@@ -12,6 +12,7 @@ import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 import { hasJobsDeletePermission, canDeleteSingleJob } from "../utils/permissions";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
+import { getNotificationPreferences } from "../services/notifications";
 import { jobCommentsRouter } from "./comments";
 import { jobTasksRouter } from "./tasks";
 
@@ -1130,23 +1131,26 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
         ...clientMetadata,
       });
       if (assigneeEmail && job) {
-        const jobSummary = {
-          id: jobId,
-          title: job.client_name ?? null,
-          client_name: job.client_name ?? null,
-          location: (job as { location?: string | null }).location ?? null,
-          due_date: (job as { due_date?: string | null }).due_date ?? null,
-          risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
-        };
-        try {
-          await queueEmail(
-            EmailJobType.job_assigned,
-            assigneeEmail,
-            { job: jobSummary, assignedByName: actorName ?? "A teammate" },
-            workerId
-          );
-        } catch (emailErr) {
-          console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
+        const prefs = await getNotificationPreferences(workerId);
+        if (prefs.email_enabled && prefs.job_assigned) {
+          const jobSummary = {
+            id: jobId,
+            title: job.client_name ?? null,
+            client_name: job.client_name ?? null,
+            location: (job as { location?: string | null }).location ?? null,
+            due_date: (job as { due_date?: string | null }).due_date ?? null,
+            risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
+          };
+          try {
+            await queueEmail(
+              EmailJobType.job_assigned,
+              assigneeEmail,
+              { job: jobSummary, assignedByName: actorName ?? "A teammate" },
+              workerId
+            );
+          } catch (emailErr) {
+            console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
+          }
         }
       }
     }
@@ -2085,24 +2089,27 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
 
       const assigneeEmail = (assignee as { email?: string | null } | null)?.email ?? null;
       if (assigneeEmail) {
-        const jobSummary = {
-          id: job.id,
-          title: job.client_name ?? null,
-          client_name: job.client_name ?? null,
-          location: (job as { location?: string | null }).location ?? null,
-          due_date: (job as { due_date?: string | null }).due_date ?? null,
-          risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
-        };
-        await queueEmail(
-          EmailJobType.job_assigned,
-          assigneeEmail,
-          {
-            job: jobSummary,
-            assignedByName: actor?.full_name ?? "A teammate",
-            userName: (assignee as { full_name?: string | null } | null)?.full_name ?? null,
-          },
-          assigneeId
-        );
+        const prefs = await getNotificationPreferences(assigneeId);
+        if (prefs.email_enabled && prefs.job_assigned) {
+          const jobSummary = {
+            id: job.id,
+            title: job.client_name ?? null,
+            client_name: job.client_name ?? null,
+            location: (job as { location?: string | null }).location ?? null,
+            due_date: (job as { due_date?: string | null }).due_date ?? null,
+            risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
+          };
+          await queueEmail(
+            EmailJobType.job_assigned,
+            assigneeEmail,
+            {
+              job: jobSummary,
+              assignedByName: actor?.full_name ?? "A teammate",
+              userName: (assignee as { full_name?: string | null } | null)?.full_name ?? null,
+            },
+            assigneeId
+          );
+        }
       }
     } catch (emailQueueErr) {
       console.warn("[Jobs] Job assigned email queueing failed:", emailQueueErr);

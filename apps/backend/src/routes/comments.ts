@@ -20,9 +20,11 @@ import {
   sendCommentReplyNotification,
   sendJobCommentNotification,
   sendCommentResolvedNotification,
+  getNotificationPreferences,
 } from "../services/notifications";
 import { supabase } from "../lib/supabaseClient";
 import { extractMentionUserIds } from "../utils/mentionParser";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 /** Table names for entity_type ownership checks (ticket scope: job, hazard, control, photo). */
 const ENTITY_TYPE_TO_TABLE: Record<CommentEntityType, string> = {
@@ -208,7 +210,7 @@ jobCommentsRouter.post(
       if (data?.id && authReq.user.id) {
         const { data: job } = await supabase
           .from("jobs")
-          .select("assigned_to_id")
+          .select("assigned_to_id, client_name")
           .eq("id", jobId)
           .eq("organization_id", authReq.user.organization_id)
           .maybeSingle();
@@ -223,6 +225,36 @@ jobCommentsRouter.post(
           ).catch((err) =>
             console.error("[Comments] Job comment notification failed:", err)
           );
+        }
+        if (mentionUserIds.length > 0) {
+          const jobName = (job as { client_name?: string | null } | null)?.client_name ?? "a job";
+          const commentPreview = (commentBody || "").replace(/@\[[^\]]*\]\([^)]*\)/g, "").trim().slice(0, 120) || "";
+          const baseUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+          const commentUrl = `${baseUrl}/jobs/${jobId}#comment-${data.id}`;
+          const mentionedByName = authReq.user.full_name ?? "A teammate";
+          for (const mentionedUserId of mentionUserIds) {
+            try {
+              const prefs = await getNotificationPreferences(mentionedUserId);
+              if (!prefs.email_enabled || !prefs.mention) continue;
+              const { data: mentionedUser } = await supabase
+                .from("users")
+                .select("id, email")
+                .eq("id", mentionedUserId)
+                .eq("organization_id", authReq.user.organization_id)
+                .maybeSingle();
+              const toEmail = (mentionedUser as { email?: string | null } | null)?.email;
+              if (toEmail) {
+                await queueEmail(
+                  EmailJobType.mention,
+                  toEmail,
+                  { mentionedByName, jobName, commentPreview, commentUrl },
+                  mentionedUserId
+                );
+              }
+            } catch (mentionErr) {
+              console.error("[Comments] Mention email queue failed for user", mentionedUserId, mentionErr);
+            }
+          }
         }
       }
       res.status(201).json({ data: data ? { ...data, content: data.content } : data });
@@ -391,7 +423,7 @@ commentsRouter.post(
       if (entityType === "job" && entityId && data?.id && authReq.user.id) {
         const { data: job } = await supabase
           .from("jobs")
-          .select("assigned_to_id")
+          .select("assigned_to_id, client_name")
           .eq("id", entityId)
           .eq("organization_id", authReq.user.organization_id)
           .maybeSingle();
@@ -406,6 +438,69 @@ commentsRouter.post(
           ).catch((err) =>
             console.error("[Comments] Job comment notification failed:", err)
           );
+        }
+        if (mentionUserIds.length > 0) {
+          const jobName = (job as { client_name?: string | null } | null)?.client_name ?? "a job";
+          const commentPreview = (commentBody || "").replace(/@\[[^\]]*\]\([^)]*\)/g, "").trim().slice(0, 120) || "";
+          const baseUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+          const commentUrl = entityType === "job" && entityId
+            ? `${baseUrl}/jobs/${entityId}#comment-${data.id}`
+            : baseUrl;
+          const mentionedByName = authReq.user.full_name ?? "A teammate";
+          for (const mentionedUserId of mentionUserIds) {
+            try {
+              const prefs = await getNotificationPreferences(mentionedUserId);
+              if (!prefs.email_enabled || !prefs.mention) continue;
+              const { data: mentionedUser } = await supabase
+                .from("users")
+                .select("id, email")
+                .eq("id", mentionedUserId)
+                .eq("organization_id", authReq.user.organization_id)
+                .maybeSingle();
+              const toEmail = (mentionedUser as { email?: string | null } | null)?.email;
+              if (toEmail) {
+                await queueEmail(
+                  EmailJobType.mention,
+                  toEmail,
+                  { mentionedByName, jobName, commentPreview, commentUrl },
+                  mentionedUserId
+                );
+              }
+            } catch (mentionErr) {
+              console.error("[Comments] Mention email queue failed for user", mentionedUserId, mentionErr);
+            }
+          }
+        }
+      } else if (data?.id && mentionUserIds.length > 0) {
+        const jobName = "a comment";
+        const commentPreview = (commentBody || "").replace(/@\[[^\]]*\]\([^)]*\)/g, "").trim().slice(0, 120) || "";
+        const baseUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+        const commentUrl = entityType === "job" && entityId
+          ? `${baseUrl}/jobs/${entityId}#comment-${data.id}`
+          : baseUrl;
+        const mentionedByName = authReq.user.full_name ?? "A teammate";
+        for (const mentionedUserId of mentionUserIds) {
+          try {
+            const prefs = await getNotificationPreferences(mentionedUserId);
+            if (!prefs.email_enabled || !prefs.mention) continue;
+            const { data: mentionedUser } = await supabase
+              .from("users")
+              .select("id, email")
+              .eq("id", mentionedUserId)
+              .eq("organization_id", authReq.user.organization_id)
+              .maybeSingle();
+            const toEmail = (mentionedUser as { email?: string | null } | null)?.email;
+            if (toEmail) {
+              await queueEmail(
+                EmailJobType.mention,
+                toEmail,
+                { mentionedByName, jobName, commentPreview, commentUrl },
+                mentionedUserId
+              );
+            }
+          } catch (mentionErr) {
+            console.error("[Comments] Mention email queue failed for user", mentionedUserId, mentionErr);
+          }
         }
       }
       res.status(201).json({ data: data ? { ...data, content: data.content } : data });
