@@ -41,7 +41,7 @@ function isPastToday8am(): boolean {
   return now.getTime() > today8am.getTime();
 }
 
-/** Send push and enqueue email for one task reminder; then update last_reminded_at to prevent duplicates. */
+/** Send push and enqueue email for one task reminder. Returns true if at least one notification was sent (push or email); only then do we update last_reminded_at so opt-in users get reminders promptly. */
 async function sendTaskReminderPushAndEmail(
   task: {
     id: string;
@@ -55,30 +55,29 @@ async function sendTaskReminderPushAndEmail(
   assigneeEmail: string | null,
   now: Date,
   isOverdue: boolean
-): Promise<void> {
+): Promise<boolean> {
   const hoursRemaining = task.due_date
     ? (new Date(task.due_date).getTime() - now.getTime()) / (60 * 60 * 1000)
     : 0;
 
-  if (isOverdue) {
-    await sendTaskOverdueNotification(
-      task.assigned_to,
-      task.organization_id,
-      task.id,
-      task.title,
-      jobTitle
-    );
-  } else {
-    await sendTaskDueSoonNotification(
-      task.assigned_to,
-      task.organization_id,
-      task.id,
-      task.title,
-      jobTitle,
-      hoursRemaining
-    );
-  }
+  const pushSent = isOverdue
+    ? await sendTaskOverdueNotification(
+        task.assigned_to,
+        task.organization_id,
+        task.id,
+        task.title,
+        jobTitle
+      )
+    : await sendTaskDueSoonNotification(
+        task.assigned_to,
+        task.organization_id,
+        task.id,
+        task.title,
+        jobTitle,
+        hoursRemaining
+      );
 
+  let emailQueued = false;
   if (assigneeEmail) {
     await queueEmail(
       EmailJobType.task_reminder,
@@ -94,12 +93,17 @@ async function sendTaskReminderPushAndEmail(
       },
       task.assigned_to
     );
+    emailQueued = true;
   }
 
-  await supabase
-    .from("tasks")
-    .update({ last_reminded_at: new Date().toISOString() })
-    .eq("id", task.id);
+  const sent = pushSent || emailQueued;
+  if (sent) {
+    await supabase
+      .from("tasks")
+      .update({ last_reminded_at: new Date().toISOString() })
+      .eq("id", task.id);
+  }
+  return sent;
 }
 
 async function processTaskReminders() {
