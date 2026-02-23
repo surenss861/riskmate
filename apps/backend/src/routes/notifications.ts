@@ -182,7 +182,7 @@ notificationsRouter.get(
   }
 );
 
-/** PATCH /api/notifications/preferences — update current user's notification preferences. */
+/** PATCH /api/notifications/preferences — update current user's notification preferences. Merges patch with existing (or defaults) so unspecified keys retain current values. */
 notificationsRouter.patch(
   "/preferences",
   authenticate as unknown as express.RequestHandler,
@@ -193,20 +193,21 @@ notificationsRouter.patch(
       const allowedKeys = Object.keys(
         DEFAULT_NOTIFICATION_PREFERENCES
       ) as (keyof NotificationPreferences)[];
-      const updates: Record<string, boolean> = {};
+      const existing = await getNotificationPreferences(authReq.user.id);
+      const merged: NotificationPreferences = { ...existing };
       for (const key of allowedKeys) {
-        if (typeof body[key] === "boolean") updates[key] = body[key];
+        if (typeof body[key] === "boolean") merged[key] = body[key];
       }
-      if (Object.keys(updates).length === 0) {
-        const prefs = await getNotificationPreferences(authReq.user.id);
-        return res.json(prefs);
+      const hasChanges = allowedKeys.some((k) => body[k] !== undefined && typeof body[k] === "boolean");
+      if (!hasChanges) {
+        return res.json(existing);
       }
       const { error } = await supabase
         .from("notification_preferences")
         .upsert(
           {
             user_id: authReq.user.id,
-            ...updates,
+            ...merged,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id" }

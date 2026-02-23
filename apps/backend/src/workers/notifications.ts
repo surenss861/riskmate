@@ -1,8 +1,10 @@
 import { supabase } from "../lib/supabaseClient";
 import {
+  getNotificationPreferences,
   notifyWeeklySummary,
   sendDeadlineNotification,
 } from "../services/notifications";
+import { EmailJobType, queueEmail } from "./emailQueue";
 
 export async function runWeeklySummaryJob() {
   const { data: organizations, error } = await supabase
@@ -94,6 +96,31 @@ export async function runDeadlineCheck() {
         hoursRemaining,
         job.client_name ?? undefined
       );
+      const prefs = await getNotificationPreferences(createdBy);
+      if (prefs.email_enabled && prefs.email_deadline_reminder) {
+        const { data: user } = await supabase
+          .from("users")
+          .select("email")
+          .eq("id", createdBy)
+          .maybeSingle();
+        const email = (user as { email?: string | null } | null)?.email;
+        if (email) {
+          queueEmail(
+            EmailJobType.deadline_reminder,
+            email,
+            {
+              job: {
+                id: job.id,
+                title: job.client_name ?? null,
+                client_name: job.client_name ?? null,
+                due_date: job.due_date ?? null,
+              },
+              hoursRemaining,
+            },
+            createdBy
+          );
+        }
+      }
     } catch (err) {
       console.error(`Deadline notification failed for job ${job.id}:`, err);
     }
