@@ -212,6 +212,7 @@ exports.teamRouter.post("/invite", (0, rbac_1.requireRole)("safety_lead"), async
             await supabaseClient_1.supabase.auth.admin.deleteUser(newUserId);
             throw insertUserError;
         }
+        (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.welcome, normalizedEmail, { userName: normalizedEmail }, newUserId);
         let inviteRow = null;
         try {
             const { data: inviteData, error: inviteInsertError } = await supabaseClient_1.supabase

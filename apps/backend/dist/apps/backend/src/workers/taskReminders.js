@@ -4,6 +4,7 @@ exports.startTaskReminderWorker = startTaskReminderWorker;
 exports.stopTaskReminderWorker = stopTaskReminderWorker;
 exports.runReminderForTask = runReminderForTask;
 const supabaseClient_1 = require("../lib/supabaseClient");
+const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -49,6 +50,9 @@ async function sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, 
         .eq("id", task.id);
 }
 async function processTaskReminders() {
+    const hasLease = await (0, workerLock_1.tryAcquireWorkerLease)(workerLock_1.WORKER_LEASE_KEYS.task_reminder);
+    if (!hasLease)
+        return;
     const now = new Date();
     const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
     const nowIso = now.toISOString();
@@ -159,6 +163,10 @@ async function runReminderForTask(organizationId, taskId) {
     }
     if (task.due_date > in24hIso) {
         return { scheduled: false, message: "Due date is not within the next 24 hours" };
+    }
+    const past24hIso = new Date(now.getTime() - ALERT_WINDOW_MS).toISOString();
+    if (task.due_date < past24hIso) {
+        return { scheduled: false, message: "Due date is more than 24 hours overdue" };
     }
     if (task.last_reminded_at && task.last_reminded_at >= remindedBefore) {
         return { scheduled: true, message: "Reminder already sent recently" };

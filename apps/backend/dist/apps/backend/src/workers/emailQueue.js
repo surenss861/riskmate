@@ -10,9 +10,31 @@ exports.stopEmailQueueWorker = stopEmailQueueWorker;
 const crypto_1 = __importDefault(require("crypto"));
 const email_1 = require("../utils/email");
 const supabaseClient_1 = require("../lib/supabaseClient");
+/** Domain identifier (task/job/report id) from email job data; null when not applicable. */
+function getDomainJobId(job) {
+    const d = job.data;
+    switch (job.type) {
+        case EmailJobType.job_assigned:
+        case EmailJobType.deadline_reminder: {
+            const raw = d.job;
+            return typeof raw?.id === 'string' ? raw.id : null;
+        }
+        case EmailJobType.signature_request:
+        case EmailJobType.report_ready:
+            return typeof d.reportRunId === 'string' ? d.reportRunId : null;
+        case EmailJobType.mention:
+            return typeof d.jobId === 'string' ? d.jobId : null;
+        case EmailJobType.task_reminder:
+        case EmailJobType.task_assigned:
+        case EmailJobType.task_completed:
+            return typeof d.taskId === 'string' ? d.taskId : typeof d.jobId === 'string' ? d.jobId : null;
+        default:
+            return null;
+    }
+}
 /** Log email event to console and optionally to email_logs table (if present). */
-async function logEmailEvent(jobId, type, to, userId, status, errorMessage) {
-    const payload = { jobId, type, to, userId, status, errorMessage };
+async function logEmailEvent(domainJobId, queueId, type, to, userId, status, errorMessage) {
+    const payload = { domainJobId, queueId, type, to, userId, status, errorMessage };
     if (status === 'sent') {
         console.info('[EmailQueue] Sent', payload);
     }
@@ -21,7 +43,8 @@ async function logEmailEvent(jobId, type, to, userId, status, errorMessage) {
     }
     try {
         await supabaseClient_1.supabase.from('email_logs').insert({
-            job_id: jobId,
+            job_id: domainJobId,
+            queue_id: queueId,
             type,
             recipient: to,
             user_id: userId ?? null,
@@ -191,9 +214,10 @@ async function runQueueCycle() {
             .filter((job) => !job.scheduledAt || job.scheduledAt <= now)
             .slice(0, 10);
         for (const job of pending) {
+            const domainJobId = getDomainJobId(job);
             try {
                 await processJob(job);
-                await logEmailEvent(job.id, job.type, job.to, job.userId, 'sent');
+                await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent');
                 const index = emailQueue.findIndex((item) => item.id === job.id);
                 if (index >= 0)
                     emailQueue.splice(index, 1);
@@ -202,7 +226,7 @@ async function runQueueCycle() {
                 job.attempts += 1;
                 const errMsg = error instanceof Error ? error.message : String(error);
                 if (job.attempts >= 3) {
-                    await logEmailEvent(job.id, job.type, job.to, job.userId, 'failed', errMsg);
+                    await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'failed', errMsg);
                     const index = emailQueue.findIndex((item) => item.id === job.id);
                     if (index >= 0)
                         emailQueue.splice(index, 1);

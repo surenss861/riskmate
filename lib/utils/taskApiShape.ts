@@ -1,6 +1,7 @@
-import type { TaskAssignedUser } from '@/types/tasks'
+/** Assignee shape used in API responses (shared with types/tasks.ts). */
+export type TaskAssignedUser = { id: string; full_name: string | null; email: string | null }
 
-type AssigneeRow = { id: string; full_name: string | null; email: string | null } | null
+type AssigneeRow = TaskAssignedUser | null
 
 export type TaskRowWithAssignee = Record<string, unknown> & {
   assignee?: AssigneeRow

@@ -107,7 +107,7 @@ async function authenticateInternal(req, res, next) {
         const userId = authData.user.id;
         const { data: userRecord, error: userError } = await supabaseClient_1.supabase
             .from("users")
-            .select("id, organization_id, email, role, archived_at, must_reset_password")
+            .select("id, organization_id, email, role, full_name, archived_at, must_reset_password")
             .eq("id", userId)
             .maybeSingle();
         // Handle missing user record gracefully (return 403, not 500)
@@ -176,6 +176,7 @@ async function authenticateInternal(req, res, next) {
             organization_id: organizationId,
             email,
             role,
+            full_name: userRecord.full_name ?? null,
             mustResetPassword,
             plan: planCode,
             seatsLimit,

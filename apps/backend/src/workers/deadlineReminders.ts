@@ -22,10 +22,10 @@ async function runDeadlineReminderCycle(): Promise<void> {
 
   const { data: jobs, error } = await supabase
     .from('jobs')
-    .select('id, organization_id, client_name, due_date, status')
-    .not('due_date', 'is', null)
-    .gte('due_date', now.toISOString())
-    .lte('due_date', in24h.toISOString())
+    .select('id, organization_id, client_name, end_date, status')
+    .not('end_date', 'is', null)
+    .gte('end_date', now.toISOString())
+    .lte('end_date', in24h.toISOString())
     .neq('status', 'completed')
     .neq('status', 'archived')
 
@@ -35,7 +35,7 @@ async function runDeadlineReminderCycle(): Promise<void> {
   }
 
   for (const job of jobs || []) {
-    const dueDate = job.due_date ? new Date(job.due_date) : null
+    const dueDate = job.end_date ? new Date(job.end_date) : null
     if (!dueDate || !job.organization_id) continue
 
     const hoursRemaining = (dueDate.getTime() - now.getTime()) / (60 * 60 * 1000)
@@ -67,7 +67,7 @@ async function runDeadlineReminderCycle(): Promise<void> {
             id: job.id,
             title: job.client_name,
             client_name: job.client_name,
-            due_date: job.due_date,
+            due_date: job.end_date,
           },
           hoursRemaining,
         },

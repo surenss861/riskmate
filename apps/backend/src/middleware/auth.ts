@@ -9,6 +9,7 @@ export interface AuthenticatedUser {
     organization_id: string;
     email?: string;
     role?: string;
+    full_name?: string | null;
   mustResetPassword: boolean;
   plan: PlanCode;
   seatsLimit: number | null;
@@ -143,7 +144,7 @@ async function authenticateInternal(
 
     const { data: userRecord, error: userError } = await supabase
       .from("users")
-      .select("id, organization_id, email, role, archived_at, must_reset_password")
+      .select("id, organization_id, email, role, full_name, archived_at, must_reset_password")
       .eq("id", userId)
       .maybeSingle();
 
@@ -222,6 +223,7 @@ async function authenticateInternal(
       organization_id: organizationId,
       email,
       role,
+      full_name: (userRecord as { full_name?: string | null }).full_name ?? null,
       mustResetPassword,
       plan: planCode,
       seatsLimit,

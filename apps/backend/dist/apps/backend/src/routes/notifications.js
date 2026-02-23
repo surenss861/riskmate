@@ -127,26 +127,27 @@ exports.notificationsRouter.get("/preferences", auth_1.authenticate, async (req,
         res.status(500).json({ message: "Failed to load preferences" });
     }
 });
-/** PATCH /api/notifications/preferences — update current user's notification preferences. */
+/** PATCH /api/notifications/preferences — update current user's notification preferences. Merges patch with existing (or defaults) so unspecified keys retain current values. */
 exports.notificationsRouter.patch("/preferences", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     try {
         const body = (req.body || {});
         const allowedKeys = Object.keys(notifications_1.DEFAULT_NOTIFICATION_PREFERENCES);
-        const updates = {};
+        const existing = await (0, notifications_1.getNotificationPreferences)(authReq.user.id);
+        const merged = { ...existing };
         for (const key of allowedKeys) {
             if (typeof body[key] === "boolean")
-                updates[key] = body[key];
+                merged[key] = body[key];
         }
-        if (Object.keys(updates).length === 0) {
-            const prefs = await (0, notifications_1.getNotificationPreferences)(authReq.user.id);
-            return res.json(prefs);
+        const hasChanges = allowedKeys.some((k) => body[k] !== undefined && typeof body[k] === "boolean");
+        if (!hasChanges) {
+            return res.json(existing);
         }
         const { error } = await supabaseClient_1.supabase
             .from("notification_preferences")
             .upsert({
             user_id: authReq.user.id,
-            ...updates,
+            ...merged,
             updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
         if (error)
@@ -181,13 +182,20 @@ exports.notificationsRouter.post("/job-assigned", auth_1.authenticate, async (re
         }
         const { data: user } = await supabaseClient_1.supabase
             .from("users")
-            .select("id, organization_id")
+            .select("id, organization_id, email")
             .eq("id", userId)
             .single();
         if (!user || user.organization_id !== organizationId) {
             return res.status(403).json({ message: "User not in this organization" });
         }
         await (0, notifications_1.sendJobAssignedNotification)(userId, organizationId, jobId, jobTitle);
+        const assigneeEmail = user.email;
+        if (assigneeEmail) {
+            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
+                job: { id: jobId, title: jobTitle ?? null },
+                assignedByName: authReq.user.full_name ?? "A teammate",
+            }, userId);
+        }
         res.status(204).end();
     }
     catch (err) {
@@ -386,7 +394,7 @@ exports.notificationsRouter.post("/mention", auth_1.authenticate, async (req, re
         }
         const { data: comment, error: commentError } = await supabaseClient_1.supabase
             .from("comments")
-            .select("id, organization_id")
+            .select("id, organization_id, content, entity_type, entity_id")
             .eq("id", commentId)
             .eq("organization_id", organizationId)
             .maybeSingle();
@@ -395,13 +403,43 @@ exports.notificationsRouter.post("/mention", auth_1.authenticate, async (req, re
         }
         const { data: user } = await supabaseClient_1.supabase
             .from("users")
-            .select("id, organization_id")
+            .select("id, organization_id, email")
             .eq("id", userId)
             .single();
         if (!user || user.organization_id !== organizationId) {
             return res.status(403).json({ message: "User not in this organization" });
         }
         await (0, notifications_1.sendMentionNotification)(userId, organizationId, commentId, contextLabel);
+        const toEmail = user.email;
+        if (toEmail) {
+            const commentRow = comment;
+            let jobName = "a job";
+            if (commentRow.entity_type === "job" && commentRow.entity_id) {
+                const { data: job } = await supabaseClient_1.supabase
+                    .from("jobs")
+                    .select("client_name")
+                    .eq("id", commentRow.entity_id)
+                    .eq("organization_id", organizationId)
+                    .maybeSingle();
+                if (job && job.client_name) {
+                    jobName = job.client_name;
+                }
+            }
+            const { data: author } = await supabaseClient_1.supabase
+                .from("users")
+                .select("full_name")
+                .eq("id", authReq.user.id)
+                .maybeSingle();
+            const mentionedByName = author?.full_name ?? "A teammate";
+            const commentPreview = typeof commentRow.content === "string"
+                ? commentRow.content.replace(/@\[[^\]]*\]\([^)]*\)/g, "").trim().slice(0, 120) || ""
+                : "";
+            const baseUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+            const commentUrl = commentRow.entity_type === "job" && commentRow.entity_id
+                ? `${baseUrl}/jobs/${commentRow.entity_id}#comment-${commentId}`
+                : baseUrl;
+            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.mention, toEmail, { mentionedByName, jobName, commentPreview, commentUrl }, userId);
+        }
         res.status(204).end();
     }
     catch (err) {

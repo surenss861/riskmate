@@ -5,6 +5,7 @@ export interface AuthenticatedUser {
     organization_id: string;
     email?: string;
     role?: string;
+    full_name?: string | null;
     mustResetPassword: boolean;
     plan: PlanCode;
     seatsLimit: number | null;

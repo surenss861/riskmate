@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startDeadlineReminderWorker = startDeadlineReminderWorker;
 exports.stopDeadlineReminderWorker = stopDeadlineReminderWorker;
 const supabaseClient_1 = require("../lib/supabaseClient");
+const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
 let workerStarted = false;
@@ -16,13 +17,16 @@ async function runDeadlineReminderCycle() {
     const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     if (dateKey === lastRunDateKey)
         return;
+    const hasLease = await (0, workerLock_1.tryAcquireWorkerLease)(workerLock_1.WORKER_LEASE_KEYS.deadline_reminder);
+    if (!hasLease)
+        return;
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const { data: jobs, error } = await supabaseClient_1.supabase
         .from('jobs')
-        .select('id, organization_id, client_name, due_date, status')
-        .not('due_date', 'is', null)
-        .gte('due_date', now.toISOString())
-        .lte('due_date', in24h.toISOString())
+        .select('id, organization_id, client_name, end_date, status')
+        .not('end_date', 'is', null)
+        .gte('end_date', now.toISOString())
+        .lte('end_date', in24h.toISOString())
         .neq('status', 'completed')
         .neq('status', 'archived');
     if (error) {
@@ -30,7 +34,7 @@ async function runDeadlineReminderCycle() {
         return;
     }
     for (const job of jobs || []) {
-        const dueDate = job.due_date ? new Date(job.due_date) : null;
+        const dueDate = job.end_date ? new Date(job.end_date) : null;
         if (!dueDate || !job.organization_id)
             continue;
         const hoursRemaining = (dueDate.getTime() - now.getTime()) / (60 * 60 * 1000);
@@ -56,7 +60,7 @@ async function runDeadlineReminderCycle() {
                     id: job.id,
                     title: job.client_name,
                     client_name: job.client_name,
-                    due_date: job.due_date,
+                    due_date: job.end_date,
                 },
                 hoursRemaining,
             }, assignment.user_id);

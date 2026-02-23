@@ -446,10 +446,13 @@ if (process.env.NODE_ENV !== "test") {
         (0, exportWorker_1.startExportWorker)();
         (0, retentionWorker_1.startRetentionWorker)();
         (0, ledgerRootWorker_1.startLedgerRootWorker)();
-        (0, emailQueue_1.startEmailQueueWorker)();
-        (0, weeklyDigest_1.startWeeklyDigestWorker)();
-        (0, deadlineReminders_1.startDeadlineReminderWorker)();
-        (0, taskReminders_1.startTaskReminderWorker)();
+        // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test
+        if (process.env.SKIP_WORKERS !== 'true') {
+            (0, emailQueue_1.startEmailQueueWorker)();
+            (0, weeklyDigest_1.startWeeklyDigestWorker)();
+            (0, deadlineReminders_1.startDeadlineReminderWorker)();
+            (0, taskReminders_1.startTaskReminderWorker)();
+        }
     });
     function shutdown(signal) {
         console.log(`[BOOT] ${signal} received, shutting down...`);

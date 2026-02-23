@@ -87,6 +87,7 @@ class ResendProvider {
                         to,
                         subject: options.subject,
                         html: options.html,
+                        text: options.text,
                         replyTo: options.replyTo,
                     });
                     lastError = null;
@@ -138,6 +139,7 @@ class SMTPProvider {
                 to,
                 subject: options.subject,
                 html: options.html,
+                text: options.text,
                 replyTo: options.replyTo,
             });
         }
@@ -178,7 +180,7 @@ async function sendEmail(options) {
     }
     if (!emailProvider) {
         console.warn('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.');
-        return;
+        throw new Error('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.');
     }
     const replyTo = options.replyTo ?? process.env.EMAIL_REPLY_TO;
     await emailProvider.send({ ...options, replyTo });
@@ -200,6 +202,7 @@ async function sendJobAssignedEmail(to, userName, job, assignedByName, userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, reportRunId, deadline, userId) {
@@ -217,6 +220,7 @@ async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, rep
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl, userId) {
@@ -233,6 +237,7 @@ async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendWelcomeEmail(to, userName, _userId) {
@@ -243,6 +248,7 @@ async function sendWelcomeEmail(to, userName, _userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, loginUrl, _userId) {
@@ -256,6 +262,7 @@ async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, login
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendMentionEmail(to, userName, mentionedByName, jobName, commentPreview, commentUrl, userId) {
@@ -273,6 +280,7 @@ async function sendMentionEmail(to, userName, mentionedByName, jobName, commentP
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendWeeklyDigestEmail(to, userName, digest, userId) {
@@ -287,6 +295,7 @@ async function sendWeeklyDigestEmail(to, userName, digest, userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, userId) {
@@ -302,6 +311,7 @@ async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, user
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendTaskAssignedEmail(to, userName, params, userId) {
@@ -319,6 +329,7 @@ async function sendTaskAssignedEmail(to, userName, params, userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendTaskCompletedEmail(to, userName, params, userId) {
@@ -336,11 +347,12 @@ async function sendTaskCompletedEmail(to, userName, params, userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 async function sendTaskReminderEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
-    if (!(prefs.email_enabled && prefs.deadline_approaching))
+    if (!(prefs.email_enabled && prefs.email_deadline_reminder))
         return;
     const template = (0, TaskReminderEmail_1.TaskReminderEmail)({
         userName: userName || fallbackName(to),
@@ -356,6 +368,7 @@ async function sendTaskReminderEmail(to, userName, params, userId) {
         to,
         subject: template.subject,
         html: template.html,
+        text: template.text,
     });
 }
 // Generate hash of alert payload for deduplication

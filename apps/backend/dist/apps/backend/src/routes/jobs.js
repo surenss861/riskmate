@@ -932,7 +932,7 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
         }
         const { data: jobs, error: fetchError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, client_name, deleted_at, archived_at, status")
+            .select("id, client_name, location, due_date, risk_level, deleted_at, archived_at, status")
             .eq("organization_id", organization_id)
             .in("id", validIds);
         if (fetchError) {
@@ -999,6 +999,15 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
             };
         }
         const clientMetadata = (0, audit_1.extractClientMetadata)(req);
+        let actorName = null;
+        if (assigneeEmail) {
+            const { data: actor } = await supabaseClient_1.supabase
+                .from("users")
+                .select("full_name")
+                .eq("id", actorId)
+                .maybeSingle();
+            actorName = actor?.full_name ?? null;
+        }
         for (const jobId of succeeded) {
             const job = found.get(jobId);
             try {
@@ -1014,6 +1023,22 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
                 metadata: { worker_id: workerId, bulk: true },
                 ...clientMetadata,
             });
+            if (assigneeEmail && job) {
+                const jobSummary = {
+                    id: jobId,
+                    title: job.client_name ?? null,
+                    client_name: job.client_name ?? null,
+                    location: job.location ?? null,
+                    due_date: job.due_date ?? null,
+                    risk_level: job.risk_level ?? null,
+                };
+                try {
+                    (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, { job: jobSummary, assignedByName: actorName ?? "A teammate" }, workerId);
+                }
+                catch (emailErr) {
+                    console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
+                }
+            }
         }
         const total = succeeded.length + failed.length;
         res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed, updated_assignments }, results: buildBulkResults(succeeded, failed) });
@@ -1785,7 +1810,7 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
         }
         const { data: job, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, organization_id, client_name")
+            .select("id, organization_id, client_name, location, due_date, risk_level")
             .eq("id", jobId)
             .eq("organization_id", organization_id)
             .single();
@@ -1835,8 +1860,16 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
                 .maybeSingle();
             const assigneeEmail = assignee?.email ?? null;
             if (assigneeEmail) {
+                const jobSummary = {
+                    id: job.id,
+                    title: job.client_name ?? null,
+                    client_name: job.client_name ?? null,
+                    location: job.location ?? null,
+                    due_date: job.due_date ?? null,
+                    risk_level: job.risk_level ?? null,
+                };
                 (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
-                    job,
+                    job: jobSummary,
                     assignedByName: actor?.full_name ?? "A teammate",
                     userName: assignee?.full_name ?? null,
                 }, assigneeId);

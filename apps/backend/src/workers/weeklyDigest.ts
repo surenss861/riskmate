@@ -57,27 +57,27 @@ async function buildDigestForUser(userId: string, organizationId: string): Promi
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId)
     .in('id', jobIds)
-    .lt('due_date', now.toISOString())
+    .lt('end_date', now.toISOString())
     .neq('status', 'completed')
     .neq('status', 'archived')
 
   // User-scoped: needs attention (assigned to user, due soon or overdue)
   const { data: attentionRows } = await supabase
     .from('jobs')
-    .select('client_name, due_date')
+    .select('client_name, end_date')
     .eq('organization_id', organizationId)
     .in('id', jobIds)
-    .not('due_date', 'is', null)
-    .lte('due_date', dueSoonCutoff.toISOString())
+    .not('end_date', 'is', null)
+    .lte('end_date', dueSoonCutoff.toISOString())
     .neq('status', 'completed')
     .neq('status', 'archived')
-    .order('due_date', { ascending: true })
+    .order('end_date', { ascending: true })
     .limit(20)
 
   const needsAttention = (attentionRows || []).map((row) => ({
     title: row.client_name || 'Untitled job',
     status:
-      row.due_date && new Date(row.due_date).getTime() < now.getTime()
+      row.end_date && new Date(row.end_date).getTime() < now.getTime()
         ? ('overdue' as const)
         : ('due_soon' as const),
   }))

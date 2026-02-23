@@ -4,6 +4,7 @@ exports.runWeeklySummaryJob = runWeeklySummaryJob;
 exports.runDeadlineCheck = runDeadlineCheck;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("../services/notifications");
+const emailQueue_1 = require("./emailQueue");
 async function runWeeklySummaryJob() {
     const { data: organizations, error } = await supabaseClient_1.supabase
         .from("organizations")
@@ -76,6 +77,26 @@ async function runDeadlineCheck() {
         const hoursRemaining = (due.getTime() - now.getTime()) / (60 * 60 * 1000);
         try {
             await (0, notifications_1.sendDeadlineNotification)(createdBy, organizationId, job.id, hoursRemaining, job.client_name ?? undefined);
+            const prefs = await (0, notifications_1.getNotificationPreferences)(createdBy);
+            if (prefs.email_enabled && prefs.email_deadline_reminder) {
+                const { data: user } = await supabaseClient_1.supabase
+                    .from("users")
+                    .select("email")
+                    .eq("id", createdBy)
+                    .maybeSingle();
+                const email = user?.email;
+                if (email) {
+                    (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, email, {
+                        job: {
+                            id: job.id,
+                            title: job.client_name ?? null,
+                            client_name: job.client_name ?? null,
+                            due_date: job.due_date ?? null,
+                        },
+                        hoursRemaining,
+                    }, createdBy);
+                }
+            }
         }
         catch (err) {
             console.error(`Deadline notification failed for job ${job.id}:`, err);
