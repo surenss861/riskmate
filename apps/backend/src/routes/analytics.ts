@@ -122,7 +122,7 @@ analyticsRouter.get(
       const jobList = (jobs || []) as { id: string; risk_score: number | null; status: string | null; created_at: string }[];
 
       const getBucketKey = (date: Date) =>
-        groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date);
+        groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date.toISOString());
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];

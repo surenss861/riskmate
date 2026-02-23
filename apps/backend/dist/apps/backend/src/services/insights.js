@@ -40,6 +40,9 @@ async function generateInsights(orgId) {
         const withRisk = jobList.filter((j) => j.risk_score != null);
         const avgRisk = withRisk.length === 0 ? 0 : withRisk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / withRisk.length;
         const highRiskCount = jobList.filter((j) => (j.risk_score ?? 0) >= 70).length;
+        const basePath = "/dashboard";
+        const jobsPath = `${basePath}/jobs`;
+        const analyticsPath = `${basePath}/analytics`;
         // completion_trend
         if (total > 0) {
             insights.push({
@@ -52,9 +55,12 @@ async function generateInsights(orgId) {
                 metric_label: "Completion %",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${jobsPath}?status=open`,
+                data: { total, completed, completion_rate: completionRate },
             });
         }
         // risk_spike / high_risk_concentration
+        const highRiskJobIds = jobList.filter((j) => (j.risk_score ?? 0) >= 70).map((j) => j.id);
         if (highRiskCount > 0) {
             const pct = total === 0 ? 0 : highRiskCount / total;
             insights.push({
@@ -67,6 +73,8 @@ async function generateInsights(orgId) {
                 metric_label: "High-risk count",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${analyticsPath}/risk-heatmap`,
+                data: { high_risk_count: highRiskCount, job_ids: highRiskJobIds.slice(0, 50) },
             });
         }
         if (avgRisk > 0) {
@@ -80,6 +88,8 @@ async function generateInsights(orgId) {
                 metric_label: "Avg risk",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${analyticsPath}/risk-heatmap`,
+                data: { avg_risk: avgRisk, jobs_scored: withRisk.length },
             });
         }
         // compliance_drop (low completion rate)
@@ -94,6 +104,8 @@ async function generateInsights(orgId) {
                 metric_label: "Completion %",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${jobsPath}?status=in_progress`,
+                data: { total, completed, completion_rate: completionRate },
             });
         }
         // team_performance: top completions from mitigation_items
@@ -123,6 +135,8 @@ async function generateInsights(orgId) {
                 metric_label: "Completions",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${analyticsPath}/team-performance`,
+                data: { user_id: topUser[0], completions: topUser[1] },
             });
         }
         // hazard_trend: most frequent hazard/control
@@ -150,6 +164,8 @@ async function generateInsights(orgId) {
                 metric_label: "Occurrences",
                 period_days: PERIOD_DAYS,
                 created_at: new Date().toISOString(),
+                action_url: `${analyticsPath}/hazard-frequency`,
+                data: { hazard_label: topHazard[0], count: topHazard[1] },
             });
         }
         // evidence_gap: jobs without documents (optional, if we have job ids)
@@ -165,6 +181,7 @@ async function generateInsights(orgId) {
             const withoutDoc = jobIds.filter((id) => !withDoc.has(id)).length;
             if (withoutDoc > 0 && sampleSize >= 5) {
                 const pct = withoutDoc / sampleSize;
+                const jobIdsWithoutDoc = jobIds.filter((jid) => !withDoc.has(jid)).slice(0, 50);
                 insights.push({
                     id: id(),
                     type: "evidence_gap",
@@ -175,6 +192,8 @@ async function generateInsights(orgId) {
                     metric_label: "% without evidence",
                     period_days: PERIOD_DAYS,
                     created_at: new Date().toISOString(),
+                    action_url: `${jobsPath}?has_evidence=false`,
+                    data: { jobs_without_evidence: withoutDoc, total_jobs: sampleSize, job_ids: jobIdsWithoutDoc },
                 });
             }
         }
