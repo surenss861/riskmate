@@ -115,10 +115,10 @@ async function processTaskReminders() {
 
     for (const task of pending) {
       try {
-        const jobTitle =
-          (task as { job?: { client_name: string } | null }).job?.client_name ?? "Job";
-        const assigneeEmail =
-          (task as { assignee?: { email: string } | null }).assignee?.email ?? null;
+        const jobRow = (task as { job?: { client_name: string } | { client_name: string }[] | null }).job;
+        const jobTitle = (Array.isArray(jobRow) ? jobRow[0] : jobRow)?.client_name ?? "Job";
+        const assigneeRow = (task as { assignee?: { email: string } | { email: string }[] | null }).assignee;
+        const assigneeEmail = (Array.isArray(assigneeRow) ? assigneeRow[0] : assigneeRow)?.email ?? null;
         if (!assigneeEmail) {
           console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
         }
@@ -227,8 +227,10 @@ export async function runReminderForTask(
     return { scheduled: true, message: "Reminder already sent recently" };
   }
 
-  const jobTitle = (task as { job?: { client_name: string } | null }).job?.client_name ?? "Job";
-  const assigneeEmail = (task as { assignee?: { email: string } | null }).assignee?.email ?? null;
+  const jobRow = (task as { job?: { client_name: string } | { client_name: string }[] | null }).job;
+  const jobTitle = (Array.isArray(jobRow) ? jobRow[0] : jobRow)?.client_name ?? "Job";
+  const assigneeRow = (task as { assignee?: { email: string } | { email: string }[] | null }).assignee;
+  const assigneeEmail = (Array.isArray(assigneeRow) ? assigneeRow[0] : assigneeRow)?.email ?? null;
 
   const prefs = await getNotificationPreferences(task.assigned_to);
   const shouldQueueEmail =

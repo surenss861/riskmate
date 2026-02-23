@@ -11,7 +11,7 @@ function TeamInviteEmail(input) {
       <p style="margin:0 0 12px;padding:12px;border-radius:8px;background:#f3f4f6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${(0, base_1.e)(input.tempPassword)}</p>
       <p style="margin:0;color:#b45309;">This invite expires in 7 days.</p>
     `,
-        ctaLabel: "Log In to Accept →",
+        ctaLabel: "Accept Invitation →",
         ctaUrl: input.loginUrl,
     });
     return {

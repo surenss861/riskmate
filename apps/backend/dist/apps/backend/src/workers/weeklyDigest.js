@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startWeeklyDigestWorker = startWeeklyDigestWorker;
 exports.stopWeeklyDigestWorker = stopWeeklyDigestWorker;
 const supabaseClient_1 = require("../lib/supabaseClient");
+const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
 let workerStarted = false;
 let workerTimer = null;
@@ -80,6 +81,9 @@ async function runWeeklyDigestCycle() {
     }
     for (const user of users || []) {
         if (!user.email || !user.organization_id)
+            continue;
+        const prefs = await (0, notifications_1.getNotificationPreferences)(user.id);
+        if (!prefs.email_enabled || !prefs.email_weekly_digest)
             continue;
         try {
             const digest = await buildDigestForUser(user.organization_id);

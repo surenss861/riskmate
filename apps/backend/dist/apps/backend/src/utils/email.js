@@ -143,25 +143,28 @@ class SMTPProvider {
         }
     }
 }
-// Initialize email provider based on env vars
+// Initialize email provider based on env vars.
+// Supported: RESEND_API_KEY, EMAIL_FROM (or RESEND_FROM_EMAIL), EMAIL_REPLY_TO.
 function getEmailProvider() {
+    const from = process.env.EMAIL_FROM ||
+        process.env.RESEND_FROM_EMAIL ||
+        process.env.SMTP_FROM;
     // Prefer Resend if configured
     const resendKey = process.env.RESEND_API_KEY;
-    const resendFrom = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM;
-    if (resendKey && resendFrom) {
-        return new ResendProvider(resendKey, resendFrom);
+    if (resendKey && from) {
+        return new ResendProvider(resendKey, from);
     }
     // Fall back to SMTP if configured
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
-    if (smtpHost && smtpUser && smtpPass && resendFrom) {
+    if (smtpHost && smtpUser && smtpPass && from) {
         return new SMTPProvider({
             host: smtpHost,
             port: parseInt(process.env.SMTP_PORT || '587', 10),
             user: smtpUser,
             pass: smtpPass,
-            from: resendFrom,
+            from,
             secure: process.env.SMTP_SECURE === 'true',
         });
     }
@@ -177,7 +180,7 @@ async function sendEmail(options) {
         console.warn('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.');
         return;
     }
-    const replyTo = options.replyTo || process.env.EMAIL_REPLY_TO;
+    const replyTo = options.replyTo ?? process.env.EMAIL_REPLY_TO;
     await emailProvider.send({ ...options, replyTo });
 }
 function fallbackName(email) {

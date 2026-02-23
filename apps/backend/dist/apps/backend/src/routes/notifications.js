@@ -10,6 +10,7 @@ const notifications_1 = require("../services/notifications");
 const limits_1 = require("../middleware/limits");
 const supabaseClient_1 = require("../lib/supabaseClient");
 const emailQueue_1 = require("../workers/emailQueue");
+const taskReminders_1 = require("../workers/taskReminders");
 exports.notificationsRouter = express_1.default.Router();
 exports.notificationsRouter.post("/register", auth_1.authenticate, (0, limits_1.requireFeature)("notifications"), async (req, res) => {
     const authReq = req;
@@ -273,6 +274,28 @@ exports.notificationsRouter.post("/task-completed", auth_1.authenticate, async (
     catch (err) {
         console.error("Task completed notification failed:", err);
         res.status(500).json({ message: "Failed to send notification" });
+    }
+});
+/** POST /api/notifications/schedule-task-reminder — run overdue/due-soon reminder for one task (assignee push + email). Body: { taskId }. */
+exports.notificationsRouter.post("/schedule-task-reminder", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    try {
+        const { taskId } = req.body || {};
+        if (!taskId || typeof taskId !== "string") {
+            return res
+                .status(400)
+                .json({ message: "Missing taskId" });
+        }
+        const organizationId = authReq.user.organization_id;
+        const result = await (0, taskReminders_1.runReminderForTask)(organizationId, taskId);
+        if (!result.scheduled && result.message && !result.message.includes("already sent")) {
+            return res.status(400).json({ message: result.message });
+        }
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Schedule task reminder failed:", err);
+        res.status(500).json({ message: "Failed to schedule task reminder" });
     }
 });
 /** POST /api/notifications/evidence-uploaded — notify recipients (job owner/assignees) that evidence was uploaded. Accepts optional userId; when provided, sends to that user; otherwise sends to job owner. Enforces org/job scoping. */

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
@@ -89,6 +90,9 @@ async function runWeeklyDigestCycle(): Promise<void> {
 
   for (const user of users || []) {
     if (!user.email || !user.organization_id) continue
+
+    const prefs = await getNotificationPreferences(user.id)
+    if (!prefs.email_enabled || !prefs.email_weekly_digest) continue
 
     try {
       const digest = await buildDigestForUser(user.organization_id)

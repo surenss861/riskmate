@@ -219,14 +219,19 @@ async function updateTask(organizationId, taskId, input, actingUserId) {
         updatePayload.due_date = input.due_date;
     if (input.status !== undefined) {
         updatePayload.status = input.status;
-        if (input.status === "done") {
+        const currentStatus = taskCheck.task.status;
+        const newStatus = input.status;
+        const isTransitionToDone = newStatus === "done" && currentStatus !== "done";
+        const isStayingDone = newStatus === "done" && currentStatus === "done";
+        if (isTransitionToDone) {
             updatePayload.completed_at = new Date().toISOString();
             updatePayload.completed_by = actingUserId;
         }
-        else {
+        else if (!isStayingDone) {
             updatePayload.completed_at = null;
             updatePayload.completed_by = null;
         }
+        // If isStayingDone: leave existing completed_at/completed_by intact (do not set in payload).
     }
     if (input.sort_order !== undefined) {
         updatePayload.sort_order = parseSortOrder(input.sort_order);

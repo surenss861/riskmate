@@ -15,6 +15,36 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
+/** Log email event to console and optionally to email_logs table (if present). */
+async function logEmailEvent(
+  jobId: string,
+  type: string,
+  to: string,
+  userId: string | undefined,
+  status: 'sent' | 'failed' | 'bounced',
+  errorMessage?: string
+): Promise<void> {
+  const payload = { jobId, type, to, userId, status, errorMessage }
+  if (status === 'sent') {
+    console.info('[EmailQueue] Sent', payload)
+  } else {
+    console.error('[EmailQueue] Event', payload)
+  }
+  try {
+    await supabase.from('email_logs').insert({
+      job_id: jobId,
+      type,
+      recipient: to,
+      user_id: userId ?? null,
+      status,
+      error_message: errorMessage ?? null,
+    })
+  } catch (e) {
+    // Table may not exist yet; avoid breaking the queue
+    if (status !== 'sent') console.error('[EmailQueue] email_logs insert failed', e)
+  }
+}
+
 export enum EmailJobType {
   job_assigned = 'job_assigned',
   signature_request = 'signature_request',
@@ -258,12 +288,28 @@ async function runQueueCycle(): Promise<void> {
     for (const job of pending) {
       try {
         await processJob(job)
+        await logEmailEvent(
+          job.id,
+          job.type,
+          job.to,
+          job.userId,
+          'sent'
+        )
         const index = emailQueue.findIndex((item) => item.id === job.id)
         if (index >= 0) emailQueue.splice(index, 1)
       } catch (error) {
         job.attempts += 1
+        const errMsg = error instanceof Error ? error.message : String(error)
 
         if (job.attempts >= 3) {
+          await logEmailEvent(
+            job.id,
+            job.type,
+            job.to,
+            job.userId,
+            'failed',
+            errMsg
+          )
           const index = emailQueue.findIndex((item) => item.id === job.id)
           if (index >= 0) emailQueue.splice(index, 1)
           console.error('[EmailQueue] Job failed and removed after 3 attempts:', {

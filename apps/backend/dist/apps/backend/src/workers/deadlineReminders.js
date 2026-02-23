@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startDeadlineReminderWorker = startDeadlineReminderWorker;
 exports.stopDeadlineReminderWorker = stopDeadlineReminderWorker;
 const supabaseClient_1 = require("../lib/supabaseClient");
+const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
 let workerStarted = false;
 let workerTimer = null;
@@ -46,6 +47,9 @@ async function runDeadlineReminderCycle() {
             const user = assignment.users;
             const userData = Array.isArray(user) ? user[0] : user;
             if (!userData?.email)
+                continue;
+            const prefs = await (0, notifications_1.getNotificationPreferences)(assignment.user_id);
+            if (!prefs.email_enabled || !prefs.email_deadline_reminder)
                 continue;
             (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, userData.email, {
                 job: {

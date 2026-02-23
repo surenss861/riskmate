@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
 
 let workerStarted = false
@@ -50,6 +51,9 @@ async function runDeadlineReminderCycle(): Promise<void> {
       const user = assignment.users as { id: string; email: string | null } | { id: string; email: string | null }[]
       const userData = Array.isArray(user) ? user[0] : user
       if (!userData?.email) continue
+
+      const prefs = await getNotificationPreferences(assignment.user_id)
+      if (!prefs.email_enabled || !prefs.email_deadline_reminder) continue
 
       queueEmail(
         EmailJobType.deadline_reminder,
