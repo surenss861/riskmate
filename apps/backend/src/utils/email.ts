@@ -124,14 +124,33 @@ class SMTPProvider implements EmailProvider {
     const recipients = Array.isArray(options.to) ? options.to : [options.to]
 
     for (const to of recipients) {
-      await transporter.sendMail({
-        from: options.from || this.from,
-        to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        replyTo: options.replyTo,
-      })
+      let lastError: unknown = null
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await transporter.sendMail({
+            from: options.from || this.from,
+            to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+            replyTo: options.replyTo,
+          })
+          lastError = null
+          break
+        } catch (error) {
+          lastError = error
+          if (attempt < 3) {
+            const backoffMs = 2 ** (attempt - 1) * 1000 // 1s, 2s
+            await sleep(backoffMs)
+          }
+        }
+      }
+
+      if (lastError) {
+        console.error('[Email] SMTP failed after 3 retries:', lastError)
+        throw lastError instanceof Error ? lastError : new Error(String(lastError))
+      }
     }
   }
 }

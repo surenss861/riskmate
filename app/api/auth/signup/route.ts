@@ -107,6 +107,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Queue welcome email via backend so it flows through the email queue
+    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+    const internalKey = process.env.INTERNAL_API_KEY
+    if (backendUrl && authData.user.email) {
+      try {
+        await fetch(`${backendUrl.replace(/\/$/, '')}/api/account/queue-welcome-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(internalKey ? { 'X-Internal-Secret': internalKey } : {}),
+          },
+          body: JSON.stringify({
+            email: authData.user.email,
+            userId: authData.user.id,
+            userName: full_name || null,
+          }),
+        })
+      } catch (welcomeErr) {
+        console.warn('Welcome email queue failed (signup succeeded):', welcomeErr)
+      }
+    }
+
     return NextResponse.json({
       user: {
         id: authData.user.id,

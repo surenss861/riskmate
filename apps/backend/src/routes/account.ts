@@ -3,8 +3,51 @@ import { supabase } from "../lib/supabaseClient";
 import { authenticate } from "../middleware/auth";
 import { recordAuditLog } from "../middleware/audit";
 import { createErrorResponse } from "../utils/errorResponse";
+import { EmailJobType, queueEmail } from "../workers/emailQueue";
 
 export const accountRouter: ExpressRouter = express.Router();
+
+// POST /api/account/queue-welcome-email — internal: enqueue welcome email after signup (called by Next.js signup route).
+// Requires X-Internal-Secret header matching INTERNAL_API_KEY.
+accountRouter.post("/queue-welcome-email", async (req: express.Request, res: express.Response) => {
+  try {
+    const secret = process.env.INTERNAL_API_KEY;
+    const headerSecret = req.headers["x-internal-secret"];
+    if (secret && headerSecret !== secret) {
+      return res.status(401).json(createErrorResponse({
+        message: "Unauthorized",
+        code: "AUTH_UNAUTHORIZED",
+        status: 401,
+      }).response);
+    }
+
+    const { email, userId, userName } = req.body ?? {};
+    if (!email || typeof email !== "string" || !userId || typeof userId !== "string") {
+      return res.status(400).json(createErrorResponse({
+        message: "email and userId are required",
+        code: "VALIDATION_ERROR",
+        status: 400,
+      }).response);
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    queueEmail(
+      EmailJobType.welcome,
+      normalizedEmail,
+      { userName: typeof userName === "string" ? userName : normalizedEmail },
+      userId
+    );
+
+    res.status(204).end();
+  } catch (err: any) {
+    console.error("Queue welcome email error:", err);
+    res.status(500).json(createErrorResponse({
+      message: "Internal server error",
+      code: "INTERNAL_ERROR",
+      status: 500,
+    }).response);
+  }
+});
 
 // Base route - confirms account router is mounted
 accountRouter.get("/", (_req, res) => {

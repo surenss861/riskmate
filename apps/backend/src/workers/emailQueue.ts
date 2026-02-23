@@ -347,10 +347,14 @@ async function runQueueCycle(): Promise<void> {
             error,
           })
         } else {
-          console.error('[EmailQueue] Job failed, will retry:', {
+          // Exponential backoff: after attempt 1 wait 1s, after attempt 2 wait 2s (next run picks it up)
+          const backoffMs = 1000 * 2 ** (job.attempts - 1)
+          job.scheduledAt = new Date(Date.now() + backoffMs)
+          console.error('[EmailQueue] Job failed, will retry after backoff:', {
             id: job.id,
             type: job.type,
             attempts: job.attempts,
+            nextAttemptAt: job.scheduledAt.toISOString(),
             error,
           })
         }
