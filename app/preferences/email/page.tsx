@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import RiskmateLogo from '@/components/RiskmateLogo'
@@ -31,7 +31,7 @@ const EMAIL_PREF_LABELS: Record<keyof NotificationPreferences, string> = {
   task_completed: 'Task completed',
 }
 
-export default function PreferencesEmailPage() {
+function PreferencesEmailContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null)
@@ -235,5 +235,21 @@ export default function PreferencesEmailPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+function PreferencesEmailFallback() {
+  return (
+    <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center px-6">
+      <div className="text-[#A1A1A1]">Loading…</div>
+    </div>
+  )
+}
+
+export default function PreferencesEmailPage() {
+  return (
+    <Suspense fallback={<PreferencesEmailFallback />}>
+      <PreferencesEmailContent />
+    </Suspense>
   )
 }
