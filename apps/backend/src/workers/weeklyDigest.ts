@@ -104,21 +104,11 @@ export async function buildDigestForUser(userId: string, organizationId: string)
   }
 }
 
-/** True when local time is within the intended 09:00–09:10 window (so we do not run on boot or at other times). */
-function isInWeeklyDigestWindow(now: Date): boolean {
-  const hours = now.getHours()
-  const minutes = now.getMinutes()
-  return hours === 9 && minutes < 10
-}
-
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
-
-  if (!isInWeeklyDigestWindow(now)) return
-
   const periodKey = getWeekPeriodKey(now)
 
-  // Persisted guard: run once per period; skip if we already ran this period (allows catch-up if 09:00–09:10 window was missed).
+  // Persisted guard: run once per period; skip if we already ran this period. No time-window short-circuit so we allow a one-time catch-up run after downtime.
   const { data: existing } = await supabase
     .from('worker_period_runs')
     .select('ran_at')

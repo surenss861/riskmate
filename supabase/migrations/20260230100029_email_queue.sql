@@ -52,3 +52,15 @@ END;
 $$;
 
 COMMENT ON FUNCTION claim_email_queue_jobs(text, int, int) IS 'Claim pending email queue jobs with a visibility timeout; returns claimed rows for processing.';
+
+-- RLS and privileges: PII and queue access only via service_role.
+ALTER TABLE email_queue ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "service_role_all_email_queue"
+  ON email_queue FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON email_queue FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON email_queue TO service_role;

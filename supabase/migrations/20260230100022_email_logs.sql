@@ -17,3 +17,15 @@ CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient);
 CREATE INDEX IF NOT EXISTS idx_email_logs_status ON email_logs(status);
 
 COMMENT ON TABLE email_logs IS 'Audit log of email delivery events from the email queue worker.';
+
+-- RLS and privileges: PII and audit log access only via service_role.
+ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "service_role_all_email_logs"
+  ON email_logs FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON email_logs FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON email_logs TO service_role;
