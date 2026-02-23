@@ -88,17 +88,18 @@ async function processTaskReminders() {
 
   const now = new Date();
   const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
-  const nowIso = now.toISOString();
   const in24hIso = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const past24hIso = new Date(now.getTime() - ALERT_WINDOW_MS).toISOString();
 
   try {
-    // Due soon: due_date in [now, now+24h]. Overdue: all tasks with due_date < now (no cap).
+    // Due soon: due_date in [now, now+24h]. Overdue: due_date in [now-24h, now). Cap at 24h overdue so we don't email indefinitely.
     // last_reminded_at throttle prevents repeated sends within ~23h for all reminders.
     const { data: tasks, error } = await supabase
       .from("tasks")
       .select(
         "id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)"
       )
+      .gte("due_date", past24hIso)
       .lte("due_date", in24hIso)
       .neq("status", "done")
       .neq("status", "cancelled")

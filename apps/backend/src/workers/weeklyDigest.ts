@@ -4,9 +4,19 @@ import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
+const WEEKLY_DIGEST_WORKER_KEY = 'weekly_digest'
+
 let workerStarted = false
 let workerTimer: NodeJS.Timeout | null = null
-let lastRunWindowKey: string | null = null
+
+/** Monday of the given date (ISO weekday week); period_key is that Monday as YYYY-MM-DD. */
+function getWeekPeriodKey(date: Date): string {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff)
+  return d.toISOString().slice(0, 10)
+}
 
 async function buildDigestForUser(userId: string, organizationId: string): Promise<WeeklyDigestData> {
   const now = new Date()
@@ -97,11 +107,18 @@ async function buildDigestForUser(userId: string, organizationId: string): Promi
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
   const isMonday = now.getDay() === 1
-  const inWindow = now.getHours() === 9 && now.getMinutes() <= 1
-  if (!isMonday || !inWindow) return
+  if (!isMonday) return
 
-  const windowKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-09`
-  if (windowKey === lastRunWindowKey) return
+  const periodKey = getWeekPeriodKey(now)
+
+  // Persisted guard: run once per week even after restart; skip if we already ran this week.
+  const { data: existing } = await supabase
+    .from('worker_period_runs')
+    .select('ran_at')
+    .eq('worker_key', WEEKLY_DIGEST_WORKER_KEY)
+    .eq('period_key', periodKey)
+    .maybeSingle()
+  if (existing) return
 
   const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.weekly_digest)
   if (!hasLease) return
@@ -136,7 +153,10 @@ async function runWeeklyDigestCycle(): Promise<void> {
     }
   }
 
-  lastRunWindowKey = windowKey
+  await supabase.from('worker_period_runs').upsert(
+    { worker_key: WEEKLY_DIGEST_WORKER_KEY, period_key: periodKey, ran_at: now.toISOString() },
+    { onConflict: 'worker_key,period_key' }
+  )
   console.log('[WeeklyDigestWorker] Queued weekly digest emails')
 }
 
