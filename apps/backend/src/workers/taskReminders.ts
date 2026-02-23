@@ -3,6 +3,7 @@ import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from "../lib/workerLock";
 import { getNotificationPreferences, sendTaskOverdueNotification, sendTaskDueSoonNotification } from "../services/notifications";
 import { EmailJobType, queueEmail } from "./emailQueue";
 
+const TASK_REMINDER_WORKER_KEY = "task_reminder";
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000; // throttle: don't re-notify same task within ~23h
 const ALERT_WINDOW_MS = 24 * 60 * 60 * 1000; // due soon: within 24h
@@ -19,6 +20,25 @@ function getMillisecondsUntilNext8amLocal(): number {
     next.setDate(next.getDate() + 1);
   }
   return Math.max(next.getTime() - now.getTime(), 0);
+}
+
+/** Today as YYYY-MM-DD (local) for worker_period_runs. */
+function getTodayPeriodKey(): string {
+  const d = new Date();
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+/** True if current time is past today's 8am (used for catch-up after downtime). */
+function isPastToday8am(): boolean {
+  const now = new Date();
+  const today8am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0, 0);
+  return now.getTime() > today8am.getTime();
 }
 
 /** Send push and enqueue email for one task reminder; then update last_reminded_at to prevent duplicates. */
@@ -155,6 +175,15 @@ async function processTaskReminders() {
     }
 
     console.log(`[TaskReminderWorker] Complete. processed=${processed} failed=${failed}`);
+
+    await supabase.from("worker_period_runs").upsert(
+      {
+        worker_key: TASK_REMINDER_WORKER_KEY,
+        period_key: getTodayPeriodKey(),
+        ran_at: new Date().toISOString(),
+      },
+      { onConflict: "worker_key,period_key" }
+    );
   } catch (err) {
     console.error("[TaskReminderWorker] Unexpected worker error:", err);
   }
@@ -169,18 +198,43 @@ export function startTaskReminderWorker() {
   workerRunning = true;
   console.log("[TaskReminderWorker] Starting...");
 
-  // Run once immediately so reminders are not skipped after mid-day restarts until next 8am
-  void processTaskReminders();
-
   const initialDelay = getMillisecondsUntilNext8amLocal();
-  console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
 
-  startupTimeout = setTimeout(() => {
+  const scheduleFirstAndInterval = () => {
     void processTaskReminders();
     workerInterval = setInterval(() => {
       void processTaskReminders();
     }, TASK_REMINDER_INTERVAL_MS);
-  }, initialDelay);
+  };
+
+  if (isPastToday8am()) {
+    const periodKey = getTodayPeriodKey();
+    supabase
+      .from("worker_period_runs")
+      .select("ran_at")
+      .eq("worker_key", TASK_REMINDER_WORKER_KEY)
+      .eq("period_key", periodKey)
+      .maybeSingle()
+      .then(({ data: existing }) => {
+        if (existing) {
+          console.log("[TaskReminderWorker] Already ran today; first run at next 8am");
+        } else {
+          console.log("[TaskReminderWorker] Catch-up run (8am window was missed)");
+          void processTaskReminders().then(() => {
+            startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+          });
+          return;
+        }
+        startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+      })
+      .catch((err) => {
+        console.error("[TaskReminderWorker] Failed to check period run:", err);
+        startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+      });
+  } else {
+    console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
+    startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+  }
 }
 
 export function stopTaskReminderWorker() {

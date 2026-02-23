@@ -104,10 +104,20 @@ export async function buildDigestForUser(userId: string, organizationId: string)
   }
 }
 
+/** Morning window: 09:00–09:09 so digests send at a bounded time, not arbitrary Monday times. */
+function isWithinDigestWindow(now: Date): boolean {
+  return now.getHours() === 9 && now.getMinutes() < 10
+}
+
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
   const isMonday = now.getDay() === 1
   if (!isMonday) return
+
+  if (!isWithinDigestWindow(now)) {
+    console.log('[WeeklyDigestWorker] Skipping: outside 09:00–09:09 window')
+    return
+  }
 
   const periodKey = getWeekPeriodKey(now)
 

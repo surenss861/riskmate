@@ -7,6 +7,8 @@ ALTER TABLE email_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
 
 -- Policies: allow full access only for service role (backend worker)
+-- Drop first so migration is idempotent (e.g. re-run after partial apply or existing policies)
+DROP POLICY IF EXISTS "Service role full access email_queue" ON email_queue;
 CREATE POLICY "Service role full access email_queue"
   ON email_queue
   FOR ALL
@@ -14,6 +16,7 @@ CREATE POLICY "Service role full access email_queue"
   USING (true)
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Service role full access email_logs" ON email_logs;
 CREATE POLICY "Service role full access email_logs"
   ON email_logs
   FOR ALL
