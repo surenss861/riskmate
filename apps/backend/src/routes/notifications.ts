@@ -504,7 +504,7 @@ notificationsRouter.post(
 
       const { data: comment, error: commentError } = await supabase
         .from("comments")
-        .select("id, organization_id")
+        .select("id, organization_id, content, entity_type, entity_id")
         .eq("id", commentId)
         .eq("organization_id", organizationId)
         .maybeSingle();
@@ -514,13 +514,50 @@ notificationsRouter.post(
 
       const { data: user } = await supabase
         .from("users")
-        .select("id, organization_id")
+        .select("id, organization_id, email")
         .eq("id", userId)
         .single();
       if (!user || user.organization_id !== organizationId) {
         return res.status(403).json({ message: "User not in this organization" });
       }
       await sendMentionNotification(userId, organizationId, commentId, contextLabel);
+
+      const toEmail = (user as { email?: string | null }).email;
+      if (toEmail) {
+        const commentRow = comment as { content?: string | null; entity_type?: string; entity_id?: string };
+        let jobName = "a job";
+        if (commentRow.entity_type === "job" && commentRow.entity_id) {
+          const { data: job } = await supabase
+            .from("jobs")
+            .select("client_name")
+            .eq("id", commentRow.entity_id)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
+          if (job && (job as { client_name?: string | null }).client_name) {
+            jobName = (job as { client_name: string }).client_name;
+          }
+        }
+        const { data: author } = await supabase
+          .from("users")
+          .select("full_name")
+          .eq("id", authReq.user.id)
+          .maybeSingle();
+        const mentionedByName = (author as { full_name?: string | null } | null)?.full_name ?? "A teammate";
+        const commentPreview = typeof commentRow.content === "string"
+          ? commentRow.content.replace(/@\[[^\]]*\]\([^)]*\)/g, "").trim().slice(0, 120) || ""
+          : "";
+        const baseUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+        const commentUrl = commentRow.entity_type === "job" && commentRow.entity_id
+          ? `${baseUrl}/jobs/${commentRow.entity_id}#comment-${commentId}`
+          : baseUrl;
+
+        queueEmail(
+          EmailJobType.mention,
+          toEmail,
+          { mentionedByName, jobName, commentPreview, commentUrl },
+          userId
+        );
+      }
       res.status(204).end();
     } catch (err: any) {
       console.error("Mention notification failed:", err);
