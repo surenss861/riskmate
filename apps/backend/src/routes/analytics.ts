@@ -52,13 +52,13 @@ const parseRangeDays = (value?: string | string[]) => {
 
 const toDateKey = (value: string) => value.slice(0, 10);
 
-// --- Period parsing for analytics (7d, 30d, 90d) ---
-const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90 } as const;
+// --- Period parsing for analytics (7d, 30d, 90d, 1y) ---
+const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 } as const;
 type PeriodKey = keyof typeof PERIOD_DAYS;
 
 const parsePeriod = (value?: string | string[]): { days: number; key: PeriodKey } => {
   const str = value ? (Array.isArray(value) ? value[0] : value) : "30d";
-  const key = (str === "7d" || str === "30d" || str === "90d" ? str : "30d") as PeriodKey;
+  const key = (str === "7d" || str === "30d" || str === "90d" || str === "1y" ? str : "30d") as PeriodKey;
   return { days: PERIOD_DAYS[key], key };
 };
 
@@ -71,7 +71,24 @@ const dateRangeForDays = (days: number): { since: string; until: string } => {
   return { since: since.toISOString(), until: until.toISOString() };
 };
 
-// GET /api/analytics/trends — metric/period/groupBy
+// Helpers for trends: bucket keys and labels
+const weekStart = (d: Date): string => {
+  const x = new Date(d);
+  const day = x.getDay();
+  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
+  x.setDate(diff);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString().slice(0, 10);
+};
+const monthStart = (d: Date): string => {
+  const x = new Date(d);
+  x.setDate(1);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString().slice(0, 10);
+};
+
+// GET /api/analytics/trends — metric (jobs|risk|compliance), period (7d|30d|90d|1y), groupBy (day|week|month)
+// Response: { period, groupBy, metric, data: Array<{ period, value, label }> }
 analyticsRouter.get(
   "/trends",
   authenticate as unknown as express.RequestHandler,
@@ -86,9 +103,11 @@ analyticsRouter.get(
     try {
       const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const { days } = parsePeriod(authReq.query.period as string);
-      const groupBy = (authReq.query.groupBy as string) === "week" ? "week" : "day";
-      const metric = (authReq.query.metric as string) || "jobs_created";
+      const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
+      const groupByRaw = (authReq.query.groupBy as string) || "day";
+      const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
+      const metricRaw = (authReq.query.metric as string) || "jobs";
+      const metric = metricRaw === "risk" ? "risk" : metricRaw === "compliance" ? "compliance" : "jobs";
       const { since, until } = dateRangeForDays(days);
 
       const { data: jobs, error: jobsError } = await supabase
@@ -102,81 +121,52 @@ analyticsRouter.get(
       if (jobsError) throw jobsError;
       const jobList = (jobs || []) as { id: string; risk_score: number | null; status: string | null; created_at: string }[];
 
-      const buckets: { label: string; value: number }[] = [];
-      if (groupBy === "week") {
-        const weekStart = (d: Date) => {
-          const x = new Date(d);
-          const day = x.getDay();
-          const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-          x.setDate(diff);
-          x.setHours(0, 0, 0, 0);
-          return x.toISOString().slice(0, 10);
-        };
-        const weekLabels = new Map<string, number>();
-        for (const j of jobList) {
-          const key = weekStart(new Date(j.created_at));
-          if (metric === "jobs_created") weekLabels.set(key, (weekLabels.get(key) ?? 0) + 1);
-        }
-        if (metric === "completion_rate") {
-          const weeks = new Set(jobList.map((j) => weekStart(new Date(j.created_at))));
-          for (const w of [...weeks].sort()) {
-            const weekTotal = jobList.filter((j) => weekStart(new Date(j.created_at)) === w).length;
-            const weekCompleted = jobList.filter((j) => weekStart(new Date(j.created_at)) === w && (j.status?.toLowerCase() === "completed")).length;
-            weekLabels.set(w, weekTotal === 0 ? 0 : Math.round((weekCompleted / weekTotal) * 1000) / 1000);
-          }
-        }
-        if (metric === "avg_risk") {
-          const byWeek = new Map<string, number[]>();
-          for (const j of jobList) {
-            if (j.risk_score != null) {
-              const key = weekStart(new Date(j.created_at));
-              if (!byWeek.has(key)) byWeek.set(key, []);
-              byWeek.get(key)!.push(j.risk_score);
-            }
-          }
-          for (const [label] of [...byWeek.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-            const arr = byWeek.get(label)!;
-            buckets.push({ label, value: Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 });
-          }
-          return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
-        }
-        for (const [label] of [...weekLabels.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          buckets.push({ label, value: weekLabels.get(label) ?? 0 });
-        }
-      } else {
-        const dayLabels = new Map<string, number>();
-        for (const j of jobList) {
-          const key = toDateKey(j.created_at);
-          if (metric === "jobs_created") dayLabels.set(key, (dayLabels.get(key) ?? 0) + 1);
-        }
-        if (metric === "completion_rate") {
-          const days = new Set(jobList.map((j) => toDateKey(j.created_at)));
-          for (const d of [...days].sort()) {
-            const total = jobList.filter((j) => toDateKey(j.created_at) === d).length;
-            const completed = jobList.filter((j) => toDateKey(j.created_at) === d && (j.status?.toLowerCase() === "completed")).length;
-            dayLabels.set(d, total === 0 ? 0 : Math.round((completed / total) * 1000) / 1000);
-          }
-        }
-        if (metric === "avg_risk") {
-          const byDay = new Map<string, number[]>();
-          for (const j of jobList) {
-            if (j.risk_score != null) {
-              const key = toDateKey(j.created_at);
-              if (!byDay.has(key)) byDay.set(key, []);
-              byDay.get(key)!.push(j.risk_score);
-            }
-          }
-          for (const [d] of [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-            const arr = byDay.get(d)!;
-            buckets.push({ label: d, value: Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 });
-          }
-          return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
-        }
-        for (const [label] of [...dayLabels.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          buckets.push({ label, value: dayLabels.get(label) ?? 0 });
+      const getBucketKey = (date: Date) =>
+        groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date);
+
+      type Point = { period: string; value: number; label: string };
+      const points: Point[] = [];
+      const bucketValues = new Map<string, number>();
+      const bucketRiskSums = new Map<string, { sum: number; count: number }>();
+      const bucketCompletion = new Map<string, { total: number; completed: number }>();
+
+      for (const j of jobList) {
+        const key = getBucketKey(new Date(j.created_at));
+        if (metric === "jobs") {
+          bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
+        } else if (metric === "risk" && j.risk_score != null) {
+          const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
+          cur.sum += j.risk_score;
+          cur.count += 1;
+          bucketRiskSums.set(key, cur);
+        } else if (metric === "compliance") {
+          const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
+          cur.total += 1;
+          if (j.status?.toLowerCase() === "completed") cur.completed += 1;
+          bucketCompletion.set(key, cur);
         }
       }
-      return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
+
+      if (metric === "jobs") {
+        for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
+        }
+      } else if (metric === "risk") {
+        for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          const { sum, count } = bucketRiskSums.get(period)!;
+          const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+          points.push({ period, value, label: period });
+        }
+      } else {
+        for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          const { total, completed } = bucketCompletion.get(period)!;
+          const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+          points.push({ period, value, label: period });
+        }
+      }
+
+      const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
+      return res.json({ period: periodLabel, groupBy, metric, data: points });
     } catch (error: any) {
       console.error("Analytics trends error:", error);
       return res.status(500).json({ message: "Failed to fetch analytics trends" });
@@ -184,7 +174,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/risk-heatmap
+// GET /api/analytics/risk-heatmap — aggregate by job_type and day_of_week (30d/90d), avg_risk and count per bucket
 analyticsRouter.get(
   "/risk-heatmap",
   authenticate as unknown as express.RequestHandler,
@@ -204,20 +194,31 @@ analyticsRouter.get(
 
       const { data: jobs, error } = await supabase
         .from("jobs")
-        .select("risk_score, risk_level")
+        .select("job_type, risk_score, created_at")
         .eq("organization_id", orgId)
         .gte("created_at", since)
         .lte("created_at", until)
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
-      const list = jobs || [];
-      const buckets = [
-        { range: "0-25", count: list.filter((j: any) => (j.risk_score ?? 0) >= 0 && (j.risk_score ?? 0) <= 25).length },
-        { range: "26-50", count: list.filter((j: any) => (j.risk_score ?? 0) >= 26 && (j.risk_score ?? 0) <= 50).length },
-        { range: "51-75", count: list.filter((j: any) => (j.risk_score ?? 0) >= 51 && (j.risk_score ?? 0) <= 75).length },
-        { range: "76-100", count: list.filter((j: any) => (j.risk_score ?? 0) >= 76 && (j.risk_score ?? 0) <= 100).length },
-      ];
+      const list = (jobs || []) as { job_type: string | null; risk_score: number | null; created_at: string }[];
+
+      type BucketKey = string;
+      const bucketSums: Record<BucketKey, { sum: number; count: number }> = {};
+      for (const j of list) {
+        const jobType = j.job_type ?? "other";
+        const dayOfWeek = new Date(j.created_at).getDay();
+        const key = `${jobType}|${dayOfWeek}`;
+        if (!bucketSums[key]) bucketSums[key] = { sum: 0, count: 0 };
+        bucketSums[key].count += 1;
+        if (j.risk_score != null) bucketSums[key].sum += j.risk_score;
+      }
+
+      const buckets = Object.entries(bucketSums).map(([key, { sum, count }]) => {
+        const [job_type, day_of_week_str] = key.split("|");
+        const avg_risk = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+        return { job_type, day_of_week: parseInt(day_of_week_str, 10), avg_risk, count };
+      });
       return res.json({ period: `${days}d`, buckets });
     } catch (error: any) {
       console.error("Analytics risk-heatmap error:", error);
@@ -226,7 +227,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/team-performance
+// GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days to complete, overdue_count per user
 analyticsRouter.get(
   "/team-performance",
   authenticate as unknown as express.RequestHandler,
@@ -243,28 +244,81 @@ analyticsRouter.get(
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
+      const now = new Date().toISOString();
 
-      const { data: mitigations, error: miError } = await supabase
-        .from("mitigation_items")
-        .select("completed_by, completed_at")
+      const { data: jobs, error: jobsError } = await supabase
+        .from("jobs")
+        .select("id, assigned_to_id, status, created_at, updated_at, due_date")
         .eq("organization_id", orgId)
-        .not("completed_at", "is", null)
-        .gte("completed_at", since)
-        .lte("completed_at", until)
+        .gte("created_at", since)
+        .lte("created_at", until)
         .limit(MAX_FETCH_LIMIT);
 
-      if (miError) throw miError;
-      const byUser: Record<string, number> = {};
-      (mitigations || []).forEach((m: any) => {
-        const uid = m.completed_by ?? "unknown";
-        byUser[uid] = (byUser[uid] ?? 0) + 1;
+      if (jobsError) throw jobsError;
+      const jobList = (jobs || []) as {
+        id: string;
+        assigned_to_id: string | null;
+        status: string | null;
+        created_at: string;
+        updated_at: string | null;
+        due_date: string | null;
+      }[];
+
+      type UserStats = {
+        jobs_assigned: number;
+        jobs_completed: number;
+        completion_rate: number;
+        avg_days_to_complete: number;
+        overdue_count: number;
+      };
+      const byUser: Record<string, UserStats> = {};
+
+      for (const j of jobList) {
+        const uid = j.assigned_to_id ?? "unassigned";
+        if (uid === "unassigned") continue;
+        if (!byUser[uid])
+          byUser[uid] = {
+            jobs_assigned: 0,
+            jobs_completed: 0,
+            completion_rate: 0,
+            avg_days_to_complete: 0,
+            overdue_count: 0,
+          };
+        byUser[uid].jobs_assigned += 1;
+        const completed = j.status?.toLowerCase() === "completed";
+        if (completed) byUser[uid].jobs_completed += 1;
+        if (j.due_date && j.due_date < now && !completed) byUser[uid].overdue_count += 1;
+      }
+
+      const completedDurations: Record<string, number[]> = {};
+      for (const j of jobList) {
+        if (j.assigned_to_id == null || j.status?.toLowerCase() !== "completed") continue;
+        const completedAt = j.updated_at ?? j.created_at;
+        const created = new Date(j.created_at).getTime();
+        const completed = new Date(completedAt).getTime();
+        const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
+        if (!completedDurations[j.assigned_to_id]) completedDurations[j.assigned_to_id] = [];
+        completedDurations[j.assigned_to_id].push(daysToComplete);
+      }
+
+      const members = Object.entries(byUser).map(([user_id, s]) => {
+        const completion_rate =
+          s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 10000;
+        const durations = completedDurations[user_id] ?? [];
+        const avg_days_to_complete =
+          durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
+        return {
+          user_id,
+          jobs_assigned: s.jobs_assigned,
+          jobs_completed: s.jobs_completed,
+          completion_rate,
+          avg_days_to_complete,
+          overdue_count: s.overdue_count,
+        };
       });
-      const members = Object.entries(byUser)
-        .filter(([id]) => id !== "unknown")
-        .map(([user_id, completions]) => ({ user_id, completions }))
-        .sort((a, b) => b.completions - a.completions)
-        .slice(0, 50);
-      return res.json({ period: `${days}d`, members });
+      members.sort((a, b) => b.jobs_completed - a.jobs_completed);
+      const topMembers = members.slice(0, 50);
+      return res.json({ period: `${days}d`, members: topMembers });
     } catch (error: any) {
       console.error("Analytics team-performance error:", error);
       return res.status(500).json({ message: "Failed to fetch team performance" });
@@ -272,7 +326,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/hazard-frequency
+// GET /api/analytics/hazard-frequency — groupBy type|location, count and avg_risk per category, trend vs previous window
 analyticsRouter.get(
   "/hazard-frequency",
   authenticate as unknown as express.RequestHandler,
@@ -289,26 +343,80 @@ analyticsRouter.get(
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
+      const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
       const { data: items, error } = await supabase
         .from("mitigation_items")
-        .select("code, title, factor_id")
+        .select("id, job_id, code, title, factor_id")
         .eq("organization_id", orgId)
         .gte("created_at", since)
         .lte("created_at", until)
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
-      const counts: Record<string, number> = {};
-      (items || []).forEach((m: any) => {
-        const key = m.code || m.factor_id || m.title || "unknown";
-        counts[key] = (counts[key] ?? 0) + 1;
+      const itemList = (items || []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
+      const jobIds = [...new Set(itemList.map((m) => m.job_id))];
+
+      const { data: jobsData } =
+        jobIds.length > 0
+          ? await supabase.from("jobs").select("id, risk_score, location").in("id", jobIds).limit(MAX_FETCH_LIMIT)
+          : { data: [] };
+      const jobMap = new Map(
+        (jobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
+      );
+
+      type CatStats = { count: number; riskSum: number; riskCount: number };
+      const current: Record<string, CatStats> = {};
+      for (const m of itemList) {
+        const category = groupBy === "location" ? (jobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
+        if (!current[category]) current[category] = { count: 0, riskSum: 0, riskCount: 0 };
+        current[category].count += 1;
+        const score = jobMap.get(m.job_id)?.risk_score;
+        if (score != null) {
+          current[category].riskSum += score;
+          current[category].riskCount += 1;
+        }
+      }
+
+      const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      const prevUntil = since;
+      const { data: prevItems } = await supabase
+        .from("mitigation_items")
+        .select("id, job_id, code, title, factor_id")
+        .eq("organization_id", orgId)
+        .gte("created_at", prevSince)
+        .lt("created_at", prevUntil)
+        .limit(MAX_FETCH_LIMIT);
+      const prevList = (prevItems || []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
+      const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
+      const { data: prevJobsData } =
+        prevJobIds.length > 0
+          ? await supabase.from("jobs").select("id, risk_score, location").in("id", prevJobIds).limit(MAX_FETCH_LIMIT)
+          : { data: [] };
+      const prevJobMap = new Map(
+        (prevJobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
+      );
+      const prev: Record<string, CatStats> = {};
+      for (const m of prevList) {
+        const category = groupBy === "location" ? (prevJobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
+        if (!prev[category]) prev[category] = { count: 0, riskSum: 0, riskCount: 0 };
+        prev[category].count += 1;
+        const score = prevJobMap.get(m.job_id)?.risk_score;
+        if (score != null) {
+          prev[category].riskSum += score;
+          prev[category].riskCount += 1;
+        }
+      }
+
+      const itemsOut = Object.entries(current).map(([category, s]) => {
+        const avg_risk = s.riskCount === 0 ? 0 : Math.round((s.riskSum / s.riskCount) * 100) / 100;
+        const prevS = prev[category];
+        const prevCount = prevS?.count ?? 0;
+        const trend = prevCount === 0 ? (s.count > 0 ? "up" : "neutral") : s.count > prevCount ? "up" : s.count < prevCount ? "down" : "neutral";
+        return { category, count: s.count, avg_risk, trend };
       });
-      const list = Object.entries(counts)
-        .map(([hazard_id, count]) => ({ hazard_id, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 100);
-      return res.json({ period: `${days}d`, items: list });
+      itemsOut.sort((a, b) => b.count - a.count);
+      return res.json({ period: `${days}d`, groupBy, items: itemsOut.slice(0, 100) });
     } catch (error: any) {
       console.error("Analytics hazard-frequency error:", error);
       return res.status(500).json({ message: "Failed to fetch hazard frequency" });
@@ -316,7 +424,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/compliance-rate
+// GET /api/analytics/compliance-rate — signature completion, photo upload, checklist completion, overall rate
 analyticsRouter.get(
   "/compliance-rate",
   authenticate as unknown as express.RequestHandler,
@@ -326,7 +434,14 @@ analyticsRouter.get(
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-      return res.json({ rate: 0, total: 0, compliant: 0, period: "30d", locked: true });
+      return res.json({
+        signature_completion_rate: 0,
+        photo_upload_rate: 0,
+        checklist_completion_rate: 0,
+        overall_rate: 0,
+        period: "30d",
+        locked: true,
+      });
     }
     try {
       const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
@@ -334,20 +449,67 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobs, error } = await supabase
+      const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
-        .select("id, status")
+        .select("id")
         .eq("organization_id", orgId)
         .gte("created_at", since)
         .lte("created_at", until)
         .limit(MAX_FETCH_LIMIT);
 
-      if (error) throw error;
-      const list = jobs || [];
-      const total = list.length;
-      const compliant = list.filter((j: any) => (j.status?.toLowerCase() === "completed")).length;
-      const rate = total === 0 ? 0 : Math.round((compliant / total) * 10000) / 10000;
-      return res.json({ period: `${days}d`, total, compliant, rate });
+      if (jobsError) throw jobsError;
+      const jobList = jobs || [];
+      const jobIds = jobList.map((j: any) => j.id);
+      const totalJobs = jobIds.length;
+      if (totalJobs === 0) {
+        return res.json({
+          period: `${days}d`,
+          signature_completion_rate: 0,
+          photo_upload_rate: 0,
+          checklist_completion_rate: 0,
+          overall_rate: 0,
+        });
+      }
+
+      const [sigRes, photoRes, checklistRes] = await Promise.all([
+        supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", jobIds).limit(MAX_FETCH_LIMIT),
+        jobIds.length > 0
+          ? supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", jobIds).limit(MAX_FETCH_LIMIT)
+          : Promise.resolve({ data: [] as { job_id: string }[] }),
+        supabase
+          .from("mitigation_items")
+          .select("job_id, completed_at")
+          .eq("organization_id", orgId)
+          .in("job_id", jobIds)
+          .limit(MAX_FETCH_LIMIT),
+      ]);
+
+      const jobsWithSignature = new Set((sigRes.data || []).map((r: any) => r.job_id)).size;
+      const jobsWithPhoto = new Set((photoRes.data || []).map((r: any) => r.job_id)).size;
+      const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
+      let checklistTotal = 0;
+      let checklistCompleted = 0;
+      for (const m of mitigationList) {
+        checklistTotal += 1;
+        if (m.completed_at) checklistCompleted += 1;
+      }
+      const checklist_completion_rate =
+        checklistTotal === 0 ? 0 : Math.round((checklistCompleted / checklistTotal) * 10000) / 10000;
+
+      const signature_completion_rate = totalJobs === 0 ? 0 : Math.round((jobsWithSignature / totalJobs) * 10000) / 10000;
+      const photo_upload_rate = totalJobs === 0 ? 0 : Math.round((jobsWithPhoto / totalJobs) * 10000) / 10000;
+      const overall_rate =
+        totalJobs === 0
+          ? 0
+          : Math.round(((signature_completion_rate + photo_upload_rate + checklist_completion_rate) / 3) * 10000) / 10000;
+
+      return res.json({
+        period: `${days}d`,
+        signature_completion_rate,
+        photo_upload_rate,
+        checklist_completion_rate,
+        overall_rate,
+      });
     } catch (error: any) {
       console.error("Analytics compliance-rate error:", error);
       return res.status(500).json({ message: "Failed to fetch compliance rate" });
@@ -355,7 +517,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/job-completion
+// GET /api/analytics/job-completion — total, completed, completion_rate, avg_days to complete, on_time_rate, overdue_count
 analyticsRouter.get(
   "/job-completion",
   authenticate as unknown as express.RequestHandler,
@@ -365,28 +527,70 @@ analyticsRouter.get(
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-      return res.json({ total: 0, completed: 0, completion_rate: 0, period: "30d", locked: true });
+      return res.json({
+        total: 0,
+        completed: 0,
+        completion_rate: 0,
+        avg_days_to_complete: 0,
+        on_time_rate: 0,
+        overdue_count: 0,
+        period: "30d",
+        locked: true,
+      });
     }
     try {
       const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
+      const now = new Date().toISOString();
 
       const { data: jobs, error } = await supabase
         .from("jobs")
-        .select("id, status")
+        .select("id, status, created_at, updated_at, due_date")
         .eq("organization_id", orgId)
         .gte("created_at", since)
         .lte("created_at", until)
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
-      const list = jobs || [];
+      const list = (jobs || []) as {
+        id: string;
+        status: string | null;
+        created_at: string;
+        updated_at: string | null;
+        due_date: string | null;
+      }[];
       const total = list.length;
-      const completed = list.filter((j: any) => (j.status?.toLowerCase() === "completed")).length;
+      const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
+      const completed = completedList.length;
       const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
-      return res.json({ period: `${days}d`, total, completed, completion_rate });
+
+      const durations: number[] = [];
+      let onTimeCount = 0;
+      for (const j of completedList) {
+        const completedAt = j.updated_at ?? j.created_at;
+        const daysToComplete = (new Date(completedAt).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        durations.push(daysToComplete);
+        if (j.due_date && new Date(completedAt) <= new Date(j.due_date)) onTimeCount += 1;
+      }
+      const avg_days_to_complete =
+        durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
+      const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 10000;
+
+      const overdue_count = list.filter(
+        (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now
+      ).length;
+
+      return res.json({
+        period: `${days}d`,
+        total,
+        completed,
+        completion_rate,
+        avg_days_to_complete,
+        on_time_rate,
+        overdue_count,
+      });
     } catch (error: any) {
       console.error("Analytics job-completion error:", error);
       return res.status(500).json({ message: "Failed to fetch job completion" });

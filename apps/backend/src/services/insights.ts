@@ -26,6 +26,10 @@ export interface Insight {
   metric_label?: string;
   period_days: number;
   created_at: string;
+  /** Actionable URL for the frontend (e.g. /jobs?status=open, /analytics/risk-heatmap). */
+  action_url: string;
+  /** Optional payload for the action (e.g. job_ids, count, filters). */
+  data: Record<string, unknown>;
 }
 
 const PERIOD_DAYS = 30;
@@ -68,6 +72,10 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       withRisk.length === 0 ? 0 : withRisk.reduce((a, j) => a + ((j as any).risk_score ?? 0), 0) / withRisk.length;
     const highRiskCount = jobList.filter((j) => ((j as any).risk_score ?? 0) >= 70).length;
 
+    const basePath = "/dashboard";
+    const jobsPath = `${basePath}/jobs`;
+    const analyticsPath = `${basePath}/analytics`;
+
     // completion_trend
     if (total > 0) {
       insights.push({
@@ -80,10 +88,13 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "Completion %",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${jobsPath}?status=open`,
+        data: { total, completed, completion_rate: completionRate },
       });
     }
 
     // risk_spike / high_risk_concentration
+    const highRiskJobIds = jobList.filter((j) => ((j as any).risk_score ?? 0) >= 70).map((j) => (j as any).id);
     if (highRiskCount > 0) {
       const pct = total === 0 ? 0 : highRiskCount / total;
       insights.push({
@@ -96,6 +107,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "High-risk count",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${analyticsPath}/risk-heatmap`,
+        data: { high_risk_count: highRiskCount, job_ids: highRiskJobIds.slice(0, 50) },
       });
     }
 
@@ -110,6 +123,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "Avg risk",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${analyticsPath}/risk-heatmap`,
+        data: { avg_risk: avgRisk, jobs_scored: withRisk.length },
       });
     }
 
@@ -125,6 +140,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "Completion %",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${jobsPath}?status=in_progress`,
+        data: { total, completed, completion_rate: completionRate },
       });
     }
 
@@ -155,6 +172,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "Completions",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${analyticsPath}/team-performance`,
+        data: { user_id: topUser[0], completions: topUser[1] },
       });
     }
 
@@ -184,6 +203,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         metric_label: "Occurrences",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
+        action_url: `${analyticsPath}/hazard-frequency`,
+        data: { hazard_label: topHazard[0], count: topHazard[1] },
       });
     }
 
@@ -201,6 +222,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       const withoutDoc = jobIds.filter((id) => !withDoc.has(id)).length;
       if (withoutDoc > 0 && sampleSize >= 5) {
         const pct = withoutDoc / sampleSize;
+        const jobIdsWithoutDoc = jobIds.filter((jid) => !withDoc.has(jid)).slice(0, 50);
         insights.push({
           id: id(),
           type: "evidence_gap",
@@ -211,6 +233,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
           metric_label: "% without evidence",
           period_days: PERIOD_DAYS,
           created_at: new Date().toISOString(),
+          action_url: `${jobsPath}?has_evidence=false`,
+          data: { jobs_without_evidence: withoutDoc, total_jobs: sampleSize, job_ids: jobIdsWithoutDoc },
         });
       }
     }
