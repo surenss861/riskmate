@@ -115,7 +115,7 @@ analyticsRouter.get(
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];
-      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS;
+      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
 
       if (useMv) {
         const sinceWeek = weekStart(new Date(since));
@@ -185,38 +185,73 @@ analyticsRouter.get(
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
       const bucketCompletion = new Map<string, { total: number; completed: number }>();
 
-      for (const j of jobList) {
-        const key = getBucketKey(new Date(j.created_at));
-        if (metric === "jobs") {
-          bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
-        } else if (metric === "risk" && j.risk_score != null) {
-          const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
-          cur.sum += j.risk_score;
-          cur.count += 1;
-          bucketRiskSums.set(key, cur);
-        } else if (metric === "compliance") {
-          const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
-          cur.total += 1;
-          if (j.status?.toLowerCase() === "completed") cur.completed += 1;
-          bucketCompletion.set(key, cur);
-        }
-      }
+      if (metric === "compliance" && jobList.length > 0) {
+        const trendJobIds = jobList.map((j) => j.id);
+        const [sigRes, photoRes, checklistRes] = await Promise.all([
+          supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
+          supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
+          supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", orgId).in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
+        ]);
+        const jobsWithSigSet = new Set((sigRes.data || []).map((r: { job_id: string }) => r.job_id));
+        const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: { job_id: string }) => r.job_id));
+        const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
 
-      if (metric === "jobs") {
-        for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
+        type BucketCompliance = { jobIds: string[]; sigCount: number; photoCount: number; checklistTotal: number; checklistCompleted: number };
+        const bucketCompliance = new Map<string, BucketCompliance>();
+        for (const j of jobList) {
+          const key = getBucketKey(new Date(j.created_at));
+          let cur = bucketCompliance.get(key);
+          if (!cur) {
+            cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistTotal: 0, checklistCompleted: 0 };
+            bucketCompliance.set(key, cur);
+          }
+          cur.jobIds.push(j.id);
+          if (jobsWithSigSet.has(j.id)) cur.sigCount += 1;
+          if (jobsWithPhotoSet.has(j.id)) cur.photoCount += 1;
         }
-      } else if (metric === "risk") {
-        for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          const { sum, count } = bucketRiskSums.get(period)!;
-          const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
-          points.push({ period, value, label: period });
+        const jobToBucket = new Map<string, string>();
+        for (const [key, cur] of bucketCompliance) {
+          for (const jid of cur.jobIds) jobToBucket.set(jid, key);
+        }
+        for (const m of mitigationList) {
+          const key = jobToBucket.get(m.job_id);
+          if (!key) continue;
+          const cur = bucketCompliance.get(key)!;
+          cur.checklistTotal += 1;
+          if (m.completed_at) cur.checklistCompleted += 1;
+        }
+        for (const [period] of [...bucketCompliance.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          const cur = bucketCompliance.get(period)!;
+          const n = cur.jobIds.length;
+          const sigRate = n === 0 ? 0 : cur.sigCount / n;
+          const photoRate = n === 0 ? 0 : cur.photoCount / n;
+          const checklistRate = cur.checklistTotal === 0 ? 0 : cur.checklistCompleted / cur.checklistTotal;
+          const value = (sigRate + photoRate + checklistRate) / 3;
+          points.push({ period, value: Math.round(value * 10000) / 10000, label: period });
         }
       } else {
-        for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          const { total, completed } = bucketCompletion.get(period)!;
-          const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
-          points.push({ period, value, label: period });
+        for (const j of jobList) {
+          const key = getBucketKey(new Date(j.created_at));
+          if (metric === "jobs") {
+            bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
+          } else if (metric === "risk" && j.risk_score != null) {
+            const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
+            cur.sum += j.risk_score;
+            cur.count += 1;
+            bucketRiskSums.set(key, cur);
+          }
+        }
+
+        if (metric === "jobs") {
+          for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+            points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
+          }
+        } else if (metric === "risk") {
+          for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+            const { sum, count } = bucketRiskSums.get(period)!;
+            const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+            points.push({ period, value, label: period });
+          }
         }
       }
 
@@ -493,10 +528,10 @@ analyticsRouter.get(
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
       return res.json({
-        signature_completion_rate: 0,
-        photo_upload_rate: 0,
-        checklist_completion_rate: 0,
-        overall_rate: 0,
+        signatures: 0,
+        photos: 0,
+        checklists: 0,
+        overall: 0,
         period: "30d",
         locked: true,
       });
@@ -522,10 +557,10 @@ analyticsRouter.get(
       if (totalJobs === 0) {
         return res.json({
           period: `${days}d`,
-          signature_completion_rate: 0,
-          photo_upload_rate: 0,
-          checklist_completion_rate: 0,
-          overall_rate: 0,
+          signatures: 0,
+          photos: 0,
+          checklists: 0,
+          overall: 0,
         });
       }
 
@@ -551,22 +586,19 @@ analyticsRouter.get(
         checklistTotal += 1;
         if (m.completed_at) checklistCompleted += 1;
       }
-      const checklist_completion_rate =
-        checklistTotal === 0 ? 0 : Math.round((checklistCompleted / checklistTotal) * 10000) / 10000;
-
-      const signature_completion_rate = totalJobs === 0 ? 0 : Math.round((jobsWithSignature / totalJobs) * 10000) / 10000;
-      const photo_upload_rate = totalJobs === 0 ? 0 : Math.round((jobsWithPhoto / totalJobs) * 10000) / 10000;
-      const overall_rate =
-        totalJobs === 0
-          ? 0
-          : Math.round(((signature_completion_rate + photo_upload_rate + checklist_completion_rate) / 3) * 10000) / 10000;
+      const checklistRate =
+        checklistTotal === 0 ? 0 : checklistCompleted / checklistTotal;
+      const signatureRate = totalJobs === 0 ? 0 : jobsWithSignature / totalJobs;
+      const photoRate = totalJobs === 0 ? 0 : jobsWithPhoto / totalJobs;
+      const overallRate =
+        totalJobs === 0 ? 0 : (signatureRate + photoRate + checklistRate) / 3;
 
       return res.json({
         period: `${days}d`,
-        signature_completion_rate,
-        photo_upload_rate,
-        checklist_completion_rate,
-        overall_rate,
+        signatures: Math.round(signatureRate * 10000) / 100,
+        photos: Math.round(photoRate * 10000) / 100,
+        checklists: Math.round(checklistRate * 10000) / 100,
+        overall: Math.round(overallRate * 10000) / 100,
       });
     } catch (error: any) {
       console.error("Analytics compliance-rate error:", error);

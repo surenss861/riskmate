@@ -1,18 +1,17 @@
 /**
  * Predictive insights service: generates insight objects for an organization
  * based on jobs, compliance, risk, and team activity. Used by GET /api/analytics/insights.
+ * Spec: deadline_risk, recurring_high_risk, pending_signatures, team_productivity_change, overdue_tasks.
  */
 
 import { supabase } from "../lib/supabaseClient";
 
 export type InsightType =
-  | "compliance_drop"
-  | "risk_spike"
-  | "hazard_trend"
-  | "team_performance"
-  | "completion_trend"
-  | "high_risk_concentration"
-  | "evidence_gap";
+  | "deadline_risk"
+  | "recurring_high_risk"
+  | "pending_signatures"
+  | "team_productivity_change"
+  | "overdue_tasks";
 
 export type InsightSeverity = "info" | "warning" | "critical";
 
@@ -34,6 +33,7 @@ export interface Insight {
 
 const PERIOD_DAYS = 30;
 const MAX_JOBS = 10000;
+const DEADLINE_RISK_DAYS = 2;
 
 function dateRange(days: number): { since: string; until: string } {
   const until = new Date();
@@ -46,197 +46,214 @@ function dateRange(days: number): { since: string; until: string } {
 
 /**
  * Generate all candidate insights for an organization; caller may take top N.
+ * Returns spec-compliant types: deadline_risk, recurring_high_risk, pending_signatures, team_productivity_change, overdue_tasks.
  */
 export async function generateInsights(orgId: string): Promise<Insight[]> {
   const insights: Insight[] = [];
   const { since, until } = dateRange(PERIOD_DAYS);
   const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+  const basePath = "/dashboard";
+  const jobsPath = `${basePath}/jobs`;
+  const analyticsPath = `${basePath}/analytics`;
+
   try {
+    const now = new Date();
+    const twoDaysFromNow = new Date(now.getTime() + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
+
     const { data: jobs, error: jobsError } = await supabase
       .from("jobs")
-      .select("id, status, risk_score, risk_level, created_at")
+      .select("id, status, risk_score, risk_level, created_at, due_date, job_type")
       .eq("organization_id", orgId)
       .gte("created_at", since)
       .lte("created_at", until)
       .limit(MAX_JOBS);
 
     if (jobsError) return insights;
-    const jobList = jobs || [];
+    const jobList = (jobs || []) as {
+      id: string;
+      status: string | null;
+      risk_score: number | null;
+      risk_level: string | null;
+      created_at: string;
+      due_date: string | null;
+      job_type: string | null;
+    }[];
 
-    const total = jobList.length;
-    const completed = jobList.filter((j) => (j as any).status?.toLowerCase() === "completed").length;
-    const completionRate = total === 0 ? 0 : completed / total;
-    const withRisk = jobList.filter((j) => (j as any).risk_score != null);
-    const avgRisk =
-      withRisk.length === 0 ? 0 : withRisk.reduce((a, j) => a + ((j as any).risk_score ?? 0), 0) / withRisk.length;
-    const highRiskCount = jobList.filter((j) => ((j as any).risk_score ?? 0) >= 70).length;
+    const jobIds = jobList.map((j) => j.id);
 
-    const basePath = "/dashboard";
-    const jobsPath = `${basePath}/jobs`;
-    const analyticsPath = `${basePath}/analytics`;
+    // --- 1. Deadline risk: jobs <50% complete with <2 days to due ---
+    const openJobIdsWithDueSoon = jobList
+      .filter((j) => {
+        if (j.status?.toLowerCase() === "completed") return false;
+        if (!j.due_date) return false;
+        const due = new Date(j.due_date).getTime();
+        return due <= twoDaysFromNow.getTime() && due >= now.getTime();
+      })
+      .map((j) => j.id);
 
-    // completion_trend
-    if (total > 0) {
+    let deadlineRiskJobIds: string[] = [];
+    if (openJobIdsWithDueSoon.length > 0) {
+      const { data: mitigations } = await supabase
+        .from("mitigation_items")
+        .select("job_id, completed_at")
+        .eq("organization_id", orgId)
+        .in("job_id", openJobIdsWithDueSoon)
+        .limit(MAX_JOBS);
+
+      const byJob: Record<string, { total: number; completed: number }> = {};
+      for (const jid of openJobIdsWithDueSoon) byJob[jid] = { total: 0, completed: 0 };
+      (mitigations || []).forEach((m: { job_id: string; completed_at: string | null }) => {
+        if (!byJob[m.job_id]) return;
+        byJob[m.job_id].total += 1;
+        if (m.completed_at) byJob[m.job_id].completed += 1;
+      });
+      deadlineRiskJobIds = openJobIdsWithDueSoon.filter((jid) => {
+        const { total, completed } = byJob[jid];
+        const pct = total === 0 ? 0 : completed / total;
+        return pct < 0.5;
+      });
+    }
+    if (deadlineRiskJobIds.length > 0) {
       insights.push({
         id: id(),
-        type: "completion_trend",
-        title: "Job completion this period",
-        description: `${completed} of ${total} jobs completed (${Math.round(completionRate * 100)}%).`,
-        severity: completionRate >= 0.8 ? "info" : completionRate >= 0.5 ? "warning" : "critical",
-        metric_value: Math.round(completionRate * 10000) / 100,
-        metric_label: "Completion %",
+        type: "deadline_risk",
+        title: "Deadline risk",
+        description: `${deadlineRiskJobIds.length} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
+        severity: deadlineRiskJobIds.length > 5 ? "critical" : deadlineRiskJobIds.length > 2 ? "warning" : "info",
+        metric_value: deadlineRiskJobIds.length,
+        metric_label: "Jobs at risk",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
-        action_url: `${jobsPath}?status=open`,
-        data: { total, completed, completion_rate: completionRate },
+        action_url: `${jobsPath}?due_soon=true`,
+        data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskJobIds.length },
       });
     }
 
-    // risk_spike / high_risk_concentration
-    const highRiskJobIds = jobList.filter((j) => ((j as any).risk_score ?? 0) >= 70).map((j) => (j as any).id);
-    if (highRiskCount > 0) {
-      const pct = total === 0 ? 0 : highRiskCount / total;
-      insights.push({
-        id: id(),
-        type: "high_risk_concentration",
-        title: "High-risk jobs",
-        description: `${highRiskCount} job(s) with risk score ≥ 70 in the last ${PERIOD_DAYS} days.`,
-        severity: pct > 0.2 ? "critical" : pct > 0.1 ? "warning" : "info",
-        metric_value: highRiskCount,
-        metric_label: "High-risk count",
-        period_days: PERIOD_DAYS,
-        created_at: new Date().toISOString(),
-        action_url: `${analyticsPath}/risk-heatmap`,
-        data: { high_risk_count: highRiskCount, job_ids: highRiskJobIds.slice(0, 50) },
-      });
-    }
-
-    if (avgRisk > 0) {
-      insights.push({
-        id: id(),
-        type: "risk_spike",
-        title: "Average risk score",
-        description: `Average risk score is ${Math.round(avgRisk)} (${withRisk.length} jobs scored).`,
-        severity: avgRisk >= 70 ? "critical" : avgRisk >= 50 ? "warning" : "info",
-        metric_value: Math.round(avgRisk * 100) / 100,
-        metric_label: "Avg risk",
-        period_days: PERIOD_DAYS,
-        created_at: new Date().toISOString(),
-        action_url: `${analyticsPath}/risk-heatmap`,
-        data: { avg_risk: avgRisk, jobs_scored: withRisk.length },
-      });
-    }
-
-    // compliance_drop (low completion rate)
-    if (total > 0 && completionRate < 0.7) {
-      insights.push({
-        id: id(),
-        type: "compliance_drop",
-        title: "Compliance below target",
-        description: `Completion rate is ${Math.round(completionRate * 100)}%. Consider prioritizing open jobs.`,
-        severity: completionRate < 0.4 ? "critical" : "warning",
-        metric_value: Math.round(completionRate * 10000) / 100,
-        metric_label: "Completion %",
-        period_days: PERIOD_DAYS,
-        created_at: new Date().toISOString(),
-        action_url: `${jobsPath}?status=in_progress`,
-        data: { total, completed, completion_rate: completionRate },
-      });
-    }
-
-    // team_performance: top completions from mitigation_items
-    const { data: mitigations } = await supabase
-      .from("mitigation_items")
-      .select("completed_by")
-      .eq("organization_id", orgId)
-      .not("completed_at", "is", null)
-      .gte("completed_at", since)
-      .lte("completed_at", until)
-      .limit(MAX_JOBS);
-
-    const byUser: Record<string, number> = {};
-    (mitigations || []).forEach((m: any) => {
-      const uid = m.completed_by ?? "unknown";
-      if (uid !== "unknown") byUser[uid] = (byUser[uid] ?? 0) + 1;
+    // --- 2. Recurring high-risk patterns by job_type and day-of-week ---
+    const highRiskJobs = jobList.filter((j) => (j.risk_score ?? 0) >= 70);
+    const bucketCount: Record<string, number> = {};
+    highRiskJobs.forEach((j) => {
+      const jobType = j.job_type ?? "other";
+      const dayOfWeek = new Date(j.created_at).getDay();
+      const key = `${jobType}|${dayOfWeek}`;
+      bucketCount[key] = (bucketCount[key] ?? 0) + 1;
     });
-    const topUser = Object.entries(byUser).sort((a, b) => b[1] - a[1])[0];
-    if (topUser) {
+    const recurringEntries = Object.entries(bucketCount).filter(([, count]) => count >= 2);
+    if (recurringEntries.length > 0) {
+      const top = recurringEntries.sort((a, b) => b[1] - a[1])[0];
+      const [jobType, dayNum] = top[0].split("|");
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       insights.push({
         id: id(),
-        type: "team_performance",
-        title: "Top contributor",
-        description: `Leading ${topUser[1]} mitigation completions in the last ${PERIOD_DAYS} days.`,
-        severity: "info",
-        metric_value: topUser[1],
-        metric_label: "Completions",
-        period_days: PERIOD_DAYS,
-        created_at: new Date().toISOString(),
-        action_url: `${analyticsPath}/team-performance`,
-        data: { user_id: topUser[0], completions: topUser[1] },
-      });
-    }
-
-    // hazard_trend: most frequent hazard/control
-    const { data: items } = await supabase
-      .from("mitigation_items")
-      .select("title, factor_id")
-      .eq("organization_id", orgId)
-      .gte("created_at", since)
-      .lte("created_at", until)
-      .limit(MAX_JOBS);
-
-    const hazardCounts: Record<string, number> = {};
-    (items || []).forEach((m: any) => {
-      const key = (m.title || m.factor_id || "unknown") as string;
-      hazardCounts[key] = (hazardCounts[key] ?? 0) + 1;
-    });
-    const topHazard = Object.entries(hazardCounts).sort((a, b) => b[1] - a[1])[0];
-    if (topHazard && topHazard[1] >= 3) {
-      insights.push({
-        id: id(),
-        type: "hazard_trend",
-        title: "Frequent hazard",
-        description: `"${topHazard[0].slice(0, 40)}${topHazard[0].length > 40 ? "…" : ""}" appears ${topHazard[1]} times.`,
-        severity: "info",
-        metric_value: topHazard[1],
+        type: "recurring_high_risk",
+        title: "Recurring high-risk pattern",
+        description: `High-risk jobs concentrate on ${dayNames[parseInt(dayNum, 10)]} for job type "${jobType}" (${top[1]} in period).`,
+        severity: top[1] >= 5 ? "critical" : top[1] >= 3 ? "warning" : "info",
+        metric_value: top[1],
         metric_label: "Occurrences",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
-        action_url: `${analyticsPath}/hazard-frequency`,
-        data: { hazard_label: topHazard[0], count: topHazard[1] },
+        action_url: `${analyticsPath}/risk-heatmap`,
+        data: { job_type: jobType, day_of_week: parseInt(dayNum, 10), count: top[1], patterns: recurringEntries.slice(0, 10).map(([k, v]) => ({ bucket: k, count: v })) },
       });
     }
 
-    // evidence_gap: jobs without documents (optional, if we have job ids)
-    const jobIds = jobList.map((j) => (j as any).id);
+    // --- 3. Pending signatures near compliance deadlines ---
     if (jobIds.length > 0) {
-      const { data: docs } = await supabase
-        .from("documents")
+      const { data: sigs } = await supabase
+        .from("signatures")
         .select("job_id")
+        .eq("organization_id", orgId)
         .in("job_id", jobIds.slice(0, 5000))
-        .limit(10000);
-
-      const withDoc = new Set((docs || []).map((d: any) => d.job_id));
-      const sampleSize = jobIds.length;
-      const withoutDoc = jobIds.filter((id) => !withDoc.has(id)).length;
-      if (withoutDoc > 0 && sampleSize >= 5) {
-        const pct = withoutDoc / sampleSize;
-        const jobIdsWithoutDoc = jobIds.filter((jid) => !withDoc.has(jid)).slice(0, 50);
+        .limit(MAX_JOBS);
+      const jobsWithSignature = new Set((sigs || []).map((r: { job_id: string }) => r.job_id));
+      const pendingSignatureJobIds = jobIds.filter((jid) => !jobsWithSignature.has(jid));
+      const withDueDate = jobList.filter((j) => j.due_date && pendingSignatureJobIds.includes(j.id));
+      const nearDeadline = withDueDate.filter((j) => {
+        const due = new Date(j.due_date!).getTime();
+        const daysToDue = (due - now.getTime()) / (24 * 60 * 60 * 1000);
+        return daysToDue >= 0 && daysToDue <= 7;
+      });
+      if (nearDeadline.length > 0) {
         insights.push({
           id: id(),
-          type: "evidence_gap",
-          title: "Jobs without evidence",
-          description: `${withoutDoc} of ${sampleSize} jobs have no documents in this period.`,
-          severity: pct > 0.5 ? "warning" : "info",
-          metric_value: Math.round((withoutDoc / sampleSize) * 10000) / 100,
-          metric_label: "% without evidence",
+          type: "pending_signatures",
+          title: "Pending signatures near deadline",
+          description: `${nearDeadline.length} job(s) have no signature and are within 7 days of compliance deadline.`,
+          severity: nearDeadline.length > 3 ? "critical" : nearDeadline.length > 1 ? "warning" : "info",
+          metric_value: nearDeadline.length,
+          metric_label: "Jobs",
           period_days: PERIOD_DAYS,
           created_at: new Date().toISOString(),
-          action_url: `${jobsPath}?has_evidence=false`,
-          data: { jobs_without_evidence: withoutDoc, total_jobs: sampleSize, job_ids: jobIdsWithoutDoc },
+          action_url: `${jobsPath}?pending_signatures=true`,
+          data: { job_ids: nearDeadline.map((j) => j.id).slice(0, 50), count: nearDeadline.length },
         });
       }
+    }
+
+    // --- 4. Team productivity change vs previous period ---
+    const prevSince = new Date(new Date(since).getTime() - PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const [currentMit, previousMit] = await Promise.all([
+      supabase
+        .from("mitigation_items")
+        .select("completed_by")
+        .eq("organization_id", orgId)
+        .not("completed_at", "is", null)
+        .gte("completed_at", since)
+        .lte("completed_at", until)
+        .limit(MAX_JOBS),
+      supabase
+        .from("mitigation_items")
+        .select("completed_by")
+        .eq("organization_id", orgId)
+        .not("completed_at", "is", null)
+        .gte("completed_at", prevSince)
+        .lt("completed_at", since)
+        .limit(MAX_JOBS),
+    ]);
+    const currentCompletions = (currentMit.data || []).length;
+    const previousCompletions = (previousMit.data || []).length;
+    const change = previousCompletions === 0 ? (currentCompletions > 0 ? 100 : 0) : ((currentCompletions - previousCompletions) / previousCompletions) * 100;
+    insights.push({
+      id: id(),
+      type: "team_productivity_change",
+      title: "Team productivity vs previous period",
+      description:
+        previousCompletions === 0
+          ? `Current period: ${currentCompletions} completions (no prior period data).`
+          : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${PERIOD_DAYS} days (${currentCompletions} vs ${previousCompletions}).`,
+      severity: change < -20 ? "warning" : change < -40 ? "critical" : "info",
+      metric_value: Math.round(change * 100) / 100,
+      metric_label: "% change",
+      period_days: PERIOD_DAYS,
+      created_at: new Date().toISOString(),
+      action_url: `${analyticsPath}/team-performance`,
+      data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
+    });
+
+    // --- 5. Overdue tasks count ---
+    const nowIso = now.toISOString();
+    const overdueCount = jobList.filter(
+      (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso
+    ).length;
+    if (overdueCount > 0) {
+      const overdueIds = jobList
+        .filter((j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso)
+        .map((j) => j.id);
+      insights.push({
+        id: id(),
+        type: "overdue_tasks",
+        title: "Overdue tasks",
+        description: `${overdueCount} job(s) are past due and not yet completed.`,
+        severity: overdueCount > 10 ? "critical" : overdueCount > 3 ? "warning" : "info",
+        metric_value: overdueCount,
+        metric_label: "Overdue",
+        period_days: PERIOD_DAYS,
+        created_at: new Date().toISOString(),
+        action_url: `${jobsPath}?overdue=true`,
+        data: { job_ids: overdueIds.slice(0, 50), count: overdueCount },
+      });
     }
 
     // Sort by severity weight then by metric relevance
