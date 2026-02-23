@@ -304,6 +304,11 @@ export async function sendWelcomeEmail(
   userName: string,
   userId?: string
 ): Promise<void> {
+  if (userId) {
+    const prefs = await getNotificationPreferences(userId)
+    if (!(prefs.email_enabled && prefs.job_assigned)) return
+  }
+
   const template = WelcomeEmail({
     userName: userName || fallbackName(to),
     managePreferencesUrl: userId ? getManagePreferencesUrl(userId) : undefined,
@@ -325,6 +330,11 @@ export async function sendTeamInviteEmail(
   loginUrl: string,
   userId?: string
 ): Promise<void> {
+  if (userId) {
+    const prefs = await getNotificationPreferences(userId)
+    if (!(prefs.email_enabled && prefs.job_assigned)) return
+  }
+
   const template = TeamInviteEmail({
     orgName,
     inviterName,
