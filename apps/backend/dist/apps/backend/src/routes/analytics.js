@@ -7,7 +7,19 @@ exports.analyticsRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const auth_1 = require("../middleware/auth");
+const insights_1 = require("../services/insights");
 exports.analyticsRouter = express_1.default.Router();
+// In-memory cache for insights: 1h TTL per org
+const INSIGHTS_CACHE_TTL_MS = 60 * 60 * 1000;
+const insightsCache = new Map();
+async function getCachedInsights(orgId) {
+    const entry = insightsCache.get(orgId);
+    if (entry && Date.now() < entry.expires)
+        return entry.data;
+    const data = await (0, insights_1.generateInsights)(orgId);
+    insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
+    return data;
+}
 const MAX_FETCH_LIMIT = 10000;
 const parseRangeDays = (value) => {
     if (!value)
@@ -22,6 +34,346 @@ const parseRangeDays = (value) => {
     return Math.min(days, 180);
 };
 const toDateKey = (value) => value.slice(0, 10);
+// --- Period parsing for analytics (7d, 30d, 90d) ---
+const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90 };
+const parsePeriod = (value) => {
+    const str = value ? (Array.isArray(value) ? value[0] : value) : "30d";
+    const key = (str === "7d" || str === "30d" || str === "90d" ? str : "30d");
+    return { days: PERIOD_DAYS[key], key };
+};
+const dateRangeForDays = (days) => {
+    const until = new Date();
+    until.setHours(23, 59, 59, 999);
+    const since = new Date(until.getTime());
+    since.setDate(since.getDate() - (days - 1));
+    since.setHours(0, 0, 0, 0);
+    return { since: since.toISOString(), until: until.toISOString() };
+};
+// GET /api/analytics/trends — metric/period/groupBy
+exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ period: "30d", groupBy: "day", data: [], locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const groupBy = authReq.query.groupBy === "week" ? "week" : "day";
+        const metric = authReq.query.metric || "jobs_created";
+        const { since, until } = dateRangeForDays(days);
+        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, risk_score, status, created_at")
+            .eq("organization_id", orgId)
+            .gte("created_at", since)
+            .lte("created_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (jobsError)
+            throw jobsError;
+        const jobList = (jobs || []);
+        const buckets = [];
+        if (groupBy === "week") {
+            const weekStart = (d) => {
+                const x = new Date(d);
+                const day = x.getDay();
+                const diff = x.getDate() - day + (day === 0 ? -6 : 1);
+                x.setDate(diff);
+                x.setHours(0, 0, 0, 0);
+                return x.toISOString().slice(0, 10);
+            };
+            const weekLabels = new Map();
+            for (const j of jobList) {
+                const key = weekStart(new Date(j.created_at));
+                if (metric === "jobs_created")
+                    weekLabels.set(key, (weekLabels.get(key) ?? 0) + 1);
+            }
+            if (metric === "completion_rate") {
+                const weeks = new Set(jobList.map((j) => weekStart(new Date(j.created_at))));
+                for (const w of [...weeks].sort()) {
+                    const weekTotal = jobList.filter((j) => weekStart(new Date(j.created_at)) === w).length;
+                    const weekCompleted = jobList.filter((j) => weekStart(new Date(j.created_at)) === w && (j.status?.toLowerCase() === "completed")).length;
+                    weekLabels.set(w, weekTotal === 0 ? 0 : Math.round((weekCompleted / weekTotal) * 1000) / 1000);
+                }
+            }
+            if (metric === "avg_risk") {
+                const byWeek = new Map();
+                for (const j of jobList) {
+                    if (j.risk_score != null) {
+                        const key = weekStart(new Date(j.created_at));
+                        if (!byWeek.has(key))
+                            byWeek.set(key, []);
+                        byWeek.get(key).push(j.risk_score);
+                    }
+                }
+                for (const [label] of [...byWeek.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                    const arr = byWeek.get(label);
+                    buckets.push({ label, value: Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 });
+                }
+                return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
+            }
+            for (const [label] of [...weekLabels.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                buckets.push({ label, value: weekLabels.get(label) ?? 0 });
+            }
+        }
+        else {
+            const dayLabels = new Map();
+            for (const j of jobList) {
+                const key = toDateKey(j.created_at);
+                if (metric === "jobs_created")
+                    dayLabels.set(key, (dayLabels.get(key) ?? 0) + 1);
+            }
+            if (metric === "completion_rate") {
+                const days = new Set(jobList.map((j) => toDateKey(j.created_at)));
+                for (const d of [...days].sort()) {
+                    const total = jobList.filter((j) => toDateKey(j.created_at) === d).length;
+                    const completed = jobList.filter((j) => toDateKey(j.created_at) === d && (j.status?.toLowerCase() === "completed")).length;
+                    dayLabels.set(d, total === 0 ? 0 : Math.round((completed / total) * 1000) / 1000);
+                }
+            }
+            if (metric === "avg_risk") {
+                const byDay = new Map();
+                for (const j of jobList) {
+                    if (j.risk_score != null) {
+                        const key = toDateKey(j.created_at);
+                        if (!byDay.has(key))
+                            byDay.set(key, []);
+                        byDay.get(key).push(j.risk_score);
+                    }
+                }
+                for (const [d] of [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                    const arr = byDay.get(d);
+                    buckets.push({ label: d, value: Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 });
+                }
+                return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
+            }
+            for (const [label] of [...dayLabels.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                buckets.push({ label, value: dayLabels.get(label) ?? 0 });
+            }
+        }
+        return res.json({ period: `${days}d`, groupBy, metric, data: buckets });
+    }
+    catch (error) {
+        console.error("Analytics trends error:", error);
+        return res.status(500).json({ message: "Failed to fetch analytics trends" });
+    }
+});
+// GET /api/analytics/risk-heatmap
+exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ buckets: [], locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = dateRangeForDays(days);
+        const { data: jobs, error } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("risk_score, risk_level")
+            .eq("organization_id", orgId)
+            .gte("created_at", since)
+            .lte("created_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (error)
+            throw error;
+        const list = jobs || [];
+        const buckets = [
+            { range: "0-25", count: list.filter((j) => (j.risk_score ?? 0) >= 0 && (j.risk_score ?? 0) <= 25).length },
+            { range: "26-50", count: list.filter((j) => (j.risk_score ?? 0) >= 26 && (j.risk_score ?? 0) <= 50).length },
+            { range: "51-75", count: list.filter((j) => (j.risk_score ?? 0) >= 51 && (j.risk_score ?? 0) <= 75).length },
+            { range: "76-100", count: list.filter((j) => (j.risk_score ?? 0) >= 76 && (j.risk_score ?? 0) <= 100).length },
+        ];
+        return res.json({ period: `${days}d`, buckets });
+    }
+    catch (error) {
+        console.error("Analytics risk-heatmap error:", error);
+        return res.status(500).json({ message: "Failed to fetch risk heatmap" });
+    }
+});
+// GET /api/analytics/team-performance
+exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ members: [], locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = dateRangeForDays(days);
+        const { data: mitigations, error: miError } = await supabaseClient_1.supabase
+            .from("mitigation_items")
+            .select("completed_by, completed_at")
+            .eq("organization_id", orgId)
+            .not("completed_at", "is", null)
+            .gte("completed_at", since)
+            .lte("completed_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (miError)
+            throw miError;
+        const byUser = {};
+        (mitigations || []).forEach((m) => {
+            const uid = m.completed_by ?? "unknown";
+            byUser[uid] = (byUser[uid] ?? 0) + 1;
+        });
+        const members = Object.entries(byUser)
+            .filter(([id]) => id !== "unknown")
+            .map(([user_id, completions]) => ({ user_id, completions }))
+            .sort((a, b) => b.completions - a.completions)
+            .slice(0, 50);
+        return res.json({ period: `${days}d`, members });
+    }
+    catch (error) {
+        console.error("Analytics team-performance error:", error);
+        return res.status(500).json({ message: "Failed to fetch team performance" });
+    }
+});
+// GET /api/analytics/hazard-frequency
+exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ items: [], locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = dateRangeForDays(days);
+        const { data: items, error } = await supabaseClient_1.supabase
+            .from("mitigation_items")
+            .select("code, title, factor_id")
+            .eq("organization_id", orgId)
+            .gte("created_at", since)
+            .lte("created_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (error)
+            throw error;
+        const counts = {};
+        (items || []).forEach((m) => {
+            const key = m.code || m.factor_id || m.title || "unknown";
+            counts[key] = (counts[key] ?? 0) + 1;
+        });
+        const list = Object.entries(counts)
+            .map(([hazard_id, count]) => ({ hazard_id, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 100);
+        return res.json({ period: `${days}d`, items: list });
+    }
+    catch (error) {
+        console.error("Analytics hazard-frequency error:", error);
+        return res.status(500).json({ message: "Failed to fetch hazard frequency" });
+    }
+});
+// GET /api/analytics/compliance-rate
+exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ rate: 0, total: 0, compliant: 0, period: "30d", locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = dateRangeForDays(days);
+        const { data: jobs, error } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, status")
+            .eq("organization_id", orgId)
+            .gte("created_at", since)
+            .lte("created_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (error)
+            throw error;
+        const list = jobs || [];
+        const total = list.length;
+        const compliant = list.filter((j) => (j.status?.toLowerCase() === "completed")).length;
+        const rate = total === 0 ? 0 : Math.round((compliant / total) * 10000) / 10000;
+        return res.json({ period: `${days}d`, total, compliant, rate });
+    }
+    catch (error) {
+        console.error("Analytics compliance-rate error:", error);
+        return res.status(500).json({ message: "Failed to fetch compliance rate" });
+    }
+});
+// GET /api/analytics/job-completion
+exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ total: 0, completed: 0, completion_rate: 0, period: "30d", locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = dateRangeForDays(days);
+        const { data: jobs, error } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, status")
+            .eq("organization_id", orgId)
+            .gte("created_at", since)
+            .lte("created_at", until)
+            .limit(MAX_FETCH_LIMIT);
+        if (error)
+            throw error;
+        const list = jobs || [];
+        const total = list.length;
+        const completed = list.filter((j) => (j.status?.toLowerCase() === "completed")).length;
+        const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+        return res.json({ period: `${days}d`, total, completed, completion_rate });
+    }
+    catch (error) {
+        console.error("Analytics job-completion error:", error);
+        return res.status(500).json({ message: "Failed to fetch job completion" });
+    }
+});
+// GET /api/analytics/insights — top 5 predictive insights (cached 1h)
+exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ insights: [], locked: true });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const all = await getCachedInsights(orgId);
+        const insights = all.slice(0, 5);
+        return res.json({ insights });
+    }
+    catch (error) {
+        console.error("Analytics insights error:", error);
+        return res.status(500).json({ message: "Failed to fetch insights" });
+    }
+});
 exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     // Soft check: return empty analytics data if plan is inactive (better UX than 402)
