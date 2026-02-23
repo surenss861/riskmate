@@ -1,16 +1,17 @@
 /**
  * Predictive insights service: generates insight objects for an organization
  * based on jobs, compliance, risk, and team activity. Used by GET /api/analytics/insights.
- * Spec: deadline_risk, recurring_high_risk, pending_signatures, team_productivity_change, overdue_tasks.
+ * Spec: deadline_risk, risk_pattern, pending_signatures, team_productivity, overdue_tasks.
  */
 
 import { supabase } from "../lib/supabaseClient";
 
+/** Spec-compliant type strings returned by /api/analytics/insights. */
 export type InsightType =
   | "deadline_risk"
-  | "recurring_high_risk"
+  | "risk_pattern"
   | "pending_signatures"
-  | "team_productivity_change"
+  | "team_productivity"
   | "overdue_tasks";
 
 export type InsightSeverity = "info" | "warning" | "critical";
@@ -46,7 +47,7 @@ function dateRange(days: number): { since: string; until: string } {
 
 /**
  * Generate all candidate insights for an organization; caller may take top N.
- * Returns spec-compliant types: deadline_risk, recurring_high_risk, pending_signatures, team_productivity_change, overdue_tasks.
+ * Returns spec-compliant types: deadline_risk, risk_pattern, pending_signatures, team_productivity, overdue_tasks.
  */
 export async function generateInsights(orgId: string): Promise<Insight[]> {
   const insights: Insight[] = [];
@@ -146,7 +147,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       insights.push({
         id: id(),
-        type: "recurring_high_risk",
+        type: "risk_pattern",
         title: "Recurring high-risk pattern",
         description: `High-risk jobs concentrate on ${dayNames[parseInt(dayNum, 10)]} for job type "${jobType}" (${top[1]} in period).`,
         severity: top[1] >= 5 ? "critical" : top[1] >= 3 ? "warning" : "info",
@@ -217,7 +218,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
     const change = previousCompletions === 0 ? (currentCompletions > 0 ? 100 : 0) : ((currentCompletions - previousCompletions) / previousCompletions) * 100;
     insights.push({
       id: id(),
-      type: "team_productivity_change",
+      type: "team_productivity",
       title: "Team productivity vs previous period",
       description:
         previousCompletions === 0

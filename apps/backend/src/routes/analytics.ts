@@ -111,7 +111,14 @@ analyticsRouter.get(
       const groupByRaw = (authReq.query.groupBy as string) || "day";
       const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
       const metricRaw = (authReq.query.metric as string) || "jobs";
-      const metric = metricRaw === "risk" ? "risk" : metricRaw === "compliance" ? "compliance" : "jobs";
+      const metric =
+        metricRaw === "risk"
+          ? "risk"
+          : metricRaw === "compliance"
+            ? "compliance"
+            : metricRaw === "completion" || metricRaw === "completion_rate"
+              ? "completion"
+              : "jobs";
       const { since, until } = dateRangeForDays(days);
 
       type Point = { period: string; value: number; label: string };
@@ -138,7 +145,8 @@ analyticsRouter.get(
               let value = 0;
               if (metric === "jobs") value = r.jobs_created ?? 0;
               else if (metric === "risk") value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0;
-              else value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 10000;
+              else if (metric === "completion")
+                value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 10000;
               points.push({ period, value, label: period });
             }
           } else {
@@ -159,7 +167,8 @@ analyticsRouter.get(
               let value = 0;
               if (metric === "jobs") value = cur.jobs_created;
               else if (metric === "risk") value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100;
-              else value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 10000;
+              else if (metric === "completion")
+                value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 10000;
               points.push({ period, value, label: period });
             }
           }
@@ -233,7 +242,13 @@ analyticsRouter.get(
       } else {
         for (const j of jobList) {
           const key = getBucketKey(new Date(j.created_at));
-          if (metric === "jobs") {
+          const completed = j.status?.toLowerCase() === "completed";
+          if (metric === "completion") {
+            const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
+            cur.total += 1;
+            if (completed) cur.completed += 1;
+            bucketCompletion.set(key, cur);
+          } else if (metric === "jobs") {
             bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
           } else if (metric === "risk" && j.risk_score != null) {
             const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
@@ -243,7 +258,13 @@ analyticsRouter.get(
           }
         }
 
-        if (metric === "jobs") {
+        if (metric === "completion") {
+          for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+            const { total, completed } = bucketCompletion.get(period)!;
+            const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+            points.push({ period, value, label: period });
+          }
+        } else if (metric === "jobs") {
           for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
             points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
           }
@@ -412,7 +433,23 @@ analyticsRouter.get(
       });
       members.sort((a, b) => b.jobs_completed - a.jobs_completed);
       const topMembers = members.slice(0, 50);
-      return res.json({ period: `${days}d`, members: topMembers });
+      const userIds = topMembers.map((m) => m.user_id);
+      const userMap = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: userRows } = await supabase
+          .from("users")
+          .select("id, full_name")
+          .in("id", userIds);
+        for (const u of userRows || []) {
+          const name = (u as { id: string; full_name: string | null }).full_name ?? "";
+          userMap.set((u as { id: string }).id, name.trim() || "Unknown");
+        }
+      }
+      const membersWithNames = topMembers.map((m) => ({
+        ...m,
+        name: userMap.get(m.user_id) ?? "Unknown",
+      }));
+      return res.json({ period: `${days}d`, members: membersWithNames });
     } catch (error: any) {
       console.error("Analytics team-performance error:", error);
       return res.status(500).json({ message: "Failed to fetch team performance" });
