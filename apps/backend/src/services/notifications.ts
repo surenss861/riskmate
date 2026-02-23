@@ -180,6 +180,7 @@ export type NotificationPreferences = {
   report_ready: boolean;
   job_comment: boolean;
   comment_resolved: boolean;
+  task_completed: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -199,6 +200,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   report_ready: true,
   job_comment: true,
   comment_resolved: true,
+  task_completed: true,
 };
 
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
@@ -219,6 +221,7 @@ export const OPT_OUT_SAFE_PREFERENCES: NotificationPreferences = {
   report_ready: false,
   job_comment: false,
   comment_resolved: false,
+  task_completed: false,
 };
 
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
@@ -255,6 +258,7 @@ export async function getNotificationPreferences(
     report_ready: data.report_ready ?? true,
     job_comment: data.job_comment ?? true,
     comment_resolved: data.comment_resolved ?? true,
+    task_completed: data.task_completed ?? true,
   };
 }
 
@@ -781,6 +785,11 @@ export async function sendTaskCompletedNotification(
   jobTitle: string,
   jobId?: string
 ) {
+  const prefs = await getNotificationPreferences(userId);
+  if (!prefs.task_completed) {
+    console.log("[Notifications] Skipped task_completed for user", userId, "(preference disabled)");
+    return;
+  }
   void jobTitle;
   const deepLink =
     jobId != null && jobId !== ""

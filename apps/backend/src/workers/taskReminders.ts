@@ -169,6 +169,9 @@ export function startTaskReminderWorker() {
   workerRunning = true;
   console.log("[TaskReminderWorker] Starting...");
 
+  // Run once immediately so reminders are not skipped after mid-day restarts until next 8am
+  void processTaskReminders();
+
   const initialDelay = getMillisecondsUntilNext8amLocal();
   console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
 

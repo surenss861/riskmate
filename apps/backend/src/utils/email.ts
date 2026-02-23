@@ -446,7 +446,7 @@ export async function sendTaskCompletedEmail(
   userId: string
 ): Promise<void> {
   const prefs = await getNotificationPreferences(userId)
-  if (!prefs.email_enabled) return
+  if (!(prefs.email_enabled && prefs.task_completed)) return
 
   const template = TaskCompletedEmail({
     userName: userName || fallbackName(to),

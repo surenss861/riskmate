@@ -30,6 +30,7 @@ const CONTRACT_KEYS: (keyof NotificationPreferences)[] = [
   "report_ready",
   "job_comment",
   "comment_resolved",
+  "task_completed",
 ];
 
 const mockMaybeSingle = jest.fn();
@@ -104,6 +105,7 @@ describe("notifications service", () => {
         report_ready: true,
         job_comment: false,
         comment_resolved: true,
+        task_completed: true,
       };
       mockMaybeSingle.mockResolvedValue({ data: row, error: null });
       const prefs = await getNotificationPreferences("user-1");
