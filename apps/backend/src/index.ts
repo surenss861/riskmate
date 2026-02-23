@@ -464,15 +464,15 @@ if (process.env.NODE_ENV !== "test") {
     startRetentionWorker();
     startLedgerRootWorker();
     // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test.
-    // Email/digest/reminder workers are gated by env flags; enable where email delivery is required.
+    // Email/digest/reminder workers run by default; set ENABLE_EMAIL_WORKER=false or DISABLE_EMAIL_QUEUE=true to opt out in local/test.
     if (process.env.SKIP_WORKERS !== 'true') {
-      if (process.env.ENABLE_EMAIL_WORKER === 'true') {
+      const disableEmailWorkers =
+        process.env.DISABLE_EMAIL_QUEUE === 'true' ||
+        process.env.DISABLE_EMAIL_QUEUE === '1' ||
+        process.env.ENABLE_EMAIL_WORKER === 'false';
+      if (!disableEmailWorkers) {
         startEmailQueueWorker();
-      }
-      if (process.env.ENABLE_WEEKLY_DIGEST === 'true') {
         startWeeklyDigestWorker();
-      }
-      if (process.env.ENABLE_DEADLINE_REMINDERS === 'true') {
         startDeadlineReminderWorker();
       }
       startTaskReminderWorker();
