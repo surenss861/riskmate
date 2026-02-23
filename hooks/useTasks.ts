@@ -2,6 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CreateTaskPayload, Task, UpdateTaskPayload } from '@/types/tasks'
+import { toast } from '@/lib/utils/toast'
+
+const ALERT_WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+function isDueDateInAlertWindow(dueDate: string | null | undefined): boolean {
+  if (!dueDate) return false
+  const due = new Date(dueDate).getTime()
+  const now = Date.now()
+  return due <= now + ALERT_WINDOW_MS
+}
+
+interface UseTasksOptions {
+  jobTitle?: string
+}
 
 interface UseTasksResult {
   tasks: Task[]
@@ -29,7 +43,8 @@ function unwrapTask(payload: any): Task | null {
   return null
 }
 
-export function useTasks(jobId: string | null): UseTasksResult {
+export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTasksResult {
+  const { jobTitle = 'Job' } = options ?? {}
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -114,6 +129,37 @@ export function useTasks(jobId: string | null): UseTasksResult {
             .map((task) => (task.id === optimisticTask.id ? created : task))
             .sort((a, b) => a.sort_order - b.sort_order)
         )
+
+        // Notify assignee and schedule reminder when due_date in alert window
+        if (payload.assigned_to) {
+          fetch('/api/notifications/task-assigned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: payload.assigned_to,
+              taskId: created.id,
+              taskTitle: created.title,
+              jobId,
+              jobTitle,
+            }),
+          }).then((r) => {
+            if (!r.ok) {
+              toast.error('Task saved but assignee notification failed')
+            }
+          }).catch(() => toast.error('Task saved but assignee notification failed'))
+        }
+        if (payload.due_date && isDueDateInAlertWindow(payload.due_date)) {
+          fetch('/api/notifications/schedule-task-reminder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: created.id }),
+          }).then((r) => {
+            if (r.ok) {
+              toast.success('Reminders scheduled for this task')
+            }
+          }).catch(() => {})
+        }
+
         return created
       } catch (err: any) {
         // Remove only the failed optimistic placeholder so previously created tasks (e.g. from batch) are preserved
@@ -148,13 +194,43 @@ export function useTasks(jobId: string | null): UseTasksResult {
         } else {
           await fetchTasks()
         }
+
+        const previousTask = previous.find((t) => t.id === id)
+        if (patch.assigned_to !== undefined && previousTask && patch.assigned_to !== previousTask.assigned_to && patch.assigned_to) {
+          fetch('/api/notifications/task-assigned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: patch.assigned_to,
+              taskId: id,
+              taskTitle: updated?.title ?? previousTask.title,
+              jobId: previousTask.job_id,
+              jobTitle,
+            }),
+          }).then((r) => {
+            if (!r.ok) {
+              toast.error('Task saved but assignee notification failed')
+            }
+          }).catch(() => toast.error('Task saved but assignee notification failed'))
+        }
+        if (patch.due_date !== undefined && isDueDateInAlertWindow(patch.due_date)) {
+          fetch('/api/notifications/schedule-task-reminder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: id }),
+          }).then((r) => {
+            if (r.ok) {
+              toast.success('Reminders scheduled for this task')
+            }
+          }).catch(() => {})
+        }
       } catch (err: any) {
         setTasks(previous)
         setError(err)
         throw err
       }
     },
-    [tasks, fetchTasks]
+    [tasks, fetchTasks, jobTitle]
   )
 
   const deleteTask = useCallback(

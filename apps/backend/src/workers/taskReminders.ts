@@ -4,6 +4,7 @@ import { EmailJobType, queueEmail } from "./emailQueue";
 
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000; // throttle: don't re-notify same task within ~23h
+const ALERT_WINDOW_MS = 24 * 60 * 60 * 1000; // due soon: within 24h
 
 let workerRunning = false;
 let workerInterval: NodeJS.Timeout | null = null;
@@ -185,4 +186,62 @@ export function stopTaskReminderWorker() {
   }
   workerRunning = false;
   console.log("[TaskReminderWorker] Stopped");
+}
+
+/**
+ * Run reminder for a single task (used when UI creates/updates a task with due_date in alert window).
+ * Validates task belongs to org, is not done/cancelled, has assignee and due_date, and due_date is within
+ * alert window (past or next 24h). Respects last_reminded_at throttle.
+ * Returns true if reminder was sent/scheduled, false if task not eligible.
+ */
+export async function runReminderForTask(
+  organizationId: string,
+  taskId: string
+): Promise<{ scheduled: boolean; message?: string }> {
+  const now = new Date();
+  const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
+  const in24hIso = new Date(now.getTime() + ALERT_WINDOW_MS).toISOString();
+
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .select(
+      "id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)"
+    )
+    .eq("id", taskId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error || !task) {
+    return { scheduled: false, message: "Task not found" };
+  }
+  if (task.status === "done" || task.status === "cancelled") {
+    return { scheduled: false, message: "Task is completed or cancelled" };
+  }
+  if (!task.assigned_to || !task.due_date) {
+    return { scheduled: false, message: "Task has no assignee or due date" };
+  }
+  if (task.due_date > in24hIso) {
+    return { scheduled: false, message: "Due date is not within the next 24 hours" };
+  }
+  if (task.last_reminded_at && task.last_reminded_at >= remindedBefore) {
+    return { scheduled: true, message: "Reminder already sent recently" };
+  }
+
+  const jobTitle = (task as { job?: { client_name: string } | null }).job?.client_name ?? "Job";
+  const assigneeEmail = (task as { assignee?: { email: string } | null }).assignee?.email ?? null;
+
+  const prefs = await getNotificationPreferences(task.assigned_to);
+  const shouldQueueEmail =
+    assigneeEmail && prefs.email_enabled && prefs.email_deadline_reminder;
+  const isOverdue = new Date(task.due_date).getTime() < now.getTime();
+
+  await sendTaskReminderPushAndEmail(
+    task,
+    jobTitle,
+    shouldQueueEmail ? assigneeEmail : null,
+    now,
+    isOverdue
+  );
+
+  return { scheduled: true };
 }

@@ -190,7 +190,7 @@ export default function JobDetailPage() {
     reorderTasks,
     refetch: refetchTasks,
     incompleteCount: taskIncompleteCount,
-  } = useTasks(jobId)
+  } = useTasks(jobId, { jobTitle: job?.client_name ?? undefined })
 
   const handleAddTask = useCallback(
     async (payload: CreateTaskPayload) => {

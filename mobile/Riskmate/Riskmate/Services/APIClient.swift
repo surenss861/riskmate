@@ -242,6 +242,13 @@ class APIClient {
                 )
             }
             
+            // 204 No Content: no body to decode; treat as success when T is EmptyResponse
+            if statusCode == 204 && data.isEmpty {
+                if T.self == EmptyResponse.self {
+                    return (EmptyResponse() as! T)
+                }
+            }
+
             // Attempt decode - if it fails, log raw response for debugging
             do {
                 return try decoder.decode(T.self, from: data)
@@ -1128,6 +1135,61 @@ class APIClient {
         return response.data
     }
 
+    /// Notify assignee (POST /api/notifications/task-assigned). Body: userId, taskId, taskTitle, jobId, jobTitle.
+    func notifyTaskAssigned(userId: String, taskId: String, taskTitle: String, jobId: String, jobTitle: String?) async throws {
+        struct Body: Encodable {
+            let userId: String
+            let taskId: String
+            let taskTitle: String
+            let jobId: String
+            let jobTitle: String?
+        }
+        let body = try JSONEncoder().encode(Body(userId: userId, taskId: taskId, taskTitle: taskTitle, jobId: jobId, jobTitle: jobTitle))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/task-assigned",
+            method: "POST",
+            body: body
+        )
+    }
+
+    /// Notify task creator (POST /api/notifications/task-completed). Body: userId, taskId, taskTitle, jobTitle?, jobId?.
+    func notifyTaskCompleted(userId: String, taskId: String, taskTitle: String, jobTitle: String?, jobId: String?) async throws {
+        struct Body: Encodable {
+            let userId: String
+            let taskId: String
+            let taskTitle: String
+            let jobTitle: String?
+            let jobId: String?
+        }
+        let body = try JSONEncoder().encode(Body(userId: userId, taskId: taskId, taskTitle: taskTitle, jobTitle: jobTitle, jobId: jobId))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/task-completed",
+            method: "POST",
+            body: body
+        )
+    }
+
+    /// Schedule/run overdue or due-soon reminder for one task (POST /api/notifications/schedule-task-reminder). Body: taskId.
+    func scheduleTaskReminder(taskId: String) async throws {
+        struct Body: Encodable {
+            let taskId: String
+        }
+        let body = try JSONEncoder().encode(Body(taskId: taskId))
+        let _: EmptyResponse = try await request(
+            endpoint: "/api/notifications/schedule-task-reminder",
+            method: "POST",
+            body: body
+        )
+    }
+
+    /// Get task templates for the current org (GET /api/task-templates). Returns default + org templates.
+    func getTaskTemplates() async throws -> [TaskTemplate] {
+        let response: TaskTemplatesResponse = try await request(
+            endpoint: "/api/task-templates"
+        )
+        return response.data
+    }
+
     /// Get controls for a job
     func getControls(jobId: String) async throws -> [Control] {
         let response: ControlsResponse = try await request(
@@ -1697,6 +1759,48 @@ struct TasksResponse: Codable {
 
 struct TaskResponse: Codable {
     let data: APIClientTask
+}
+
+/// Task template from GET /api/task-templates (same shape as web TaskTemplateSelector).
+struct TaskTemplate: Codable, Identifiable {
+    let id: String
+    let name: String
+    let tasks: [TemplateTaskItem]?
+    let jobType: String?
+    let organizationId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case tasks
+        case jobType = "job_type"
+        case organizationId = "organization_id"
+    }
+}
+
+/// Single task definition inside a template (title, description, assigned_to, priority, due_date, status, sort_order).
+struct TemplateTaskItem: Codable {
+    let title: String?
+    let description: String?
+    let assigned_to: String?
+    let priority: String?
+    let due_date: String?
+    let status: String?
+    let sort_order: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case description
+        case assigned_to
+        case priority
+        case due_date
+        case status
+        case sort_order
+    }
+}
+
+struct TaskTemplatesResponse: Codable {
+    let data: [TaskTemplate]
 }
 
 // MARK: - Comments API

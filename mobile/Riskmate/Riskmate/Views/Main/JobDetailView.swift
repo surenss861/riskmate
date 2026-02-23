@@ -291,7 +291,7 @@ struct JobDetailView: View {
             case .evidence:
                 EvidenceTab(jobId: jobId)
             case .tasks:
-                JobTasksView(jobId: jobId)
+                JobTasksView(jobId: jobId, jobTitle: job.clientName)
             case .comments:
                 VStack(spacing: 0) {
                     HStack {

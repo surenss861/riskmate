@@ -22,6 +22,7 @@ import {
 import { requireFeature } from "../middleware/limits";
 import { supabase } from "../lib/supabaseClient";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
+import { runReminderForTask } from "../workers/taskReminders";
 
 export const notificationsRouter: ExpressRouter = express.Router();
 
@@ -368,6 +369,32 @@ notificationsRouter.post(
     } catch (err: any) {
       console.error("Task completed notification failed:", err);
       res.status(500).json({ message: "Failed to send notification" });
+    }
+  }
+);
+
+/** POST /api/notifications/schedule-task-reminder — run overdue/due-soon reminder for one task (assignee push + email). Body: { taskId }. */
+notificationsRouter.post(
+  "/schedule-task-reminder",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    try {
+      const { taskId } = req.body || {};
+      if (!taskId || typeof taskId !== "string") {
+        return res
+          .status(400)
+          .json({ message: "Missing taskId" });
+      }
+      const organizationId = authReq.user.organization_id;
+      const result = await runReminderForTask(organizationId, taskId);
+      if (!result.scheduled && result.message && !result.message.includes("already sent")) {
+        return res.status(400).json({ message: result.message });
+      }
+      res.status(204).end();
+    } catch (err: any) {
+      console.error("Schedule task reminder failed:", err);
+      res.status(500).json({ message: "Failed to schedule task reminder" });
     }
   }
 );
