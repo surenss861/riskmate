@@ -5,6 +5,7 @@ import {
   sendDeadlineNotification,
 } from "../services/notifications";
 import { EmailJobType, queueEmail } from "./emailQueue";
+import { buildDigestForUser } from "./weeklyDigest";
 
 export async function runWeeklySummaryJob() {
   const { data: organizations, error } = await supabase
@@ -25,6 +26,30 @@ export async function runWeeklySummaryJob() {
         organizationId: org.id,
         message,
       });
+
+      // Enqueue weekly_digest email for users who have email_weekly_digest enabled and email on file
+      const { data: orgUsers } = await supabase
+        .from("users")
+        .select("id, email")
+        .eq("organization_id", org.id)
+        .not("email", "is", null);
+
+      for (const user of orgUsers ?? []) {
+        if (!user.email) continue;
+        const prefs = await getNotificationPreferences(user.id);
+        if (!prefs.email_enabled || !prefs.email_weekly_digest) continue;
+        try {
+          const digestData = await buildDigestForUser(user.id, org.id);
+          await queueEmail(
+            EmailJobType.weekly_digest,
+            user.email,
+            digestData as unknown as Record<string, unknown>,
+            user.id
+          );
+        } catch (digestErr) {
+          console.error(`Weekly digest email enqueue failed for user ${user.id}:`, digestErr);
+        }
+      }
     } catch (err) {
       console.error(`Weekly summary failed for org ${org.id}:`, err);
     }

@@ -18,7 +18,7 @@ function getWeekPeriodKey(date: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-async function buildDigestForUser(userId: string, organizationId: string): Promise<WeeklyDigestData> {
+export async function buildDigestForUser(userId: string, organizationId: string): Promise<WeeklyDigestData> {
   const now = new Date()
   const oneWeekAgo = new Date(now)
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)

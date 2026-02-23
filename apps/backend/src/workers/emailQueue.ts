@@ -13,6 +13,7 @@ import {
   sendWelcomeEmail,
 } from '../utils/email'
 import { supabase } from '../lib/supabaseClient'
+import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from '../lib/workerLock'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
 const LEASE_VISIBILITY_SEC = 120
@@ -349,6 +350,8 @@ async function processJob(job: EmailJob): Promise<void> {
 
 async function runQueueCycle(): Promise<void> {
   if (processing) return
+  const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.email_queue, 60)
+  if (!hasLease) return
   processing = true
 
   const holderId = `${process.pid}-${crypto.randomUUID().slice(0, 8)}`
