@@ -252,6 +252,13 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
       throw insertUserError;
     }
 
+    queueEmail(
+      EmailJobType.welcome,
+      normalizedEmail,
+      { userName: normalizedEmail },
+      newUserId
+    );
+
     let inviteRow: any = null;
     try {
       const { data: inviteData, error: inviteInsertError } = await supabase

@@ -246,13 +246,25 @@ notificationsRouter.post(
       }
       const { data: user } = await supabase
         .from("users")
-        .select("id, organization_id")
+        .select("id, organization_id, email")
         .eq("id", userId)
         .single();
       if (!user || user.organization_id !== organizationId) {
         return res.status(403).json({ message: "User not in this organization" });
       }
       await sendJobAssignedNotification(userId, organizationId, jobId, jobTitle);
+      const assigneeEmail = (user as { email?: string | null }).email;
+      if (assigneeEmail) {
+        queueEmail(
+          EmailJobType.job_assigned,
+          assigneeEmail,
+          {
+            job: { id: jobId, title: jobTitle ?? null },
+            assignedByName: authReq.user.full_name ?? "A teammate",
+          },
+          userId
+        );
+      }
       res.status(204).end();
     } catch (err: any) {
       console.error("Job assigned notification failed:", err);
