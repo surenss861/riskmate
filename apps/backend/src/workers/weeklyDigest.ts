@@ -2,9 +2,14 @@ import { supabase } from '../lib/supabaseClient'
 import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from '../lib/workerLock'
 import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
+import { isWithinTimeWindow } from './timeWindow'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
 const WEEKLY_DIGEST_WORKER_KEY = 'weekly_digest'
+/** Only run weekly digest cycle in this morning window (server local time). */
+const DIGEST_WINDOW_START_HOUR = 9
+const DIGEST_WINDOW_START_MINUTE = 0
+const DIGEST_WINDOW_DURATION_MINUTES = 10
 
 let workerStarted = false
 let workerTimer: NodeJS.Timeout | null = null
@@ -106,9 +111,14 @@ export async function buildDigestForUser(userId: string, organizationId: string)
 
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
+
+  if (!isWithinTimeWindow(now, DIGEST_WINDOW_START_HOUR, DIGEST_WINDOW_START_MINUTE, DIGEST_WINDOW_DURATION_MINUTES)) {
+    return
+  }
+
   const periodKey = getWeekPeriodKey(now)
 
-  // Persisted guard: run once per period; skip if we already ran this period. No time-window short-circuit so we allow a one-time catch-up run after downtime.
+  // Persisted guard: run once per period; skip if we already ran this period.
   const { data: existing } = await supabase
     .from('worker_period_runs')
     .select('ran_at')
