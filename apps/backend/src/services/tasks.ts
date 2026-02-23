@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
-import { mapTaskToApiShape } from "@lib/utils/taskApiShape";
+import { mapTaskToApiShape } from "../utils/taskApiShape";
 import { sendTaskAssignedNotification, sendTaskCompletedNotification } from "./notifications";
 
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
