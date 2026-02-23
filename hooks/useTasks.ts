@@ -84,7 +84,6 @@ export function useTasks(jobId: string | null): UseTasksResult {
         updated_at: new Date().toISOString(),
       }
 
-      const previous = tasks
       setTasks((prev) => [optimisticTask, ...prev])
 
       try {
@@ -105,12 +104,13 @@ export function useTasks(jobId: string | null): UseTasksResult {
         setTasks((prev) => prev.map((task) => (task.id === optimisticTask.id ? created : task)))
         return created
       } catch (err: any) {
-        setTasks(previous)
+        // Remove only the failed optimistic placeholder so previously created tasks (e.g. from batch) are preserved
+        setTasks((prev) => prev.filter((t) => t.id !== optimisticTask.id))
         setError(err)
         throw err
       }
     },
-    [jobId, tasks]
+    [jobId]
   )
 
   const updateTask = useCallback(

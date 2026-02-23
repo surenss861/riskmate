@@ -254,6 +254,7 @@ struct JobTasksView: View {
                     .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.5))
             } else {
                 Button {
+                    guard task.status != "done" else { return }
                     Task { await completeTask(id: task.id) }
                 } label: {
                     Image(systemName: task.status == "done" ? "checkmark.circle.fill" : "circle")
@@ -261,6 +262,7 @@ struct JobTasksView: View {
                         .foregroundColor(task.status == "done" ? .green : RMTheme.Colors.textTertiary)
                 }
                 .buttonStyle(.plain)
+                .disabled(task.status == "done")
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -294,7 +296,7 @@ struct JobTasksView: View {
                     Label("Reopen", systemImage: "arrow.uturn.backward")
                 }
                 .tint(.blue)
-            } else {
+            } else if task.status != "done" {
                 Button {
                     Task { await completeTask(id: task.id) }
                 } label: {

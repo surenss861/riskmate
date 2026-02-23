@@ -201,23 +201,31 @@ export default function JobDetailPage() {
 
   const handleApplyTaskTemplate = useCallback(
     async (templateTasks: CreateTaskPayload[]) => {
-      try {
-        const offset =
-          tasks.length === 0
-            ? 0
-            : Math.max(0, ...tasks.map((t) => t.sort_order)) + 1
-        for (let i = 0; i < templateTasks.length; i++) {
-          const task = templateTasks[i]
-          const sortOrder = offset + (task.sort_order ?? i)
+      const offset =
+        tasks.length === 0
+          ? 0
+          : Math.max(0, ...tasks.map((t) => t.sort_order)) + 1
+      const failures: string[] = []
+      for (let i = 0; i < templateTasks.length; i++) {
+        const task = templateTasks[i]
+        const sortOrder = offset + (task.sort_order ?? i)
+        try {
           await addTask({ ...task, sort_order: sortOrder })
+        } catch (err: any) {
+          failures.push(err?.message || `Task ${i + 1} failed`)
         }
-      } catch (err: any) {
-        const message = err?.message || 'Some tasks could not be created. Please retry.'
-        setToast({ message, type: 'error' })
-        throw err
+      }
+      if (failures.length > 0) {
+        await refetchTasks()
+        setToast({
+          message: failures.length === templateTasks.length
+            ? (failures[0] || 'Some tasks could not be created. Please retry.')
+            : `${failures.length} of ${templateTasks.length} tasks could not be created. The rest were added.`,
+          type: 'error',
+        })
       }
     },
-    [tasks, addTask]
+    [tasks, addTask, refetchTasks]
   )
 
   const loadVersionHistory = async () => {
