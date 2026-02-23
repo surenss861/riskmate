@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { format, isPast } from 'date-fns'
-import { Check, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import type { DragEvent } from 'react'
 import { badgeStyles, cardStyles, hoverStates, motion } from '@/lib/styles/design-system'
 import { Task } from '@/types/tasks'
@@ -18,6 +18,8 @@ interface TaskItemProps {
   onDrop: (event: DragEvent<HTMLDivElement>) => void
   /** When false, task is not draggable (e.g. cancelled section). Default true. */
   isDraggable?: boolean
+  /** When provided, show a Reopen action (e.g. for cancelled tasks). */
+  onReopen?: (id: string) => void
 }
 
 const PRIORITY_CLASSES: Record<Task['priority'], string> = {
@@ -39,7 +41,7 @@ function getInitials(fullName: string | null | undefined, email: string | null |
 const isCompletionDisabled = (task: Task, onComplete?: (id: string) => void) =>
   task.status === 'cancelled' || task.status === 'done' || onComplete == null
 
-export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop, isDraggable = true }: TaskItemProps) {
+export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStart, onDragOver, onDrop, isDraggable = true, onReopen }: TaskItemProps) {
   const [expanded, setExpanded] = useState(false)
   const dueDate = task.due_date ? new Date(task.due_date) : null
   const isOverdue = Boolean(dueDate && task.status !== 'done' && task.status !== 'cancelled' && isPast(dueDate))
@@ -126,6 +128,16 @@ export function TaskItem({ task, onComplete, onDelete, onEditRequest, onDragStar
       </div>
 
       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+        {task.status === 'cancelled' && onReopen != null && (
+          <button
+            type="button"
+            onClick={() => onReopen(task.id)}
+            className={`${hoverStates.iconButton} p-2 rounded-md text-white/60 hover:text-green-300`}
+            aria-label="Reopen task"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onEditRequest(task)}

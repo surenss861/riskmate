@@ -38,7 +38,7 @@ export function TaskList({
   deleteTask,
   completeTask,
   reorderTasks,
-  refetch: _refetch,
+  refetch,
   incompleteCount: _incompleteCount,
 }: TaskListProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -237,6 +237,10 @@ export function TaskList({
                 onDragOver={() => {}}
                 onDrop={() => {}}
                 isDraggable={false}
+                onReopen={async (id) => {
+                  await updateTask(id, { status: 'todo', completed_at: null })
+                  await refetch()
+                }}
               />
             ))}
           </div>
