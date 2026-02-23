@@ -463,9 +463,12 @@ if (process.env.NODE_ENV !== "test") {
     startExportWorker();
     startRetentionWorker();
     startLedgerRootWorker();
-    startEmailQueueWorker();
-    startWeeklyDigestWorker();
-    startDeadlineReminderWorker();
+    // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test
+    if (process.env.SKIP_WORKERS !== 'true') {
+      startEmailQueueWorker();
+      startWeeklyDigestWorker();
+      startDeadlineReminderWorker();
+    }
     startTaskReminderWorker();
   });
 

@@ -7,40 +7,65 @@ let workerStarted = false
 let workerTimer: NodeJS.Timeout | null = null
 let lastRunWindowKey: string | null = null
 
-async function buildDigestForUser(organizationId: string): Promise<WeeklyDigestData> {
+async function buildDigestForUser(userId: string, organizationId: string): Promise<WeeklyDigestData> {
   const now = new Date()
   const oneWeekAgo = new Date(now)
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
   const dueSoonCutoff = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
+  // Jobs assigned to this user (via job_assignments)
+  const { data: assignments } = await supabase
+    .from('job_assignments')
+    .select('job_id')
+    .eq('user_id', userId)
+
+  const jobIds = (assignments || []).map((a) => a.job_id).filter(Boolean)
+  if (jobIds.length === 0) {
+    return {
+      activeJobs: 0,
+      completedJobs: 0,
+      overdueJobs: 0,
+      needsAttention: [],
+      completedThisWeek: [],
+    }
+  }
+
+  // User-scoped: active jobs (assigned to user, not completed/archived)
   const { count: activeJobs } = await supabase
     .from('jobs')
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId)
+    .in('id', jobIds)
     .neq('status', 'completed')
     .neq('status', 'archived')
 
+  // User-scoped: completed this week (assigned to user)
   const { data: completedRows } = await supabase
     .from('jobs')
     .select('client_name, updated_at')
     .eq('organization_id', organizationId)
+    .in('id', jobIds)
     .eq('status', 'completed')
     .gte('updated_at', oneWeekAgo.toISOString())
     .order('updated_at', { ascending: false })
     .limit(10)
 
+  // User-scoped: overdue jobs (assigned to user)
   const { count: overdueJobs } = await supabase
     .from('jobs')
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId)
+    .in('id', jobIds)
     .lt('due_date', now.toISOString())
     .neq('status', 'completed')
     .neq('status', 'archived')
 
+  // User-scoped: needs attention (assigned to user, due soon or overdue)
   const { data: attentionRows } = await supabase
     .from('jobs')
     .select('client_name, due_date')
     .eq('organization_id', organizationId)
+    .in('id', jobIds)
     .not('due_date', 'is', null)
     .lte('due_date', dueSoonCutoff.toISOString())
     .neq('status', 'completed')
@@ -95,7 +120,7 @@ async function runWeeklyDigestCycle(): Promise<void> {
     if (!prefs.email_enabled || !prefs.email_weekly_digest) continue
 
     try {
-      const digest = await buildDigestForUser(user.organization_id)
+      const digest = await buildDigestForUser(user.id, user.organization_id)
       queueEmail(
         EmailJobType.weekly_digest,
         user.email,

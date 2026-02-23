@@ -16,6 +16,7 @@ interface EmailOptions {
   to: string | string[]
   subject: string
   html: string
+  text?: string
   from?: string
   replyTo?: string
 }
@@ -57,6 +58,7 @@ class ResendProvider implements EmailProvider {
             to,
             subject: options.subject,
             html: options.html,
+            text: options.text,
             replyTo: options.replyTo,
           })
           lastError = null
@@ -127,6 +129,7 @@ class SMTPProvider implements EmailProvider {
         to,
         subject: options.subject,
         html: options.html,
+        text: options.text,
         replyTo: options.replyTo,
       })
     }
@@ -215,6 +218,7 @@ export async function sendJobAssignedEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -242,6 +246,7 @@ export async function sendSignatureRequestEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -267,6 +272,7 @@ export async function sendReportReadyEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -283,6 +289,7 @@ export async function sendWelcomeEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -305,6 +312,7 @@ export async function sendTeamInviteEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -332,6 +340,7 @@ export async function sendMentionEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -353,6 +362,7 @@ export async function sendWeeklyDigestEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -381,6 +391,7 @@ export async function sendDeadlineReminderEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -405,6 +416,7 @@ export async function sendTaskAssignedEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -429,6 +441,7 @@ export async function sendTaskCompletedEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
@@ -464,6 +477,7 @@ export async function sendTaskReminderEmail(
     to,
     subject: template.subject,
     html: template.html,
+    text: template.text,
   })
 }
 
