@@ -263,13 +263,14 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
   const completeTask = useCallback(
     async (id: string) => {
       const previous = tasks
+      const task = previous.find((t) => t.id === id)
       const completedAt = new Date().toISOString()
 
       setTasks((prev) =>
-        prev.map((task) =>
-          task.id === id
-            ? { ...task, status: 'done', completed_at: completedAt, updated_at: completedAt }
-            : task
+        prev.map((t) =>
+          t.id === id
+            ? { ...t, status: 'done', completed_at: completedAt, updated_at: completedAt }
+            : t
         )
       )
 
@@ -278,13 +279,33 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
         if (!response.ok) {
           throw new Error(`Failed to complete task (${response.status})`)
         }
+
+        if (task?.created_by) {
+          fetch('/api/notifications/task-completed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: task.created_by,
+              taskId: id,
+              taskTitle: task.title,
+              jobTitle,
+              jobId: jobId ?? undefined,
+            }),
+          })
+            .then((r) => {
+              if (!r.ok) {
+                toast.error('Task completed but creator notification failed')
+              }
+            })
+            .catch(() => toast.error('Task completed but creator notification failed'))
+        }
       } catch (err: any) {
         setTasks(previous)
         setError(err)
         throw err
       }
     },
-    [tasks]
+    [tasks, jobId, jobTitle]
   )
 
   const reorderTasks = useCallback(

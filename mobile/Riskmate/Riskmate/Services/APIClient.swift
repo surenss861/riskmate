@@ -1926,6 +1926,8 @@ struct APIClientTask: Codable, Identifiable {
     let completedAt: String?
     let sortOrder: Int
     let assignedUser: APIClientTaskUser?
+    /// Task creator user id (for task-completed notification).
+    let createdBy: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1937,6 +1939,7 @@ struct APIClientTask: Codable, Identifiable {
         case completedAt = "completed_at"
         case sortOrder = "sort_order"
         case assignedUser = "assigned_user"
+        case createdBy = "created_by"
     }
 }
 

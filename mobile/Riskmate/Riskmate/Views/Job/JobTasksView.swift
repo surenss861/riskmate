@@ -29,6 +29,8 @@ struct JobTasksView: View {
         let dueDate: Date?
         let completedAt: Date?
         let sortOrder: Int
+        /// Task creator user id (for task-completed notification).
+        let createdBy: String?
     }
 
     private var sortedTasks: [TaskItem] {
@@ -275,7 +277,7 @@ struct JobTasksView: View {
             } else {
                 Button {
                     guard task.status != "done" else { return }
-                    Task { await completeTask(id: task.id) }
+                    Task { await completeTask(task: task) }
                 } label: {
                     Image(systemName: task.status == "done" ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 20, weight: .medium))
@@ -318,7 +320,7 @@ struct JobTasksView: View {
                 .tint(.blue)
             } else if task.status != "done" {
                 Button {
-                    Task { await completeTask(id: task.id) }
+                    Task { await completeTask(task: task) }
                 } label: {
                     Label("Complete", systemImage: "checkmark")
                 }
@@ -353,7 +355,8 @@ struct JobTasksView: View {
                     assignedUserId: item.assignedUser?.id,
                     dueDate: parseDate(item.dueDate),
                     completedAt: parseDate(item.completedAt),
-                    sortOrder: item.sortOrder
+                    sortOrder: item.sortOrder,
+                    createdBy: item.createdBy
                 )
             }
             loadError = nil
@@ -410,11 +413,20 @@ struct JobTasksView: View {
         }
     }
 
-    private func completeTask(id: String) async {
+    private func completeTask(task: TaskItem) async {
         do {
-            try await APIClient.shared.completeTask(id: id)
+            try await APIClient.shared.completeTask(id: task.id)
             await loadTasks()
             ToastCenter.shared.show("Task completed", systemImage: "checkmark.circle.fill", style: .success)
+            if let creatorId = task.createdBy {
+                Task {
+                    do {
+                        try await APIClient.shared.notifyTaskCompleted(userId: creatorId, taskId: task.id, taskTitle: task.title, jobTitle: jobTitle, jobId: jobId)
+                    } catch {
+                        ToastCenter.shared.show("Creator notification failed", systemImage: "exclamationmark.triangle", style: .error)
+                    }
+                }
+            }
         } catch {
             loadError = error.localizedDescription
         }
@@ -502,7 +514,25 @@ struct JobTasksView: View {
                 sort_order: sortOrder
             )
             do {
-                _ = try await APIClient.shared.createTask(jobId: jobId, payload: payload)
+                let created = try await APIClient.shared.createTask(jobId: jobId, payload: payload)
+                let titleForNotify = jobTitle ?? "Job"
+                if let assigneeId = item.assigned_to {
+                    Task {
+                        do {
+                            try await APIClient.shared.notifyTaskAssigned(userId: assigneeId, taskId: created.id, taskTitle: created.title, jobId: jobId, jobTitle: titleForNotify)
+                        } catch {
+                            ToastCenter.shared.show("Assignee notification failed", systemImage: "exclamationmark.triangle", style: .error)
+                        }
+                    }
+                }
+                if let dueDate = parseDate(item.due_date), isDueDateInAlertWindow(dueDate) {
+                    Task {
+                        do {
+                            try await APIClient.shared.scheduleTaskReminder(taskId: created.id)
+                            ToastCenter.shared.show("Reminders scheduled for this task", systemImage: "bell.badge", style: .success)
+                        } catch { /* non-fatal */ }
+                    }
+                }
             } catch {
                 failed += 1
             }
