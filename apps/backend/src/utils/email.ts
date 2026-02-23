@@ -156,9 +156,10 @@ class SMTPProvider implements EmailProvider {
   }
 }
 
-// Initialize email provider based on env vars.
+// Initialize email provider based on env vars. Attempts dynamic import of resend/nodemailer;
+// if the relevant package is missing, returns null so the queue worker skips instead of claiming and DLQ-ing.
 // Supported: RESEND_API_KEY, EMAIL_FROM (or RESEND_FROM_EMAIL), EMAIL_REPLY_TO.
-function getEmailProvider(): EmailProvider | null {
+export async function getEmailProvider(): Promise<EmailProvider | null> {
   const from =
     process.env.EMAIL_FROM ||
     process.env.RESEND_FROM_EMAIL ||
@@ -167,6 +168,14 @@ function getEmailProvider(): EmailProvider | null {
   // Prefer Resend if configured
   const resendKey = process.env.RESEND_API_KEY
   if (resendKey && from) {
+    try {
+      await import('resend')
+    } catch {
+      console.warn(
+        '[Email] Resend is configured but the "resend" package is not installed. Run: pnpm add resend. Email queue will skip processing.'
+      )
+      return null
+    }
     return new ResendProvider(resendKey, from)
   }
 
@@ -176,6 +185,14 @@ function getEmailProvider(): EmailProvider | null {
   const smtpPass = process.env.SMTP_PASS
 
   if (smtpHost && smtpUser && smtpPass && from) {
+    try {
+      await import('nodemailer')
+    } catch {
+      console.warn(
+        '[Email] SMTP is configured but the "nodemailer" package is not installed. Run: pnpm add nodemailer. Email queue will skip processing.'
+      )
+      return null
+    }
     return new SMTPProvider({
       host: smtpHost,
       port: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -189,9 +206,9 @@ function getEmailProvider(): EmailProvider | null {
   return null
 }
 
-/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
-export function isEmailConfigured(): boolean {
-  return getEmailProvider() !== null
+/** Whether an email provider is configured and available (Resend or SMTP). Use to short-circuit queue worker when not configured or packages missing. */
+export async function isEmailConfigured(): Promise<boolean> {
+  return (await getEmailProvider()) !== null
 }
 
 // Singleton email provider instance
@@ -199,7 +216,7 @@ let emailProvider: EmailProvider | null = null
 
 export async function sendEmail(options: EmailOptions): Promise<void> {
   if (!emailProvider) {
-    emailProvider = getEmailProvider()
+    emailProvider = await getEmailProvider()
   }
 
   if (!emailProvider) {

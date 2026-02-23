@@ -358,7 +358,7 @@ async function runQueueCycle(): Promise<void> {
   if (process.env.DISABLE_EMAIL_QUEUE === 'true' || process.env.DISABLE_EMAIL_QUEUE === '1') {
     return
   }
-  if (!isEmailConfigured()) {
+  if (!(await isEmailConfigured())) {
     console.warn('[EmailQueue] Skipping cycle: no email provider configured. Set RESEND_API_KEY or SMTP_* (or DISABLE_EMAIL_QUEUE=1 to disable processing).')
     return
   }

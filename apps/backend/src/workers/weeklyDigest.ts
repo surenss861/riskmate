@@ -106,17 +106,9 @@ export async function buildDigestForUser(userId: string, organizationId: string)
 
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
-  const isMonday = now.getDay() === 1
-  if (!isMonday) return
-
-  // Time-of-day guard: run only in 09:00–09:10 local to match required 09:00 schedule; handles restarts within the window.
-  const hour = now.getHours()
-  const minute = now.getMinutes()
-  if (hour !== 9 || minute >= 10) return
-
   const periodKey = getWeekPeriodKey(now)
 
-  // Persisted guard: run once per week; skip if we already ran this week.
+  // Persisted guard: run once per period; skip if we already ran this period (allows catch-up if 09:00–09:10 window was missed).
   const { data: existing } = await supabase
     .from('worker_period_runs')
     .select('ran_at')
