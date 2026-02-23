@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface WeeklyDigestData {
     activeJobs: number;
     completedJobs: number;
@@ -17,5 +16,10 @@ export interface WeeklyDigestEmailInput {
     digest: WeeklyDigestData;
     managePreferencesUrl?: string;
 }
-export declare function WeeklyDigestEmail(input: WeeklyDigestEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function WeeklyDigestEmail(input: WeeklyDigestEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=WeeklyDigestEmail.d.ts.map

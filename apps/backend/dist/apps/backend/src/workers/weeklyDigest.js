@@ -7,7 +7,12 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
+const timeWindow_1 = require("./timeWindow");
 const WEEKLY_DIGEST_WORKER_KEY = 'weekly_digest';
+/** Only run weekly digest cycle in this morning window (server local time). */
+const DIGEST_WINDOW_START_HOUR = 9;
+const DIGEST_WINDOW_START_MINUTE = 0;
+const DIGEST_WINDOW_DURATION_MINUTES = 10;
 let workerStarted = false;
 let workerTimer = null;
 /** Monday of the given date (ISO weekday week); period_key is that Monday as YYYY-MM-DD. */
@@ -94,21 +99,13 @@ async function buildDigestForUser(userId, organizationId) {
         })),
     };
 }
-/** Morning window: 09:00–09:09 so digests send at a bounded time, not arbitrary Monday times. */
-function isWithinDigestWindow(now) {
-    return now.getHours() === 9 && now.getMinutes() < 10;
-}
 async function runWeeklyDigestCycle() {
     const now = new Date();
-    const isMonday = now.getDay() === 1;
-    if (!isMonday)
-        return;
-    if (!isWithinDigestWindow(now)) {
-        console.log('[WeeklyDigestWorker] Skipping: outside 09:00–09:09 window');
+    if (!(0, timeWindow_1.isWithinTimeWindow)(now, DIGEST_WINDOW_START_HOUR, DIGEST_WINDOW_START_MINUTE, DIGEST_WINDOW_DURATION_MINUTES)) {
         return;
     }
     const periodKey = getWeekPeriodKey(now);
-    // Persisted guard: run once per week even after restart; skip if we already ran this week.
+    // Persisted guard: run once per period; skip if we already ran this period.
     const { data: existing } = await supabaseClient_1.supabase
         .from('worker_period_runs')
         .select('ran_at')

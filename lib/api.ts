@@ -1155,6 +1155,21 @@ export const reportsApi = {
 };
 
 // Analytics API
+export type AnalyticsSummaryResponse = {
+  org_id: string;
+  range_days: number;
+  job_counts_by_status: Record<string, number>;
+  risk_level_distribution: Record<string, number>;
+  evidence_statistics: {
+    total_items: number;
+    jobs_with_evidence: number;
+    jobs_without_evidence: number;
+  };
+  team_activity: Array<{ user_id: string; completions_count: number }>;
+  locked?: boolean;
+  message?: string;
+};
+
 export const analyticsApi = {
   mitigations: async (params?: { orgId?: string; range?: string; crewId?: string }) => {
     const query = new URLSearchParams();
@@ -1187,6 +1202,16 @@ export const analyticsApi = {
       // Empty state reasons
       trend_empty_reason?: 'no_jobs' | 'no_events' | null;
     }>(endpoint);
+  },
+
+  /** Job counts by status, risk level distribution, evidence stats, team activity (mitigation completions by user). */
+  summary: async (params?: { orgId?: string; range?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.orgId) query.set('org_id', params.orgId);
+    if (params?.range) query.set('range', params.range);
+    const qs = query.toString();
+    const endpoint = qs ? `/api/analytics/summary?${qs}` : `/api/analytics/summary`;
+    return apiRequest<AnalyticsSummaryResponse>(endpoint);
   },
 };
 

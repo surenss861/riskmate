@@ -134,7 +134,20 @@ exports.notificationsRouter.get("/preferences/email", async (req, res) => {
         res.status(500).json({ message: "Failed to load preferences" });
     }
 });
-/** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus preference keys to update. */
+/** Email-only preference keys allowed for the public token PATCH. Must match the toggles shown on the public email prefs page so saved values persist. */
+const EMAIL_PREFERENCE_KEYS = [
+    "email_enabled",
+    "job_assigned",
+    "signature_requested",
+    "mention",
+    "email_deadline_reminder",
+    "email_weekly_digest",
+    "report_ready",
+    "job_comment",
+    "comment_resolved",
+    "task_completed",
+];
+/** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus email preference keys only. Push and other non-email prefs are left unchanged (use authenticated /preferences for those). */
 exports.notificationsRouter.patch("/preferences/email", async (req, res) => {
     try {
         const body = (req.body || {});
@@ -149,10 +162,9 @@ exports.notificationsRouter.patch("/preferences/email", async (req, res) => {
                 .status(401)
                 .json({ message: "Invalid or expired link", code: "INVALID_TOKEN" });
         }
-        const allowedKeys = Object.keys(notifications_1.DEFAULT_NOTIFICATION_PREFERENCES);
         const existing = await (0, notifications_1.getNotificationPreferences)(parsed.userId);
         const merged = { ...existing };
-        for (const key of allowedKeys) {
+        for (const key of EMAIL_PREFERENCE_KEYS) {
             if (typeof body[key] === "boolean")
                 merged[key] = body[key];
         }

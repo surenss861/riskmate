@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface TaskCompletedEmailInput {
     userName: string;
     taskTitle: string;
@@ -7,5 +6,10 @@ export interface TaskCompletedEmailInput {
     jobId: string;
     managePreferencesUrl?: string;
 }
-export declare function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function TaskCompletedEmail(input: TaskCompletedEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=TaskCompletedEmail.d.ts.map

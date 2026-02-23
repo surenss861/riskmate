@@ -7,9 +7,22 @@ interface EmailOptions {
     from?: string;
     replyTo?: string;
 }
-/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
-export declare function isEmailConfigured(): boolean;
-export declare function sendEmail(options: EmailOptions): Promise<void>;
+export interface SendEmailResult {
+    providerId?: string;
+}
+export type SendResult = {
+    sent: true;
+    providerId?: string;
+} | {
+    sent: false;
+};
+interface EmailProvider {
+    send(options: EmailOptions): Promise<SendEmailResult>;
+}
+export declare function getEmailProvider(): Promise<EmailProvider | null>;
+/** Whether an email provider is configured and available (Resend or SMTP). Use to short-circuit queue worker when not configured or packages missing. */
+export declare function isEmailConfigured(): Promise<boolean>;
+export declare function sendEmail(options: EmailOptions): Promise<SendEmailResult>;
 export declare function sendJobAssignedEmail(to: string, userName: string, job: {
     id?: string;
     title?: string | null;
@@ -17,31 +30,31 @@ export declare function sendJobAssignedEmail(to: string, userName: string, job: 
     location?: string | null;
     due_date?: string | null;
     risk_level?: string | null;
-}, assignedByName: string, userId: string): Promise<boolean>;
-export declare function sendSignatureRequestEmail(to: string, userName: string, reportName: string, jobTitle: string, reportRunId: string, deadline: string | undefined, userId: string): Promise<boolean>;
-export declare function sendReportReadyEmail(to: string, userName: string, jobTitle: string, downloadUrl: string, viewUrl: string, userId: string): Promise<boolean>;
-export declare function sendWelcomeEmail(to: string, userName: string, userId?: string): Promise<boolean>;
-export declare function sendTeamInviteEmail(to: string, orgName: string, inviterName: string, tempPassword: string, loginUrl: string, userId?: string): Promise<boolean>;
-export declare function sendMentionEmail(to: string, userName: string, mentionedByName: string, jobName: string, commentPreview: string, commentUrl: string, userId: string): Promise<boolean>;
-export declare function sendWeeklyDigestEmail(to: string, userName: string, digest: WeeklyDigestData, userId: string): Promise<boolean>;
+}, assignedByName: string, userId: string): Promise<SendResult>;
+export declare function sendSignatureRequestEmail(to: string, userName: string, reportName: string, jobTitle: string, reportRunId: string, deadline: string | undefined, userId: string): Promise<SendResult>;
+export declare function sendReportReadyEmail(to: string, userName: string, jobTitle: string, downloadUrl: string, viewUrl: string, userId: string): Promise<SendResult>;
+export declare function sendWelcomeEmail(to: string, userName: string, userId?: string): Promise<SendResult>;
+export declare function sendTeamInviteEmail(to: string, orgName: string, inviterName: string, tempPassword: string, loginUrl: string, userId?: string): Promise<SendResult>;
+export declare function sendMentionEmail(to: string, userName: string, mentionedByName: string, jobName: string, commentPreview: string, commentUrl: string, userId: string): Promise<SendResult>;
+export declare function sendWeeklyDigestEmail(to: string, userName: string, digest: WeeklyDigestData, userId: string): Promise<SendResult>;
 export declare function sendDeadlineReminderEmail(to: string, userName: string, job: {
     id?: string;
     title?: string | null;
     client_name?: string | null;
     due_date?: string | null;
-}, hoursRemaining: number, userId: string): Promise<boolean>;
+}, hoursRemaining: number, userId: string): Promise<SendResult>;
 export declare function sendTaskAssignedEmail(to: string, userName: string, params: {
     taskTitle: string;
     jobTitle: string;
     jobId: string;
     taskId: string;
-}, userId: string): Promise<boolean>;
+}, userId: string): Promise<SendResult>;
 export declare function sendTaskCompletedEmail(to: string, userName: string, params: {
     taskTitle: string;
     jobTitle: string;
     taskId: string;
     jobId: string;
-}, userId: string): Promise<boolean>;
+}, userId: string): Promise<SendResult>;
 export declare function sendTaskReminderEmail(to: string, userName: string, params: {
     taskTitle: string;
     jobTitle: string;
@@ -50,7 +63,7 @@ export declare function sendTaskReminderEmail(to: string, userName: string, para
     hoursRemaining?: number;
     jobId?: string;
     taskId?: string;
-}, userId: string): Promise<boolean>;
+}, userId: string): Promise<SendResult>;
 export declare function hashAlertPayload(payload: Record<string, unknown>): string;
 export {};
 //# sourceMappingURL=email.d.ts.map

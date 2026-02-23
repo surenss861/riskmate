@@ -215,4 +215,116 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         res.status(500).json({ message: "Failed to fetch analytics metrics" });
     }
 });
+exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({
+            org_id: authReq.user.organization_id ?? "",
+            range_days: parseRangeDays(authReq.query.range),
+            job_counts_by_status: {},
+            risk_level_distribution: {},
+            evidence_statistics: {
+                total_items: 0,
+                jobs_with_evidence: 0,
+                jobs_without_evidence: 0,
+            },
+            team_activity: [],
+            locked: true,
+            message: status === "none"
+                ? "Analytics requires an active subscription"
+                : "Analytics not available on your current plan",
+        });
+    }
+    try {
+        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        if (!orgId) {
+            return res.status(400).json({ message: "Missing organization id" });
+        }
+        const rangeDays = parseRangeDays(authReq.query.range);
+        const sinceDate = new Date();
+        sinceDate.setHours(0, 0, 0, 0);
+        sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
+        const sinceIso = sinceDate.toISOString();
+        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, status, risk_level, created_at")
+            .eq("organization_id", orgId)
+            .gte("created_at", sinceIso)
+            .limit(MAX_FETCH_LIMIT);
+        if (jobsError)
+            throw jobsError;
+        const jobList = (jobs || []);
+        const jobIds = jobList.map((j) => j.id);
+        const [documentsResponse, mitigationsResponse] = await Promise.all([
+            jobIds.length
+                ? supabaseClient_1.supabase
+                    .from("documents")
+                    .select("id, job_id")
+                    .in("job_id", jobIds)
+                    .limit(MAX_FETCH_LIMIT)
+                : Promise.resolve({ data: [], error: null }),
+            jobIds.length
+                ? supabaseClient_1.supabase
+                    .from("mitigation_items")
+                    .select("id, job_id, completed_at, completed_by")
+                    .in("job_id", jobIds)
+                    .not("completed_at", "is", null)
+                    .gte("completed_at", sinceIso)
+                    .limit(MAX_FETCH_LIMIT)
+                : Promise.resolve({
+                    data: [],
+                    error: null,
+                }),
+        ]);
+        if (documentsResponse.error)
+            throw documentsResponse.error;
+        if (mitigationsResponse.error)
+            throw mitigationsResponse.error;
+        const documents = documentsResponse.data || [];
+        const completions = mitigationsResponse.data || [];
+        const jobCountsByStatus = {};
+        for (const job of jobList) {
+            const s = job.status ?? "unknown";
+            jobCountsByStatus[s] = (jobCountsByStatus[s] ?? 0) + 1;
+        }
+        const riskLevelDistribution = {};
+        for (const job of jobList) {
+            const level = (job.risk_level ?? "unscored").toLowerCase();
+            riskLevelDistribution[level] = (riskLevelDistribution[level] ?? 0) + 1;
+        }
+        const jobsWithEvidenceSet = new Set(documents.map((d) => d.job_id).filter(Boolean));
+        const jobsWithEvidence = jobsWithEvidenceSet.size;
+        const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
+        const evidenceStatistics = {
+            total_items: documents.length,
+            jobs_with_evidence: jobsWithEvidence,
+            jobs_without_evidence: jobsWithoutEvidence,
+        };
+        const completionsByUser = {};
+        for (const c of completions) {
+            const uid = c.completed_by ?? "unknown";
+            completionsByUser[uid] = (completionsByUser[uid] ?? 0) + 1;
+        }
+        const teamActivity = Object.entries(completionsByUser)
+            .filter(([id]) => id !== "unknown")
+            .map(([user_id, completions_count]) => ({ user_id, completions_count }))
+            .sort((a, b) => b.completions_count - a.completions_count)
+            .slice(0, 20);
+        res.json({
+            org_id: orgId,
+            range_days: rangeDays,
+            job_counts_by_status: jobCountsByStatus,
+            risk_level_distribution: riskLevelDistribution,
+            evidence_statistics: evidenceStatistics,
+            team_activity: teamActivity,
+        });
+    }
+    catch (error) {
+        console.error("Analytics summary error:", error);
+        res.status(500).json({ message: "Failed to fetch analytics summary" });
+    }
+});
 //# sourceMappingURL=analytics.js.map

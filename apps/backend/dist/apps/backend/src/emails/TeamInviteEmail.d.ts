@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface TeamInviteEmailInput {
     orgName: string;
     inviterName: string;
@@ -6,5 +5,10 @@ export interface TeamInviteEmailInput {
     loginUrl: string;
     managePreferencesUrl?: string;
 }
-export declare function TeamInviteEmail(input: TeamInviteEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function TeamInviteEmail(input: TeamInviteEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=TeamInviteEmail.d.ts.map

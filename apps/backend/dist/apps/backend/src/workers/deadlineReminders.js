@@ -6,7 +6,12 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
+const timeWindow_1 = require("./timeWindow");
 const DEADLINE_REMINDER_WORKER_KEY = 'deadline_reminder';
+/** Only run deadline reminder cycle in this morning window (server local time). */
+const DEADLINE_WINDOW_START_HOUR = 8;
+const DEADLINE_WINDOW_START_MINUTE = 0;
+const DEADLINE_WINDOW_DURATION_MINUTES = 10;
 /** Today as YYYY-MM-DD (local) for worker_period_runs. */
 function getTodayPeriodKey(date) {
     const y = date.getFullYear();
@@ -18,11 +23,11 @@ let workerStarted = false;
 let workerTimer = null;
 async function runDeadlineReminderCycle() {
     const now = new Date();
-    const inWindow = now.getHours() === 8 && now.getMinutes() <= 1;
-    if (!inWindow)
+    if (!(0, timeWindow_1.isWithinTimeWindow)(now, DEADLINE_WINDOW_START_HOUR, DEADLINE_WINDOW_START_MINUTE, DEADLINE_WINDOW_DURATION_MINUTES)) {
         return;
+    }
     const periodKey = getTodayPeriodKey(now);
-    // Persisted guard: run once per day even after restart; skip if we already ran today.
+    // Persisted guard: run once per period; skip if we already ran this period.
     const { data: existing } = await supabaseClient_1.supabase
         .from('worker_period_runs')
         .select('ran_at')

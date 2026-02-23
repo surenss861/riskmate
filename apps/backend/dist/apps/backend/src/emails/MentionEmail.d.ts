@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface MentionEmailInput {
     userName: string;
     mentionedByName: string;
@@ -7,5 +6,10 @@ export interface MentionEmailInput {
     commentUrl: string;
     managePreferencesUrl?: string;
 }
-export declare function MentionEmail(input: MentionEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function MentionEmail(input: MentionEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=MentionEmail.d.ts.map

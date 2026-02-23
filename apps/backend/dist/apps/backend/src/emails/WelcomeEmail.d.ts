@@ -1,7 +1,11 @@
-import { type EmailTemplate } from "./base";
 export interface WelcomeEmailInput {
     userName: string;
     managePreferencesUrl?: string;
 }
-export declare function WelcomeEmail(input: WelcomeEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function WelcomeEmail(input: WelcomeEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=WelcomeEmail.d.ts.map

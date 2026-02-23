@@ -72,6 +72,7 @@ const metrics_1 = require("./routes/metrics");
 const dashboard_1 = require("./routes/dashboard");
 const comments_1 = require("./routes/comments");
 const tasks_1 = require("./routes/tasks");
+const resendWebhook_1 = require("./routes/resendWebhook");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -371,6 +372,7 @@ app.use("/api/dashboard", dashboard_1.dashboardRouter);
 app.use("/api/comments", comments_1.commentsRouter);
 app.use("/api/tasks", tasks_1.tasksRouter);
 app.use("/api/task-templates", tasks_1.taskTemplatesRouter);
+app.use("/api/webhooks/resend", resendWebhook_1.resendWebhookRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -394,6 +396,7 @@ v1Router.use("/dashboard", dashboard_1.dashboardRouter);
 v1Router.use("/comments", comments_1.commentsRouter);
 v1Router.use("/tasks", tasks_1.tasksRouter);
 v1Router.use("/task-templates", tasks_1.taskTemplatesRouter);
+v1Router.use("/webhooks/resend", resendWebhook_1.resendWebhookRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
@@ -446,14 +449,17 @@ if (process.env.NODE_ENV !== "test") {
         (0, exportWorker_1.startExportWorker)();
         (0, retentionWorker_1.startRetentionWorker)();
         (0, ledgerRootWorker_1.startLedgerRootWorker)();
-        // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test
+        // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test.
+        // Email/digest/reminder workers run by default; set ENABLE_EMAIL_WORKER=false or DISABLE_EMAIL_QUEUE=true to opt out in local/test.
         if (process.env.SKIP_WORKERS !== 'true') {
-            // Email queue worker: optional guard ENABLE_EMAIL_WORKER (default: run; set to 'false' to disable)
-            if (process.env.ENABLE_EMAIL_WORKER !== 'false') {
+            const disableEmailWorkers = process.env.DISABLE_EMAIL_QUEUE === 'true' ||
+                process.env.DISABLE_EMAIL_QUEUE === '1' ||
+                process.env.ENABLE_EMAIL_WORKER === 'false';
+            if (!disableEmailWorkers) {
                 (0, emailQueue_1.startEmailQueueWorker)();
+                (0, weeklyDigest_1.startWeeklyDigestWorker)();
+                (0, deadlineReminders_1.startDeadlineReminderWorker)();
             }
-            (0, weeklyDigest_1.startWeeklyDigestWorker)();
-            (0, deadlineReminders_1.startDeadlineReminderWorker)();
             (0, taskReminders_1.startTaskReminderWorker)();
         }
     });

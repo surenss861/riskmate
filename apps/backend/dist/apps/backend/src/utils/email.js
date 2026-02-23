@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getEmailProvider = getEmailProvider;
 exports.isEmailConfigured = isEmailConfigured;
 exports.sendEmail = sendEmail;
 exports.sendJobAssignedEmail = sendJobAssignedEmail;
@@ -80,11 +81,12 @@ class ResendProvider {
         }
         const client = new resend.Resend(this.apiKey);
         const recipients = Array.isArray(options.to) ? options.to : [options.to];
+        let lastProviderId;
         for (const to of recipients) {
             let lastError = null;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
-                    await client.emails.send({
+                    const result = await client.emails.send({
                         from: options.from || this.from,
                         to,
                         subject: options.subject,
@@ -92,6 +94,9 @@ class ResendProvider {
                         text: options.text,
                         replyTo: options.replyTo,
                     });
+                    const id = result?.data?.id;
+                    if (id)
+                        lastProviderId = id;
                     lastError = null;
                     break;
                 }
@@ -108,6 +113,7 @@ class ResendProvider {
                 throw lastError instanceof Error ? lastError : new Error(String(lastError));
             }
         }
+        return { providerId: lastProviderId };
     }
 }
 // SMTP provider (works anywhere, no vendor lock-in)
@@ -163,17 +169,26 @@ class SMTPProvider {
                 throw lastError instanceof Error ? lastError : new Error(String(lastError));
             }
         }
+        return {};
     }
 }
-// Initialize email provider based on env vars.
+// Initialize email provider based on env vars. Attempts dynamic import of resend/nodemailer;
+// if the relevant package is missing, returns null so the queue worker skips instead of claiming and DLQ-ing.
 // Supported: RESEND_API_KEY, EMAIL_FROM (or RESEND_FROM_EMAIL), EMAIL_REPLY_TO.
-function getEmailProvider() {
+async function getEmailProvider() {
     const from = process.env.EMAIL_FROM ||
         process.env.RESEND_FROM_EMAIL ||
         process.env.SMTP_FROM;
     // Prefer Resend if configured
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey && from) {
+        try {
+            await Promise.resolve().then(() => __importStar(require('resend')));
+        }
+        catch {
+            console.warn('[Email] Resend is configured but the "resend" package is not installed. Run: pnpm add resend. Email queue will skip processing.');
+            return null;
+        }
         return new ResendProvider(resendKey, from);
     }
     // Fall back to SMTP if configured
@@ -181,6 +196,13 @@ function getEmailProvider() {
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
     if (smtpHost && smtpUser && smtpPass && from) {
+        try {
+            await Promise.resolve().then(() => __importStar(require('nodemailer')));
+        }
+        catch {
+            console.warn('[Email] SMTP is configured but the "nodemailer" package is not installed. Run: pnpm add nodemailer. Email queue will skip processing.');
+            return null;
+        }
         return new SMTPProvider({
             host: smtpHost,
             port: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -192,22 +214,22 @@ function getEmailProvider() {
     }
     return null;
 }
-/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
-function isEmailConfigured() {
-    return getEmailProvider() !== null;
+/** Whether an email provider is configured and available (Resend or SMTP). Use to short-circuit queue worker when not configured or packages missing. */
+async function isEmailConfigured() {
+    return (await getEmailProvider()) !== null;
 }
 // Singleton email provider instance
 let emailProvider = null;
 async function sendEmail(options) {
     if (!emailProvider) {
-        emailProvider = getEmailProvider();
+        emailProvider = await getEmailProvider();
     }
     if (!emailProvider) {
         console.warn('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.');
         throw new Error('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.');
     }
     const replyTo = options.replyTo ?? process.env.EMAIL_REPLY_TO;
-    await emailProvider.send({ ...options, replyTo });
+    return emailProvider.send({ ...options, replyTo });
 }
 function fallbackName(email) {
     const local = email.split('@')[0] || 'there';
@@ -216,26 +238,26 @@ function fallbackName(email) {
 async function sendJobAssignedEmail(to, userName, job, assignedByName, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.job_assigned))
-        return false;
-    const template = (0, JobAssignedEmail_1.JobAssignedEmail)({
+        return { sent: false };
+    const template = await (0, JobAssignedEmail_1.JobAssignedEmail)({
         userName: userName || fallbackName(to),
         job,
         assignedByName,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, reportRunId, deadline, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.signature_requested))
-        return false;
-    const template = (0, SignatureRequestEmail_1.SignatureRequestEmail)({
+        return { sent: false };
+    const template = await (0, SignatureRequestEmail_1.SignatureRequestEmail)({
         userName: userName || fallbackName(to),
         reportName,
         jobTitle,
@@ -243,77 +265,77 @@ async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, rep
         deadline,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.report_ready))
-        return false;
-    const template = (0, ReportReadyEmail_1.ReportReadyEmail)({
+        return { sent: false };
+    const template = await (0, ReportReadyEmail_1.ReportReadyEmail)({
         userName: userName || fallbackName(to),
         jobTitle,
         downloadUrl,
         viewUrl,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendWelcomeEmail(to, userName, userId) {
     if (userId) {
         const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
         if (!prefs.email_enabled)
-            return false;
+            return { sent: false };
     }
-    const template = (0, WelcomeEmail_1.WelcomeEmail)({
+    const template = await (0, WelcomeEmail_1.WelcomeEmail)({
         userName: userName || fallbackName(to),
         managePreferencesUrl: userId ? (0, base_1.getManagePreferencesUrl)(userId) : undefined,
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, loginUrl, userId) {
     if (userId) {
         const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
         if (!prefs.email_enabled)
-            return false;
+            return { sent: false };
     }
-    const template = (0, TeamInviteEmail_1.TeamInviteEmail)({
+    const template = await (0, TeamInviteEmail_1.TeamInviteEmail)({
         orgName,
         inviterName,
         tempPassword,
         loginUrl,
         managePreferencesUrl: userId ? (0, base_1.getManagePreferencesUrl)(userId) : undefined,
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendMentionEmail(to, userName, mentionedByName, jobName, commentPreview, commentUrl, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.mention))
-        return false;
-    const template = (0, MentionEmail_1.MentionEmail)({
+        return { sent: false };
+    const template = await (0, MentionEmail_1.MentionEmail)({
         userName: userName || fallbackName(to),
         mentionedByName,
         jobName,
@@ -321,54 +343,54 @@ async function sendMentionEmail(to, userName, mentionedByName, jobName, commentP
         commentUrl,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendWeeklyDigestEmail(to, userName, digest, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_weekly_digest))
-        return false;
-    const template = (0, WeeklyDigestEmail_1.WeeklyDigestEmail)({
+        return { sent: false };
+    const template = await (0, WeeklyDigestEmail_1.WeeklyDigestEmail)({
         userName: userName || fallbackName(to),
         digest,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_deadline_reminder))
-        return false;
-    const template = (0, DeadlineReminderEmail_1.DeadlineReminderEmail)({
+        return { sent: false };
+    const template = await (0, DeadlineReminderEmail_1.DeadlineReminderEmail)({
         userName: userName || fallbackName(to),
         job,
         hoursRemaining,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendTaskAssignedEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.job_assigned))
-        return false;
-    const template = (0, TaskAssignedEmail_1.TaskAssignedEmail)({
+        return { sent: false };
+    const template = await (0, TaskAssignedEmail_1.TaskAssignedEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
         jobTitle: params.jobTitle,
@@ -376,19 +398,19 @@ async function sendTaskAssignedEmail(to, userName, params, userId) {
         taskId: params.taskId,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendTaskCompletedEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.task_completed))
-        return false;
-    const template = (0, TaskCompletedEmail_1.TaskCompletedEmail)({
+        return { sent: false };
+    const template = await (0, TaskCompletedEmail_1.TaskCompletedEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
         jobTitle: params.jobTitle,
@@ -396,19 +418,19 @@ async function sendTaskCompletedEmail(to, userName, params, userId) {
         jobId: params.jobId ?? '',
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 async function sendTaskReminderEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_deadline_reminder))
-        return false;
-    const template = (0, TaskReminderEmail_1.TaskReminderEmail)({
+        return { sent: false };
+    const template = await (0, TaskReminderEmail_1.TaskReminderEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
         jobTitle: params.jobTitle,
@@ -419,13 +441,13 @@ async function sendTaskReminderEmail(to, userName, params, userId) {
         taskId: params.taskId,
         managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
-    await sendEmail({
+    const result = await sendEmail({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
     });
-    return true;
+    return { sent: true, providerId: result.providerId };
 }
 // Generate hash of alert payload for deduplication
 function hashAlertPayload(payload) {

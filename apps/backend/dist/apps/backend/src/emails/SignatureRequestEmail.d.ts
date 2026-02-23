@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface SignatureRequestEmailInput {
     userName: string;
     reportName: string;
@@ -7,5 +6,10 @@ export interface SignatureRequestEmailInput {
     deadline?: string;
     managePreferencesUrl?: string;
 }
-export declare function SignatureRequestEmail(input: SignatureRequestEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function SignatureRequestEmail(input: SignatureRequestEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=SignatureRequestEmail.d.ts.map

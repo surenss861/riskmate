@@ -50,6 +50,7 @@ const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const realtimeEvents_1 = require("../utils/realtimeEvents");
 const permissions_1 = require("../utils/permissions");
 const emailQueue_1 = require("../workers/emailQueue");
+const notifications_2 = require("../services/notifications");
 const comments_1 = require("./comments");
 const tasks_1 = require("./tasks");
 exports.jobsRouter = express_1.default.Router();
@@ -1024,19 +1025,22 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
                 ...clientMetadata,
             });
             if (assigneeEmail && job) {
-                const jobSummary = {
-                    id: jobId,
-                    title: job.client_name ?? null,
-                    client_name: job.client_name ?? null,
-                    location: job.location ?? null,
-                    due_date: job.due_date ?? null,
-                    risk_level: job.risk_level ?? null,
-                };
-                try {
-                    await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, { job: jobSummary, assignedByName: actorName ?? "A teammate" }, workerId);
-                }
-                catch (emailErr) {
-                    console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
+                const prefs = await (0, notifications_2.getNotificationPreferences)(workerId);
+                if (prefs.email_enabled && prefs.job_assigned) {
+                    const jobSummary = {
+                        id: jobId,
+                        title: job.client_name ?? null,
+                        client_name: job.client_name ?? null,
+                        location: job.location ?? null,
+                        due_date: job.due_date ?? null,
+                        risk_level: job.risk_level ?? null,
+                    };
+                    try {
+                        await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, { job: jobSummary, assignedByName: actorName ?? "A teammate" }, workerId);
+                    }
+                    catch (emailErr) {
+                        console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
+                    }
                 }
             }
         }
@@ -1860,19 +1864,22 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
                 .maybeSingle();
             const assigneeEmail = assignee?.email ?? null;
             if (assigneeEmail) {
-                const jobSummary = {
-                    id: job.id,
-                    title: job.client_name ?? null,
-                    client_name: job.client_name ?? null,
-                    location: job.location ?? null,
-                    due_date: job.due_date ?? null,
-                    risk_level: job.risk_level ?? null,
-                };
-                await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
-                    job: jobSummary,
-                    assignedByName: actor?.full_name ?? "A teammate",
-                    userName: assignee?.full_name ?? null,
-                }, assigneeId);
+                const prefs = await (0, notifications_2.getNotificationPreferences)(assigneeId);
+                if (prefs.email_enabled && prefs.job_assigned) {
+                    const jobSummary = {
+                        id: job.id,
+                        title: job.client_name ?? null,
+                        client_name: job.client_name ?? null,
+                        location: job.location ?? null,
+                        due_date: job.due_date ?? null,
+                        risk_level: job.risk_level ?? null,
+                    };
+                    await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
+                        job: jobSummary,
+                        assignedByName: actor?.full_name ?? "A teammate",
+                        userName: assignee?.full_name ?? null,
+                    }, assigneeId);
+                }
             }
         }
         catch (emailQueueErr) {

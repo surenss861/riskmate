@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { analyticsApi } from '@/lib/api';
+import { analyticsApi, type AnalyticsSummaryResponse } from '@/lib/api';
 
 export type MitigationAnalytics = Awaited<ReturnType<typeof analyticsApi.mitigations>>;
 
@@ -173,5 +173,60 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
     refetch,
     lastUpdated,
   };
+}
+
+type UseAnalyticsSummaryOptions = {
+  range?: string;
+  orgId?: string;
+  enabled?: boolean;
+};
+
+export function useAnalyticsSummary(
+  options: UseAnalyticsSummaryOptions = {}
+): {
+  data: AnalyticsSummaryResponse | null;
+  isLoading: boolean;
+  isError: boolean;
+  isFeatureLocked: boolean;
+  refetch: () => Promise<void>;
+} {
+  const { range, orgId, enabled = true } = options;
+  const [data, setData] = useState<AnalyticsSummaryResponse | null>(null);
+  const [isLoading, setLoading] = useState(false);
+  const [isError, setError] = useState(false);
+  const [isFeatureLocked, setFeatureLocked] = useState(false);
+  const controllerRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+    if (controllerRef.current) controllerRef.current.abort();
+    setLoading(true);
+    setError(false);
+    setFeatureLocked(false);
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    try {
+      const response = await analyticsApi.summary({ orgId, range });
+      if (!controller.signal.aborted) setData(response);
+      if (!controller.signal.aborted && response.locked) setFeatureLocked(true);
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.error('Analytics summary fetch failed', err);
+        setError(true);
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, [orgId, range, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    fetchData();
+    return () => controllerRef.current?.abort();
+  }, [fetchData, enabled]);
+
+  const refetch = useCallback(() => fetchData(), [fetchData]);
+
+  return { data, isLoading, isError, isFeatureLocked, refetch };
 }
 

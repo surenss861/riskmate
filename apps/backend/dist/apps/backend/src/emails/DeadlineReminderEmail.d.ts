@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface DeadlineReminderEmailInput {
     userName: string;
     job: {
@@ -10,5 +9,10 @@ export interface DeadlineReminderEmailInput {
     hoursRemaining: number;
     managePreferencesUrl?: string;
 }
-export declare function DeadlineReminderEmail(input: DeadlineReminderEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function DeadlineReminderEmail(input: DeadlineReminderEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=DeadlineReminderEmail.d.ts.map

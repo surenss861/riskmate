@@ -1,4 +1,3 @@
-import { type EmailTemplate } from "./base";
 export interface TaskReminderEmailInput {
     userName: string;
     taskTitle: string;
@@ -10,5 +9,10 @@ export interface TaskReminderEmailInput {
     taskId?: string;
     managePreferencesUrl?: string;
 }
-export declare function TaskReminderEmail(input: TaskReminderEmailInput): EmailTemplate;
+export interface EmailTemplate {
+    subject: string;
+    html: string;
+    text: string;
+}
+export declare function TaskReminderEmail(input: TaskReminderEmailInput): Promise<EmailTemplate>;
 //# sourceMappingURL=TaskReminderEmail.d.ts.map
