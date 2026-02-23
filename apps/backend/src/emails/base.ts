@@ -1,7 +1,30 @@
+import crypto from "crypto";
+
 export interface EmailTemplate {
   subject: string;
   html: string;
   text: string;
+}
+
+const PREFERENCES_LINK_EXPIRY_DAYS = 30;
+
+/**
+ * Build a per-recipient manage-preferences URL that does not require an active session.
+ * Uses a signed token (userId + expiry) so recipients can unsubscribe or manage preferences with one click.
+ * Set PREFERENCES_LINK_SECRET in env; if unset, returns the authenticated settings URL as fallback.
+ */
+export function getManagePreferencesUrl(userId: string): string {
+  const frontendUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
+  const base = `${frontendUrl}/settings/notifications`;
+  const secret = process.env.PREFERENCES_LINK_SECRET;
+  if (!secret) return base;
+
+  const exp = Date.now() + PREFERENCES_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  const payload = `${userId}:${exp}`;
+  const b64 = (buf: Buffer) => buf.toString("base64url");
+  const sig = b64(crypto.createHmac("sha256", secret).update(payload).digest());
+  const token = `${b64(Buffer.from(payload, "utf8"))}.${sig}`;
+  return `${frontendUrl}/preferences/email?token=${encodeURIComponent(token)}`;
 }
 
 function escapeHtml(value: string): string {
@@ -40,9 +63,12 @@ export function layout(params: {
   bodyHtml: string;
   ctaLabel?: string;
   ctaUrl?: string;
+  /** Per-recipient one-click manage/unsubscribe URL (signed token); when set, used instead of authenticated settings. */
+  managePreferencesUrl?: string;
 }): string {
   const frontendUrl = process.env.FRONTEND_URL || "https://www.riskmate.dev";
-  const preferencesUrl = `${frontendUrl}/settings/notifications`;
+  const preferencesUrl =
+    params.managePreferencesUrl ?? `${frontendUrl}/settings/notifications`;
   const cta =
     params.ctaLabel && params.ctaUrl
       ? `<p style="margin:24px 0 0;"><a href="${e(params.ctaUrl)}" style="display:inline-block;background:#007aff;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 16px;border-radius:8px;">${e(params.ctaLabel)}</a></p>`

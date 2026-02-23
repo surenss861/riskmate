@@ -5,6 +5,7 @@ export interface TeamInviteEmailInput {
   inviterName: string;
   tempPassword: string;
   loginUrl: string;
+  managePreferencesUrl?: string;
 }
 
 export function TeamInviteEmail(input: TeamInviteEmailInput): EmailTemplate {
@@ -18,6 +19,7 @@ export function TeamInviteEmail(input: TeamInviteEmailInput): EmailTemplate {
     `,
     ctaLabel: "Accept Invitation →",
     ctaUrl: input.loginUrl,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

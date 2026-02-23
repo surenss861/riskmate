@@ -6,6 +6,7 @@ export interface TaskAssignedEmailInput {
   jobTitle: string;
   jobId: string;
   taskId: string;
+  managePreferencesUrl?: string;
 }
 
 export function TaskAssignedEmail(input: TaskAssignedEmailInput): EmailTemplate {
@@ -22,6 +23,7 @@ export function TaskAssignedEmail(input: TaskAssignedEmailInput): EmailTemplate 
     `,
     ctaLabel: "View Task →",
     ctaUrl: `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

@@ -11,6 +11,7 @@ export interface WeeklyDigestData {
 export interface WeeklyDigestEmailInput {
   userName: string;
   digest: WeeklyDigestData;
+  managePreferencesUrl?: string;
 }
 
 export function WeeklyDigestEmail(input: WeeklyDigestEmailInput): EmailTemplate {
@@ -35,6 +36,7 @@ export function WeeklyDigestEmail(input: WeeklyDigestEmailInput): EmailTemplate 
   const html = layout({
     title: "Weekly digest",
     intro: `Hi ${input.userName}, here is your weekly compliance summary.`,
+    managePreferencesUrl: input.managePreferencesUrl,
     bodyHtml: `
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 14px;border-collapse:collapse;">
         <tr>

@@ -6,6 +6,7 @@ export interface TaskCompletedEmailInput {
   jobTitle: string;
   taskId: string;
   jobId: string;
+  managePreferencesUrl?: string;
 }
 
 export function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplate {
@@ -23,6 +24,7 @@ export function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplat
     `,
     ctaLabel: "View Task →",
     ctaUrl,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

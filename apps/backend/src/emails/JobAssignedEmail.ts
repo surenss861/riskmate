@@ -11,6 +11,7 @@ export interface JobAssignedEmailInput {
     due_date?: string | null;
     risk_level?: string | null;
   };
+  managePreferencesUrl?: string;
 }
 
 export function JobAssignedEmail(input: JobAssignedEmailInput): EmailTemplate {
@@ -31,6 +32,7 @@ export function JobAssignedEmail(input: JobAssignedEmailInput): EmailTemplate {
     `,
     ctaLabel: "View Job Details →",
     ctaUrl: `${frontendUrl}/jobs/${input.job.id || ""}`,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

@@ -6,6 +6,7 @@ export interface SignatureRequestEmailInput {
   jobTitle: string;
   reportRunId: string;
   deadline?: string;
+  managePreferencesUrl?: string;
 }
 
 export function SignatureRequestEmail(input: SignatureRequestEmailInput): EmailTemplate {
@@ -21,6 +22,7 @@ export function SignatureRequestEmail(input: SignatureRequestEmailInput): EmailT
     `,
     ctaLabel: "Sign Now →",
     ctaUrl: `${frontendUrl}/reports/${input.reportRunId}`,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

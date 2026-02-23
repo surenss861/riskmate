@@ -9,6 +9,7 @@ export interface DeadlineReminderEmailInput {
     due_date?: string | null;
   };
   hoursRemaining: number;
+  managePreferencesUrl?: string;
 }
 
 export function DeadlineReminderEmail(input: DeadlineReminderEmailInput): EmailTemplate {
@@ -25,6 +26,7 @@ export function DeadlineReminderEmail(input: DeadlineReminderEmailInput): EmailT
     `,
     ctaLabel: "View Job →",
     ctaUrl: `${frontendUrl}/jobs/${input.job.id || ""}`,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

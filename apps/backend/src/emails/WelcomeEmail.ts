@@ -2,6 +2,7 @@ import { type EmailTemplate, e, layout } from "./base";
 
 export interface WelcomeEmailInput {
   userName: string;
+  managePreferencesUrl?: string;
 }
 
 export function WelcomeEmail(input: WelcomeEmailInput): EmailTemplate {
@@ -19,6 +20,7 @@ export function WelcomeEmail(input: WelcomeEmailInput): EmailTemplate {
     `,
     ctaLabel: "Create Your First Job →",
     ctaUrl: `${frontendUrl}/jobs/new`,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

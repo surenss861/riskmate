@@ -5,6 +5,7 @@ export interface ReportReadyEmailInput {
   jobTitle: string;
   downloadUrl: string;
   viewUrl: string;
+  managePreferencesUrl?: string;
 }
 
 export function ReportReadyEmail(input: ReportReadyEmailInput): EmailTemplate {
@@ -15,6 +16,7 @@ export function ReportReadyEmail(input: ReportReadyEmailInput): EmailTemplate {
       <p style="margin:0;"><a href="${e(input.viewUrl)}" style="color:#007aff;text-decoration:none;">View Online</a></p>`,
     ctaLabel: "Download Report →",
     ctaUrl: input.downloadUrl,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

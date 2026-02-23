@@ -6,6 +6,7 @@ export interface MentionEmailInput {
   jobName: string;
   commentPreview: string;
   commentUrl: string;
+  managePreferencesUrl?: string;
 }
 
 export function MentionEmail(input: MentionEmailInput): EmailTemplate {
@@ -18,6 +19,7 @@ export function MentionEmail(input: MentionEmailInput): EmailTemplate {
     `,
     ctaLabel: "View Comment →",
     ctaUrl: input.commentUrl,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

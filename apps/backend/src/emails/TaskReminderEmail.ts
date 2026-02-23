@@ -9,6 +9,7 @@ export interface TaskReminderEmailInput {
   hoursRemaining?: number;
   jobId?: string;
   taskId?: string;
+  managePreferencesUrl?: string;
 }
 
 export function TaskReminderEmail(input: TaskReminderEmailInput): EmailTemplate {
@@ -37,6 +38,7 @@ export function TaskReminderEmail(input: TaskReminderEmailInput): EmailTemplate 
       input.jobId && input.taskId
         ? `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`
         : frontendUrl,
+    managePreferencesUrl: input.managePreferencesUrl,
   });
 
   return {

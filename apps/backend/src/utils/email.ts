@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { getManagePreferencesUrl } from '../emails/base'
 import { getNotificationPreferences } from '../services/notifications'
 import { JobAssignedEmail } from '../emails/JobAssignedEmail'
 import { SignatureRequestEmail } from '../emails/SignatureRequestEmail'
@@ -231,6 +232,7 @@ export async function sendJobAssignedEmail(
     userName: userName || fallbackName(to),
     job,
     assignedByName,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -259,6 +261,7 @@ export async function sendSignatureRequestEmail(
     jobTitle,
     reportRunId,
     deadline,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -285,6 +288,7 @@ export async function sendReportReadyEmail(
     jobTitle,
     downloadUrl,
     viewUrl,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -298,10 +302,11 @@ export async function sendReportReadyEmail(
 export async function sendWelcomeEmail(
   to: string,
   userName: string,
-  _userId?: string
+  userId?: string
 ): Promise<void> {
   const template = WelcomeEmail({
     userName: userName || fallbackName(to),
+    managePreferencesUrl: userId ? getManagePreferencesUrl(userId) : undefined,
   })
 
   await sendEmail({
@@ -318,13 +323,14 @@ export async function sendTeamInviteEmail(
   inviterName: string,
   tempPassword: string,
   loginUrl: string,
-  _userId?: string
+  userId?: string
 ): Promise<void> {
   const template = TeamInviteEmail({
     orgName,
     inviterName,
     tempPassword,
     loginUrl,
+    managePreferencesUrl: userId ? getManagePreferencesUrl(userId) : undefined,
   })
 
   await sendEmail({
@@ -353,6 +359,7 @@ export async function sendMentionEmail(
     jobName,
     commentPreview,
     commentUrl,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -375,6 +382,7 @@ export async function sendWeeklyDigestEmail(
   const template = WeeklyDigestEmail({
     userName: userName || fallbackName(to),
     digest,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -404,6 +412,7 @@ export async function sendDeadlineReminderEmail(
     userName: userName || fallbackName(to),
     job,
     hoursRemaining,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -429,6 +438,7 @@ export async function sendTaskAssignedEmail(
     jobTitle: params.jobTitle,
     jobId: params.jobId,
     taskId: params.taskId,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -454,6 +464,7 @@ export async function sendTaskCompletedEmail(
     jobTitle: params.jobTitle,
     taskId: params.taskId,
     jobId: params.jobId ?? '',
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
@@ -490,6 +501,7 @@ export async function sendTaskReminderEmail(
     hoursRemaining: params.hoursRemaining,
     jobId: params.jobId,
     taskId: params.taskId,
+    managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
   await sendEmail({
