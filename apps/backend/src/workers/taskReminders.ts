@@ -223,6 +223,10 @@ export async function runReminderForTask(
   if (task.due_date > in24hIso) {
     return { scheduled: false, message: "Due date is not within the next 24 hours" };
   }
+  const past24hIso = new Date(now.getTime() - ALERT_WINDOW_MS).toISOString();
+  if (task.due_date < past24hIso) {
+    return { scheduled: false, message: "Due date is more than 24 hours overdue" };
+  }
   if (task.last_reminded_at && task.last_reminded_at >= remindedBefore) {
     return { scheduled: true, message: "Reminder already sent recently" };
   }
