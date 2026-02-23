@@ -2,6 +2,9 @@
 -- (not public.users). Recreate assigned_to, created_by, completed_by with
 -- auth.users and appropriate ON DELETE actions.
 -- Lock table first to avoid deadlock with concurrent sessions (40P01).
+-- LOCK TABLE requires a transaction block (25P01).
+
+BEGIN;
 
 LOCK TABLE tasks IN ACCESS EXCLUSIVE MODE;
 
@@ -25,3 +28,5 @@ ALTER TABLE tasks
 ALTER TABLE tasks
   ADD CONSTRAINT tasks_completed_by_fkey
   FOREIGN KEY (completed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+COMMIT;
