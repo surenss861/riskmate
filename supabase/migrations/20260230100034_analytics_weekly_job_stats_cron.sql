@@ -1,0 +1,8 @@
+-- Schedule refresh of analytics_weekly_job_stats so weekly/time-bucketed analytics use up-to-date data.
+-- refresh_analytics_weekly_job_stats() is defined in 20260230100033_analytics_weekly_job_stats_mv.sql.
+--
+-- If pg_cron is enabled (e.g. Supabase Pro), uncomment and run to schedule hourly refresh:
+--   SELECT cron.schedule('refresh-analytics-weekly-job-stats', '0 * * * *', 'SELECT refresh_analytics_weekly_job_stats();');
+--
+-- If pg_cron is not available, call refresh_analytics_weekly_job_stats() from an external cron or
+-- after bulk job imports (e.g. from your backend or a worker).

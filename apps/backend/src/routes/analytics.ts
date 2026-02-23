@@ -71,6 +71,9 @@ const dateRangeForDays = (days: number): { since: string; until: string } => {
   return { since: since.toISOString(), until: until.toISOString() };
 };
 
+// MV covers last 2 years; use for week/month bucketed analytics when in range
+const MV_COVERAGE_DAYS = 730;
+
 // Helpers for trends: bucket keys and labels
 const weekStart = (d: Date): string => {
   const x = new Date(d);
@@ -101,7 +104,7 @@ analyticsRouter.get(
       return res.json({ period: "30d", groupBy: "day", data: [], locked: true });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
       const groupByRaw = (authReq.query.groupBy as string) || "day";
@@ -109,6 +112,60 @@ analyticsRouter.get(
       const metricRaw = (authReq.query.metric as string) || "jobs";
       const metric = metricRaw === "risk" ? "risk" : metricRaw === "compliance" ? "compliance" : "jobs";
       const { since, until } = dateRangeForDays(days);
+
+      type Point = { period: string; value: number; label: string };
+      const points: Point[] = [];
+      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS;
+
+      if (useMv) {
+        const sinceWeek = weekStart(new Date(since));
+        const untilWeek = weekStart(new Date(until));
+        const { data: mvRows, error: mvError } = await supabase
+          .from("analytics_weekly_job_stats")
+          .select("week_start, jobs_created, jobs_completed, avg_risk")
+          .eq("organization_id", orgId)
+          .gte("week_start", sinceWeek)
+          .lte("week_start", untilWeek)
+          .order("week_start", { ascending: true })
+          .limit(MAX_FETCH_LIMIT);
+
+        if (!mvError && mvRows && mvRows.length > 0) {
+          const rows = mvRows as { week_start: string; jobs_created: number; jobs_completed: number; avg_risk: number | null }[];
+          if (groupBy === "week") {
+            for (const r of rows) {
+              const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+              let value = 0;
+              if (metric === "jobs") value = r.jobs_created ?? 0;
+              else if (metric === "risk") value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0;
+              else value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 10000;
+              points.push({ period, value, label: period });
+            }
+          } else {
+            const byMonth = new Map<string, { jobs_created: number; jobs_completed: number; riskSum: number; riskWeight: number }>();
+            for (const r of rows) {
+              const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+              const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0, riskSum: 0, riskWeight: 0 };
+              cur.jobs_created += r.jobs_created ?? 0;
+              cur.jobs_completed += r.jobs_completed ?? 0;
+              if (r.avg_risk != null && (r.jobs_created ?? 0) > 0) {
+                cur.riskSum += (r.avg_risk ?? 0) * (r.jobs_created ?? 0);
+                cur.riskWeight += r.jobs_created ?? 0;
+              }
+              byMonth.set(period, cur);
+            }
+            for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+              const cur = byMonth.get(period)!;
+              let value = 0;
+              if (metric === "jobs") value = cur.jobs_created;
+              else if (metric === "risk") value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100;
+              else value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 10000;
+              points.push({ period, value, label: period });
+            }
+          }
+          const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
+          return res.json({ period: periodLabel, groupBy, metric, data: points });
+        }
+      }
 
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
@@ -124,8 +181,6 @@ analyticsRouter.get(
       const getBucketKey = (date: Date) =>
         groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date.toISOString());
 
-      type Point = { period: string; value: number; label: string };
-      const points: Point[] = [];
       const bucketValues = new Map<string, number>();
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
       const bucketCompletion = new Map<string, { total: number; completed: number }>();
@@ -187,7 +242,7 @@ analyticsRouter.get(
       return res.json({ buckets: [], locked: true });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
@@ -204,19 +259,22 @@ analyticsRouter.get(
       const list = (jobs || []) as { job_type: string | null; risk_score: number | null; created_at: string }[];
 
       type BucketKey = string;
-      const bucketSums: Record<BucketKey, { sum: number; count: number }> = {};
+      const bucketSums: Record<BucketKey, { sum: number; count: number; riskCount: number }> = {};
       for (const j of list) {
         const jobType = j.job_type ?? "other";
         const dayOfWeek = new Date(j.created_at).getDay();
         const key = `${jobType}|${dayOfWeek}`;
-        if (!bucketSums[key]) bucketSums[key] = { sum: 0, count: 0 };
+        if (!bucketSums[key]) bucketSums[key] = { sum: 0, count: 0, riskCount: 0 };
         bucketSums[key].count += 1;
-        if (j.risk_score != null) bucketSums[key].sum += j.risk_score;
+        if (j.risk_score != null) {
+          bucketSums[key].sum += j.risk_score;
+          bucketSums[key].riskCount += 1;
+        }
       }
 
-      const buckets = Object.entries(bucketSums).map(([key, { sum, count }]) => {
+      const buckets = Object.entries(bucketSums).map(([key, { sum, count, riskCount }]) => {
         const [job_type, day_of_week_str] = key.split("|");
-        const avg_risk = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+        const avg_risk = riskCount === 0 ? 0 : Math.round((sum / riskCount) * 100) / 100;
         return { job_type, day_of_week: parseInt(day_of_week_str, 10), avg_risk, count };
       });
       return res.json({ period: `${days}d`, buckets });
@@ -240,7 +298,7 @@ analyticsRouter.get(
       return res.json({ members: [], locked: true });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
@@ -339,7 +397,7 @@ analyticsRouter.get(
       return res.json({ items: [], locked: true });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
@@ -444,7 +502,7 @@ analyticsRouter.get(
       });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
@@ -539,11 +597,39 @@ analyticsRouter.get(
       });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
       const now = new Date().toISOString();
+
+      const useMvForCounts = days <= MV_COVERAGE_DAYS;
+
+      let total: number;
+      let completed: number;
+
+      if (useMvForCounts) {
+        const sinceWeek = weekStart(new Date(since));
+        const untilWeek = weekStart(new Date(until));
+        const { data: mvRows, error: mvError } = await supabase
+          .from("analytics_weekly_job_stats")
+          .select("jobs_created, jobs_completed")
+          .eq("organization_id", orgId)
+          .gte("week_start", sinceWeek)
+          .lte("week_start", untilWeek);
+
+        if (mvError) {
+          total = 0;
+          completed = 0;
+        } else {
+          const rows = (mvRows || []) as { jobs_created: number; jobs_completed: number }[];
+          total = rows.reduce((a, r) => a + (r.jobs_created ?? 0), 0);
+          completed = rows.reduce((a, r) => a + (r.jobs_completed ?? 0), 0);
+        }
+      } else {
+        total = 0;
+        completed = 0;
+      }
 
       const { data: jobs, error } = await supabase
         .from("jobs")
@@ -561,10 +647,14 @@ analyticsRouter.get(
         updated_at: string | null;
         due_date: string | null;
       }[];
-      const total = list.length;
-      const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
-      const completed = completedList.length;
+
+      if (!useMvForCounts) {
+        total = list.length;
+        completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
+      }
+
       const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+      const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
 
       const durations: number[] = [];
       let onTimeCount = 0;
@@ -611,7 +701,7 @@ analyticsRouter.get(
       return res.json({ insights: [], locked: true });
     }
     try {
-      const orgId = (authReq.query.org_id as string) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const all = await getCachedInsights(orgId);
       const insights = all.slice(0, 5);
@@ -663,8 +753,7 @@ analyticsRouter.get(
     }
     
     try {
-      const orgId =
-        (authReq.query.org_id as string | undefined) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) {
         return res.status(400).json({ message: "Missing organization id" });
       }
@@ -901,8 +990,7 @@ analyticsRouter.get(
     }
 
     try {
-      const orgId =
-        (authReq.query.org_id as string | undefined) || authReq.user.organization_id;
+      const orgId = authReq.user.organization_id;
       if (!orgId) {
         return res.status(400).json({ message: "Missing organization id" });
       }
