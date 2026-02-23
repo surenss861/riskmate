@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from '../lib/workerLock'
 import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
 
@@ -13,6 +14,9 @@ async function runDeadlineReminderCycle(): Promise<void> {
 
   const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
   if (dateKey === lastRunDateKey) return
+
+  const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.deadline_reminder)
+  if (!hasLease) return
 
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 

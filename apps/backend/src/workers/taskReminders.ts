@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from "../lib/workerLock";
 import { getNotificationPreferences, sendTaskOverdueNotification, sendTaskDueSoonNotification } from "../services/notifications";
 import { EmailJobType, queueEmail } from "./emailQueue";
 
@@ -82,6 +83,9 @@ async function sendTaskReminderPushAndEmail(
 }
 
 async function processTaskReminders() {
+  const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.task_reminder);
+  if (!hasLease) return;
+
   const now = new Date();
   const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
   const nowIso = now.toISOString();

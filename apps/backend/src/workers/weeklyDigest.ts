@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { tryAcquireWorkerLease, WORKER_LEASE_KEYS } from '../lib/workerLock'
 import { getNotificationPreferences } from '../services/notifications'
 import { EmailJobType, queueEmail } from './emailQueue'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
@@ -101,6 +102,9 @@ async function runWeeklyDigestCycle(): Promise<void> {
 
   const windowKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-09`
   if (windowKey === lastRunWindowKey) return
+
+  const hasLease = await tryAcquireWorkerLease(WORKER_LEASE_KEYS.weekly_digest)
+  if (!hasLease) return
 
   const { data: users, error } = await supabase
     .from('users')
