@@ -18,12 +18,10 @@ let workerTimer: NodeJS.Timeout | null = null
 
 async function runDeadlineReminderCycle(): Promise<void> {
   const now = new Date()
-  const inWindow = now.getHours() === 8 && now.getMinutes() <= 1
-  if (!inWindow) return
-
   const periodKey = getTodayPeriodKey(now)
 
-  // Persisted guard: run once per day even after restart; skip if we already ran today.
+  // Persisted guard: run once per day; skip if we already ran today. No narrow time window —
+  // if the window was missed (e.g. restart after 08:01) we still run on the next tick so reminders send.
   const { data: existing } = await supabase
     .from('worker_period_runs')
     .select('ran_at')

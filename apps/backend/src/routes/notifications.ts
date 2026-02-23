@@ -188,7 +188,18 @@ notificationsRouter.get(
   }
 );
 
-/** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus preference keys to update. */
+/** Email-only preference keys allowed for the public token PATCH. Push and other non-email prefs are not writable here. */
+const EMAIL_PREFERENCE_KEYS: (keyof NotificationPreferences)[] = [
+  "email_enabled",
+  "job_assigned",
+  "signature_requested",
+  "report_ready",
+  "email_weekly_digest",
+  "email_deadline_reminder",
+  "mention",
+];
+
+/** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus email preference keys only. Push and other non-email prefs are left unchanged (use authenticated /preferences for those). */
 notificationsRouter.patch(
   "/preferences/email",
   async (req: express.Request, res: express.Response) => {
@@ -206,12 +217,9 @@ notificationsRouter.patch(
           .status(401)
           .json({ message: "Invalid or expired link", code: "INVALID_TOKEN" });
       }
-      const allowedKeys = Object.keys(
-        DEFAULT_NOTIFICATION_PREFERENCES
-      ) as (keyof NotificationPreferences)[];
       const existing = await getNotificationPreferences(parsed.userId);
       const merged: NotificationPreferences = { ...existing };
-      for (const key of allowedKeys) {
+      for (const key of EMAIL_PREFERENCE_KEYS) {
         if (typeof body[key] === "boolean") merged[key] = body[key];
       }
       const { error } = await supabase

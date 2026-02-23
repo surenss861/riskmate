@@ -104,24 +104,15 @@ export async function buildDigestForUser(userId: string, organizationId: string)
   }
 }
 
-/** Morning window: 09:00–09:09 so digests send at a bounded time, not arbitrary Monday times. */
-function isWithinDigestWindow(now: Date): boolean {
-  return now.getHours() === 9 && now.getMinutes() < 10
-}
-
 async function runWeeklyDigestCycle(): Promise<void> {
   const now = new Date()
   const isMonday = now.getDay() === 1
   if (!isMonday) return
 
-  if (!isWithinDigestWindow(now)) {
-    console.log('[WeeklyDigestWorker] Skipping: outside 09:00–09:09 window')
-    return
-  }
-
   const periodKey = getWeekPeriodKey(now)
 
-  // Persisted guard: run once per week even after restart; skip if we already ran this week.
+  // Persisted guard: run once per week; skip if we already ran this week. No narrow time window —
+  // if the window was missed (e.g. restart after 09:09) we still run on the next tick so digests send.
   const { data: existing } = await supabase
     .from('worker_period_runs')
     .select('ran_at')
