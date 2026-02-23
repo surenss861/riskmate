@@ -4,6 +4,13 @@ export interface EmailTemplate {
     text: string;
 }
 /**
+ * Verify a signed preferences token (userId:exp), check HMAC and expiry.
+ * Returns { userId } on success, null if invalid or expired.
+ */
+export declare function verifyPreferencesToken(token: string): {
+    userId: string;
+} | null;
+/**
  * Build a per-recipient manage-preferences URL that does not require an active session.
  * Uses a signed token (userId + expiry) so recipients can unsubscribe or manage preferences with one click.
  * Set PREFERENCES_LINK_SECRET in env; if unset, returns the authenticated settings URL as fallback.

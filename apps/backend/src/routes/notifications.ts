@@ -212,7 +212,6 @@ notificationsRouter.patch(
       const existing = await getNotificationPreferences(parsed.userId);
       const merged: NotificationPreferences = { ...existing };
       for (const key of allowedKeys) {
-        if (key === "token") continue;
         if (typeof body[key] === "boolean") merged[key] = body[key];
       }
       const { error } = await supabase

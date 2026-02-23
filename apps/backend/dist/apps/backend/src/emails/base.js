@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.verifyPreferencesToken = verifyPreferencesToken;
 exports.getManagePreferencesUrl = getManagePreferencesUrl;
 exports.e = e;
 exports.truncate = truncate;
@@ -10,6 +11,35 @@ exports.formatDate = formatDate;
 exports.layout = layout;
 const crypto_1 = __importDefault(require("crypto"));
 const PREFERENCES_LINK_EXPIRY_DAYS = 30;
+const b64 = (buf) => buf.toString("base64url");
+/**
+ * Verify a signed preferences token (userId:exp), check HMAC and expiry.
+ * Returns { userId } on success, null if invalid or expired.
+ */
+function verifyPreferencesToken(token) {
+    const secret = process.env.PREFERENCES_LINK_SECRET;
+    if (!secret || !token)
+        return null;
+    const parts = token.trim().split(".");
+    if (parts.length !== 2)
+        return null;
+    const [payloadB64, sigProvided] = parts;
+    let payload;
+    try {
+        payload = Buffer.from(payloadB64, "base64url").toString("utf8");
+    }
+    catch {
+        return null;
+    }
+    const expectedSig = b64(crypto_1.default.createHmac("sha256", secret).update(payload).digest());
+    if (expectedSig !== sigProvided)
+        return null;
+    const [userId, expStr] = payload.split(":");
+    const exp = parseInt(expStr || "0", 10);
+    if (!userId || !Number.isFinite(exp) || Date.now() > exp)
+        return null;
+    return { userId };
+}
 /**
  * Build a per-recipient manage-preferences URL that does not require an active session.
  * Uses a signed token (userId + expiry) so recipients can unsubscribe or manage preferences with one click.
@@ -23,7 +53,6 @@ function getManagePreferencesUrl(userId) {
         return base;
     const exp = Date.now() + PREFERENCES_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
     const payload = `${userId}:${exp}`;
-    const b64 = (buf) => buf.toString("base64url");
     const sig = b64(crypto_1.default.createHmac("sha256", secret).update(payload).digest());
     const token = `${b64(Buffer.from(payload, "utf8"))}.${sig}`;
     return `${frontendUrl}/preferences/email?token=${encodeURIComponent(token)}`;

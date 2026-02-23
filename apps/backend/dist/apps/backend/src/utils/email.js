@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isEmailConfigured = isEmailConfigured;
 exports.sendEmail = sendEmail;
 exports.sendJobAssignedEmail = sendJobAssignedEmail;
 exports.sendSignatureRequestEmail = sendSignatureRequestEmail;
@@ -190,6 +191,10 @@ function getEmailProvider() {
         });
     }
     return null;
+}
+/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
+function isEmailConfigured() {
+    return getEmailProvider() !== null;
 }
 // Singleton email provider instance
 let emailProvider = null;

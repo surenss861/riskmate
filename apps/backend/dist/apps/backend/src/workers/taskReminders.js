@@ -149,12 +149,12 @@ function startTaskReminderWorker() {
     };
     if (isPastToday8am()) {
         const periodKey = getTodayPeriodKey();
-        supabaseClient_1.supabase
+        void Promise.resolve(supabaseClient_1.supabase
             .from("worker_period_runs")
             .select("ran_at")
             .eq("worker_key", TASK_REMINDER_WORKER_KEY)
             .eq("period_key", periodKey)
-            .maybeSingle()
+            .maybeSingle())
             .then(({ data: existing }) => {
             if (existing) {
                 console.log("[TaskReminderWorker] Already ran today; first run at next 8am");

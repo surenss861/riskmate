@@ -7,6 +7,8 @@ interface EmailOptions {
     from?: string;
     replyTo?: string;
 }
+/** Whether an email provider is configured (Resend or SMTP). Use to short-circuit queue worker when not configured. */
+export declare function isEmailConfigured(): boolean;
 export declare function sendEmail(options: EmailOptions): Promise<void>;
 export declare function sendJobAssignedEmail(to: string, userName: string, job: {
     id?: string;

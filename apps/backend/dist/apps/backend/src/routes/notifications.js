@@ -7,6 +7,7 @@ exports.notificationsRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
 const notifications_1 = require("../services/notifications");
+const base_1 = require("../emails/base");
 const limits_1 = require("../middleware/limits");
 const supabaseClient_1 = require("../lib/supabaseClient");
 const emailQueue_1 = require("../workers/emailQueue");
@@ -113,6 +114,63 @@ exports.notificationsRouter.patch("/read", auth_1.authenticate, async (req, res)
     catch (err) {
         console.error("Set notifications read state failed:", err);
         res.status(500).json({ message: "Failed to update read state" });
+    }
+});
+/** GET /api/notifications/preferences/email — public: get preferences by signed token (no session). Query: token. */
+exports.notificationsRouter.get("/preferences/email", async (req, res) => {
+    try {
+        const token = typeof req.query.token === "string" ? req.query.token : "";
+        const parsed = (0, base_1.verifyPreferencesToken)(token);
+        if (!parsed) {
+            return res
+                .status(401)
+                .json({ message: "Invalid or expired link", code: "INVALID_TOKEN" });
+        }
+        const prefs = await (0, notifications_1.getNotificationPreferences)(parsed.userId);
+        res.json(prefs);
+    }
+    catch (err) {
+        console.error("Get email preferences by token failed:", err);
+        res.status(500).json({ message: "Failed to load preferences" });
+    }
+});
+/** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus preference keys to update. */
+exports.notificationsRouter.patch("/preferences/email", async (req, res) => {
+    try {
+        const body = (req.body || {});
+        const token = typeof body.token === "string"
+            ? body.token
+            : typeof req.query.token === "string"
+                ? req.query.token
+                : "";
+        const parsed = (0, base_1.verifyPreferencesToken)(token);
+        if (!parsed) {
+            return res
+                .status(401)
+                .json({ message: "Invalid or expired link", code: "INVALID_TOKEN" });
+        }
+        const allowedKeys = Object.keys(notifications_1.DEFAULT_NOTIFICATION_PREFERENCES);
+        const existing = await (0, notifications_1.getNotificationPreferences)(parsed.userId);
+        const merged = { ...existing };
+        for (const key of allowedKeys) {
+            if (typeof body[key] === "boolean")
+                merged[key] = body[key];
+        }
+        const { error } = await supabaseClient_1.supabase
+            .from("notification_preferences")
+            .upsert({
+            user_id: parsed.userId,
+            ...merged,
+            updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (error)
+            throw error;
+        const prefs = await (0, notifications_1.getNotificationPreferences)(parsed.userId);
+        res.json(prefs);
+    }
+    catch (err) {
+        console.error("Update email preferences by token failed:", err);
+        res.status(500).json({ message: "Failed to update preferences" });
     }
 });
 /** GET /api/notifications/preferences — get current user's notification preferences (defaults if no row). */
