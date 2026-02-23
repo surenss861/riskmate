@@ -15,16 +15,40 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
+/** Domain identifier (task/job/report id) from email job data; null when not applicable. */
+function getDomainJobId(job: EmailJob): string | null {
+  const d = job.data
+  switch (job.type) {
+    case EmailJobType.job_assigned:
+    case EmailJobType.deadline_reminder: {
+      const raw = d.job as Record<string, unknown> | undefined
+      return typeof raw?.id === 'string' ? raw.id : null
+    }
+    case EmailJobType.signature_request:
+    case EmailJobType.report_ready:
+      return typeof d.reportRunId === 'string' ? d.reportRunId : null
+    case EmailJobType.mention:
+      return typeof d.jobId === 'string' ? d.jobId : null
+    case EmailJobType.task_reminder:
+    case EmailJobType.task_assigned:
+    case EmailJobType.task_completed:
+      return typeof d.taskId === 'string' ? d.taskId : typeof d.jobId === 'string' ? d.jobId : null
+    default:
+      return null
+  }
+}
+
 /** Log email event to console and optionally to email_logs table (if present). */
 async function logEmailEvent(
-  jobId: string,
+  domainJobId: string | null,
+  queueId: string,
   type: string,
   to: string,
   userId: string | undefined,
   status: 'sent' | 'failed' | 'bounced',
   errorMessage?: string
 ): Promise<void> {
-  const payload = { jobId, type, to, userId, status, errorMessage }
+  const payload = { domainJobId, queueId, type, to, userId, status, errorMessage }
   if (status === 'sent') {
     console.info('[EmailQueue] Sent', payload)
   } else {
@@ -32,7 +56,8 @@ async function logEmailEvent(
   }
   try {
     await supabase.from('email_logs').insert({
-      job_id: jobId,
+      job_id: domainJobId,
+      queue_id: queueId,
       type,
       recipient: to,
       user_id: userId ?? null,
@@ -286,9 +311,11 @@ async function runQueueCycle(): Promise<void> {
       .slice(0, 10)
 
     for (const job of pending) {
+      const domainJobId = getDomainJobId(job)
       try {
         await processJob(job)
         await logEmailEvent(
+          domainJobId,
           job.id,
           job.type,
           job.to,
@@ -303,6 +330,7 @@ async function runQueueCycle(): Promise<void> {
 
         if (job.attempts >= 3) {
           await logEmailEvent(
+            domainJobId,
             job.id,
             job.type,
             job.to,

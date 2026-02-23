@@ -179,7 +179,7 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
 
   if (!emailProvider) {
     console.warn('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.')
-    return
+    throw new Error('Email provider not configured. Set RESEND_API_KEY or SMTP_* environment variables.')
   }
 
   const replyTo = options.replyTo ?? process.env.EMAIL_REPLY_TO
