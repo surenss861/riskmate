@@ -15,6 +15,7 @@ function SignatureRequestEmail(input) {
     `,
         ctaLabel: "Sign Now →",
         ctaUrl: `${frontendUrl}/reports/${input.reportRunId}`,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Signature requested: ${input.reportName}`,

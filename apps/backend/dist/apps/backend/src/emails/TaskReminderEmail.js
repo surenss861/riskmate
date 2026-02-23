@@ -27,6 +27,7 @@ function TaskReminderEmail(input) {
         ctaUrl: input.jobId && input.taskId
             ? `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`
             : frontendUrl,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: input.isOverdue ? `Overdue: ${input.taskTitle}` : `Due soon: ${input.taskTitle}`,

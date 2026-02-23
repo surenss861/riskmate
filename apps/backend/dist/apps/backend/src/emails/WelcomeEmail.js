@@ -17,6 +17,7 @@ function WelcomeEmail(input) {
     `,
         ctaLabel: "Create Your First Job →",
         ctaUrl: `${frontendUrl}/jobs/new`,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: "Welcome to RiskMate",

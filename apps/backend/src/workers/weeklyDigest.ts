@@ -146,7 +146,7 @@ async function runWeeklyDigestCycle(): Promise<void> {
 
     try {
       const digest = await buildDigestForUser(user.id, user.organization_id)
-      queueEmail(
+      await queueEmail(
         EmailJobType.weekly_digest,
         user.email,
         digest as unknown as Record<string, unknown>,

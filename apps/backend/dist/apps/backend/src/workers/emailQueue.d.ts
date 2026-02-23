@@ -21,7 +21,7 @@ export interface EmailJob {
     attempts: number;
     createdAt: Date;
 }
-export declare function queueEmail(type: EmailJobType, to: string, data: Record<string, unknown>, userId?: string, scheduledAt?: Date): EmailJob;
+export declare function queueEmail(type: EmailJobType, to: string, data: Record<string, unknown>, userId?: string, scheduledAt?: Date): Promise<EmailJob>;
 export declare function startEmailQueueWorker(): void;
 export declare function stopEmailQueueWorker(): void;
 //# sourceMappingURL=emailQueue.d.ts.map

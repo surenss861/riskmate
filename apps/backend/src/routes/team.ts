@@ -252,7 +252,7 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
       throw insertUserError;
     }
 
-    queueEmail(
+    await queueEmail(
       EmailJobType.welcome,
       normalizedEmail,
       { userName: normalizedEmail },
@@ -315,7 +315,7 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
         supabase.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
       ]);
 
-      queueEmail(
+      await queueEmail(
         EmailJobType.team_invite,
         normalizedEmail,
         {

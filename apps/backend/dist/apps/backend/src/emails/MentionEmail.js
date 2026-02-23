@@ -12,6 +12,7 @@ function MentionEmail(input) {
     `,
         ctaLabel: "View Comment →",
         ctaUrl: input.commentUrl,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Mention from ${input.mentionedByName}`,

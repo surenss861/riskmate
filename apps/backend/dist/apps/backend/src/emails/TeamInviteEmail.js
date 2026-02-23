@@ -13,6 +13,7 @@ function TeamInviteEmail(input) {
     `,
         ctaLabel: "Accept Invitation →",
         ctaUrl: input.loginUrl,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Invitation to join ${input.orgName}`,

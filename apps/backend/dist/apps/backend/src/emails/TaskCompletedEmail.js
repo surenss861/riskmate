@@ -17,6 +17,7 @@ function TaskCompletedEmail(input) {
     `,
         ctaLabel: "View Task →",
         ctaUrl,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Task completed: ${input.taskTitle}`,

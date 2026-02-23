@@ -9,7 +9,42 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const auth_1 = require("../middleware/auth");
 const audit_1 = require("../middleware/audit");
 const errorResponse_1 = require("../utils/errorResponse");
+const emailQueue_1 = require("../workers/emailQueue");
 exports.accountRouter = express_1.default.Router();
+// POST /api/account/queue-welcome-email — internal: enqueue welcome email after signup (called by Next.js signup route).
+// Requires X-Internal-Secret header matching INTERNAL_API_KEY.
+exports.accountRouter.post("/queue-welcome-email", async (req, res) => {
+    try {
+        const secret = process.env.INTERNAL_API_KEY;
+        const headerSecret = req.headers["x-internal-secret"];
+        if (secret && headerSecret !== secret) {
+            return res.status(401).json((0, errorResponse_1.createErrorResponse)({
+                message: "Unauthorized",
+                code: "AUTH_UNAUTHORIZED",
+                status: 401,
+            }).response);
+        }
+        const { email, userId, userName } = req.body ?? {};
+        if (!email || typeof email !== "string" || !userId || typeof userId !== "string") {
+            return res.status(400).json((0, errorResponse_1.createErrorResponse)({
+                message: "email and userId are required",
+                code: "VALIDATION_ERROR",
+                status: 400,
+            }).response);
+        }
+        const normalizedEmail = email.trim().toLowerCase();
+        await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.welcome, normalizedEmail, { userName: typeof userName === "string" ? userName : normalizedEmail }, userId);
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error("Queue welcome email error:", err);
+        res.status(500).json((0, errorResponse_1.createErrorResponse)({
+            message: "Internal server error",
+            code: "INTERNAL_ERROR",
+            status: 500,
+        }).response);
+    }
+});
 // Base route - confirms account router is mounted
 exports.accountRouter.get("/", (_req, res) => {
     res.json({

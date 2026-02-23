@@ -4,6 +4,7 @@ export interface TeamInviteEmailInput {
     inviterName: string;
     tempPassword: string;
     loginUrl: string;
+    managePreferencesUrl?: string;
 }
 export declare function TeamInviteEmail(input: TeamInviteEmailInput): EmailTemplate;
 //# sourceMappingURL=TeamInviteEmail.d.ts.map

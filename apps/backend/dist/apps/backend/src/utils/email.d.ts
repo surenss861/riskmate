@@ -18,8 +18,8 @@ export declare function sendJobAssignedEmail(to: string, userName: string, job: 
 }, assignedByName: string, userId: string): Promise<void>;
 export declare function sendSignatureRequestEmail(to: string, userName: string, reportName: string, jobTitle: string, reportRunId: string, deadline: string | undefined, userId: string): Promise<void>;
 export declare function sendReportReadyEmail(to: string, userName: string, jobTitle: string, downloadUrl: string, viewUrl: string, userId: string): Promise<void>;
-export declare function sendWelcomeEmail(to: string, userName: string, _userId?: string): Promise<void>;
-export declare function sendTeamInviteEmail(to: string, orgName: string, inviterName: string, tempPassword: string, loginUrl: string, _userId?: string): Promise<void>;
+export declare function sendWelcomeEmail(to: string, userName: string, userId?: string): Promise<void>;
+export declare function sendTeamInviteEmail(to: string, orgName: string, inviterName: string, tempPassword: string, loginUrl: string, userId?: string): Promise<void>;
 export declare function sendMentionEmail(to: string, userName: string, mentionedByName: string, jobName: string, commentPreview: string, commentUrl: string, userId: string): Promise<void>;
 export declare function sendWeeklyDigestEmail(to: string, userName: string, digest: WeeklyDigestData, userId: string): Promise<void>;
 export declare function sendDeadlineReminderEmail(to: string, userName: string, job: {

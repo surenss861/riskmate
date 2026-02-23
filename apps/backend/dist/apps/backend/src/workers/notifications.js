@@ -86,7 +86,7 @@ async function runDeadlineCheck() {
                     .maybeSingle();
                 const email = user?.email;
                 if (email) {
-                    (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, email, {
+                    await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, email, {
                         job: {
                             id: job.id,
                             title: job.client_name ?? null,

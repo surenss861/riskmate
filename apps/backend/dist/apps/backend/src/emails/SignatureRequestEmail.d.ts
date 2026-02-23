@@ -5,6 +5,7 @@ export interface SignatureRequestEmailInput {
     jobTitle: string;
     reportRunId: string;
     deadline?: string;
+    managePreferencesUrl?: string;
 }
 export declare function SignatureRequestEmail(input: SignatureRequestEmailInput): EmailTemplate;
 //# sourceMappingURL=SignatureRequestEmail.d.ts.map

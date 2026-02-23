@@ -1033,7 +1033,7 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
                     risk_level: job.risk_level ?? null,
                 };
                 try {
-                    (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, { job: jobSummary, assignedByName: actorName ?? "A teammate" }, workerId);
+                    await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, { job: jobSummary, assignedByName: actorName ?? "A teammate" }, workerId);
                 }
                 catch (emailErr) {
                     console.warn("[Jobs] Bulk assign job_assigned email queue failed for job", jobId, emailErr);
@@ -1868,7 +1868,7 @@ exports.jobsRouter.post("/:id/assign", auth_1.authenticate, requireWriteAccess_1
                     due_date: job.due_date ?? null,
                     risk_level: job.risk_level ?? null,
                 };
-                (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
+                await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
                     job: jobSummary,
                     assignedByName: actor?.full_name ?? "A teammate",
                     userName: assignee?.full_name ?? null,

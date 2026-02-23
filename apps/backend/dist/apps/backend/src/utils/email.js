@@ -50,6 +50,7 @@ exports.sendTaskCompletedEmail = sendTaskCompletedEmail;
 exports.sendTaskReminderEmail = sendTaskReminderEmail;
 exports.hashAlertPayload = hashAlertPayload;
 const crypto_1 = __importDefault(require("crypto"));
+const base_1 = require("../emails/base");
 const notifications_1 = require("../services/notifications");
 const JobAssignedEmail_1 = require("../emails/JobAssignedEmail");
 const SignatureRequestEmail_1 = require("../emails/SignatureRequestEmail");
@@ -134,14 +135,32 @@ class SMTPProvider {
         });
         const recipients = Array.isArray(options.to) ? options.to : [options.to];
         for (const to of recipients) {
-            await transporter.sendMail({
-                from: options.from || this.from,
-                to,
-                subject: options.subject,
-                html: options.html,
-                text: options.text,
-                replyTo: options.replyTo,
-            });
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await transporter.sendMail({
+                        from: options.from || this.from,
+                        to,
+                        subject: options.subject,
+                        html: options.html,
+                        text: options.text,
+                        replyTo: options.replyTo,
+                    });
+                    lastError = null;
+                    break;
+                }
+                catch (error) {
+                    lastError = error;
+                    if (attempt < 3) {
+                        const backoffMs = 2 ** (attempt - 1) * 1000; // 1s, 2s
+                        await sleep(backoffMs);
+                    }
+                }
+            }
+            if (lastError) {
+                console.error('[Email] SMTP failed after 3 retries:', lastError);
+                throw lastError instanceof Error ? lastError : new Error(String(lastError));
+            }
         }
     }
 }
@@ -197,6 +216,7 @@ async function sendJobAssignedEmail(to, userName, job, assignedByName, userId) {
         userName: userName || fallbackName(to),
         job,
         assignedByName,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -215,6 +235,7 @@ async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, rep
         jobTitle,
         reportRunId,
         deadline,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -232,6 +253,7 @@ async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl
         jobTitle,
         downloadUrl,
         viewUrl,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -240,9 +262,15 @@ async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl
         text: template.text,
     });
 }
-async function sendWelcomeEmail(to, userName, _userId) {
+async function sendWelcomeEmail(to, userName, userId) {
+    if (userId) {
+        const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
+        if (!prefs.email_enabled)
+            return;
+    }
     const template = (0, WelcomeEmail_1.WelcomeEmail)({
         userName: userName || fallbackName(to),
+        managePreferencesUrl: userId ? (0, base_1.getManagePreferencesUrl)(userId) : undefined,
     });
     await sendEmail({
         to,
@@ -251,12 +279,18 @@ async function sendWelcomeEmail(to, userName, _userId) {
         text: template.text,
     });
 }
-async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, loginUrl, _userId) {
+async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, loginUrl, userId) {
+    if (userId) {
+        const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
+        if (!prefs.email_enabled)
+            return;
+    }
     const template = (0, TeamInviteEmail_1.TeamInviteEmail)({
         orgName,
         inviterName,
         tempPassword,
         loginUrl,
+        managePreferencesUrl: userId ? (0, base_1.getManagePreferencesUrl)(userId) : undefined,
     });
     await sendEmail({
         to,
@@ -275,6 +309,7 @@ async function sendMentionEmail(to, userName, mentionedByName, jobName, commentP
         jobName,
         commentPreview,
         commentUrl,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -290,6 +325,7 @@ async function sendWeeklyDigestEmail(to, userName, digest, userId) {
     const template = (0, WeeklyDigestEmail_1.WeeklyDigestEmail)({
         userName: userName || fallbackName(to),
         digest,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -306,6 +342,7 @@ async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, user
         userName: userName || fallbackName(to),
         job,
         hoursRemaining,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -324,6 +361,7 @@ async function sendTaskAssignedEmail(to, userName, params, userId) {
         jobTitle: params.jobTitle,
         jobId: params.jobId,
         taskId: params.taskId,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -334,7 +372,7 @@ async function sendTaskAssignedEmail(to, userName, params, userId) {
 }
 async function sendTaskCompletedEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
-    if (!prefs.email_enabled)
+    if (!(prefs.email_enabled && prefs.task_completed))
         return;
     const template = (0, TaskCompletedEmail_1.TaskCompletedEmail)({
         userName: userName || fallbackName(to),
@@ -342,6 +380,7 @@ async function sendTaskCompletedEmail(to, userName, params, userId) {
         jobTitle: params.jobTitle,
         taskId: params.taskId,
         jobId: params.jobId ?? '',
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,
@@ -363,6 +402,7 @@ async function sendTaskReminderEmail(to, userName, params, userId) {
         hoursRemaining: params.hoursRemaining,
         jobId: params.jobId,
         taskId: params.taskId,
+        managePreferencesUrl: (0, base_1.getManagePreferencesUrl)(userId),
     });
     await sendEmail({
         to,

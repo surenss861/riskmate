@@ -23,10 +23,10 @@ async function runDeadlineReminderCycle() {
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const { data: jobs, error } = await supabaseClient_1.supabase
         .from('jobs')
-        .select('id, organization_id, client_name, end_date, status')
-        .not('end_date', 'is', null)
-        .gte('end_date', now.toISOString())
-        .lte('end_date', in24h.toISOString())
+        .select('id, organization_id, client_name, due_date, status')
+        .not('due_date', 'is', null)
+        .gte('due_date', now.toISOString())
+        .lte('due_date', in24h.toISOString())
         .neq('status', 'completed')
         .neq('status', 'archived');
     if (error) {
@@ -34,7 +34,7 @@ async function runDeadlineReminderCycle() {
         return;
     }
     for (const job of jobs || []) {
-        const dueDate = job.end_date ? new Date(job.end_date) : null;
+        const dueDate = job.due_date ? new Date(job.due_date) : null;
         if (!dueDate || !job.organization_id)
             continue;
         const hoursRemaining = (dueDate.getTime() - now.getTime()) / (60 * 60 * 1000);
@@ -55,12 +55,12 @@ async function runDeadlineReminderCycle() {
             const prefs = await (0, notifications_1.getNotificationPreferences)(assignment.user_id);
             if (!prefs.email_enabled || !prefs.email_deadline_reminder)
                 continue;
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, userData.email, {
+            await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.deadline_reminder, userData.email, {
                 job: {
                     id: job.id,
                     title: job.client_name,
                     client_name: job.client_name,
-                    due_date: job.end_date,
+                    due_date: job.due_date,
                 },
                 hoursRemaining,
             }, assignment.user_id);

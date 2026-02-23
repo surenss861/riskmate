@@ -105,7 +105,7 @@ export async function runDeadlineCheck() {
           .maybeSingle();
         const email = (user as { email?: string | null } | null)?.email;
         if (email) {
-          queueEmail(
+          await queueEmail(
             EmailJobType.deadline_reminder,
             email,
             {

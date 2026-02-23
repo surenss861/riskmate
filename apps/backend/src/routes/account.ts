@@ -31,7 +31,7 @@ accountRouter.post("/queue-welcome-email", async (req: express.Request, res: exp
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    queueEmail(
+    await queueEmail(
       EmailJobType.welcome,
       normalizedEmail,
       { userName: typeof userName === "string" ? userName : normalizedEmail },

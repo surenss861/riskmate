@@ -8,6 +8,7 @@ export interface TaskReminderEmailInput {
     hoursRemaining?: number;
     jobId?: string;
     taskId?: string;
+    managePreferencesUrl?: string;
 }
 export declare function TaskReminderEmail(input: TaskReminderEmailInput): EmailTemplate;
 //# sourceMappingURL=TaskReminderEmail.d.ts.map

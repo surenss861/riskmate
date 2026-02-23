@@ -60,7 +60,7 @@ async function sendTaskReminderPushAndEmail(
   }
 
   if (assigneeEmail) {
-    queueEmail(
+    await queueEmail(
       EmailJobType.task_reminder,
       assigneeEmail,
       {

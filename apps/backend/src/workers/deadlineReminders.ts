@@ -59,7 +59,7 @@ async function runDeadlineReminderCycle(): Promise<void> {
       const prefs = await getNotificationPreferences(assignment.user_id)
       if (!prefs.email_enabled || !prefs.email_deadline_reminder) continue
 
-      queueEmail(
+      await queueEmail(
         EmailJobType.deadline_reminder,
         userData.email,
         {

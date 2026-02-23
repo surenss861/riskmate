@@ -1139,7 +1139,7 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
           risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
         };
         try {
-          queueEmail(
+          await queueEmail(
             EmailJobType.job_assigned,
             assigneeEmail,
             { job: jobSummary, assignedByName: actorName ?? "A teammate" },
@@ -2093,7 +2093,7 @@ jobsRouter.post("/:id/assign", authenticate, requireWriteAccess, async (req: exp
           due_date: (job as { due_date?: string | null }).due_date ?? null,
           risk_level: (job as { risk_level?: string | null }).risk_level ?? null,
         };
-        queueEmail(
+        await queueEmail(
           EmailJobType.job_assigned,
           assigneeEmail,
           {

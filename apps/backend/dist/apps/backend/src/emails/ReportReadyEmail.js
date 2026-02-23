@@ -10,6 +10,7 @@ function ReportReadyEmail(input) {
       <p style="margin:0;"><a href="${(0, base_1.e)(input.viewUrl)}" style="color:#007aff;text-decoration:none;">View Online</a></p>`,
         ctaLabel: "Download Report →",
         ctaUrl: input.downloadUrl,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Report ready: ${input.jobTitle}`,

@@ -10,6 +10,7 @@ export interface JobAssignedEmailInput {
         due_date?: string | null;
         risk_level?: string | null;
     };
+    managePreferencesUrl?: string;
 }
 export declare function JobAssignedEmail(input: JobAssignedEmailInput): EmailTemplate;
 //# sourceMappingURL=JobAssignedEmail.d.ts.map

@@ -17,6 +17,7 @@ function WeeklyDigestEmail(input) {
     const html = (0, base_1.layout)({
         title: "Weekly digest",
         intro: `Hi ${input.userName}, here is your weekly compliance summary.`,
+        managePreferencesUrl: input.managePreferencesUrl,
         bodyHtml: `
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 14px;border-collapse:collapse;">
         <tr>

@@ -5,6 +5,7 @@ export interface MentionEmailInput {
     jobName: string;
     commentPreview: string;
     commentUrl: string;
+    managePreferencesUrl?: string;
 }
 export declare function MentionEmail(input: MentionEmailInput): EmailTemplate;
 //# sourceMappingURL=MentionEmail.d.ts.map

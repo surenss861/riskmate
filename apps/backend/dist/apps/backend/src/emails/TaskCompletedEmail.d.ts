@@ -5,6 +5,7 @@ export interface TaskCompletedEmailInput {
     jobTitle: string;
     taskId: string;
     jobId: string;
+    managePreferencesUrl?: string;
 }
 export declare function TaskCompletedEmail(input: TaskCompletedEmailInput): EmailTemplate;
 //# sourceMappingURL=TaskCompletedEmail.d.ts.map

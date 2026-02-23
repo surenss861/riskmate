@@ -34,7 +34,7 @@ async function sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, 
         await (0, notifications_1.sendTaskDueSoonNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle, hoursRemaining);
     }
     if (assigneeEmail) {
-        (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_reminder, assigneeEmail, {
+        await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_reminder, assigneeEmail, {
             taskTitle: task.title,
             jobTitle,
             dueDate: task.due_date,
@@ -55,14 +55,15 @@ async function processTaskReminders() {
         return;
     const now = new Date();
     const remindedBefore = new Date(now.getTime() - MIN_REMINDER_GAP_MS).toISOString();
-    const nowIso = now.toISOString();
     const in24hIso = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const past24hIso = new Date(now.getTime() - ALERT_WINDOW_MS).toISOString();
     try {
-        // Due soon: due_date in [now, now+24h]. Overdue: all tasks with due_date < now (no cap).
+        // Due soon: due_date in [now, now+24h]. Overdue: due_date in [now-24h, now). Cap at 24h overdue so we don't email indefinitely.
         // last_reminded_at throttle prevents repeated sends within ~23h for all reminders.
         const { data: tasks, error } = await supabaseClient_1.supabase
             .from("tasks")
             .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)")
+            .gte("due_date", past24hIso)
             .lte("due_date", in24hIso)
             .neq("status", "done")
             .neq("status", "cancelled")
@@ -115,6 +116,8 @@ function startTaskReminderWorker() {
     }
     workerRunning = true;
     console.log("[TaskReminderWorker] Starting...");
+    // Run once immediately so reminders are not skipped after mid-day restarts until next 8am
+    void processTaskReminders();
     const initialDelay = getMillisecondsUntilNext8amLocal();
     console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
     startupTimeout = setTimeout(() => {

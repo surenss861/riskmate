@@ -4,6 +4,7 @@ export interface ReportReadyEmailInput {
     jobTitle: string;
     downloadUrl: string;
     viewUrl: string;
+    managePreferencesUrl?: string;
 }
 export declare function ReportReadyEmail(input: ReportReadyEmailInput): EmailTemplate;
 //# sourceMappingURL=ReportReadyEmail.d.ts.map

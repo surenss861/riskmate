@@ -297,7 +297,7 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
 
           for (const user of users || []) {
             if (!user.email) continue;
-            queueEmail(
+            await queueEmail(
               EmailJobType.report_ready,
               user.email,
               {
@@ -421,7 +421,7 @@ reportsRouter.post(
 
         for (const signer of signerRows || []) {
           if (!signer.email) continue;
-          queueEmail(
+          await queueEmail(
             EmailJobType.signature_request,
             signer.email,
             {

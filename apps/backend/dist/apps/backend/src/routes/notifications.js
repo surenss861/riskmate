@@ -191,7 +191,7 @@ exports.notificationsRouter.post("/job-assigned", auth_1.authenticate, async (re
         await (0, notifications_1.sendJobAssignedNotification)(userId, organizationId, jobId, jobTitle);
         const assigneeEmail = user.email;
         if (assigneeEmail) {
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
+            await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.job_assigned, assigneeEmail, {
                 job: { id: jobId, title: jobTitle ?? null },
                 assignedByName: authReq.user.full_name ?? "A teammate",
             }, userId);
@@ -234,7 +234,7 @@ exports.notificationsRouter.post("/task-assigned", auth_1.authenticate, async (r
         await (0, notifications_1.sendTaskAssignedNotification)(userId, organizationId, taskId, jobTitle || "Job", taskTitle);
         const toEmail = user.email;
         if (toEmail) {
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_assigned, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId }, userId);
+            await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_assigned, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId }, userId);
         }
         res.status(204).end();
     }
@@ -275,7 +275,7 @@ exports.notificationsRouter.post("/task-completed", auth_1.authenticate, async (
         await (0, notifications_1.sendTaskCompletedNotification)(userId, organizationId, taskId, taskTitle, jobTitle || "Job", jobId);
         const toEmail = user.email;
         if (toEmail) {
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_completed, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId: jobId ?? "" }, userId);
+            await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_completed, toEmail, { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId: jobId ?? "" }, userId);
         }
         res.status(204).end();
     }
@@ -438,7 +438,7 @@ exports.notificationsRouter.post("/mention", auth_1.authenticate, async (req, re
             const commentUrl = commentRow.entity_type === "job" && commentRow.entity_id
                 ? `${baseUrl}/jobs/${commentRow.entity_id}#comment-${commentId}`
                 : baseUrl;
-            (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.mention, toEmail, { mentionedByName, jobName, commentPreview, commentUrl }, userId);
+            await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.mention, toEmail, { mentionedByName, jobName, commentPreview, commentUrl }, userId);
         }
         res.status(204).end();
     }

@@ -160,6 +160,7 @@ exports.DEFAULT_NOTIFICATION_PREFERENCES = {
     report_ready: true,
     job_comment: true,
     comment_resolved: true,
+    task_completed: true,
 };
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */
 exports.OPT_OUT_SAFE_PREFERENCES = {
@@ -179,6 +180,7 @@ exports.OPT_OUT_SAFE_PREFERENCES = {
     report_ready: false,
     job_comment: false,
     comment_resolved: false,
+    task_completed: false,
 };
 /** Fetch notification preferences for a user; returns defaults if no row exists. On Supabase error returns OPT_OUT_SAFE_PREFERENCES so delivery is skipped (fail closed). */
 async function getNotificationPreferences(userId) {
@@ -210,6 +212,7 @@ async function getNotificationPreferences(userId) {
         report_ready: data.report_ready ?? true,
         job_comment: data.job_comment ?? true,
         comment_resolved: data.comment_resolved ?? true,
+        task_completed: data.task_completed ?? true,
     };
 }
 /** Fetch push tokens for a single user in a given organization (for targeted notifications). */
@@ -589,6 +592,11 @@ async function sendTaskAssignedNotification(userId, organizationId, taskId, jobT
     });
 }
 async function sendTaskCompletedNotification(userId, organizationId, taskId, taskTitle, jobTitle, jobId) {
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.task_completed) {
+        console.log("[Notifications] Skipped task_completed for user", userId, "(preference disabled)");
+        return;
+    }
     void jobTitle;
     const deepLink = jobId != null && jobId !== ""
         ? `riskmate://jobs/${jobId}/tasks?highlight=${taskId}`

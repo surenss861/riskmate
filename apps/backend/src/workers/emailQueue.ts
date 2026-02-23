@@ -15,6 +15,10 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import type { WeeklyDigestData } from '../emails/WeeklyDigestEmail'
 
+const LEASE_VISIBILITY_SEC = 120
+const MAX_CLAIM = 10
+const MAX_ATTEMPTS = 3
+
 /** Domain identifier (task/job/report id) from email job data; null when not applicable. */
 function getDomainJobId(job: EmailJob): string | null {
   const d = job.data
@@ -95,31 +99,74 @@ export interface EmailJob {
   createdAt: Date
 }
 
-const emailQueue: EmailJob[] = []
 let workerStarted = false
 let workerTimer: NodeJS.Timeout | null = null
 let processing = false
 
-export function queueEmail(
+/** Row returned from email_queue table (and from claim_email_queue_jobs RPC). */
+interface EmailQueueRow {
+  id: string
+  type: string
+  recipient: string
+  user_id: string | null
+  data: Record<string, unknown>
+  scheduled_at: string
+  attempts: number
+  created_at: string
+  lease_holder: string | null
+  lease_expires_at: string | null
+}
+
+function rowToJob(row: EmailQueueRow): EmailJob {
+  return {
+    id: row.id,
+    type: row.type as EmailJobType,
+    to: row.recipient,
+    userId: row.user_id ?? undefined,
+    data: row.data ?? {},
+    scheduledAt: new Date(row.scheduled_at),
+    attempts: row.attempts,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export async function queueEmail(
   type: EmailJobType,
   to: string,
   data: Record<string, unknown>,
   userId?: string,
   scheduledAt?: Date
-): EmailJob {
-  const job: EmailJob = {
-    id: crypto.randomUUID(),
+): Promise<EmailJob> {
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const scheduled = (scheduledAt ?? new Date()).toISOString()
+
+  const { error } = await supabase.from('email_queue').insert({
+    id,
+    type,
+    recipient: to,
+    user_id: userId ?? null,
+    data: data ?? {},
+    scheduled_at: scheduled,
+    attempts: 0,
+    created_at: now,
+  })
+
+  if (error) {
+    console.error('[EmailQueue] Insert failed:', error)
+    throw new Error(`Email queue insert failed: ${error.message}`)
+  }
+
+  return {
+    id,
     type,
     to,
     userId,
     data,
-    scheduledAt,
+    scheduledAt: scheduledAt ? new Date(scheduled) : undefined,
     attempts: 0,
-    createdAt: new Date(),
+    createdAt: new Date(now),
   }
-
-  emailQueue.push(job)
-  return job
 }
 
 function deriveName(email: string): string {
@@ -304,42 +351,39 @@ async function runQueueCycle(): Promise<void> {
   if (processing) return
   processing = true
 
-  try {
-    const now = new Date()
-    const pending = emailQueue
-      .filter((job) => !job.scheduledAt || job.scheduledAt <= now)
-      .slice(0, 10)
+  const holderId = `${process.pid}-${crypto.randomUUID().slice(0, 8)}`
 
-    for (const job of pending) {
+  try {
+    const { data: rows, error: claimError } = await supabase.rpc('claim_email_queue_jobs', {
+      p_holder_id: holderId,
+      p_visibility_sec: LEASE_VISIBILITY_SEC,
+      p_max: MAX_CLAIM,
+    })
+
+    if (claimError) {
+      // Table or RPC may not exist yet (e.g. before migration)
+      if (claimError.code !== 'PGRST204' && claimError.message?.includes('claim_email_queue_jobs') === false) {
+        console.error('[EmailQueue] Claim failed:', claimError)
+      }
+      return
+    }
+
+    const claimed = (rows ?? []) as EmailQueueRow[]
+    for (const row of claimed) {
+      const job = rowToJob(row)
       const domainJobId = getDomainJobId(job)
+
       try {
         await processJob(job)
-        await logEmailEvent(
-          domainJobId,
-          job.id,
-          job.type,
-          job.to,
-          job.userId,
-          'sent'
-        )
-        const index = emailQueue.findIndex((item) => item.id === job.id)
-        if (index >= 0) emailQueue.splice(index, 1)
+        await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent')
+        await supabase.from('email_queue').delete().eq('id', job.id)
       } catch (error) {
-        job.attempts += 1
         const errMsg = error instanceof Error ? error.message : String(error)
+        const newAttempts = job.attempts + 1
 
-        if (job.attempts >= 3) {
-          await logEmailEvent(
-            domainJobId,
-            job.id,
-            job.type,
-            job.to,
-            job.userId,
-            'failed',
-            errMsg
-          )
-          const index = emailQueue.findIndex((item) => item.id === job.id)
-          if (index >= 0) emailQueue.splice(index, 1)
+        if (newAttempts >= MAX_ATTEMPTS) {
+          await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'failed', errMsg)
+          await supabase.from('email_queue').delete().eq('id', job.id)
           console.error('[EmailQueue] Job failed and removed after 3 attempts:', {
             id: job.id,
             type: job.type,
@@ -347,14 +391,22 @@ async function runQueueCycle(): Promise<void> {
             error,
           })
         } else {
-          // Exponential backoff: after attempt 1 wait 1s, after attempt 2 wait 2s (next run picks it up)
-          const backoffMs = 1000 * 2 ** (job.attempts - 1)
-          job.scheduledAt = new Date(Date.now() + backoffMs)
+          const backoffSec = 2 ** (newAttempts - 1)
+          const scheduledAt = new Date(Date.now() + backoffSec * 1000).toISOString()
+          await supabase
+            .from('email_queue')
+            .update({
+              attempts: newAttempts,
+              scheduled_at: scheduledAt,
+              lease_holder: null,
+              lease_expires_at: null,
+            })
+            .eq('id', job.id)
           console.error('[EmailQueue] Job failed, will retry after backoff:', {
             id: job.id,
             type: job.type,
-            attempts: job.attempts,
-            nextAttemptAt: job.scheduledAt.toISOString(),
+            attempts: newAttempts,
+            nextAttemptAt: scheduledAt,
             error,
           })
         }

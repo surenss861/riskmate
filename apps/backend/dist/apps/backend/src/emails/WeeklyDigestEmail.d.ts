@@ -15,6 +15,7 @@ export interface WeeklyDigestData {
 export interface WeeklyDigestEmailInput {
     userName: string;
     digest: WeeklyDigestData;
+    managePreferencesUrl?: string;
 }
 export declare function WeeklyDigestEmail(input: WeeklyDigestEmailInput): EmailTemplate;
 //# sourceMappingURL=WeeklyDigestEmail.d.ts.map

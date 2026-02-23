@@ -306,7 +306,7 @@ export async function sendWelcomeEmail(
 ): Promise<void> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!(prefs.email_enabled && prefs.job_assigned)) return
+    if (!prefs.email_enabled) return
   }
 
   const template = WelcomeEmail({
@@ -332,7 +332,7 @@ export async function sendTeamInviteEmail(
 ): Promise<void> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!(prefs.email_enabled && prefs.job_assigned)) return
+    if (!prefs.email_enabled) return
   }
 
   const template = TeamInviteEmail({

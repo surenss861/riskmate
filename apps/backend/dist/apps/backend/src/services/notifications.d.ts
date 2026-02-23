@@ -30,6 +30,7 @@ export type NotificationPreferences = {
     report_ready: boolean;
     job_comment: boolean;
     comment_resolved: boolean;
+    task_completed: boolean;
 };
 export declare const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences;
 /** Safe opt-out when preferences cannot be loaded (e.g. Supabase error). All delivery disabled to avoid re-enabling push/email for opted-out users. */

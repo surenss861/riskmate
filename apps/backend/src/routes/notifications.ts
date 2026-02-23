@@ -256,7 +256,7 @@ notificationsRouter.post(
       await sendJobAssignedNotification(userId, organizationId, jobId, jobTitle);
       const assigneeEmail = (user as { email?: string | null }).email;
       if (assigneeEmail) {
-        queueEmail(
+        await queueEmail(
           EmailJobType.job_assigned,
           assigneeEmail,
           {
@@ -314,7 +314,7 @@ notificationsRouter.post(
       );
       const toEmail = (user as { email?: string | null }).email;
       if (toEmail) {
-        queueEmail(
+        await queueEmail(
           EmailJobType.task_assigned,
           toEmail,
           { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId },
@@ -371,7 +371,7 @@ notificationsRouter.post(
       );
       const toEmail = (user as { email?: string | null }).email;
       if (toEmail) {
-        queueEmail(
+        await queueEmail(
           EmailJobType.task_completed,
           toEmail,
           { taskId, taskTitle, jobTitle: jobTitle || "Job", jobId: jobId ?? "" },
@@ -564,7 +564,7 @@ notificationsRouter.post(
           ? `${baseUrl}/jobs/${commentRow.entity_id}#comment-${commentId}`
           : baseUrl;
 
-        queueEmail(
+        await queueEmail(
           EmailJobType.mention,
           toEmail,
           { mentionedByName, jobName, commentPreview, commentUrl },

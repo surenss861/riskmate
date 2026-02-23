@@ -16,6 +16,7 @@ function DeadlineReminderEmail(input) {
     `,
         ctaLabel: "View Job →",
         ctaUrl: `${frontendUrl}/jobs/${input.job.id || ""}`,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Deadline reminder: ${jobTitle}`,

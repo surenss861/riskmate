@@ -16,6 +16,7 @@ function TaskAssignedEmail(input) {
     `,
         ctaLabel: "View Task →",
         ctaUrl: `${frontendUrl}/jobs/${input.jobId}/tasks?highlight=${input.taskId}`,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Task assigned: ${input.taskTitle}`,

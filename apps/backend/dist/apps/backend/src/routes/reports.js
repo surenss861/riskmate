@@ -242,7 +242,7 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
                     for (const user of users || []) {
                         if (!user.email)
                             continue;
-                        (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.report_ready, user.email, {
+                        await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.report_ready, user.email, {
                             jobTitle: reportData.job?.client_name ?? "Risk report",
                             downloadUrl: pdfUrl ?? "",
                             viewUrl: `${BASE_SHARE_URL}/reports/${jobId}`,
@@ -351,7 +351,7 @@ exports.reportsRouter.post("/runs/:reportRunId/ready-for-signatures", auth_1.aut
             for (const signer of signerRows || []) {
                 if (!signer.email)
                     continue;
-                (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.signature_request, signer.email, {
+                await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.signature_request, signer.email, {
                     reportRunId,
                     jobTitle: jobTitleOrClientName ?? "Risk report",
                     reportName: `Report ${reportRunId.slice(0, 8)}`,

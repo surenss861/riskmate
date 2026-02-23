@@ -20,6 +20,7 @@ function JobAssignedEmail(input) {
     `,
         ctaLabel: "View Job Details →",
         ctaUrl: `${frontendUrl}/jobs/${input.job.id || ""}`,
+        managePreferencesUrl: input.managePreferencesUrl,
     });
     return {
         subject: `Job assigned: ${jobTitle}`,

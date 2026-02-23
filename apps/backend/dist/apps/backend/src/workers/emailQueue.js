@@ -10,6 +10,9 @@ exports.stopEmailQueueWorker = stopEmailQueueWorker;
 const crypto_1 = __importDefault(require("crypto"));
 const email_1 = require("../utils/email");
 const supabaseClient_1 = require("../lib/supabaseClient");
+const LEASE_VISIBILITY_SEC = 120;
+const MAX_CLAIM = 10;
+const MAX_ATTEMPTS = 3;
 /** Domain identifier (task/job/report id) from email job data; null when not applicable. */
 function getDomainJobId(job) {
     const d = job.data;
@@ -72,23 +75,49 @@ var EmailJobType;
     EmailJobType["task_assigned"] = "task_assigned";
     EmailJobType["task_completed"] = "task_completed";
 })(EmailJobType || (exports.EmailJobType = EmailJobType = {}));
-const emailQueue = [];
 let workerStarted = false;
 let workerTimer = null;
 let processing = false;
-function queueEmail(type, to, data, userId, scheduledAt) {
-    const job = {
-        id: crypto_1.default.randomUUID(),
+function rowToJob(row) {
+    return {
+        id: row.id,
+        type: row.type,
+        to: row.recipient,
+        userId: row.user_id ?? undefined,
+        data: row.data ?? {},
+        scheduledAt: new Date(row.scheduled_at),
+        attempts: row.attempts,
+        createdAt: new Date(row.created_at),
+    };
+}
+async function queueEmail(type, to, data, userId, scheduledAt) {
+    const id = crypto_1.default.randomUUID();
+    const now = new Date().toISOString();
+    const scheduled = (scheduledAt ?? new Date()).toISOString();
+    const { error } = await supabaseClient_1.supabase.from('email_queue').insert({
+        id,
+        type,
+        recipient: to,
+        user_id: userId ?? null,
+        data: data ?? {},
+        scheduled_at: scheduled,
+        attempts: 0,
+        created_at: now,
+    });
+    if (error) {
+        console.error('[EmailQueue] Insert failed:', error);
+        throw new Error(`Email queue insert failed: ${error.message}`);
+    }
+    return {
+        id,
         type,
         to,
         userId,
         data,
-        scheduledAt,
+        scheduledAt: scheduledAt ? new Date(scheduled) : undefined,
         attempts: 0,
-        createdAt: new Date(),
+        createdAt: new Date(now),
     };
-    emailQueue.push(job);
-    return job;
 }
 function deriveName(email) {
     const local = email.split('@')[0] || 'there';
@@ -208,28 +237,35 @@ async function runQueueCycle() {
     if (processing)
         return;
     processing = true;
+    const holderId = `${process.pid}-${crypto_1.default.randomUUID().slice(0, 8)}`;
     try {
-        const now = new Date();
-        const pending = emailQueue
-            .filter((job) => !job.scheduledAt || job.scheduledAt <= now)
-            .slice(0, 10);
-        for (const job of pending) {
+        const { data: rows, error: claimError } = await supabaseClient_1.supabase.rpc('claim_email_queue_jobs', {
+            p_holder_id: holderId,
+            p_visibility_sec: LEASE_VISIBILITY_SEC,
+            p_max: MAX_CLAIM,
+        });
+        if (claimError) {
+            // Table or RPC may not exist yet (e.g. before migration)
+            if (claimError.code !== 'PGRST204' && claimError.message?.includes('claim_email_queue_jobs') === false) {
+                console.error('[EmailQueue] Claim failed:', claimError);
+            }
+            return;
+        }
+        const claimed = (rows ?? []);
+        for (const row of claimed) {
+            const job = rowToJob(row);
             const domainJobId = getDomainJobId(job);
             try {
                 await processJob(job);
                 await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent');
-                const index = emailQueue.findIndex((item) => item.id === job.id);
-                if (index >= 0)
-                    emailQueue.splice(index, 1);
+                await supabaseClient_1.supabase.from('email_queue').delete().eq('id', job.id);
             }
             catch (error) {
-                job.attempts += 1;
                 const errMsg = error instanceof Error ? error.message : String(error);
-                if (job.attempts >= 3) {
+                const newAttempts = job.attempts + 1;
+                if (newAttempts >= MAX_ATTEMPTS) {
                     await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'failed', errMsg);
-                    const index = emailQueue.findIndex((item) => item.id === job.id);
-                    if (index >= 0)
-                        emailQueue.splice(index, 1);
+                    await supabaseClient_1.supabase.from('email_queue').delete().eq('id', job.id);
                     console.error('[EmailQueue] Job failed and removed after 3 attempts:', {
                         id: job.id,
                         type: job.type,
@@ -238,10 +274,22 @@ async function runQueueCycle() {
                     });
                 }
                 else {
-                    console.error('[EmailQueue] Job failed, will retry:', {
+                    const backoffSec = 2 ** (newAttempts - 1);
+                    const scheduledAt = new Date(Date.now() + backoffSec * 1000).toISOString();
+                    await supabaseClient_1.supabase
+                        .from('email_queue')
+                        .update({
+                        attempts: newAttempts,
+                        scheduled_at: scheduledAt,
+                        lease_holder: null,
+                        lease_expires_at: null,
+                    })
+                        .eq('id', job.id);
+                    console.error('[EmailQueue] Job failed, will retry after backoff:', {
                         id: job.id,
                         type: job.type,
-                        attempts: job.attempts,
+                        attempts: newAttempts,
+                        nextAttemptAt: scheduledAt,
                         error,
                     });
                 }

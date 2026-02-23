@@ -8,6 +8,7 @@ export interface DeadlineReminderEmailInput {
         due_date?: string | null;
     };
     hoursRemaining: number;
+    managePreferencesUrl?: string;
 }
 export declare function DeadlineReminderEmail(input: DeadlineReminderEmailInput): EmailTemplate;
 //# sourceMappingURL=DeadlineReminderEmail.d.ts.map
