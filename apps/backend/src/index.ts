@@ -35,6 +35,7 @@ import { metricsRouter } from "./routes/metrics";
 import { dashboardRouter } from "./routes/dashboard";
 import { commentsRouter } from "./routes/comments";
 import { tasksRouter, taskTemplatesRouter } from "./routes/tasks";
+import { resendWebhookRouter } from "./routes/resendWebhook";
 import { startExportWorker } from "./services/exportWorker";
 import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
@@ -366,6 +367,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/comments", commentsRouter);
 app.use("/api/tasks", tasksRouter);
 app.use("/api/task-templates", taskTemplatesRouter);
+app.use("/api/webhooks/resend", resendWebhookRouter);
 
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", riskRouter);
@@ -390,6 +392,7 @@ v1Router.use("/dashboard", dashboardRouter);
 v1Router.use("/comments", commentsRouter);
 v1Router.use("/tasks", tasksRouter);
 v1Router.use("/task-templates", taskTemplatesRouter);
+v1Router.use("/webhooks/resend", resendWebhookRouter);
 
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it

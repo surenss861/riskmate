@@ -22,8 +22,14 @@ interface EmailOptions {
   replyTo?: string
 }
 
+export interface SendEmailResult {
+  providerId?: string
+}
+
+export type SendResult = { sent: true; providerId?: string } | { sent: false }
+
 interface EmailProvider {
-  send(options: EmailOptions): Promise<void>
+  send(options: EmailOptions): Promise<SendEmailResult>
 }
 
 function sleep(ms: number): Promise<void> {
@@ -40,7 +46,7 @@ class ResendProvider implements EmailProvider {
     this.from = from
   }
 
-  async send(options: EmailOptions): Promise<void> {
+  async send(options: EmailOptions): Promise<SendEmailResult> {
     const resend = await import('resend').catch(() => null)
     if (!resend) {
       throw new Error('Resend package not installed. Run: pnpm add resend')
@@ -48,13 +54,14 @@ class ResendProvider implements EmailProvider {
 
     const client = new resend.Resend(this.apiKey)
     const recipients = Array.isArray(options.to) ? options.to : [options.to]
+    let lastProviderId: string | undefined
 
     for (const to of recipients) {
       let lastError: unknown = null
 
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          await client.emails.send({
+          const result = await client.emails.send({
             from: options.from || this.from,
             to,
             subject: options.subject,
@@ -62,6 +69,8 @@ class ResendProvider implements EmailProvider {
             text: options.text,
             replyTo: options.replyTo,
           })
+          const id = result?.data?.id as string | undefined
+          if (id) lastProviderId = id
           lastError = null
           break
         } catch (error) {
@@ -78,6 +87,7 @@ class ResendProvider implements EmailProvider {
         throw lastError instanceof Error ? lastError : new Error(String(lastError))
       }
     }
+    return { providerId: lastProviderId }
   }
 }
 
@@ -106,7 +116,7 @@ class SMTPProvider implements EmailProvider {
     this.secure = config.secure ?? (config.port === 465)
   }
 
-  async send(options: EmailOptions): Promise<void> {
+  async send(options: EmailOptions): Promise<SendEmailResult> {
     const nodemailer = await import('nodemailer').catch(() => null)
     if (!nodemailer) {
       throw new Error('Nodemailer package not installed. Run: pnpm add nodemailer')
@@ -153,6 +163,7 @@ class SMTPProvider implements EmailProvider {
         throw lastError instanceof Error ? lastError : new Error(String(lastError))
       }
     }
+    return {}
   }
 }
 
@@ -214,7 +225,7 @@ export async function isEmailConfigured(): Promise<boolean> {
 // Singleton email provider instance
 let emailProvider: EmailProvider | null = null
 
-export async function sendEmail(options: EmailOptions): Promise<void> {
+export async function sendEmail(options: EmailOptions): Promise<SendEmailResult> {
   if (!emailProvider) {
     emailProvider = await getEmailProvider()
   }
@@ -225,7 +236,7 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
   }
 
   const replyTo = options.replyTo ?? process.env.EMAIL_REPLY_TO
-  await emailProvider.send({ ...options, replyTo })
+  return emailProvider.send({ ...options, replyTo })
 }
 
 function fallbackName(email: string): string {
@@ -246,24 +257,24 @@ export async function sendJobAssignedEmail(
   },
   assignedByName: string,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.job_assigned)) return false
+  if (!(prefs.email_enabled && prefs.job_assigned)) return { sent: false }
 
-  const template = JobAssignedEmail({
+  const template = await JobAssignedEmail({
     userName: userName || fallbackName(to),
     job,
     assignedByName,
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendSignatureRequestEmail(
@@ -274,11 +285,11 @@ export async function sendSignatureRequestEmail(
   reportRunId: string,
   deadline: string | undefined,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.signature_requested)) return false
+  if (!(prefs.email_enabled && prefs.signature_requested)) return { sent: false }
 
-  const template = SignatureRequestEmail({
+  const template = await SignatureRequestEmail({
     userName: userName || fallbackName(to),
     reportName,
     jobTitle,
@@ -287,13 +298,13 @@ export async function sendSignatureRequestEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendReportReadyEmail(
@@ -303,11 +314,11 @@ export async function sendReportReadyEmail(
   downloadUrl: string,
   viewUrl: string,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.report_ready)) return false
+  if (!(prefs.email_enabled && prefs.report_ready)) return { sent: false }
 
-  const template = ReportReadyEmail({
+  const template = await ReportReadyEmail({
     userName: userName || fallbackName(to),
     jobTitle,
     downloadUrl,
@@ -315,37 +326,37 @@ export async function sendReportReadyEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendWelcomeEmail(
   to: string,
   userName: string,
   userId?: string
-): Promise<boolean> {
+): Promise<SendResult> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!prefs.email_enabled) return false
+    if (!prefs.email_enabled) return { sent: false }
   }
 
-  const template = WelcomeEmail({
+  const template = await WelcomeEmail({
     userName: userName || fallbackName(to),
     managePreferencesUrl: userId ? getManagePreferencesUrl(userId) : undefined,
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendTeamInviteEmail(
@@ -355,13 +366,13 @@ export async function sendTeamInviteEmail(
   tempPassword: string,
   loginUrl: string,
   userId?: string
-): Promise<boolean> {
+): Promise<SendResult> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!prefs.email_enabled) return false
+    if (!prefs.email_enabled) return { sent: false }
   }
 
-  const template = TeamInviteEmail({
+  const template = await TeamInviteEmail({
     orgName,
     inviterName,
     tempPassword,
@@ -369,13 +380,13 @@ export async function sendTeamInviteEmail(
     managePreferencesUrl: userId ? getManagePreferencesUrl(userId) : undefined,
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendMentionEmail(
@@ -386,11 +397,11 @@ export async function sendMentionEmail(
   commentPreview: string,
   commentUrl: string,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.mention)) return false
+  if (!(prefs.email_enabled && prefs.mention)) return { sent: false }
 
-  const template = MentionEmail({
+  const template = await MentionEmail({
     userName: userName || fallbackName(to),
     mentionedByName,
     jobName,
@@ -399,13 +410,13 @@ export async function sendMentionEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendWeeklyDigestEmail(
@@ -413,23 +424,23 @@ export async function sendWeeklyDigestEmail(
   userName: string,
   digest: WeeklyDigestData,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_weekly_digest)) return false
+  if (!(prefs.email_enabled && prefs.email_weekly_digest)) return { sent: false }
 
-  const template = WeeklyDigestEmail({
+  const template = await WeeklyDigestEmail({
     userName: userName || fallbackName(to),
     digest,
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendDeadlineReminderEmail(
@@ -443,24 +454,24 @@ export async function sendDeadlineReminderEmail(
   },
   hoursRemaining: number,
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return false
+  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return { sent: false }
 
-  const template = DeadlineReminderEmail({
+  const template = await DeadlineReminderEmail({
     userName: userName || fallbackName(to),
     job,
     hoursRemaining,
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendTaskAssignedEmail(
@@ -468,11 +479,11 @@ export async function sendTaskAssignedEmail(
   userName: string,
   params: { taskTitle: string; jobTitle: string; jobId: string; taskId: string },
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.job_assigned)) return false
+  if (!(prefs.email_enabled && prefs.job_assigned)) return { sent: false }
 
-  const template = TaskAssignedEmail({
+  const template = await TaskAssignedEmail({
     userName: userName || fallbackName(to),
     taskTitle: params.taskTitle,
     jobTitle: params.jobTitle,
@@ -481,13 +492,13 @@ export async function sendTaskAssignedEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendTaskCompletedEmail(
@@ -495,11 +506,11 @@ export async function sendTaskCompletedEmail(
   userName: string,
   params: { taskTitle: string; jobTitle: string; taskId: string; jobId: string },
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.task_completed)) return false
+  if (!(prefs.email_enabled && prefs.task_completed)) return { sent: false }
 
-  const template = TaskCompletedEmail({
+  const template = await TaskCompletedEmail({
     userName: userName || fallbackName(to),
     taskTitle: params.taskTitle,
     jobTitle: params.jobTitle,
@@ -508,13 +519,13 @@ export async function sendTaskCompletedEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 export async function sendTaskReminderEmail(
@@ -530,11 +541,11 @@ export async function sendTaskReminderEmail(
     taskId?: string
   },
   userId: string
-): Promise<boolean> {
+): Promise<SendResult> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return false
+  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return { sent: false }
 
-  const template = TaskReminderEmail({
+  const template = await TaskReminderEmail({
     userName: userName || fallbackName(to),
     taskTitle: params.taskTitle,
     jobTitle: params.jobTitle,
@@ -546,13 +557,13 @@ export async function sendTaskReminderEmail(
     managePreferencesUrl: getManagePreferencesUrl(userId),
   })
 
-  await sendEmail({
+  const result = await sendEmail({
     to,
     subject: template.subject,
     html: template.html,
     text: template.text,
   })
-  return true
+  return { sent: true, providerId: result.providerId }
 }
 
 // Generate hash of alert payload for deduplication

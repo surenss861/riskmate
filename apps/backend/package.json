@@ -16,6 +16,8 @@
     "test:golden-path": "tsx scripts/golden-path-test.ts"
   },
   "dependencies": {
+    "@react-email/components": "^1.0.8",
+    "@react-email/render": "^2.0.4",
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdfkit": "^0.17.3",
     "apn": "^2.2.0",
@@ -27,6 +29,8 @@
     "nodemailer": "^7.0.12",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "resend": "^6.7.0",
     "stripe": "^14.7.0",
     "uuid": "^13.0.0",
