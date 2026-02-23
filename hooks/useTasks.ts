@@ -322,29 +322,28 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
       if (changed.length === 0) return
 
       try {
-        await Promise.all(
-          changed.map((task) => {
-            const newOrder = reordered.findIndex((candidate) => candidate.id === task.id)
-            return fetch(`/api/tasks/${task.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sort_order: newOrder }),
-            }).then((response) => {
-              if (!response.ok) {
-                throw new Error(`Failed to reorder task (${response.status})`)
-              }
-            })
+        // Apply sort_order updates sequentially so partial failure can be detected.
+        for (const task of changed) {
+          const newOrder = reordered.findIndex((candidate) => candidate.id === task.id)
+          const response = await fetch(`/api/tasks/${task.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sort_order: newOrder }),
           })
-        )
+          if (!response.ok) {
+            throw new Error(`Failed to reorder task (${response.status})`)
+          }
+        }
 
         setTasks(reordered.map((task, idx) => ({ ...task, sort_order: idx })))
       } catch (err: any) {
-        setTasks(previous)
+        // Refetch so client order stays in sync with server after partial PATCH failure.
+        await fetchTasks()
         setError(err)
         throw err
       }
     },
-    [tasks]
+    [tasks, fetchTasks]
   )
 
   const incompleteCount = useMemo(

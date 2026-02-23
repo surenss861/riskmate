@@ -1914,6 +1914,19 @@ struct UpdateTaskRequest: Codable {
     let status: String?
     let completed_at: String?
     let sort_order: Int?
+
+    /// Encode so that due_date: nil is sent as "due_date": null (allows clearing due date on server).
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(assigned_to, forKey: .assigned_to)
+        try c.encodeIfPresent(priority, forKey: .priority)
+        try c.encode(due_date, forKey: .due_date)
+        try c.encodeIfPresent(status, forKey: .status)
+        try c.encodeIfPresent(completed_at, forKey: .completed_at)
+        try c.encodeIfPresent(sort_order, forKey: .sort_order)
+    }
 }
 
 struct APIClientTask: Codable, Identifiable {

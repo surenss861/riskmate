@@ -606,14 +606,22 @@ private struct TaskDetailSheet: View {
                         Text("Done").tag("done")
                         Text("Cancelled").tag("cancelled")
                     }
-                    DatePicker(
-                        "Due date",
-                        selection: Binding(
-                            get: { dueDate ?? Date() },
-                            set: { dueDate = $0 }
-                        ),
-                        displayedComponents: .date
-                    )
+                    HStack {
+                        DatePicker(
+                            "Due date",
+                            selection: Binding(
+                                get: { dueDate ?? Date() },
+                                set: { dueDate = $0 }
+                            ),
+                            displayedComponents: .date
+                        )
+                        if dueDate != nil {
+                            Button("Clear") {
+                                dueDate = nil
+                            }
+                            .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
                 }
                 Section("Assignment") {
                     Picker("Assignee", selection: $assignedToId) {
