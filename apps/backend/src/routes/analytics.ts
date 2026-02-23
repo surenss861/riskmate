@@ -36,6 +36,7 @@ type DocumentRecord = {
   id: string;
   job_id: string;
   created_at: string;
+  type?: string;
 };
 
 const MAX_FETCH_LIMIT = 10000;
@@ -825,7 +826,7 @@ analyticsRouter.get(
         jobIds.length
           ? supabase
               .from("documents")
-              .select("id, job_id, created_at")
+              .select("id, job_id, created_at, type")
               .in("job_id", jobIds)
               .order("created_at", { ascending: true })
               .limit(MAX_FETCH_LIMIT)
@@ -886,12 +887,18 @@ analyticsRouter.get(
       const jobsWithEvidence = Object.keys(jobEvidenceMap).length;
       const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
 
+      // Photo evidence: only documents with type === "photo"
+      const photoDocuments = documents.filter((d) => (d as DocumentRecord).type === "photo");
+      const jobPhotoMap = photoDocuments.reduce<Record<string, string>>((acc, doc) => {
+        if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
+          acc[doc.job_id] = doc.created_at;
+        }
+        return acc;
+      }, {});
+      const jobsWithPhotoEvidence = Object.keys(jobPhotoMap).length;
+
       // Calculate explicit evidence metrics
       const jobsTotal = jobIds.length;
-      
-      // Jobs with photo evidence (assuming documents with type='photo' or checking file extensions)
-      // For now, count all documents as photo evidence (can be refined later)
-      const jobsWithPhotoEvidence = jobsWithEvidence;
       
       // Jobs missing required evidence - use readiness rules or default: high-risk jobs without evidence
       const highRiskJobIds = (jobs || [])
@@ -914,7 +921,17 @@ analyticsRouter.get(
               return acc + Math.max(diffHours, 0);
             }, 0) / jobsWithEvidence;
       
-      const avgTimeToFirstPhotoMinutes = avgTimeToFirstEvidenceHours * 60;
+      const avgTimeToFirstPhotoMinutes =
+        jobsWithPhotoEvidence === 0
+          ? 0
+          : Object.entries(jobPhotoMap).reduce((acc, [jobId, firstPhotoAt]) => {
+              const job = jobs?.find((item) => item.id === jobId);
+              if (!job) return acc;
+              const jobCreated = new Date(job.created_at).getTime();
+              const photoCreated = new Date(firstPhotoAt).getTime();
+              const diffMinutes = (photoCreated - jobCreated) / (1000 * 60);
+              return acc + Math.max(diffMinutes, 0);
+            }, 0) / jobsWithPhotoEvidence;
 
       // Trend (daily)
       const trend: { date: string; completion_rate: number }[] = [];
@@ -970,7 +987,7 @@ analyticsRouter.get(
         jobs_with_photo_evidence: jobsWithPhotoEvidence,
         jobs_missing_required_evidence: jobsMissingRequiredEvidence,
         required_evidence_policy: 'Photo required for high-risk jobs',
-        avg_time_to_first_photo_minutes: avgTimeToFirstPhotoMinutes ? Number(avgTimeToFirstPhotoMinutes.toFixed(0)) : null,
+        avg_time_to_first_photo_minutes: Math.round(avgTimeToFirstPhotoMinutes),
         // Empty state reasons
         trend_empty_reason: trendEmptyReason,
       });

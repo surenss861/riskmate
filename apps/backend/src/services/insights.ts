@@ -223,7 +223,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         previousCompletions === 0
           ? `Current period: ${currentCompletions} completions (no prior period data).`
           : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${PERIOD_DAYS} days (${currentCompletions} vs ${previousCompletions}).`,
-      severity: change < -20 ? "warning" : change < -40 ? "critical" : "info",
+      severity: change < -40 ? "critical" : change < -20 ? "warning" : "info",
       metric_value: Math.round(change * 100) / 100,
       metric_label: "% change",
       period_days: PERIOD_DAYS,
