@@ -224,9 +224,9 @@ export async function sendJobAssignedEmail(
   },
   assignedByName: string,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.job_assigned)) return
+  if (!(prefs.email_enabled && prefs.job_assigned)) return false
 
   const template = JobAssignedEmail({
     userName: userName || fallbackName(to),
@@ -241,6 +241,7 @@ export async function sendJobAssignedEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendSignatureRequestEmail(
@@ -251,9 +252,9 @@ export async function sendSignatureRequestEmail(
   reportRunId: string,
   deadline: string | undefined,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.signature_requested)) return
+  if (!(prefs.email_enabled && prefs.signature_requested)) return false
 
   const template = SignatureRequestEmail({
     userName: userName || fallbackName(to),
@@ -270,6 +271,7 @@ export async function sendSignatureRequestEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendReportReadyEmail(
@@ -279,9 +281,9 @@ export async function sendReportReadyEmail(
   downloadUrl: string,
   viewUrl: string,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.report_ready)) return
+  if (!(prefs.email_enabled && prefs.report_ready)) return false
 
   const template = ReportReadyEmail({
     userName: userName || fallbackName(to),
@@ -297,16 +299,17 @@ export async function sendReportReadyEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendWelcomeEmail(
   to: string,
   userName: string,
   userId?: string
-): Promise<void> {
+): Promise<boolean> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!prefs.email_enabled) return
+    if (!prefs.email_enabled) return false
   }
 
   const template = WelcomeEmail({
@@ -320,6 +323,7 @@ export async function sendWelcomeEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendTeamInviteEmail(
@@ -329,10 +333,10 @@ export async function sendTeamInviteEmail(
   tempPassword: string,
   loginUrl: string,
   userId?: string
-): Promise<void> {
+): Promise<boolean> {
   if (userId) {
     const prefs = await getNotificationPreferences(userId)
-    if (!prefs.email_enabled) return
+    if (!prefs.email_enabled) return false
   }
 
   const template = TeamInviteEmail({
@@ -349,6 +353,7 @@ export async function sendTeamInviteEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendMentionEmail(
@@ -359,9 +364,9 @@ export async function sendMentionEmail(
   commentPreview: string,
   commentUrl: string,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.mention)) return
+  if (!(prefs.email_enabled && prefs.mention)) return false
 
   const template = MentionEmail({
     userName: userName || fallbackName(to),
@@ -378,6 +383,7 @@ export async function sendMentionEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendWeeklyDigestEmail(
@@ -385,9 +391,9 @@ export async function sendWeeklyDigestEmail(
   userName: string,
   digest: WeeklyDigestData,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_weekly_digest)) return
+  if (!(prefs.email_enabled && prefs.email_weekly_digest)) return false
 
   const template = WeeklyDigestEmail({
     userName: userName || fallbackName(to),
@@ -401,6 +407,7 @@ export async function sendWeeklyDigestEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendDeadlineReminderEmail(
@@ -414,9 +421,9 @@ export async function sendDeadlineReminderEmail(
   },
   hoursRemaining: number,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return
+  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return false
 
   const template = DeadlineReminderEmail({
     userName: userName || fallbackName(to),
@@ -431,6 +438,7 @@ export async function sendDeadlineReminderEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendTaskAssignedEmail(
@@ -438,9 +446,9 @@ export async function sendTaskAssignedEmail(
   userName: string,
   params: { taskTitle: string; jobTitle: string; jobId: string; taskId: string },
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.job_assigned)) return
+  if (!(prefs.email_enabled && prefs.job_assigned)) return false
 
   const template = TaskAssignedEmail({
     userName: userName || fallbackName(to),
@@ -457,6 +465,7 @@ export async function sendTaskAssignedEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendTaskCompletedEmail(
@@ -464,9 +473,9 @@ export async function sendTaskCompletedEmail(
   userName: string,
   params: { taskTitle: string; jobTitle: string; taskId: string; jobId: string },
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.task_completed)) return
+  if (!(prefs.email_enabled && prefs.task_completed)) return false
 
   const template = TaskCompletedEmail({
     userName: userName || fallbackName(to),
@@ -483,6 +492,7 @@ export async function sendTaskCompletedEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 export async function sendTaskReminderEmail(
@@ -498,9 +508,9 @@ export async function sendTaskReminderEmail(
     taskId?: string
   },
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return
+  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return false
 
   const template = TaskReminderEmail({
     userName: userName || fallbackName(to),
@@ -520,6 +530,7 @@ export async function sendTaskReminderEmail(
     html: template.html,
     text: template.text,
   })
+  return true
 }
 
 // Generate hash of alert payload for deduplication

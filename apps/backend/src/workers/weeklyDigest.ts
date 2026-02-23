@@ -109,10 +109,6 @@ async function runWeeklyDigestCycle(): Promise<void> {
   const isMonday = now.getDay() === 1
   if (!isMonday) return
 
-  // Run only at 09:00 (optionally allow a small minute window, e.g. <= 1)
-  const inTimeWindow = now.getHours() === 9 && now.getMinutes() <= 1
-  if (!inTimeWindow) return
-
   const periodKey = getWeekPeriodKey(now)
 
   // Persisted guard: run once per week even after restart; skip if we already ran this week.

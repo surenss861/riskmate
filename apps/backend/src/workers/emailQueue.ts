@@ -186,14 +186,15 @@ async function loadUserName(userId: string | undefined, fallbackEmail: string): 
   return (data?.full_name as string | null) || deriveName(fallbackEmail)
 }
 
-async function processJob(job: EmailJob): Promise<void> {
+/** Returns true if an email was actually dispatched; false if skipped (e.g. user preferences). */
+async function processJob(job: EmailJob): Promise<boolean> {
   const userName = await loadUserName(job.userId, job.to)
 
   if (job.type === EmailJobType.job_assigned) {
     if (!job.userId) throw new Error('job_assigned requires userId')
     const assignedByName = String(job.data.assignedByName || 'A teammate')
     const rawJob = (job.data.job as Record<string, unknown>) || {}
-    await sendJobAssignedEmail(
+    return sendJobAssignedEmail(
       job.to,
       String(job.data.userName || userName),
       {
@@ -207,13 +208,12 @@ async function processJob(job: EmailJob): Promise<void> {
       assignedByName,
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.signature_request) {
     if (!job.userId) throw new Error('signature_request requires userId')
     const reportRunId = String(job.data.reportRunId || '')
-    await sendSignatureRequestEmail(
+    return sendSignatureRequestEmail(
       job.to,
       userName,
       String(job.data.reportName || `Report ${reportRunId.slice(0, 8)}`),
@@ -222,12 +222,11 @@ async function processJob(job: EmailJob): Promise<void> {
       typeof job.data.deadline === 'string' ? job.data.deadline : undefined,
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.report_ready) {
     if (!job.userId) throw new Error('report_ready requires userId')
-    await sendReportReadyEmail(
+    return sendReportReadyEmail(
       job.to,
       userName,
       String(job.data.jobTitle || 'Risk report'),
@@ -235,16 +234,14 @@ async function processJob(job: EmailJob): Promise<void> {
       String(job.data.viewUrl || String(job.data.downloadUrl || '')),
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.welcome) {
-    await sendWelcomeEmail(job.to, userName, job.userId)
-    return
+    return sendWelcomeEmail(job.to, userName, job.userId)
   }
 
   if (job.type === EmailJobType.team_invite) {
-    await sendTeamInviteEmail(
+    return sendTeamInviteEmail(
       job.to,
       String(job.data.orgName || 'your organization'),
       String(job.data.inviterName || 'A teammate'),
@@ -252,12 +249,11 @@ async function processJob(job: EmailJob): Promise<void> {
       String(job.data.loginUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'),
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.mention) {
     if (!job.userId) throw new Error('mention requires userId')
-    await sendMentionEmail(
+    return sendMentionEmail(
       job.to,
       userName,
       String(job.data.mentionedByName || 'A teammate'),
@@ -266,19 +262,17 @@ async function processJob(job: EmailJob): Promise<void> {
       String(job.data.commentUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'),
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.weekly_digest) {
     if (!job.userId) throw new Error('weekly_digest requires userId')
-    await sendWeeklyDigestEmail(job.to, userName, job.data as unknown as WeeklyDigestData, job.userId)
-    return
+    return sendWeeklyDigestEmail(job.to, userName, job.data as unknown as WeeklyDigestData, job.userId)
   }
 
   if (job.type === EmailJobType.deadline_reminder) {
     if (!job.userId) throw new Error('deadline_reminder requires userId')
     const rawJob = (job.data.job as Record<string, unknown>) || {}
-    await sendDeadlineReminderEmail(
+    return sendDeadlineReminderEmail(
       job.to,
       userName,
       {
@@ -290,12 +284,11 @@ async function processJob(job: EmailJob): Promise<void> {
       Number(job.data.hoursRemaining || 0),
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.task_reminder) {
     if (!job.userId) throw new Error('task_reminder requires userId')
-    await sendTaskReminderEmail(
+    return sendTaskReminderEmail(
       job.to,
       userName,
       {
@@ -310,12 +303,11 @@ async function processJob(job: EmailJob): Promise<void> {
       },
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.task_assigned) {
     if (!job.userId) throw new Error('task_assigned requires userId')
-    await sendTaskAssignedEmail(
+    return sendTaskAssignedEmail(
       job.to,
       userName,
       {
@@ -326,12 +318,11 @@ async function processJob(job: EmailJob): Promise<void> {
       },
       job.userId
     )
-    return
   }
 
   if (job.type === EmailJobType.task_completed) {
     if (!job.userId) throw new Error('task_completed requires userId')
-    await sendTaskCompletedEmail(
+    return sendTaskCompletedEmail(
       job.to,
       userName,
       {
@@ -342,7 +333,6 @@ async function processJob(job: EmailJob): Promise<void> {
       },
       job.userId
     )
-    return
   }
 
   throw new Error(`Unsupported email job type: ${job.type}`)
@@ -377,8 +367,10 @@ async function runQueueCycle(): Promise<void> {
       const domainJobId = getDomainJobId(job)
 
       try {
-        await processJob(job)
-        await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent')
+        const dispatched = await processJob(job)
+        if (dispatched) {
+          await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent')
+        }
         await supabase.from('email_queue').delete().eq('id', job.id)
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error)
