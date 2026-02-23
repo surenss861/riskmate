@@ -465,7 +465,10 @@ if (process.env.NODE_ENV !== "test") {
     startLedgerRootWorker();
     // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test
     if (process.env.SKIP_WORKERS !== 'true') {
-      startEmailQueueWorker();
+      // Email queue worker: optional guard ENABLE_EMAIL_WORKER (default: run; set to 'false' to disable)
+      if (process.env.ENABLE_EMAIL_WORKER !== 'false') {
+        startEmailQueueWorker();
+      }
       startWeeklyDigestWorker();
       startDeadlineReminderWorker();
       startTaskReminderWorker();
