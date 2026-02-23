@@ -377,6 +377,9 @@ struct JobTasksView: View {
                 sort_order: nil
             )
             let created = try await APIClient.shared.createTask(jobId: jobId, payload: payload)
+            let assigneeIdForNotify = newTaskAssigneeId
+            let dueDateForReminder = newTaskDueDate
+
             newTaskTitle = ""
             newTaskPriority = "medium"
             newTaskAssigneeId = nil
@@ -385,7 +388,7 @@ struct JobTasksView: View {
             await loadTasks()
 
             let titleForNotify = jobTitle ?? "Job"
-            if let assigneeId = newTaskAssigneeId {
+            if let assigneeId = assigneeIdForNotify {
                 Task {
                     do {
                         try await APIClient.shared.notifyTaskAssigned(userId: assigneeId, taskId: created.id, taskTitle: created.title, jobId: jobId, jobTitle: titleForNotify)
@@ -394,7 +397,7 @@ struct JobTasksView: View {
                     }
                 }
             }
-            if newTaskDueDate != nil, isDueDateInAlertWindow(newTaskDueDate!) {
+            if dueDateForReminder != nil, isDueDateInAlertWindow(dueDateForReminder!) {
                 Task {
                     do {
                         try await APIClient.shared.scheduleTaskReminder(taskId: created.id)

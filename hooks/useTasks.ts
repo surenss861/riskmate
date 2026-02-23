@@ -79,6 +79,12 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
     async (payload: CreateTaskPayload): Promise<Task | null> => {
       if (!jobId) return null
 
+      const defaultSortOrder =
+        payload.sort_order != null
+          ? payload.sort_order
+          : (tasks.length === 0 ? 0 : Math.max(...tasks.map((t) => t.sort_order)) + 1)
+      const effectiveSortOrder = payload.sort_order ?? defaultSortOrder
+
       const optimisticTask: Task = {
         id: `temp-${Date.now()}`,
         job_id: jobId,
@@ -94,7 +100,7 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
         priority: payload.priority ?? 'medium',
         due_date: payload.due_date ?? null,
         completed_at: null,
-        sort_order: payload.sort_order ?? 0,
+        sort_order: effectiveSortOrder,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
@@ -109,11 +115,13 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
         return next
       })
 
+      const requestPayload = { ...payload, sort_order: payload.sort_order ?? defaultSortOrder }
+
       try {
         const response = await fetch(`/api/jobs/${jobId}/tasks`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(requestPayload),
         })
 
         if (!response.ok) {
@@ -168,7 +176,7 @@ export function useTasks(jobId: string | null, options?: UseTasksOptions): UseTa
         throw err
       }
     },
-    [jobId]
+    [jobId, tasks]
   )
 
   const updateTask = useCallback(
