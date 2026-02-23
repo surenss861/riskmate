@@ -188,15 +188,18 @@ notificationsRouter.get(
   }
 );
 
-/** Email-only preference keys allowed for the public token PATCH. Push and other non-email prefs are not writable here. */
+/** Email-only preference keys allowed for the public token PATCH. Must match the toggles shown on the public email prefs page so saved values persist. */
 const EMAIL_PREFERENCE_KEYS: (keyof NotificationPreferences)[] = [
   "email_enabled",
   "job_assigned",
   "signature_requested",
-  "report_ready",
-  "email_weekly_digest",
-  "email_deadline_reminder",
   "mention",
+  "email_deadline_reminder",
+  "email_weekly_digest",
+  "report_ready",
+  "job_comment",
+  "comment_resolved",
+  "task_completed",
 ];
 
 /** PATCH /api/notifications/preferences/email — public: update preferences by signed token (no session). Body: token, plus email preference keys only. Push and other non-email prefs are left unchanged (use authenticated /preferences for those). */

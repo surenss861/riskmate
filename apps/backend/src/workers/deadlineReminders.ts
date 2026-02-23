@@ -16,8 +16,18 @@ function getTodayPeriodKey(date: Date): string {
 let workerStarted = false
 let workerTimer: NodeJS.Timeout | null = null
 
+/** True when local time is within the intended 08:00–08:10 window (so we do not run on boot or at other times). */
+function isInDeadlineReminderWindow(now: Date): boolean {
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  return hours === 8 && minutes < 10
+}
+
 async function runDeadlineReminderCycle(): Promise<void> {
   const now = new Date()
+
+  if (!isInDeadlineReminderWindow(now)) return
+
   const periodKey = getTodayPeriodKey(now)
 
   // Persisted guard: run once per period; skip if we already ran this period (allows catch-up if 08:00–08:10 window was missed).
