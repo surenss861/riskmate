@@ -468,8 +468,8 @@ if (process.env.NODE_ENV !== "test") {
       startEmailQueueWorker();
       startWeeklyDigestWorker();
       startDeadlineReminderWorker();
+      startTaskReminderWorker();
     }
-    startTaskReminderWorker();
   });
 
   function shutdown(signal: string) {

@@ -460,7 +460,7 @@ export async function sendTaskReminderEmail(
   userId: string
 ): Promise<void> {
   const prefs = await getNotificationPreferences(userId)
-  if (!(prefs.email_enabled && prefs.deadline_approaching)) return
+  if (!(prefs.email_enabled && prefs.email_deadline_reminder)) return
 
   const template = TaskReminderEmail({
     userName: userName || fallbackName(to),
