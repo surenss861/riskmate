@@ -21,3 +21,17 @@ CREATE INDEX IF NOT EXISTS idx_email_queue_dlq_type
   ON email_queue_dlq (type);
 
 COMMENT ON TABLE email_queue_dlq IS 'Dead-letter queue for email jobs that permanently failed; enables alerting and remediation.';
+
+-- RLS and privilege hardening: only backend (service role) may access DLQ; client roles must not see failed payloads.
+ALTER TABLE email_queue_dlq ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Service role full access email_queue_dlq" ON email_queue_dlq;
+CREATE POLICY "Service role full access email_queue_dlq"
+  ON email_queue_dlq
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON email_queue_dlq FROM anon, authenticated;
+GRANT ALL ON email_queue_dlq TO service_role;
