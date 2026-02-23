@@ -84,7 +84,15 @@ export function useTasks(jobId: string | null): UseTasksResult {
         updated_at: new Date().toISOString(),
       }
 
-      setTasks((prev) => [optimisticTask, ...prev])
+      setTasks((prev) => {
+        const idx =
+          payload.sort_order != null
+            ? Math.min(Math.max(0, payload.sort_order), prev.length)
+            : prev.length
+        const next = [...prev]
+        next.splice(idx, 0, optimisticTask)
+        return next
+      })
 
       try {
         const response = await fetch(`/api/jobs/${jobId}/tasks`, {
@@ -101,7 +109,11 @@ export function useTasks(jobId: string | null): UseTasksResult {
         const created = unwrapTask(json)
         if (!created) throw new Error('Task create response was empty')
 
-        setTasks((prev) => prev.map((task) => (task.id === optimisticTask.id ? created : task)))
+        setTasks((prev) =>
+          prev
+            .map((task) => (task.id === optimisticTask.id ? created : task))
+            .sort((a, b) => a.sort_order - b.sort_order)
+        )
         return created
       } catch (err: any) {
         // Remove only the failed optimistic placeholder so previously created tasks (e.g. from batch) are preserved

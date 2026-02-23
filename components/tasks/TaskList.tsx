@@ -70,6 +70,8 @@ export function TaskList({
   const handleDrop = async (dropIndex: number) => {
     if (dragIndex === null || dragIndex === dropIndex) return
 
+    const previousOrder = orderedTasks
+
     const visible = nonCancelledTasks
     const nextVisible = [...visible]
     const [moved] = nextVisible.splice(dragIndex, 1)
@@ -91,6 +93,7 @@ export function TaskList({
       await reorderTasks(normalized)
     } catch (err) {
       console.error('Failed to reorder tasks:', err)
+      setOrderedTasks(previousOrder)
     }
   }
 
