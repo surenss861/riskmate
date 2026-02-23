@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.buildDigestForUser = buildDigestForUser;
 exports.startWeeklyDigestWorker = startWeeklyDigestWorker;
 exports.stopWeeklyDigestWorker = stopWeeklyDigestWorker;
 const supabaseClient_1 = require("../lib/supabaseClient");
@@ -61,24 +62,24 @@ async function buildDigestForUser(userId, organizationId) {
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
         .in('id', jobIds)
-        .lt('end_date', now.toISOString())
+        .lt('due_date', now.toISOString())
         .neq('status', 'completed')
         .neq('status', 'archived');
     // User-scoped: needs attention (assigned to user, due soon or overdue)
     const { data: attentionRows } = await supabaseClient_1.supabase
         .from('jobs')
-        .select('client_name, end_date')
+        .select('client_name, due_date')
         .eq('organization_id', organizationId)
         .in('id', jobIds)
-        .not('end_date', 'is', null)
-        .lte('end_date', dueSoonCutoff.toISOString())
+        .not('due_date', 'is', null)
+        .lte('due_date', dueSoonCutoff.toISOString())
         .neq('status', 'completed')
         .neq('status', 'archived')
-        .order('end_date', { ascending: true })
+        .order('due_date', { ascending: true })
         .limit(20);
     const needsAttention = (attentionRows || []).map((row) => ({
         title: row.client_name || 'Untitled job',
-        status: row.end_date && new Date(row.end_date).getTime() < now.getTime()
+        status: row.due_date && new Date(row.due_date).getTime() < now.getTime()
             ? 'overdue'
             : 'due_soon',
     }));
@@ -93,15 +94,19 @@ async function buildDigestForUser(userId, organizationId) {
         })),
     };
 }
+/** Morning window: 09:00–09:09 so digests send at a bounded time, not arbitrary Monday times. */
+function isWithinDigestWindow(now) {
+    return now.getHours() === 9 && now.getMinutes() < 10;
+}
 async function runWeeklyDigestCycle() {
     const now = new Date();
     const isMonday = now.getDay() === 1;
     if (!isMonday)
         return;
-    // Run only at 09:00 (optionally allow a small minute window, e.g. <= 1)
-    const inTimeWindow = now.getHours() === 9 && now.getMinutes() <= 1;
-    if (!inTimeWindow)
+    if (!isWithinDigestWindow(now)) {
+        console.log('[WeeklyDigestWorker] Skipping: outside 09:00–09:09 window');
         return;
+    }
     const periodKey = getWeekPeriodKey(now);
     // Persisted guard: run once per week even after restart; skip if we already ran this week.
     const { data: existing } = await supabaseClient_1.supabase

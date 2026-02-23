@@ -1,1 +1,1 @@
-{"version":3,"file":"weeklyDigest.d.ts","sourceRoot":"","sources":["../../../../../src/workers/weeklyDigest.ts"],"names":[],"mappings":"AAsKA,wBAAgB,uBAAuB,IAAI,IAAI,CAc9C;AAED,wBAAgB,sBAAsB,IAAI,IAAI,CAM7C"}
+{"version":3,"file":"weeklyDigest.d.ts","sourceRoot":"","sources":["../../../../../src/workers/weeklyDigest.ts"],"names":[],"mappings":"AAIA,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,6BAA6B,CAAA;AAgBnE,wBAAsB,kBAAkB,CAAC,MAAM,EAAE,MAAM,EAAE,cAAc,EAAE,MAAM,GAAG,OAAO,CAAC,gBAAgB,CAAC,CAoF1G;AAoED,wBAAgB,uBAAuB,IAAI,IAAI,CAc9C;AAED,wBAAgB,sBAAsB,IAAI,IAAI,CAM7C"}

@@ -612,11 +612,12 @@ async function sendTaskCompletedNotification(userId, organizationId, taskId, tas
         priority: "default",
     });
 }
+/** Returns true if a notification was sent, false if skipped (e.g. preference disabled). */
 async function sendTaskOverdueNotification(userId, organizationId, taskId, taskTitle, jobTitle) {
     const prefs = await getNotificationPreferences(userId);
     if (!prefs.deadline_approaching) {
         console.log("[Notifications] Skipped task_overdue for user", userId, "(preference disabled)");
-        return;
+        return false;
     }
     await sendToUser(userId, organizationId, {
         title: "Task Overdue",
@@ -628,13 +629,14 @@ async function sendTaskOverdueNotification(userId, organizationId, taskId, taskT
         priority: "high",
         categoryId: "deadline",
     });
+    return true;
 }
-/** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). */
+/** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). Returns true if a notification was sent, false if skipped. */
 async function sendTaskDueSoonNotification(userId, organizationId, taskId, taskTitle, jobTitle, hoursRemaining) {
     const prefs = await getNotificationPreferences(userId);
     if (!prefs.deadline_approaching) {
         console.log("[Notifications] Skipped task_due_soon for user", userId, "(preference disabled)");
-        return;
+        return false;
     }
     const h = Math.max(0, Math.round(hoursRemaining));
     const text = h <= 0 ? "Due now" : h === 1 ? "Due in 1 hour" : `Due in ${h} hours`;
@@ -648,6 +650,7 @@ async function sendTaskDueSoonNotification(userId, organizationId, taskId, taskT
         priority: "high",
         categoryId: "deadline",
     });
+    return true;
 }
 /** Notify user when their signature is requested on a report run. */
 async function sendSignatureRequestNotification(userId, organizationId, reportRunId, jobTitle) {

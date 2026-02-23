@@ -5,6 +5,7 @@ exports.runDeadlineCheck = runDeadlineCheck;
 const supabaseClient_1 = require("../lib/supabaseClient");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
+const weeklyDigest_1 = require("./weeklyDigest");
 async function runWeeklySummaryJob() {
     const { data: organizations, error } = await supabaseClient_1.supabase
         .from("organizations")
@@ -22,6 +23,26 @@ async function runWeeklySummaryJob() {
                 organizationId: org.id,
                 message,
             });
+            // Enqueue weekly_digest email for users who have email_weekly_digest enabled and email on file
+            const { data: orgUsers } = await supabaseClient_1.supabase
+                .from("users")
+                .select("id, email")
+                .eq("organization_id", org.id)
+                .not("email", "is", null);
+            for (const user of orgUsers ?? []) {
+                if (!user.email)
+                    continue;
+                const prefs = await (0, notifications_1.getNotificationPreferences)(user.id);
+                if (!prefs.email_enabled || !prefs.email_weekly_digest)
+                    continue;
+                try {
+                    const digestData = await (0, weeklyDigest_1.buildDigestForUser)(user.id, org.id);
+                    await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.weekly_digest, user.email, digestData, user.id);
+                }
+                catch (digestErr) {
+                    console.error(`Weekly digest email enqueue failed for user ${user.id}:`, digestErr);
+                }
+            }
         }
         catch (err) {
             console.error(`Weekly summary failed for org ${org.id}:`, err);

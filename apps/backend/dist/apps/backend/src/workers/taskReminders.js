@@ -7,6 +7,7 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
+const TASK_REMINDER_WORKER_KEY = "task_reminder";
 const TASK_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const MIN_REMINDER_GAP_MS = 23 * 60 * 60 * 1000; // throttle: don't re-notify same task within ~23h
 const ALERT_WINDOW_MS = 24 * 60 * 60 * 1000; // due soon: within 24h
@@ -22,17 +23,30 @@ function getMillisecondsUntilNext8amLocal() {
     }
     return Math.max(next.getTime() - now.getTime(), 0);
 }
-/** Send push and enqueue email for one task reminder; then update last_reminded_at to prevent duplicates. */
+/** Today as YYYY-MM-DD (local) for worker_period_runs. */
+function getTodayPeriodKey() {
+    const d = new Date();
+    return (d.getFullYear() +
+        "-" +
+        String(d.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(d.getDate()).padStart(2, "0"));
+}
+/** True if current time is past today's 8am (used for catch-up after downtime). */
+function isPastToday8am() {
+    const now = new Date();
+    const today8am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0, 0);
+    return now.getTime() > today8am.getTime();
+}
+/** Send push and enqueue email for one task reminder. Returns true if at least one notification was sent (push or email); only then do we update last_reminded_at so opt-in users get reminders promptly. */
 async function sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, isOverdue) {
     const hoursRemaining = task.due_date
         ? (new Date(task.due_date).getTime() - now.getTime()) / (60 * 60 * 1000)
         : 0;
-    if (isOverdue) {
-        await (0, notifications_1.sendTaskOverdueNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle);
-    }
-    else {
-        await (0, notifications_1.sendTaskDueSoonNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle, hoursRemaining);
-    }
+    const pushSent = isOverdue
+        ? await (0, notifications_1.sendTaskOverdueNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle)
+        : await (0, notifications_1.sendTaskDueSoonNotification)(task.assigned_to, task.organization_id, task.id, task.title, jobTitle, hoursRemaining);
+    let emailQueued = false;
     if (assigneeEmail) {
         await (0, emailQueue_1.queueEmail)(emailQueue_1.EmailJobType.task_reminder, assigneeEmail, {
             taskTitle: task.title,
@@ -43,11 +57,16 @@ async function sendTaskReminderPushAndEmail(task, jobTitle, assigneeEmail, now, 
             jobId: task.job_id,
             taskId: task.id,
         }, task.assigned_to);
+        emailQueued = true;
     }
-    await supabaseClient_1.supabase
-        .from("tasks")
-        .update({ last_reminded_at: new Date().toISOString() })
-        .eq("id", task.id);
+    const sent = pushSent || emailQueued;
+    if (sent) {
+        await supabaseClient_1.supabase
+            .from("tasks")
+            .update({ last_reminded_at: new Date().toISOString() })
+            .eq("id", task.id);
+    }
+    return sent;
 }
 async function processTaskReminders() {
     const hasLease = await (0, workerLock_1.tryAcquireWorkerLease)(workerLock_1.WORKER_LEASE_KEYS.task_reminder);
@@ -104,6 +123,11 @@ async function processTaskReminders() {
             }
         }
         console.log(`[TaskReminderWorker] Complete. processed=${processed} failed=${failed}`);
+        await supabaseClient_1.supabase.from("worker_period_runs").upsert({
+            worker_key: TASK_REMINDER_WORKER_KEY,
+            period_key: getTodayPeriodKey(),
+            ran_at: new Date().toISOString(),
+        }, { onConflict: "worker_key,period_key" });
     }
     catch (err) {
         console.error("[TaskReminderWorker] Unexpected worker error:", err);
@@ -116,16 +140,43 @@ function startTaskReminderWorker() {
     }
     workerRunning = true;
     console.log("[TaskReminderWorker] Starting...");
-    // Run once immediately so reminders are not skipped after mid-day restarts until next 8am
-    void processTaskReminders();
     const initialDelay = getMillisecondsUntilNext8amLocal();
-    console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
-    startupTimeout = setTimeout(() => {
+    const scheduleFirstAndInterval = () => {
         void processTaskReminders();
         workerInterval = setInterval(() => {
             void processTaskReminders();
         }, TASK_REMINDER_INTERVAL_MS);
-    }, initialDelay);
+    };
+    if (isPastToday8am()) {
+        const periodKey = getTodayPeriodKey();
+        supabaseClient_1.supabase
+            .from("worker_period_runs")
+            .select("ran_at")
+            .eq("worker_key", TASK_REMINDER_WORKER_KEY)
+            .eq("period_key", periodKey)
+            .maybeSingle()
+            .then(({ data: existing }) => {
+            if (existing) {
+                console.log("[TaskReminderWorker] Already ran today; first run at next 8am");
+            }
+            else {
+                console.log("[TaskReminderWorker] Catch-up run (8am window was missed)");
+                void processTaskReminders().then(() => {
+                    startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+                });
+                return;
+            }
+            startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+        })
+            .catch((err) => {
+            console.error("[TaskReminderWorker] Failed to check period run:", err);
+            startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+        });
+    }
+    else {
+        console.log(`[TaskReminderWorker] First run in ${Math.round(initialDelay / 1000)}s`);
+        startupTimeout = setTimeout(scheduleFirstAndInterval, initialDelay);
+    }
 }
 function stopTaskReminderWorker() {
     if (startupTimeout) {

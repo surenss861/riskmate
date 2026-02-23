@@ -448,7 +448,10 @@ if (process.env.NODE_ENV !== "test") {
         (0, ledgerRootWorker_1.startLedgerRootWorker)();
         // Email queue and scheduled workers: skip when SKIP_WORKERS=true (e.g. serverless) or in test
         if (process.env.SKIP_WORKERS !== 'true') {
-            (0, emailQueue_1.startEmailQueueWorker)();
+            // Email queue worker: optional guard ENABLE_EMAIL_WORKER (default: run; set to 'false' to disable)
+            if (process.env.ENABLE_EMAIL_WORKER !== 'false') {
+                (0, emailQueue_1.startEmailQueueWorker)();
+            }
             (0, weeklyDigest_1.startWeeklyDigestWorker)();
             (0, deadlineReminders_1.startDeadlineReminderWorker)();
             (0, taskReminders_1.startTaskReminderWorker)();

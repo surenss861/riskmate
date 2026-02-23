@@ -6,16 +6,30 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const workerLock_1 = require("../lib/workerLock");
 const notifications_1 = require("../services/notifications");
 const emailQueue_1 = require("./emailQueue");
+const DEADLINE_REMINDER_WORKER_KEY = 'deadline_reminder';
+/** Today as YYYY-MM-DD (local) for worker_period_runs. */
+function getTodayPeriodKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
 let workerStarted = false;
 let workerTimer = null;
-let lastRunDateKey = null;
 async function runDeadlineReminderCycle() {
     const now = new Date();
     const inWindow = now.getHours() === 8 && now.getMinutes() <= 1;
     if (!inWindow)
         return;
-    const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-    if (dateKey === lastRunDateKey)
+    const periodKey = getTodayPeriodKey(now);
+    // Persisted guard: run once per day even after restart; skip if we already ran today.
+    const { data: existing } = await supabaseClient_1.supabase
+        .from('worker_period_runs')
+        .select('ran_at')
+        .eq('worker_key', DEADLINE_REMINDER_WORKER_KEY)
+        .eq('period_key', periodKey)
+        .maybeSingle();
+    if (existing)
         return;
     const hasLease = await (0, workerLock_1.tryAcquireWorkerLease)(workerLock_1.WORKER_LEASE_KEYS.deadline_reminder);
     if (!hasLease)
@@ -66,7 +80,7 @@ async function runDeadlineReminderCycle() {
             }, assignment.user_id);
         }
     }
-    lastRunDateKey = dateKey;
+    await supabaseClient_1.supabase.from('worker_period_runs').upsert({ worker_key: DEADLINE_REMINDER_WORKER_KEY, period_key: periodKey, ran_at: now.toISOString() }, { onConflict: 'worker_key,period_key' });
     console.log('[DeadlineReminderWorker] Queued daily deadline reminder emails');
 }
 function startDeadlineReminderWorker() {

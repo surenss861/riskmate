@@ -81,9 +81,10 @@ export declare function notifyWeeklySummary(params: {
 export declare function sendJobAssignedNotification(userId: string, organizationId: string, jobId: string, jobTitle?: string): Promise<void>;
 export declare function sendTaskAssignedNotification(userId: string, organizationId: string, taskId: string, jobTitle: string, taskTitle: string): Promise<void>;
 export declare function sendTaskCompletedNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string, jobId?: string): Promise<void>;
-export declare function sendTaskOverdueNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<void>;
-/** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). */
-export declare function sendTaskDueSoonNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string, hoursRemaining: number): Promise<void>;
+/** Returns true if a notification was sent, false if skipped (e.g. preference disabled). */
+export declare function sendTaskOverdueNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string): Promise<boolean>;
+/** Notify assignee that a task is due within 24 hours (push only; caller should queue email separately). Returns true if a notification was sent, false if skipped. */
+export declare function sendTaskDueSoonNotification(userId: string, organizationId: string, taskId: string, taskTitle: string, jobTitle: string, hoursRemaining: number): Promise<boolean>;
 /** Notify user when their signature is requested on a report run. */
 export declare function sendSignatureRequestNotification(userId: string, organizationId: string, reportRunId: string, jobTitle?: string): Promise<void>;
 /** Notify user when evidence is uploaded to a job they care about. */

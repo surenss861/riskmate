@@ -10,6 +10,7 @@ exports.stopEmailQueueWorker = stopEmailQueueWorker;
 const crypto_1 = __importDefault(require("crypto"));
 const email_1 = require("../utils/email");
 const supabaseClient_1 = require("../lib/supabaseClient");
+const workerLock_1 = require("../lib/workerLock");
 const LEASE_VISIBILITY_SEC = 120;
 const MAX_CLAIM = 10;
 const MAX_ATTEMPTS = 3;
@@ -133,6 +134,7 @@ async function loadUserName(userId, fallbackEmail) {
         .maybeSingle();
     return data?.full_name || deriveName(fallbackEmail);
 }
+/** Returns true if an email was actually dispatched; false if skipped (e.g. user preferences). */
 async function processJob(job) {
     const userName = await loadUserName(job.userId, job.to);
     if (job.type === EmailJobType.job_assigned) {
@@ -140,7 +142,7 @@ async function processJob(job) {
             throw new Error('job_assigned requires userId');
         const assignedByName = String(job.data.assignedByName || 'A teammate');
         const rawJob = job.data.job || {};
-        await (0, email_1.sendJobAssignedEmail)(job.to, String(job.data.userName || userName), {
+        return (0, email_1.sendJobAssignedEmail)(job.to, String(job.data.userName || userName), {
             id: typeof rawJob.id === 'string' ? rawJob.id : undefined,
             title: typeof rawJob.title === 'string' ? rawJob.title : null,
             client_name: typeof rawJob.client_name === 'string' ? rawJob.client_name : null,
@@ -148,57 +150,49 @@ async function processJob(job) {
             due_date: typeof rawJob.due_date === 'string' ? rawJob.due_date : null,
             risk_level: typeof rawJob.risk_level === 'string' ? rawJob.risk_level : null,
         }, assignedByName, job.userId);
-        return;
     }
     if (job.type === EmailJobType.signature_request) {
         if (!job.userId)
             throw new Error('signature_request requires userId');
         const reportRunId = String(job.data.reportRunId || '');
-        await (0, email_1.sendSignatureRequestEmail)(job.to, userName, String(job.data.reportName || `Report ${reportRunId.slice(0, 8)}`), String(job.data.jobTitle || 'Risk report'), reportRunId, typeof job.data.deadline === 'string' ? job.data.deadline : undefined, job.userId);
-        return;
+        return (0, email_1.sendSignatureRequestEmail)(job.to, userName, String(job.data.reportName || `Report ${reportRunId.slice(0, 8)}`), String(job.data.jobTitle || 'Risk report'), reportRunId, typeof job.data.deadline === 'string' ? job.data.deadline : undefined, job.userId);
     }
     if (job.type === EmailJobType.report_ready) {
         if (!job.userId)
             throw new Error('report_ready requires userId');
-        await (0, email_1.sendReportReadyEmail)(job.to, userName, String(job.data.jobTitle || 'Risk report'), String(job.data.downloadUrl || ''), String(job.data.viewUrl || String(job.data.downloadUrl || '')), job.userId);
-        return;
+        return (0, email_1.sendReportReadyEmail)(job.to, userName, String(job.data.jobTitle || 'Risk report'), String(job.data.downloadUrl || ''), String(job.data.viewUrl || String(job.data.downloadUrl || '')), job.userId);
     }
     if (job.type === EmailJobType.welcome) {
-        await (0, email_1.sendWelcomeEmail)(job.to, userName, job.userId);
-        return;
+        return (0, email_1.sendWelcomeEmail)(job.to, userName, job.userId);
     }
     if (job.type === EmailJobType.team_invite) {
-        await (0, email_1.sendTeamInviteEmail)(job.to, String(job.data.orgName || 'your organization'), String(job.data.inviterName || 'A teammate'), String(job.data.tempPassword || ''), String(job.data.loginUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'), job.userId);
-        return;
+        return (0, email_1.sendTeamInviteEmail)(job.to, String(job.data.orgName || 'your organization'), String(job.data.inviterName || 'A teammate'), String(job.data.tempPassword || ''), String(job.data.loginUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'), job.userId);
     }
     if (job.type === EmailJobType.mention) {
         if (!job.userId)
             throw new Error('mention requires userId');
-        await (0, email_1.sendMentionEmail)(job.to, userName, String(job.data.mentionedByName || 'A teammate'), String(job.data.jobName || 'a job'), String(job.data.commentPreview || ''), String(job.data.commentUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'), job.userId);
-        return;
+        return (0, email_1.sendMentionEmail)(job.to, userName, String(job.data.mentionedByName || 'A teammate'), String(job.data.jobName || 'a job'), String(job.data.commentPreview || ''), String(job.data.commentUrl || process.env.FRONTEND_URL || 'https://www.riskmate.dev'), job.userId);
     }
     if (job.type === EmailJobType.weekly_digest) {
         if (!job.userId)
             throw new Error('weekly_digest requires userId');
-        await (0, email_1.sendWeeklyDigestEmail)(job.to, userName, job.data, job.userId);
-        return;
+        return (0, email_1.sendWeeklyDigestEmail)(job.to, userName, job.data, job.userId);
     }
     if (job.type === EmailJobType.deadline_reminder) {
         if (!job.userId)
             throw new Error('deadline_reminder requires userId');
         const rawJob = job.data.job || {};
-        await (0, email_1.sendDeadlineReminderEmail)(job.to, userName, {
+        return (0, email_1.sendDeadlineReminderEmail)(job.to, userName, {
             id: typeof rawJob.id === 'string' ? rawJob.id : undefined,
             title: typeof rawJob.title === 'string' ? rawJob.title : null,
             client_name: typeof rawJob.client_name === 'string' ? rawJob.client_name : null,
             due_date: typeof rawJob.due_date === 'string' ? rawJob.due_date : null,
         }, Number(job.data.hoursRemaining || 0), job.userId);
-        return;
     }
     if (job.type === EmailJobType.task_reminder) {
         if (!job.userId)
             throw new Error('task_reminder requires userId');
-        await (0, email_1.sendTaskReminderEmail)(job.to, userName, {
+        return (0, email_1.sendTaskReminderEmail)(job.to, userName, {
             taskTitle: String(job.data.taskTitle || ''),
             jobTitle: String(job.data.jobTitle || 'Job'),
             dueDate: typeof job.data.dueDate === 'string' ? job.data.dueDate : null,
@@ -207,34 +201,34 @@ async function processJob(job) {
             jobId: typeof job.data.jobId === 'string' ? job.data.jobId : undefined,
             taskId: typeof job.data.taskId === 'string' ? job.data.taskId : undefined,
         }, job.userId);
-        return;
     }
     if (job.type === EmailJobType.task_assigned) {
         if (!job.userId)
             throw new Error('task_assigned requires userId');
-        await (0, email_1.sendTaskAssignedEmail)(job.to, userName, {
+        return (0, email_1.sendTaskAssignedEmail)(job.to, userName, {
             taskTitle: String(job.data.taskTitle || ''),
             jobTitle: String(job.data.jobTitle || 'Job'),
             jobId: String(job.data.jobId || ''),
             taskId: String(job.data.taskId || ''),
         }, job.userId);
-        return;
     }
     if (job.type === EmailJobType.task_completed) {
         if (!job.userId)
             throw new Error('task_completed requires userId');
-        await (0, email_1.sendTaskCompletedEmail)(job.to, userName, {
+        return (0, email_1.sendTaskCompletedEmail)(job.to, userName, {
             taskTitle: String(job.data.taskTitle || ''),
             jobTitle: String(job.data.jobTitle || 'Job'),
             taskId: String(job.data.taskId || ''),
             jobId: String(job.data.jobId ?? ''),
         }, job.userId);
-        return;
     }
     throw new Error(`Unsupported email job type: ${job.type}`);
 }
 async function runQueueCycle() {
     if (processing)
+        return;
+    const hasLease = await (0, workerLock_1.tryAcquireWorkerLease)(workerLock_1.WORKER_LEASE_KEYS.email_queue, 60);
+    if (!hasLease)
         return;
     processing = true;
     const holderId = `${process.pid}-${crypto_1.default.randomUUID().slice(0, 8)}`;
@@ -256,8 +250,10 @@ async function runQueueCycle() {
             const job = rowToJob(row);
             const domainJobId = getDomainJobId(job);
             try {
-                await processJob(job);
-                await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent');
+                const dispatched = await processJob(job);
+                if (dispatched) {
+                    await logEmailEvent(domainJobId, job.id, job.type, job.to, job.userId, 'sent');
+                }
                 await supabaseClient_1.supabase.from('email_queue').delete().eq('id', job.id);
             }
             catch (error) {

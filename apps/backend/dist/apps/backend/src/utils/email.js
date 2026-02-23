@@ -211,7 +211,7 @@ function fallbackName(email) {
 async function sendJobAssignedEmail(to, userName, job, assignedByName, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.job_assigned))
-        return;
+        return false;
     const template = (0, JobAssignedEmail_1.JobAssignedEmail)({
         userName: userName || fallbackName(to),
         job,
@@ -224,11 +224,12 @@ async function sendJobAssignedEmail(to, userName, job, assignedByName, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, reportRunId, deadline, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.signature_requested))
-        return;
+        return false;
     const template = (0, SignatureRequestEmail_1.SignatureRequestEmail)({
         userName: userName || fallbackName(to),
         reportName,
@@ -243,11 +244,12 @@ async function sendSignatureRequestEmail(to, userName, reportName, jobTitle, rep
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.report_ready))
-        return;
+        return false;
     const template = (0, ReportReadyEmail_1.ReportReadyEmail)({
         userName: userName || fallbackName(to),
         jobTitle,
@@ -261,12 +263,13 @@ async function sendReportReadyEmail(to, userName, jobTitle, downloadUrl, viewUrl
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendWelcomeEmail(to, userName, userId) {
     if (userId) {
         const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
         if (!prefs.email_enabled)
-            return;
+            return false;
     }
     const template = (0, WelcomeEmail_1.WelcomeEmail)({
         userName: userName || fallbackName(to),
@@ -278,12 +281,13 @@ async function sendWelcomeEmail(to, userName, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, loginUrl, userId) {
     if (userId) {
         const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
         if (!prefs.email_enabled)
-            return;
+            return false;
     }
     const template = (0, TeamInviteEmail_1.TeamInviteEmail)({
         orgName,
@@ -298,11 +302,12 @@ async function sendTeamInviteEmail(to, orgName, inviterName, tempPassword, login
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendMentionEmail(to, userName, mentionedByName, jobName, commentPreview, commentUrl, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.mention))
-        return;
+        return false;
     const template = (0, MentionEmail_1.MentionEmail)({
         userName: userName || fallbackName(to),
         mentionedByName,
@@ -317,11 +322,12 @@ async function sendMentionEmail(to, userName, mentionedByName, jobName, commentP
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendWeeklyDigestEmail(to, userName, digest, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_weekly_digest))
-        return;
+        return false;
     const template = (0, WeeklyDigestEmail_1.WeeklyDigestEmail)({
         userName: userName || fallbackName(to),
         digest,
@@ -333,11 +339,12 @@ async function sendWeeklyDigestEmail(to, userName, digest, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_deadline_reminder))
-        return;
+        return false;
     const template = (0, DeadlineReminderEmail_1.DeadlineReminderEmail)({
         userName: userName || fallbackName(to),
         job,
@@ -350,11 +357,12 @@ async function sendDeadlineReminderEmail(to, userName, job, hoursRemaining, user
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendTaskAssignedEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.job_assigned))
-        return;
+        return false;
     const template = (0, TaskAssignedEmail_1.TaskAssignedEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
@@ -369,11 +377,12 @@ async function sendTaskAssignedEmail(to, userName, params, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendTaskCompletedEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.task_completed))
-        return;
+        return false;
     const template = (0, TaskCompletedEmail_1.TaskCompletedEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
@@ -388,11 +397,12 @@ async function sendTaskCompletedEmail(to, userName, params, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 async function sendTaskReminderEmail(to, userName, params, userId) {
     const prefs = await (0, notifications_1.getNotificationPreferences)(userId);
     if (!(prefs.email_enabled && prefs.email_deadline_reminder))
-        return;
+        return false;
     const template = (0, TaskReminderEmail_1.TaskReminderEmail)({
         userName: userName || fallbackName(to),
         taskTitle: params.taskTitle,
@@ -410,6 +420,7 @@ async function sendTaskReminderEmail(to, userName, params, userId) {
         html: template.html,
         text: template.text,
     });
+    return true;
 }
 // Generate hash of alert payload for deduplication
 function hashAlertPayload(payload) {
