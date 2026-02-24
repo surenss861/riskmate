@@ -66,6 +66,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       .from("jobs")
       .select("id, status, risk_score, risk_level, created_at, due_date, job_type")
       .eq("organization_id", orgId)
+      .is("deleted_at", null)
       .gte("created_at", since)
       .lte("created_at", until)
       .limit(MAX_JOBS);

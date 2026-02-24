@@ -208,36 +208,39 @@ analyticsRouter.get(
         const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: { job_id: string }) => r.job_id));
         const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
 
-        type BucketCompliance = { jobIds: string[]; sigCount: number; photoCount: number; checklistTotal: number; checklistCompleted: number };
+        // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
+        const byJobTrend: Record<string, { total: number; completed: number }> = {};
+        for (const j of jobList) byJobTrend[j.id] = { total: 0, completed: 0 };
+        for (const m of mitigationList) {
+          if (!byJobTrend[m.job_id]) continue;
+          byJobTrend[m.job_id].total += 1;
+          if (m.completed_at) byJobTrend[m.job_id].completed += 1;
+        }
+        const jobChecklistCompleteSet = new Set(
+          jobList.filter(
+            (j) => byJobTrend[j.id].total === 0 || byJobTrend[j.id].completed === byJobTrend[j.id].total
+          ).map((j) => j.id)
+        );
+        type BucketCompliance = { jobIds: string[]; sigCount: number; photoCount: number; checklistCompleteCount: number };
         const bucketCompliance = new Map<string, BucketCompliance>();
         for (const j of jobList) {
           const key = getBucketKey(new Date(j.created_at));
           let cur = bucketCompliance.get(key);
           if (!cur) {
-            cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistTotal: 0, checklistCompleted: 0 };
+            cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistCompleteCount: 0 };
             bucketCompliance.set(key, cur);
           }
           cur.jobIds.push(j.id);
           if (jobsWithSigSet.has(j.id)) cur.sigCount += 1;
           if (jobsWithPhotoSet.has(j.id)) cur.photoCount += 1;
-        }
-        const jobToBucket = new Map<string, string>();
-        for (const [key, cur] of bucketCompliance) {
-          for (const jid of cur.jobIds) jobToBucket.set(jid, key);
-        }
-        for (const m of mitigationList) {
-          const key = jobToBucket.get(m.job_id);
-          if (!key) continue;
-          const cur = bucketCompliance.get(key)!;
-          cur.checklistTotal += 1;
-          if (m.completed_at) cur.checklistCompleted += 1;
+          if (jobChecklistCompleteSet.has(j.id)) cur.checklistCompleteCount += 1;
         }
         for (const [period] of [...bucketCompliance.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
           const cur = bucketCompliance.get(period)!;
           const n = cur.jobIds.length;
           const sigRate = n === 0 ? 0 : cur.sigCount / n;
           const photoRate = n === 0 ? 0 : cur.photoCount / n;
-          const checklistRate = cur.checklistTotal === 0 ? 0 : cur.checklistCompleted / cur.checklistTotal;
+          const checklistRate = n === 0 ? 0 : cur.checklistCompleteCount / n;
           const value = (sigRate + photoRate + checklistRate) / 3;
           points.push({ period, value: Math.round(value * 10000) / 10000, label: period });
         }
@@ -626,19 +629,23 @@ analyticsRouter.get(
           .limit(MAX_FETCH_LIMIT),
       ]);
 
-      const jobsWithSignature = new Set((sigRes.data || []).map((r: any) => r.job_id)).size;
-      const jobsWithPhoto = new Set((photoRes.data || []).map((r: any) => r.job_id)).size;
+      const jobsWithSignatureSet = new Set((sigRes.data || []).map((r: any) => r.job_id));
+      const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: any) => r.job_id));
       const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
-      let checklistTotal = 0;
-      let checklistCompleted = 0;
+      // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
+      const byJob: Record<string, { total: number; completed: number }> = {};
+      for (const id of jobIds) byJob[id] = { total: 0, completed: 0 };
       for (const m of mitigationList) {
-        checklistTotal += 1;
-        if (m.completed_at) checklistCompleted += 1;
+        if (!byJob[m.job_id]) continue;
+        byJob[m.job_id].total += 1;
+        if (m.completed_at) byJob[m.job_id].completed += 1;
       }
-      const checklistRate =
-        checklistTotal === 0 ? 0 : checklistCompleted / checklistTotal;
-      const signatureRate = totalJobs === 0 ? 0 : jobsWithSignature / totalJobs;
-      const photoRate = totalJobs === 0 ? 0 : jobsWithPhoto / totalJobs;
+      const jobsWithChecklistComplete = jobIds.filter(
+        (jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total
+      ).length;
+      const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
+      const signatureRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
+      const photoRate = totalJobs === 0 ? 0 : jobsWithPhotoSet.size / totalJobs;
       const overallRate =
         totalJobs === 0 ? 0 : (signatureRate + photoRate + checklistRate) / 3;
 
