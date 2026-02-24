@@ -35,6 +35,10 @@ export interface Insight {
 const PERIOD_DAYS = 30;
 const MAX_JOBS = 10000;
 const DEADLINE_RISK_DAYS = 2;
+/** Window for due-soon / pending-signature insights (days from now). */
+const DUE_WINDOW_DAYS = 7;
+/** Cap for due-relevance job query (performance). */
+const DUE_JOBS_CAP = 2000;
 
 function dateRange(days: number): { since: string; until: string } {
   const until = new Date();
@@ -60,19 +64,23 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
 
   try {
     const now = new Date();
+    const nowIso = now.toISOString();
     const twoDaysFromNow = new Date(now.getTime() + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
+    const sevenDaysFromNow = new Date(now.getTime() + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    const { data: jobs, error: jobsError } = await supabase
+    // Due-relevance: open/active jobs with due_date in window (overdue or due within 7 days). No created_at filter so older active jobs are included.
+    const { data: dueRelevanceJobs, error: dueJobsError } = await supabase
       .from("jobs")
       .select("id, status, risk_score, risk_level, created_at, due_date, job_type")
       .eq("organization_id", orgId)
       .is("deleted_at", null)
-      .gte("created_at", since)
-      .lte("created_at", until)
-      .limit(MAX_JOBS);
+      .not("due_date", "is", null)
+      .lte("due_date", sevenDaysFromNow.toISOString())
+      .order("due_date", { ascending: true })
+      .limit(DUE_JOBS_CAP);
 
-    if (jobsError) return insights;
-    const jobList = (jobs || []) as {
+    if (dueJobsError) return insights;
+    const dueJobList = (dueRelevanceJobs || []) as {
       id: string;
       status: string | null;
       risk_score: number | null;
@@ -82,10 +90,8 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       job_type: string | null;
     }[];
 
-    const jobIds = jobList.map((j) => j.id);
-
-    // --- 1. Deadline risk: jobs <50% complete with <2 days to due ---
-    const openJobIdsWithDueSoon = jobList
+    // --- 1. Deadline risk: open jobs <50% complete with <2 days to due ---
+    const openJobIdsWithDueSoon = dueJobList
       .filter((j) => {
         if (j.status?.toLowerCase() === "completed") return false;
         if (!j.due_date) return false;
@@ -132,8 +138,26 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       });
     }
 
-    // --- 2. Recurring high-risk patterns by job_type and day-of-week ---
-    const highRiskJobs = jobList.filter((j) => (j.risk_score ?? 0) >= 70);
+    // --- 2. Recurring high-risk patterns by job_type and day-of-week (use jobs created in period) ---
+    const { data: periodJobs, error: periodJobsError } = await supabase
+      .from("jobs")
+      .select("id, status, risk_score, risk_level, created_at, due_date, job_type")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .gte("created_at", since)
+      .lte("created_at", until)
+      .limit(MAX_JOBS);
+
+    const periodJobList = (periodJobsError ? [] : (periodJobs || [])) as {
+      id: string;
+      status: string | null;
+      risk_score: number | null;
+      risk_level: string | null;
+      created_at: string;
+      due_date: string | null;
+      job_type: string | null;
+    }[];
+    const highRiskJobs = periodJobList.filter((j) => (j.risk_score ?? 0) >= 70);
     const bucketCount: Record<string, number> = {};
     highRiskJobs.forEach((j) => {
       const jobType = j.job_type ?? "other";
@@ -161,22 +185,23 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       });
     }
 
-    // --- 3. Pending signatures near compliance deadlines ---
-    if (jobIds.length > 0) {
+    // --- 3. Pending signatures near compliance deadlines (due within 7 days, no created_at filter) ---
+    const dueInSevenDays = dueJobList.filter((j) => {
+      if (!j.due_date) return false;
+      const due = new Date(j.due_date).getTime();
+      const daysToDue = (due - now.getTime()) / (24 * 60 * 60 * 1000);
+      return daysToDue >= 0 && daysToDue <= DUE_WINDOW_DAYS;
+    });
+    const dueInSevenIds = dueInSevenDays.map((j) => j.id);
+    if (dueInSevenIds.length > 0) {
       const { data: sigs } = await supabase
         .from("signatures")
         .select("job_id")
         .eq("organization_id", orgId)
-        .in("job_id", jobIds.slice(0, 5000))
+        .in("job_id", dueInSevenIds)
         .limit(MAX_JOBS);
       const jobsWithSignature = new Set((sigs || []).map((r: { job_id: string }) => r.job_id));
-      const pendingSignatureJobIds = jobIds.filter((jid) => !jobsWithSignature.has(jid));
-      const withDueDate = jobList.filter((j) => j.due_date && pendingSignatureJobIds.includes(j.id));
-      const nearDeadline = withDueDate.filter((j) => {
-        const due = new Date(j.due_date!).getTime();
-        const daysToDue = (due - now.getTime()) / (24 * 60 * 60 * 1000);
-        return daysToDue >= 0 && daysToDue <= 7;
-      });
+      const nearDeadline = dueInSevenDays.filter((j) => !jobsWithSignature.has(j.id));
       if (nearDeadline.length > 0) {
         insights.push({
           id: id(),
@@ -234,13 +259,12 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
     });
 
-    // --- 5. Overdue tasks count ---
-    const nowIso = now.toISOString();
-    const overdueCount = jobList.filter(
+    // --- 5. Overdue tasks (open jobs with due_date < now; no created_at filter) ---
+    const overdueCount = dueJobList.filter(
       (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso
     ).length;
     if (overdueCount > 0) {
-      const overdueIds = jobList
+      const overdueIds = dueJobList
         .filter((j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso)
         .map((j) => j.id);
       insights.push({

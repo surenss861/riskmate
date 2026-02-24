@@ -69,12 +69,14 @@ dashboardRouter.get(
           .from("jobs")
           .select(selectFields)
           .eq("organization_id", organization_id)
+          .is("deleted_at", null)
           .gte("created_at", currentSince)
           .lte("created_at", currentUntil),
         supabase
           .from("jobs")
           .select(selectFields)
           .eq("organization_id", organization_id)
+          .is("deleted_at", null)
           .gte("created_at", previousRange.since)
           .lte("created_at", previousRange.until),
       ]);
