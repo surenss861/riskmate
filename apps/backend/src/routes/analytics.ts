@@ -937,14 +937,14 @@ analyticsRouter.get(
       // Calculate explicit evidence metrics
       const jobsTotal = jobIds.length;
       
-      // Jobs missing required evidence - use readiness rules or default: high-risk jobs without evidence
+      // Jobs missing required evidence: high-risk jobs without photo evidence (policy: photo required)
       const highRiskJobIds = (jobs || [])
         .filter((job) => job.risk_score !== null && job.risk_score > 75)
         .map((job) => job.id);
-      const highRiskJobsWithoutEvidence = highRiskJobIds.filter(
-        (jobId) => !jobEvidenceMap[jobId]
+      const highRiskJobsWithoutPhotoEvidence = highRiskJobIds.filter(
+        (jobId) => !jobPhotoMap[jobId]
       ).length;
-      const jobsMissingRequiredEvidence = highRiskJobsWithoutEvidence;
+      const jobsMissingRequiredEvidence = highRiskJobsWithoutPhotoEvidence;
 
       const avgTimeToFirstEvidenceHours =
         jobsWithEvidence === 0

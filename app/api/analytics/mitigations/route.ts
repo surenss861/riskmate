@@ -231,7 +231,7 @@ export async function GET(request: NextRequest) {
       .filter((job) => job.risk_score != null && job.risk_score > 75)
       .map((job) => job.id)
     const jobsMissingRequiredEvidence = highRiskJobIds.filter(
-      (jobId) => !jobEvidenceMap[jobId]
+      (jobId) => !jobPhotoMap[jobId]
     ).length
 
     const avgTimeToFirstEvidenceHours =
