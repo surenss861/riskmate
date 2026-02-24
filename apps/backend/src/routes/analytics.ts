@@ -326,7 +326,7 @@ analyticsRouter.get(
       const bucketSums: Record<BucketKey, { sum: number; count: number; riskCount: number }> = {};
       for (const j of list) {
         const jobType = j.job_type ?? "other";
-        const dayOfWeek = new Date(j.created_at).getDay();
+        const dayOfWeek = new Date(j.created_at).getUTCDay();
         const key = `${jobType}|${dayOfWeek}`;
         if (!bucketSums[key]) bucketSums[key] = { sum: 0, count: 0, riskCount: 0 };
         bucketSums[key].count += 1;
@@ -366,7 +366,6 @@ analyticsRouter.get(
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
-      const now = new Date().toISOString();
 
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
@@ -397,6 +396,7 @@ analyticsRouter.get(
       };
       const byUser: Record<string, UserStats> = {};
 
+      const nowDate = new Date();
       for (const j of jobList) {
         const uid = j.assigned_to_id ?? "unassigned";
         if (uid === "unassigned") continue;
@@ -411,7 +411,15 @@ analyticsRouter.get(
         byUser[uid].jobs_assigned += 1;
         const completed = j.status?.toLowerCase() === "completed";
         if (completed) byUser[uid].jobs_completed += 1;
-        if (j.due_date && j.due_date < now && !completed) byUser[uid].overdue_count += 1;
+        if (j.due_date) {
+          const dueDate = new Date(j.due_date);
+          const completedAt = new Date(j.updated_at ?? j.created_at);
+          if (completed) {
+            if (completedAt > dueDate) byUser[uid].overdue_count += 1;
+          } else if (nowDate > dueDate) {
+            byUser[uid].overdue_count += 1;
+          }
+        }
       }
 
       const completedDurations: Record<string, number[]> = {};

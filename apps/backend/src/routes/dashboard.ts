@@ -104,15 +104,20 @@ dashboardRouter.get(
         const jobsWithSig = new Set((sigRes.data || []).map((r: { job_id: string }) => r.job_id)).size;
         const jobsWithPhoto = new Set((photoRes.data || []).map((r: { job_id: string }) => r.job_id)).size;
         const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
-        let checklistTotal = 0;
-        let checklistCompleted = 0;
+        // Per-job tally: job is checklist-complete when it has zero items or all items have completed_at
+        const byJob: Record<string, { total: number; completed: number }> = {};
+        for (const id of jobIds) byJob[id] = { total: 0, completed: 0 };
         for (const m of mitigationList) {
-          checklistTotal += 1;
-          if (m.completed_at) checklistCompleted += 1;
+          if (!byJob[m.job_id]) continue;
+          byJob[m.job_id].total += 1;
+          if (m.completed_at) byJob[m.job_id].completed += 1;
         }
-        const sigRate = jobIds.length === 0 ? 0 : jobsWithSig / jobIds.length;
-        const photoRate = jobIds.length === 0 ? 0 : jobsWithPhoto / jobIds.length;
-        const checklistRate = checklistTotal === 0 ? 0 : checklistCompleted / checklistTotal;
+        const completedJobsWithChecklist = jobIds.filter(
+          (jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total
+        ).length;
+        const sigRate = jobsWithSig / jobIds.length;
+        const photoRate = jobsWithPhoto / jobIds.length;
+        const checklistRate = completedJobsWithChecklist / jobIds.length;
         return (sigRate + photoRate + checklistRate) / 3;
       }
 
