@@ -1191,6 +1191,9 @@ export const analyticsApi = {
       jobs_without_evidence: number;
       avg_time_to_first_evidence_hours: number;
       trend: Array<{ date: string; completion_rate: number }>;
+      // Feature gating: when true, UI should show locked state
+      locked?: boolean;
+      message?: string;
       // Explicit evidence denominators
       jobs_total?: number;
       jobs_scored?: number;

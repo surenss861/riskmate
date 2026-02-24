@@ -51,7 +51,6 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
 
     setLoading(true);
     setError(false);
-    setFeatureLocked(false);
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -64,9 +63,14 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
       });
 
       if (!controller.signal.aborted) {
-        setData(response);
+        if (response.locked) {
+          setFeatureLocked(true);
+          setData((current) => current ?? DEFAULT_ANALYTICS);
+        } else {
+          setFeatureLocked(false);
+          setData(response);
+        }
         setLastUpdated(new Date().toISOString());
-        setFeatureLocked(false);
       }
     } catch (error) {
       if (!controller.signal.aborted) {

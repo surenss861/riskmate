@@ -142,6 +142,7 @@ export async function GET(request: NextRequest) {
       .from('jobs')
       .select('id, risk_score, created_at')
       .eq('organization_id', orgId)
+      .is('deleted_at', null)
       .gte('created_at', sinceIso)
       .limit(MAX_FETCH_LIMIT)
 
@@ -200,7 +201,7 @@ export async function GET(request: NextRequest) {
       if (job.risk_score === null || job.risk_score === undefined) {
         return false
       }
-      return job.risk_score > 75
+      return job.risk_score >= 70
     }).length
 
     const evidenceCount = documents.length
@@ -228,7 +229,7 @@ export async function GET(request: NextRequest) {
     const jobsTotal = jobIds.length
     const jobsScored = (jobs || []).filter((job) => job.risk_score != null).length
     const highRiskJobIds = (jobs || [])
-      .filter((job) => job.risk_score != null && job.risk_score > 75)
+      .filter((job) => job.risk_score != null && job.risk_score >= 70)
       .map((job) => job.id)
     const jobsMissingRequiredEvidence = highRiskJobIds.filter(
       (jobId) => !jobPhotoMap[jobId]
