@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/analytics/mitigations'
 
-const MAX_FETCH_LIMIT = 10000
+const PAGE_SIZE = 2000
 
 function parseRangeDays(range?: string): number {
   if (range === '30d') return 30
@@ -20,6 +20,33 @@ function parseRangeDays(range?: string): number {
 function toDateKey(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toISOString().slice(0, 10)
+}
+
+/** Fetch all rows by paginating; no cap. */
+async function fetchAllPages<T>(
+  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: any }>
+): Promise<{ data: T[]; error: any }> {
+  const out: T[] = []
+  let offset = 0
+  let hasMore = true
+  let lastError: any = null
+  while (hasMore) {
+    const { data, error } = await fetchPage(offset, PAGE_SIZE)
+    if (error) return { data: out, error }
+    lastError = error
+    const chunk = data ?? []
+    out.push(...chunk)
+    hasMore = chunk.length === PAGE_SIZE
+    offset += chunk.length
+  }
+  return { data: out, error: lastError }
+}
+
+/** Chunk array into batches of at most size. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size))
+  return result
 }
 
 export async function GET(request: NextRequest) {
@@ -138,46 +165,130 @@ export async function GET(request: NextRequest) {
     sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1))
     const sinceIso = sinceDate.toISOString()
 
-    const { data: jobs, error: jobsError } = await supabase
-      .from('jobs')
-      .select('id, risk_score, created_at')
-      .eq('organization_id', orgId)
-      .is('deleted_at', null)
-      .gte('created_at', sinceIso)
-      .limit(MAX_FETCH_LIMIT)
+    // When crew_id is supplied, scope jobs to those that have mitigation activity by this crew (denominators consistent with crew filter).
+    let jobIdsFilter: string[] | null = null
+    if (crewId) {
+      const { data: crewMitigationRows } = await fetchAllPages<{ job_id: string }>(
+        (offset, limit) =>
+          supabase
+            .from('mitigation_items')
+            .select('job_id')
+            .eq('organization_id', orgId)
+            .eq('completed_by', crewId)
+            .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
+            .range(offset, offset + limit - 1)
+      )
+      const crewJobIdsSet = new Set((crewMitigationRows ?? []).map((r) => r.job_id))
+      jobIdsFilter = crewJobIdsSet.size > 0 ? [...crewJobIdsSet] : []
+    }
 
-    if (jobsError) throw jobsError
+    let jobs: Array<{ id: string; risk_score: number | null; created_at: string }>
+    if (jobIdsFilter !== null) {
+      if (jobIdsFilter.length === 0) {
+        jobs = []
+      } else {
+        const jobsList: Array<{ id: string; risk_score: number | null; created_at: string }> = []
+        for (const idChunk of chunk(jobIdsFilter, 500)) {
+          const { data, error } = await supabase
+            .from('jobs')
+            .select('id, risk_score, created_at')
+            .eq('organization_id', orgId)
+            .is('deleted_at', null)
+            .gte('created_at', sinceIso)
+            .in('id', idChunk)
+          if (error) throw error
+          jobsList.push(...(data ?? []))
+        }
+        jobs = jobsList
+      }
+    } else {
+      const { data: jobsData, error: jobsError } = await fetchAllPages<{
+        id: string
+        risk_score: number | null
+        created_at: string
+      }>((offset, limit) =>
+        supabase
+          .from('jobs')
+          .select('id, risk_score, created_at')
+          .eq('organization_id', orgId)
+          .is('deleted_at', null)
+          .gte('created_at', sinceIso)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + limit - 1)
+      )
+      if (jobsError) throw jobsError
+      jobs = jobsData ?? []
+    }
+    const jobIds = jobs.map((j) => j.id)
 
-    const jobIds = (jobs || []).map((job) => job.id)
+    if (jobIds.length === 0) {
+      const rangeDaysOut = parseRangeDays(searchParams.get('range') || undefined)
+      return NextResponse.json({
+        org_id: orgId,
+        range_days: rangeDaysOut,
+        completion_rate: 0,
+        avg_time_to_close_hours: 0,
+        high_risk_jobs: 0,
+        evidence_count: 0,
+        jobs_with_evidence: 0,
+        jobs_without_evidence: 0,
+        avg_time_to_first_evidence_hours: 0,
+        trend: [],
+        jobs_total: 0,
+        jobs_scored: 0,
+        jobs_with_any_evidence: 0,
+        jobs_with_photo_evidence: 0,
+        jobs_missing_required_evidence: 0,
+        required_evidence_policy: null,
+        avg_time_to_first_photo_minutes: null,
+        trend_empty_reason: 'no_jobs',
+      }, { status: 200, headers: { 'X-Request-ID': requestId } })
+    }
 
-    const [mitigationsResponse, documentsResponse] = await Promise.all([
-      jobIds.length
-        ? supabase
+    const mitigationsByChunk = chunk(jobIds, 500)
+    const { data: mitigationsRaw, error: mitigationsError } = await (async () => {
+      const out: any[] = []
+      for (const ids of mitigationsByChunk) {
+        const { data, error } = await fetchAllPages<any>((offset, limit) =>
+          supabase
             .from('mitigation_items')
             .select('id, job_id, created_at, completed_at, completed_by')
-            .in('job_id', jobIds)
+            .in('job_id', ids)
             .order('created_at', { ascending: true })
-            .limit(MAX_FETCH_LIMIT)
-        : Promise.resolve({ data: [] as any[], error: null }),
-      jobIds.length
-        ? supabase
+            .range(offset, offset + limit - 1)
+        )
+        if (error) return { data: [] as any[], error }
+        out.push(...(data ?? []))
+      }
+      return { data: out, error: null }
+    })()
+    if (mitigationsError) throw mitigationsError
+
+    const documentsByChunk = chunk(jobIds, 500)
+    const { data: documentsRaw, error: documentsError } = await (async () => {
+      const out: any[] = []
+      for (const ids of documentsByChunk) {
+        const { data, error } = await fetchAllPages<any>((offset, limit) =>
+          supabase
             .from('documents')
             .select('id, job_id, created_at, type')
-            .in('job_id', jobIds)
+            .in('job_id', ids)
             .order('created_at', { ascending: true })
-            .limit(MAX_FETCH_LIMIT)
-        : Promise.resolve({ data: [] as any[], error: null }),
-    ])
+            .range(offset, offset + limit - 1)
+        )
+        if (error) return { data: [] as any[], error }
+        out.push(...(data ?? []))
+      }
+      return { data: out, error: null }
+    })()
+    if (documentsError) throw documentsError
 
-    if (mitigationsResponse.error) throw mitigationsResponse.error
-    if (documentsResponse.error) throw documentsResponse.error
-
-    const mitigations = (mitigationsResponse.data || []).filter((item) => {
+    const mitigations = (mitigationsRaw ?? []).filter((item: any) => {
       if (!crewId) return true
       return item.completed_by === crewId
     })
 
-    const documents = documentsResponse.data || []
+    const documents = documentsRaw ?? []
 
     const totalMitigations = mitigations.length
     const completedMitigations = mitigations.filter((item) => item.completed_at)

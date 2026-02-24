@@ -1204,7 +1204,6 @@ export const analyticsApi = {
       avg_time_to_first_photo_minutes?: number | null;
       // Empty state reasons
       trend_empty_reason?: 'no_jobs' | 'no_events' | null;
-      locked?: boolean;
     }>(endpoint);
   },
 
