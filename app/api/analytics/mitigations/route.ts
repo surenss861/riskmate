@@ -3,12 +3,13 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/analytics/mitigations'
 
-const MAX_FETCH_LIMIT = 1000
+const MAX_FETCH_LIMIT = 10000
 
 function parseRangeDays(range?: string): number {
   if (range === '30d') return 30
@@ -66,6 +67,60 @@ export async function GET(request: NextRequest) {
     }
 
     const orgId = userData.organization_id
+
+    // Subscription/feature gating (match backend analytics routes)
+    const { data: orgSub, error: orgSubError } = await supabase
+      .from('org_subscriptions')
+      .select('plan_code, status')
+      .eq('organization_id', orgId)
+      .maybeSingle()
+
+    if (orgSubError && orgSubError.code !== 'PGRST116') {
+      const { response, errorId } = createErrorResponse(
+        'Failed to get subscription',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const planCode: PlanCode =
+      orgSub?.plan_code && orgSub.plan_code !== 'none' ? (orgSub.plan_code as PlanCode) : 'none'
+    const status = orgSub?.status ?? (planCode === 'none' ? 'none' : 'inactive')
+    const isActive = ['active', 'trialing', 'free'].includes(status)
+    const features = isActive ? planFeatures(planCode) : []
+    const hasAnalytics = features.includes('analytics')
+
+    if (!isActive || !hasAnalytics) {
+      const rangeDays = parseRangeDays(new URL(request.url).searchParams.get('range') || undefined)
+      return NextResponse.json(
+        {
+          org_id: orgId,
+          range_days: rangeDays,
+          completion_rate: 0,
+          avg_time_to_close_hours: 0,
+          high_risk_jobs: 0,
+          evidence_count: 0,
+          jobs_with_evidence: 0,
+          jobs_without_evidence: 0,
+          avg_time_to_first_evidence_hours: 0,
+          trend: [],
+          locked: true,
+          message:
+            status === 'none'
+              ? 'Analytics requires an active subscription'
+              : 'Analytics not available on your current plan',
+        },
+        { status: 200, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const rangeDays = parseRangeDays(searchParams.get('range') || undefined)
     const crewId = searchParams.get('crew_id') || undefined

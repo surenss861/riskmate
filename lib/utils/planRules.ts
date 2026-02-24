@@ -5,6 +5,30 @@ export interface PlanLimits {
   jobsMonthly: number | null
 }
 
+/** Feature list per plan (must match backend auth/planRules for gating). */
+export function planFeatures(plan: PlanCode): string[] {
+  switch (plan) {
+    case 'none':
+      return []
+    case 'starter':
+      return ['share_links']
+    case 'pro':
+      return ['branded_pdfs', 'share_links', 'notifications']
+    case 'business':
+      return [
+        'branded_pdfs',
+        'share_links',
+        'notifications',
+        'analytics',
+        'permit_pack',
+        'audit_logs',
+        'priority_support',
+      ]
+    default:
+      return []
+  }
+}
+
 export function limitsFor(plan: PlanCode): PlanLimits {
   switch (plan) {
     case 'none':
