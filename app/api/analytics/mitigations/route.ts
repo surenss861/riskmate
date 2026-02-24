@@ -111,6 +111,14 @@ export async function GET(request: NextRequest) {
           jobs_without_evidence: 0,
           avg_time_to_first_evidence_hours: 0,
           trend: [],
+          jobs_total: 0,
+          jobs_scored: 0,
+          jobs_with_any_evidence: 0,
+          jobs_with_photo_evidence: 0,
+          jobs_missing_required_evidence: 0,
+          required_evidence_policy: null,
+          avg_time_to_first_photo_minutes: null,
+          trend_empty_reason: 'no_jobs',
           locked: true,
           message:
             status === 'none'
@@ -153,7 +161,7 @@ export async function GET(request: NextRequest) {
       jobIds.length
         ? supabase
             .from('documents')
-            .select('id, job_id, created_at')
+            .select('id, job_id, created_at, type')
             .in('job_id', jobIds)
             .order('created_at', { ascending: true })
             .limit(MAX_FETCH_LIMIT)
@@ -207,6 +215,25 @@ export async function GET(request: NextRequest) {
     const jobsWithEvidence = Object.keys(jobEvidenceMap).length
     const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0)
 
+    // Photo evidence: only documents with type === "photo" (match backend)
+    const photoDocuments = documents.filter((d: { type?: string }) => d.type === 'photo')
+    const jobPhotoMap = photoDocuments.reduce<Record<string, string>>((acc, doc) => {
+      if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
+        acc[doc.job_id] = doc.created_at
+      }
+      return acc
+    }, {})
+    const jobsWithPhotoEvidence = Object.keys(jobPhotoMap).length
+
+    const jobsTotal = jobIds.length
+    const jobsScored = (jobs || []).filter((job) => job.risk_score != null).length
+    const highRiskJobIds = (jobs || [])
+      .filter((job) => job.risk_score != null && job.risk_score > 75)
+      .map((job) => job.id)
+    const jobsMissingRequiredEvidence = highRiskJobIds.filter(
+      (jobId) => !jobEvidenceMap[jobId]
+    ).length
+
     const avgTimeToFirstEvidenceHours =
       jobsWithEvidence === 0
         ? 0
@@ -218,6 +245,18 @@ export async function GET(request: NextRequest) {
             const diffHours = (evidenceCreated - jobCreated) / (1000 * 60 * 60)
             return acc + Math.max(diffHours, 0)
           }, 0) / jobsWithEvidence
+
+    const avgTimeToFirstPhotoMinutes =
+      jobsWithPhotoEvidence === 0
+        ? 0
+        : Object.entries(jobPhotoMap).reduce((acc, [jobId, firstPhotoAt]) => {
+            const job = jobs?.find((item) => item.id === jobId)
+            if (!job) return acc
+            const jobCreated = new Date(job.created_at).getTime()
+            const photoCreated = new Date(firstPhotoAt).getTime()
+            const diffMinutes = (photoCreated - jobCreated) / (1000 * 60)
+            return acc + Math.max(diffMinutes, 0)
+          }, 0) / jobsWithPhotoEvidence
 
     // Trend (daily)
     const trend: { date: string; completion_rate: number }[] = []
@@ -248,6 +287,9 @@ export async function GET(request: NextRequest) {
       dateCursor.setDate(dateCursor.getDate() + 1)
     }
 
+    const trendEmptyReason =
+      jobsTotal === 0 ? 'no_jobs' : totalMitigations === 0 ? 'no_events' : null
+
     return NextResponse.json({
       org_id: orgId,
       range_days: rangeDays,
@@ -259,6 +301,14 @@ export async function GET(request: NextRequest) {
       jobs_without_evidence: jobsWithoutEvidence,
       avg_time_to_first_evidence_hours: Number(avgTimeToFirstEvidenceHours.toFixed(2)),
       trend,
+      jobs_total: jobsTotal,
+      jobs_scored: jobsScored,
+      jobs_with_any_evidence: jobsWithEvidence,
+      jobs_with_photo_evidence: jobsWithPhotoEvidence,
+      jobs_missing_required_evidence: jobsMissingRequiredEvidence,
+      required_evidence_policy: 'Photo required for high-risk jobs',
+      avg_time_to_first_photo_minutes: Math.round(avgTimeToFirstPhotoMinutes),
+      trend_empty_reason: trendEmptyReason,
     })
   } catch (error: any) {
     console.error('Analytics metrics error:', error)
