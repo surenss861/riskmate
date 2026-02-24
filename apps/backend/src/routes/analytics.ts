@@ -181,8 +181,10 @@ analyticsRouter.get(
         .from("jobs")
         .select("id, risk_score, status, created_at")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (jobsError) throw jobsError;
@@ -198,9 +200,9 @@ analyticsRouter.get(
       if (metric === "compliance" && jobList.length > 0) {
         const trendJobIds = jobList.map((j) => j.id);
         const [sigRes, photoRes, checklistRes] = await Promise.all([
-          supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
-          supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
-          supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", orgId).in("job_id", trendJobIds).limit(MAX_FETCH_LIMIT),
+          supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", trendJobIds).order("signed_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
+          supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", trendJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
+          supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", orgId).in("job_id", trendJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
         ]);
         const jobsWithSigSet = new Set((sigRes.data || []).map((r: { job_id: string }) => r.job_id));
         const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: { job_id: string }) => r.job_id));
@@ -308,8 +310,10 @@ analyticsRouter.get(
         .from("jobs")
         .select("job_type, risk_score, created_at")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
@@ -365,8 +369,10 @@ analyticsRouter.get(
         .from("jobs")
         .select("id, assigned_to_id, status, created_at, updated_at, due_date")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (jobsError) throw jobsError;
@@ -482,6 +488,7 @@ analyticsRouter.get(
         .eq("organization_id", orgId)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
@@ -490,7 +497,7 @@ analyticsRouter.get(
 
       const { data: jobsData } =
         jobIds.length > 0
-          ? await supabase.from("jobs").select("id, risk_score, location").in("id", jobIds).limit(MAX_FETCH_LIMIT)
+          ? await supabase.from("jobs").select("id, risk_score, location").is("deleted_at", null).in("id", jobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
           : { data: [] };
       const jobMap = new Map(
         (jobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
@@ -517,12 +524,13 @@ analyticsRouter.get(
         .eq("organization_id", orgId)
         .gte("created_at", prevSince)
         .lt("created_at", prevUntil)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
       const prevList = (prevItems || []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
       const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
       const { data: prevJobsData } =
         prevJobIds.length > 0
-          ? await supabase.from("jobs").select("id, risk_score, location").in("id", prevJobIds).limit(MAX_FETCH_LIMIT)
+          ? await supabase.from("jobs").select("id, risk_score, location").is("deleted_at", null).in("id", prevJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
           : { data: [] };
       const prevJobMap = new Map(
         (prevJobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
@@ -584,8 +592,10 @@ analyticsRouter.get(
         .from("jobs")
         .select("id")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (jobsError) throw jobsError;
@@ -603,15 +613,16 @@ analyticsRouter.get(
       }
 
       const [sigRes, photoRes, checklistRes] = await Promise.all([
-        supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", jobIds).limit(MAX_FETCH_LIMIT),
+        supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", jobIds).order("signed_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
         jobIds.length > 0
-          ? supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", jobIds).limit(MAX_FETCH_LIMIT)
+          ? supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", jobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
           : Promise.resolve({ data: [] as { job_id: string }[] }),
         supabase
           .from("mitigation_items")
           .select("job_id, completed_at")
           .eq("organization_id", orgId)
           .in("job_id", jobIds)
+          .order("created_at", { ascending: false })
           .limit(MAX_FETCH_LIMIT),
       ]);
 
@@ -678,8 +689,10 @@ analyticsRouter.get(
         .from("jobs")
         .select("id, status, created_at, updated_at, due_date")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .lte("created_at", until)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (error) throw error;
@@ -815,7 +828,9 @@ analyticsRouter.get(
         .from("jobs")
         .select("id, risk_score, created_at")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (jobsError) {
@@ -882,7 +897,7 @@ analyticsRouter.get(
         if (job.risk_score === null || job.risk_score === undefined) {
           return false;
         }
-        return job.risk_score > 75;
+        return job.risk_score >= 70;
       }).length;
 
       const evidenceCount = documents.length;
@@ -912,7 +927,7 @@ analyticsRouter.get(
       
       // Jobs missing required evidence: high-risk jobs without photo evidence (policy: photo required)
       const highRiskJobIds = (jobs || [])
-        .filter((job) => job.risk_score !== null && job.risk_score > 75)
+        .filter((job) => job.risk_score !== null && job.risk_score >= 70)
         .map((job) => job.id);
       const highRiskJobsWithoutPhotoEvidence = highRiskJobIds.filter(
         (jobId) => !jobPhotoMap[jobId]
@@ -1064,7 +1079,9 @@ analyticsRouter.get(
         .from("jobs")
         .select("id, status, risk_level, created_at")
         .eq("organization_id", orgId)
+        .is("deleted_at", null)
         .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
         .limit(MAX_FETCH_LIMIT);
 
       if (jobsError) throw jobsError;
@@ -1078,6 +1095,7 @@ analyticsRouter.get(
               .from("documents")
               .select("id, job_id")
               .in("job_id", jobIds)
+              .order("created_at", { ascending: false })
               .limit(MAX_FETCH_LIMIT)
           : Promise.resolve({ data: [] as { job_id: string }[], error: null }),
         jobIds.length
@@ -1087,6 +1105,7 @@ analyticsRouter.get(
               .in("job_id", jobIds)
               .not("completed_at", "is", null)
               .gte("completed_at", sinceIso)
+              .order("created_at", { ascending: false })
               .limit(MAX_FETCH_LIMIT)
           : Promise.resolve({
               data: [] as { job_id: string; completed_by: string | null }[],
