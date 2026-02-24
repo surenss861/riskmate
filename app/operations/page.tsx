@@ -696,7 +696,7 @@ function DashboardPageInner() {
                     jobs_total={analyticsData.jobs_total}
                     jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
                     jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
-                    required_evidence_policy={analyticsData.required_evidence_policy}
+                    required_evidence_policy={analyticsData.required_evidence_policy ?? undefined}
                     avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
                     timeRange={timeRange}
                   />

@@ -169,14 +169,16 @@ export async function GET(request: NextRequest) {
     let jobIdsFilter: string[] | null = null
     if (crewId) {
       const { data: crewMitigationRows } = await fetchAllPages<{ job_id: string }>(
-        (offset, limit) =>
-          supabase
+        async (offset, limit) => {
+          const { data, error } = await supabase
             .from('mitigation_items')
             .select('job_id')
             .eq('organization_id', orgId)
             .eq('completed_by', crewId)
             .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
             .range(offset, offset + limit - 1)
+          return { data, error }
+        }
       )
       const crewJobIdsSet = new Set((crewMitigationRows ?? []).map((r) => r.job_id))
       jobIdsFilter = crewJobIdsSet.size > 0 ? [...crewJobIdsSet] : []
@@ -206,8 +208,8 @@ export async function GET(request: NextRequest) {
         id: string
         risk_score: number | null
         created_at: string
-      }>((offset, limit) =>
-        supabase
+      }>(async (offset, limit) => {
+        const { data, error } = await supabase
           .from('jobs')
           .select('id, risk_score, created_at')
           .eq('organization_id', orgId)
@@ -215,7 +217,8 @@ export async function GET(request: NextRequest) {
           .gte('created_at', sinceIso)
           .order('created_at', { ascending: true })
           .range(offset, offset + limit - 1)
-      )
+        return { data, error }
+      })
       if (jobsError) throw jobsError
       jobs = jobsData ?? []
     }
@@ -249,14 +252,15 @@ export async function GET(request: NextRequest) {
     const { data: mitigationsRaw, error: mitigationsError } = await (async () => {
       const out: any[] = []
       for (const ids of mitigationsByChunk) {
-        const { data, error } = await fetchAllPages<any>((offset, limit) =>
-          supabase
+        const { data, error } = await fetchAllPages<any>(async (offset, limit) => {
+          const res = await supabase
             .from('mitigation_items')
             .select('id, job_id, created_at, completed_at, completed_by')
             .in('job_id', ids)
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)
-        )
+          return { data: res.data, error: res.error }
+        })
         if (error) return { data: [] as any[], error }
         out.push(...(data ?? []))
       }
@@ -268,14 +272,15 @@ export async function GET(request: NextRequest) {
     const { data: documentsRaw, error: documentsError } = await (async () => {
       const out: any[] = []
       for (const ids of documentsByChunk) {
-        const { data, error } = await fetchAllPages<any>((offset, limit) =>
-          supabase
+        const { data, error } = await fetchAllPages<any>(async (offset, limit) => {
+          const res = await supabase
             .from('documents')
             .select('id, job_id, created_at, type')
             .in('job_id', ids)
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)
-        )
+          return { data: res.data, error: res.error }
+        })
         if (error) return { data: [] as any[], error }
         out.push(...(data ?? []))
       }
