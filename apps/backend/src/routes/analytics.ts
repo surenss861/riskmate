@@ -645,7 +645,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/job-completion — total, completed, completion_rate, avg_days to complete, on_time_rate, overdue_count
+// GET /api/analytics/job-completion — contract: completion_rate, avg_days, on_time_rate, overdue_count; optional: total, completed, period, avg_days_to_complete
 analyticsRouter.get(
   "/job-completion",
   authenticate as unknown as express.RequestHandler,
@@ -656,12 +656,12 @@ analyticsRouter.get(
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
       return res.json({
-        total: 0,
-        completed: 0,
         completion_rate: 0,
-        avg_days_to_complete: 0,
+        avg_days: 0,
         on_time_rate: 0,
         overdue_count: 0,
+        total: 0,
+        completed: 0,
         period: "30d",
         locked: true,
       });
@@ -673,34 +673,7 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const now = new Date().toISOString();
 
-      const useMvForCounts = days <= MV_COVERAGE_DAYS;
-
-      let total: number;
-      let completed: number;
-
-      if (useMvForCounts) {
-        const sinceWeek = weekStart(new Date(since));
-        const untilWeek = weekStart(new Date(until));
-        const { data: mvRows, error: mvError } = await supabase
-          .from("analytics_weekly_job_stats")
-          .select("jobs_created, jobs_completed")
-          .eq("organization_id", orgId)
-          .gte("week_start", sinceWeek)
-          .lte("week_start", untilWeek);
-
-        if (mvError) {
-          total = 0;
-          completed = 0;
-        } else {
-          const rows = (mvRows || []) as { jobs_created: number; jobs_completed: number }[];
-          total = rows.reduce((a, r) => a + (r.jobs_created ?? 0), 0);
-          completed = rows.reduce((a, r) => a + (r.jobs_completed ?? 0), 0);
-        }
-      } else {
-        total = 0;
-        completed = 0;
-      }
-
+      // Always use raw jobs filtered by created_at so total/completed and rates are over the exact requested range (no MV whole-week inflation).
       const { data: jobs, error } = await supabase
         .from("jobs")
         .select("id, status, created_at, updated_at, due_date")
@@ -718,10 +691,8 @@ analyticsRouter.get(
         due_date: string | null;
       }[];
 
-      if (!useMvForCounts) {
-        total = list.length;
-        completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
-      }
+      const total = list.length;
+      const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
 
       const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
       const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
@@ -742,14 +713,16 @@ analyticsRouter.get(
         (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now
       ).length;
 
+      // Contract: completion_rate, avg_days, on_time_rate, overdue_count. Optional extensions: total, completed, period, avg_days_to_complete.
       return res.json({
-        period: `${days}d`,
-        total,
-        completed,
         completion_rate,
-        avg_days_to_complete,
+        avg_days: avg_days_to_complete,
         on_time_rate,
         overdue_count,
+        total,
+        completed,
+        period: `${days}d`,
+        avg_days_to_complete,
       });
     } catch (error: any) {
       console.error("Analytics job-completion error:", error);
