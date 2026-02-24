@@ -31,6 +31,15 @@ const DEFAULT_ANALYTICS: MitigationAnalytics = {
   jobs_without_evidence: 0,
   avg_time_to_first_evidence_hours: 0,
   trend: [],
+  jobs_total: 0,
+  jobs_scored: 0,
+  jobs_with_any_evidence: 0,
+  jobs_with_photo_evidence: 0,
+  jobs_missing_required_evidence: 0,
+  required_evidence_policy: null,
+  avg_time_to_first_photo_minutes: null,
+  trend_empty_reason: null,
+  locked: false,
 };
 
 export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsResult {
