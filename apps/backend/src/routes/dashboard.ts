@@ -38,6 +38,7 @@ type JobRow = {
   risk_level: string | null;
   created_at: string;
   due_date: string | null;
+  completed_at?: string | null;
   updated_at?: string | null;
   client_name?: string;
   job_type?: string;
@@ -63,7 +64,7 @@ dashboardRouter.get(
       previousSince.setHours(0, 0, 0, 0);
       const previousRange = { since: previousSince.toISOString(), until: previousEnd.toISOString() };
 
-      const selectFields = "id, status, risk_score, risk_level, created_at, due_date, updated_at, client_name, job_type, location";
+      const selectFields = "id, status, risk_score, risk_level, created_at, due_date, completed_at, updated_at, client_name, job_type, location";
       const [currentRes, previousRes] = await Promise.all([
         supabase
           .from("jobs")
@@ -143,14 +144,14 @@ dashboardRouter.get(
       const on_time_count = currentJobs.filter((j) => {
         if ((j.status?.toLowerCase() !== "completed") || !j.due_date) return false;
         const due = new Date(j.due_date).getTime();
-        const completedAt = j.updated_at ? new Date(j.updated_at).getTime() : now.getTime();
+        const completedAt = (j.completed_at != null ? new Date(j.completed_at) : new Date(j.created_at)).getTime();
         return completedAt <= due;
       }).length;
       const overdue_count = currentJobs.filter((j) => {
         if (!j.due_date) return false;
         const due = new Date(j.due_date).getTime();
         if ((j.status?.toLowerCase() === "completed")) {
-          const completedAt = j.updated_at ? new Date(j.updated_at).getTime() : now.getTime();
+          const completedAt = (j.completed_at != null ? new Date(j.completed_at) : new Date(j.created_at)).getTime();
           return completedAt > due;
         }
         return now.getTime() > due;

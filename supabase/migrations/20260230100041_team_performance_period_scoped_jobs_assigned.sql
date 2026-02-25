@@ -37,6 +37,7 @@ AS $$
         OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
       )
   ),
+  -- Open assigned jobs: no created_at window so overdue_count includes pre-period backlog
   open_jobs AS (
     SELECT j.assigned_to_id, j.id,
       (j.due_date IS NOT NULL AND j.due_date < clock_timestamp()) AS is_overdue
@@ -45,8 +46,6 @@ AS $$
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
-      AND j.created_at >= p_since
-      AND j.created_at <= p_until
   ),
   assigned_union AS (
     SELECT assigned_to_id, id FROM completed_in_period
@@ -89,4 +88,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned is period-scoped (completed in period + open jobs created in period).';
+  'Returns per-user team performance aggregates; jobs_assigned = completed in period + all open assigned; overdue_count includes all open overdue (no created_at window on open_jobs).';

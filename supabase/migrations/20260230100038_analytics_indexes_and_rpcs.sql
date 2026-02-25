@@ -12,6 +12,10 @@ CREATE INDEX IF NOT EXISTS idx_documents_org_job_type
   ON documents(organization_id, job_id, type)
   WHERE job_id IS NOT NULL;
 
+CREATE INDEX IF NOT EXISTS idx_jobs_org_created
+  ON jobs(organization_id, created_at)
+  WHERE deleted_at IS NULL;
+
 -- Job completion KPIs in one round-trip (organization_id + deleted_at IS NULL applied).
 -- Returns: total, completed, avg_days_to_complete, on_time_count, overdue_count_period, overdue_count_all_time
 CREATE OR REPLACE FUNCTION get_job_completion_kpis(
@@ -41,7 +45,7 @@ DECLARE
   v_overdue_all BIGINT;
   v_now TIMESTAMPTZ := clock_timestamp();
 BEGIN
-  -- Completed in period: effective completion date in [p_since, p_until]
+  -- Completed in period: completion date = completed_at when not null else created_at (no updated_at)
   SELECT COUNT(*)::BIGINT INTO v_completed
   FROM jobs j
   WHERE j.organization_id = p_org_id
@@ -49,8 +53,7 @@ BEGIN
     AND LOWER(COALESCE(j.status, '')) = 'completed'
     AND (
       (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-      OR (j.completed_at IS NULL AND j.updated_at IS NOT NULL AND j.updated_at >= p_since AND j.updated_at <= p_until)
-      OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
+      OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
   -- Open jobs created in period (denominator for completion_rate)
@@ -64,14 +67,14 @@ BEGIN
 
   v_total := v_completed + v_open_in_period;
 
-  -- Avg days to complete and on_time count (from completed in period only)
+  -- Avg days to complete and on_time count (completed_at when not null else created_at; no updated_at)
   SELECT
     COALESCE(AVG(
       EXTRACT(EPOCH FROM (
-        COALESCE(j.completed_at, j.updated_at, j.created_at) - j.created_at
+        COALESCE(j.completed_at, j.created_at) - j.created_at
       )) / 86400.0
     ), 0),
-    COUNT(*) FILTER (WHERE j.due_date IS NOT NULL AND COALESCE(j.completed_at, j.updated_at, j.created_at) <= j.due_date)::BIGINT
+    COUNT(*) FILTER (WHERE j.due_date IS NOT NULL AND COALESCE(j.completed_at, j.created_at) <= j.due_date)::BIGINT
   INTO v_avg_days, v_on_time
   FROM jobs j
   WHERE j.organization_id = p_org_id
@@ -79,21 +82,19 @@ BEGIN
     AND LOWER(COALESCE(j.status, '')) = 'completed'
     AND (
       (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-      OR (j.completed_at IS NULL AND j.updated_at IS NOT NULL AND j.updated_at >= p_since AND j.updated_at <= p_until)
-      OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
+      OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
-  -- Period-scoped overdue: (1) completed in period with due in window and completed after due, (2) open with due in window and due < now
+  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) open with due in window and due < now
   SELECT (
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) = 'completed'
        AND j.due_date IS NOT NULL
        AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
-       AND COALESCE(j.completed_at, j.updated_at, j.created_at) > j.due_date
+       AND COALESCE(j.completed_at, j.created_at) > j.due_date
        AND (
          (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-         OR (j.completed_at IS NULL AND j.updated_at IS NOT NULL AND j.updated_at >= p_since AND j.updated_at <= p_until)
-         OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
+         OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
        ))
     +
     (SELECT COUNT(*)::BIGINT FROM jobs j
