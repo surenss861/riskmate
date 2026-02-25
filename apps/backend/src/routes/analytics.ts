@@ -61,7 +61,7 @@ type DocumentRecord = {
   type?: string;
 };
 
-const PAGE_SIZE = 2000;
+const PAGE_SIZE = 500;
 
 /** Fetch all rows by paginating; no cap. */
 async function fetchAllPages<T>(
@@ -123,6 +123,20 @@ const dateRangeForDays = (days: number): { since: string; until: string } => {
 
 // MV covers last 2 years; use for week/month bucketed analytics when in range
 const MV_COVERAGE_DAYS = 730;
+
+// Fallback refresh when pg_cron is unavailable: refresh MV at most once per hour before serving week/month trends
+const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
+let lastAnalyticsMvRefreshAt = 0;
+
+async function ensureAnalyticsMvRefreshed(): Promise<void> {
+  const now = Date.now();
+  if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return;
+  lastAnalyticsMvRefreshAt = now;
+  const { error } = await supabase.rpc("refresh_analytics_weekly_job_stats");
+  if (error) {
+    console.warn("Analytics MV refresh failed (pg_cron may be unavailable):", error);
+  }
+}
 
 // Helpers for trends: bucket keys and labels
 const weekStart = (d: Date): string => {
@@ -200,6 +214,7 @@ analyticsRouter.get(
       const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
 
       if (useMv) {
+        await ensureAnalyticsMvRefreshed();
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
         const { data: mvRows, error: mvError } = await fetchAllPages<{

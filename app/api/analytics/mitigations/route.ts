@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 
 const ROUTE = '/api/analytics/mitigations'
 
-const PAGE_SIZE = 2000
+const PAGE_SIZE = 500
 
 function parseRangeDays(range?: string | null): number {
   if (range == null || range === '') return 30
