@@ -22,7 +22,6 @@ SET search_path = public
 AS $$
 DECLARE
   v_completed BIGINT;
-  v_open_in_period BIGINT;
   v_total BIGINT;
   v_avg_days NUMERIC;
   v_on_time BIGINT;
@@ -30,29 +29,23 @@ DECLARE
   v_overdue_all BIGINT;
   v_now TIMESTAMPTZ := clock_timestamp();
 BEGIN
-  -- Completed in period: completion date = completed_at when not null else created_at (no updated_at)
+  -- Denominator and numerator aligned to jobs created in period: total = jobs created in period, completed = of those, count that are completed (completion_rate cannot exceed 100%).
+  SELECT COUNT(*)::BIGINT INTO v_total
+  FROM jobs j
+  WHERE j.organization_id = p_org_id
+    AND j.deleted_at IS NULL
+    AND j.created_at >= p_since
+    AND j.created_at <= p_until;
+
   SELECT COUNT(*)::BIGINT INTO v_completed
   FROM jobs j
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) = 'completed'
-    AND (
-      (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-      OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
-    );
-
-  -- Open jobs created within the period (denominator for completion_rate; period-scoped)
-  SELECT COUNT(*)::BIGINT INTO v_open_in_period
-  FROM jobs j
-  WHERE j.organization_id = p_org_id
-    AND j.deleted_at IS NULL
-    AND LOWER(COALESCE(j.status, '')) != 'completed'
     AND j.created_at >= p_since
     AND j.created_at <= p_until;
 
-  v_total := v_completed + v_open_in_period;
-
-  -- Avg days to complete and on_time count (completed_at when not null else created_at; no updated_at)
+  -- Avg days to complete and on_time count: jobs created in period that are completed (same population as completion rate)
   SELECT
     COALESCE(AVG(
       EXTRACT(EPOCH FROM (
@@ -65,10 +58,8 @@ BEGIN
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) = 'completed'
-    AND (
-      (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-      OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
-    );
+    AND j.created_at >= p_since
+    AND j.created_at <= p_until;
 
   -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) open overdue jobs whose due_date (and created_at) fall within period
   SELECT (
@@ -109,7 +100,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_job_completion_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns job-completion KPIs for analytics in one round-trip; org-scoped, deleted_at IS NULL.';
+  'Returns job-completion KPIs for analytics in one round-trip; org-scoped, deleted_at IS NULL. total/completed scoped to jobs created in period so completion_rate cannot exceed 100%.';
 
 -- Team performance: per-user aggregates (jobs_assigned = completed-in-period + all open assigned).
 -- Returns: user_id, jobs_assigned, jobs_completed, sum_days, count_completed, overdue_count
@@ -149,6 +140,7 @@ AS $$
         OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
       )
   ),
+  -- All open jobs assigned to the user (no created_at filter) so overdue_count includes overdue jobs created before p_since
   open_jobs AS (
     SELECT j.assigned_to_id, j.id,
       (j.due_date IS NOT NULL AND j.due_date < clock_timestamp()) AS is_overdue
@@ -157,8 +149,6 @@ AS $$
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
-      AND j.created_at >= p_since
-      AND j.created_at <= p_until
   ),
   assigned_union AS (
     SELECT assigned_to_id, id FROM completed_in_period
@@ -201,4 +191,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned, completion_rate, and overdue_count are period-scoped (completed in period plus open jobs created within the period).';
+  'Returns per-user team performance aggregates; jobs_assigned = completed in period + all open assigned; overdue_count includes all currently overdue assigned jobs (no created_at filter on open jobs).';

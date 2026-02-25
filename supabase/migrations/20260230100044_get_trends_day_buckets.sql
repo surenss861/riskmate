@@ -47,39 +47,27 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Completion: bucket by completion date (COALESCE(completed_at, created_at)); value = percentage 0–100 (completions in that day / jobs created that day); reflects completions in the selected window.
+  -- Completion: scope both numerator and denominator to jobs created in the bucket; value = (jobs created that day that are completed) / (jobs created that day) * 100, clamped 0–100.
   IF p_metric = 'completion' THEN
     RETURN QUERY
-    WITH day_created AS (
+    WITH day_buckets AS (
       SELECT
         (j.created_at AT TIME ZONE 'UTC')::DATE AS pk,
-        COUNT(*)::BIGINT AS total
+        COUNT(*)::BIGINT AS total,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(j.status, '')) = 'completed')::BIGINT AS completed
       FROM jobs j
       WHERE j.organization_id = p_org_id
         AND j.deleted_at IS NULL
         AND j.created_at >= p_since
         AND j.created_at <= p_until
       GROUP BY (j.created_at AT TIME ZONE 'UTC')::DATE
-    ),
-    day_completed AS (
-      SELECT
-        ((COALESCE(j.completed_at, j.created_at)) AT TIME ZONE 'UTC')::DATE AS pk,
-        COUNT(*)::BIGINT AS completed
-      FROM jobs j
-      WHERE j.organization_id = p_org_id
-        AND j.deleted_at IS NULL
-        AND LOWER(COALESCE(j.status, '')) = 'completed'
-        AND (COALESCE(j.completed_at, j.created_at)) >= p_since
-        AND (COALESCE(j.completed_at, j.created_at)) <= p_until
-      GROUP BY ((COALESCE(j.completed_at, j.created_at)) AT TIME ZONE 'UTC')::DATE
     )
     SELECT
-      COALESCE(c.pk, d.pk) AS period_key,
+      d.pk AS period_key,
       CASE WHEN COALESCE(d.total, 0) = 0 THEN 0
-           ELSE ROUND((COALESCE(c.completed, 0)::NUMERIC / NULLIF(d.total, 0)) * 100.0, 2)
+           ELSE LEAST(100.0, ROUND((d.completed::NUMERIC / NULLIF(d.total, 0)) * 100.0, 2))
       END AS value
-    FROM day_created d
-    FULL OUTER JOIN day_completed c ON c.pk = d.pk
+    FROM day_buckets d
     ORDER BY 1;
     RETURN;
   END IF;
@@ -147,4 +135,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_trends_day_buckets(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) IS
-  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (0–100 %), compliance. Completion = per-day completions (by completion date) / per-day jobs created * 100; denominator matches period job population.';
+  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (0–100 %), compliance. Completion = (jobs created that day that are completed) / (jobs created that day) * 100, clamped 0–100.';
