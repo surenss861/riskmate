@@ -47,20 +47,47 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Completion: bucket by completion date (COALESCE(completed_at, created_at)); value = jobs completed that day (count).
+  -- Completion: one row per day in range; value = completion rate 0–100 (jobs_completed_that_day / jobs_created_that_day * 100).
   IF p_metric = 'completion' THEN
     RETURN QUERY
+    WITH days AS (
+      SELECT generate_series(
+        (p_since AT TIME ZONE 'UTC')::DATE,
+        (p_until AT TIME ZONE 'UTC')::DATE,
+        '1 day'::INTERVAL
+      )::DATE AS period_key
+    ),
+    created AS (
+      SELECT (j.created_at AT TIME ZONE 'UTC')::DATE AS d, COUNT(*)::BIGINT AS c
+      FROM jobs j
+      WHERE j.organization_id = p_org_id
+        AND j.deleted_at IS NULL
+        AND j.created_at >= p_since
+        AND j.created_at <= p_until
+      GROUP BY (j.created_at AT TIME ZONE 'UTC')::DATE
+    ),
+    completed AS (
+      SELECT (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE AS d, COUNT(*)::BIGINT AS c
+      FROM jobs j
+      WHERE j.organization_id = p_org_id
+        AND j.deleted_at IS NULL
+        AND LOWER(COALESCE(j.status, '')) = 'completed'
+        AND COALESCE(j.completed_at, j.created_at) >= p_since
+        AND COALESCE(j.completed_at, j.created_at) <= p_until
+      GROUP BY (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE
+    )
     SELECT
-      (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE AS period_key,
-      COUNT(*)::NUMERIC AS value
-    FROM jobs j
-    WHERE j.organization_id = p_org_id
-      AND j.deleted_at IS NULL
-      AND LOWER(COALESCE(j.status, '')) = 'completed'
-      AND COALESCE(j.completed_at, j.created_at) >= p_since
-      AND COALESCE(j.completed_at, j.created_at) <= p_until
-    GROUP BY (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE
-    ORDER BY 1;
+      days.period_key,
+      (CASE
+        WHEN COALESCE(created.c, 0) = 0 THEN 0
+        ELSE ROUND(LEAST(100::NUMERIC, GREATEST(0::NUMERIC,
+          (COALESCE(completed.c, 0)::NUMERIC / created.c) * 100
+        ))::NUMERIC, 2)
+      END) AS value
+    FROM days
+    LEFT JOIN created ON created.d = days.period_key
+    LEFT JOIN completed ON completed.d = days.period_key
+    ORDER BY days.period_key;
     RETURN;
   END IF;
 
@@ -127,4 +154,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_trends_day_buckets(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) IS
-  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (count by completion date), compliance. Completion uses COALESCE(completed_at, created_at) as bucket key; value = jobs completed that day.';
+  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (rate 0–100: jobs_completed_that_day / jobs_created_that_day), compliance.';
