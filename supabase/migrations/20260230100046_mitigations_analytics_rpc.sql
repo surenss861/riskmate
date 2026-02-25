@@ -98,13 +98,13 @@ BEGIN
       AND d.created_at <= v_until_lo
     GROUP BY d.job_id
   ),
+  -- Photo evidence: job's lifetime up to p_until (honor previously satisfied evidence outside window)
   docs_photo_first AS (
     SELECT d.job_id,
       MIN(d.created_at) AS first_at
     FROM documents d
     WHERE d.organization_id = p_org_id
       AND d.job_id = ANY(v_job_ids)
-      AND d.created_at >= v_since_lo
       AND d.created_at <= v_until_lo
       AND d.type = 'photo'
     GROUP BY d.job_id

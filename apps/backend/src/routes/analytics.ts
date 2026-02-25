@@ -40,27 +40,6 @@ export function getAnalyticsObservability(): {
   };
 }
 
-type MitigationItem = {
-  id: string;
-  job_id: string;
-  created_at: string;
-  completed_at: string | null;
-  completed_by: string | null;
-};
-
-type JobRecord = {
-  id: string;
-  risk_score: number | null;
-  created_at: string;
-};
-
-type DocumentRecord = {
-  id: string;
-  job_id: string;
-  created_at: string;
-  type?: string;
-};
-
 const PAGE_SIZE = 500;
 
 /** Fetch all rows by paginating; no cap. */
@@ -757,19 +736,18 @@ analyticsRouter.get(
   }
 );
 
+// GET /api/analytics/mitigations — server-side aggregation via get_mitigations_analytics_kpis + get_mitigations_analytics_trend
 analyticsRouter.get(
   "/mitigations",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
-    
-    // Soft check: return empty analytics data if plan is inactive (better UX than 402)
+
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
-    
+
     if (!isActive || !hasAnalytics) {
-      // Return empty analytics data instead of 402 (better UX)
       return res.json({
         org_id: authReq.user.organization_id,
         range_days: parseRangeDays(authReq.query.range as string | undefined),
@@ -788,333 +766,85 @@ analyticsRouter.get(
         jobs_missing_required_evidence: 0,
         required_evidence_policy: null,
         avg_time_to_first_photo_minutes: null,
-        trend_empty_reason: 'no_jobs',
+        trend_empty_reason: "no_jobs",
         locked: true,
-        message: status === "none" 
-          ? "Analytics requires an active subscription"
-          : "Analytics not available on your current plan",
+        message:
+          status === "none"
+            ? "Analytics requires an active subscription"
+            : "Analytics not available on your current plan",
       });
     }
-    
+
     try {
       const orgId = authReq.user.organization_id;
-      if (!orgId) {
-        return res.status(400).json({ message: "Missing organization id" });
-      }
+      if (!orgId) return res.status(400).json({ message: "Missing organization id" });
 
       const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
-      const crewId = authReq.query.crew_id
-        ? String(authReq.query.crew_id)
-        : undefined;
+      const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
+      const { since, until } = dateRangeForDays(rangeDays);
 
-      const sinceDate = new Date();
-      sinceDate.setHours(0, 0, 0, 0);
-      sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
-      const sinceIso = sinceDate.toISOString();
+      const [kpisRes, trendRes] = await Promise.all([
+        supabase.rpc("get_mitigations_analytics_kpis", {
+          p_org_id: orgId,
+          p_since: since,
+          p_until: until,
+          p_crew_id: crewId ?? null,
+        }),
+        supabase.rpc("get_mitigations_analytics_trend", {
+          p_org_id: orgId,
+          p_since: since,
+          p_until: until,
+          p_crew_id: crewId ?? null,
+        }),
+      ]);
 
-      // When crew_id is supplied, scope jobs to those that have mitigation activity by this crew (denominators consistent with crew filter).
-      let jobIdsFilter: string[] | null = null;
-      if (crewId) {
-        const { data: crewMitigationRows } = await fetchAllPages<{ job_id: string }>(
-          async (offset, limit) => {
-            const { data, error } = await supabase
-              .from("mitigation_items")
-              .select("job_id")
-              .eq("organization_id", orgId)
-              .eq("completed_by", crewId)
-              .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
-              .range(offset, offset + limit - 1);
-            return { data, error };
-          }
-        );
-        const crewJobIdsSet = new Set((crewMitigationRows ?? []).map((r) => r.job_id));
-        jobIdsFilter = crewJobIdsSet.size > 0 ? [...crewJobIdsSet] : [];
-      }
+      if (kpisRes.error) throw kpisRes.error;
+      if (trendRes.error) throw trendRes.error;
 
-      let jobs: JobRecord[];
-      if (jobIdsFilter !== null) {
-        if (jobIdsFilter.length === 0) {
-          jobs = [];
-        } else {
-          const jobsList: JobRecord[] = [];
-          for (const idChunk of chunkArray(jobIdsFilter, 500)) {
-            const { data, error } = await supabase
-              .from("jobs")
-              .select("id, risk_score, created_at")
-              .eq("organization_id", orgId)
-              .is("deleted_at", null)
-              .in("id", idChunk);
-            if (error) throw error;
-            jobsList.push(...((data as JobRecord[]) ?? []));
-          }
-          jobs = jobsList;
-        }
-      } else {
-        // Include jobs created in range OR jobs with mitigation items created or completed in range (so completions in-range for older items are counted).
-        const { data: mitigationJobRows } = await fetchAllPages<{ job_id: string }>(
-          async (offset, limit) => {
-            const { data, error } = await supabase
-              .from("mitigation_items")
-              .select("job_id")
-              .eq("organization_id", orgId)
-              .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
-              .range(offset, offset + limit - 1);
-            return { data, error };
-          }
-        );
-        const mitigationJobIds = new Set((mitigationJobRows ?? []).map((r) => r.job_id));
+      const kpiRow = Array.isArray(kpisRes.data) ? kpisRes.data[0] : kpisRes.data;
+      const trendRows = (Array.isArray(trendRes.data) ? trendRes.data : []) as { period_key: string | Date; completion_rate: number }[];
 
-        const { data: jobsInRangeData, error: jobsError } = await fetchAllPages<JobRecord>(
-          async (offset, limit) => {
-            const { data, error } = await supabase
-              .from("jobs")
-              .select("id, risk_score, created_at")
-              .eq("organization_id", orgId)
-              .is("deleted_at", null)
-              .gte("created_at", sinceIso)
-              .order("created_at", { ascending: true })
-              .range(offset, offset + limit - 1);
-            return { data, error };
-          }
-        );
-        if (jobsError) throw jobsError;
-        const jobsInRange = jobsInRangeData ?? [];
-        const allJobIdsSet = new Set(jobsInRange.map((j) => j.id));
-        for (const id of mitigationJobIds) allJobIdsSet.add(id);
-        const allJobIds = [...allJobIdsSet];
-        if (allJobIds.length === 0) {
-          jobs = [];
-        } else {
-          const jobsList: JobRecord[] = [];
-          for (const idChunk of chunkArray(allJobIds, 500)) {
-            const { data, error } = await supabase
-              .from("jobs")
-              .select("id, risk_score, created_at")
-              .eq("organization_id", orgId)
-              .is("deleted_at", null)
-              .in("id", idChunk);
-            if (error) throw error;
-            jobsList.push(...((data as JobRecord[]) ?? []));
-          }
-          jobs = jobsList;
-        }
-      }
-      const jobIds = jobs.map((j) => j.id);
+      const jobsTotal = Number(kpiRow?.jobs_total ?? 0);
+      const jobsWithEvidence = Number(kpiRow?.jobs_with_evidence ?? 0);
+      const totalMitigations =
+        Number(kpiRow?.jobs_with_evidence ?? 0) + Number(kpiRow?.jobs_without_evidence ?? 0);
+      const trendEmptyReason =
+        jobsTotal === 0 ? "no_jobs" : (trendRows.length === 0 ? "no_events" : null);
 
-      if (jobIds.length === 0) {
-        return res.json({
-          org_id: orgId,
-          range_days: rangeDays,
-          completion_rate: 0,
-          avg_time_to_close_hours: 0,
-          high_risk_jobs: 0,
-          evidence_count: 0,
-          jobs_with_evidence: 0,
-          jobs_without_evidence: 0,
-          avg_time_to_first_evidence_hours: 0,
-          trend: [],
-          jobs_total: 0,
-          jobs_scored: 0,
-          jobs_with_any_evidence: 0,
-          jobs_with_photo_evidence: 0,
-          jobs_missing_required_evidence: 0,
-          required_evidence_policy: "Photo required for high-risk jobs",
-          avg_time_to_first_photo_minutes: null,
-          trend_empty_reason: "no_jobs",
-        });
-      }
-
-      const mitigationsByChunk = chunkArray(jobIds, 500);
-      const mitigationsRaw: MitigationItem[] = [];
-      for (const ids of mitigationsByChunk) {
-        const { data, error } = await fetchAllPages<MitigationItem>(async (offset, limit) => {
-          const query = supabase
-            .from("mitigation_items")
-            .select("id, job_id, created_at, completed_at, completed_by")
-            .eq("organization_id", orgId)
-            .in("job_id", ids)
-            .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`);
-          const { data, error } = await query
-            .order("created_at", { ascending: true })
-            .range(offset, offset + limit - 1);
-          return { data, error };
-        });
-        if (error) throw error;
-        mitigationsRaw.push(...(data ?? []));
-      }
-
-      const documentsByChunk = chunkArray(jobIds, 500);
-      const documentsRaw: DocumentRecord[] = [];
-      for (const ids of documentsByChunk) {
-        const { data, error } = await fetchAllPages<DocumentRecord>(async (offset, limit) => {
-          const query = supabase
-            .from("documents")
-            .select("id, job_id, created_at, type")
-            .eq("organization_id", orgId)
-            .in("job_id", ids)
-            .gte("created_at", sinceIso);
-          const { data, error } = await query
-            .order("created_at", { ascending: true })
-            .range(offset, offset + limit - 1);
-          return { data, error };
-        });
-        if (error) throw error;
-        documentsRaw.push(...(data ?? []));
-      }
-
-      const mitigations = mitigationsRaw.filter((item) => {
-        if (!crewId) return true;
-        return item.completed_by === crewId;
+      const trend = trendRows.map((r) => {
+        const dateStr =
+          typeof r.period_key === "string"
+            ? r.period_key.slice(0, 10)
+            : new Date(r.period_key).toISOString().slice(0, 10);
+        return { date: dateStr, completion_rate: Number(r.completion_rate ?? 0) };
       });
-
-      const documents = documentsRaw;
-
-      const totalMitigations = mitigations.length;
-      const completedMitigations = mitigations.filter(
-        (item) => item.completed_at
-      );
-
-      const completionRate =
-        totalMitigations === 0
-          ? 0
-          : completedMitigations.length / totalMitigations;
-
-      const avgTimeToCloseHours =
-        completedMitigations.length === 0
-          ? 0
-          : completedMitigations.reduce((acc, item) => {
-              const createdAt = new Date(item.created_at).getTime();
-              const completedAt = new Date(item.completed_at as string).getTime();
-              const diffHours = (completedAt - createdAt) / (1000 * 60 * 60);
-              return acc + Math.max(diffHours, 0);
-            }, 0) / completedMitigations.length;
-
-      const highRiskJobs = (jobs || []).filter((job) => {
-        if (job.risk_score === null || job.risk_score === undefined) {
-          return false;
-        }
-        return job.risk_score >= 70;
-      }).length;
-
-      const evidenceCount = documents.length;
-
-      const jobEvidenceMap = documents.reduce<Record<string, string>>((acc, doc) => {
-        if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
-          acc[doc.job_id] = doc.created_at;
-        }
-        return acc;
-      }, {});
-
-      const jobsWithEvidence = Object.keys(jobEvidenceMap).length;
-      const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
-
-      // Photo evidence: only documents with type === "photo"
-      const photoDocuments = documents.filter((d) => (d as DocumentRecord).type === "photo");
-      const jobPhotoMap = photoDocuments.reduce<Record<string, string>>((acc, doc) => {
-        if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
-          acc[doc.job_id] = doc.created_at;
-        }
-        return acc;
-      }, {});
-      const jobsWithPhotoEvidence = Object.keys(jobPhotoMap).length;
-
-      // Calculate explicit evidence metrics
-      const jobsTotal = jobIds.length;
-      
-      // Jobs missing required evidence: high-risk jobs without photo evidence (policy: photo required)
-      const highRiskJobIds = (jobs || [])
-        .filter((job) => job.risk_score !== null && job.risk_score >= 70)
-        .map((job) => job.id);
-      const highRiskJobsWithoutPhotoEvidence = highRiskJobIds.filter(
-        (jobId) => !jobPhotoMap[jobId]
-      ).length;
-      const jobsMissingRequiredEvidence = highRiskJobsWithoutPhotoEvidence;
-
-      const avgTimeToFirstEvidenceHours =
-        jobsWithEvidence === 0
-          ? 0
-          : Object.entries(jobEvidenceMap).reduce((acc, [jobId, firstEvidence]) => {
-              const job = jobs?.find((item) => item.id === jobId);
-              if (!job) return acc;
-              const jobCreated = new Date(job.created_at).getTime();
-              const evidenceCreated = new Date(firstEvidence).getTime();
-              const diffHours = (evidenceCreated - jobCreated) / (1000 * 60 * 60);
-              return acc + Math.max(diffHours, 0);
-            }, 0) / jobsWithEvidence;
-      
-      const avgTimeToFirstPhotoMinutes =
-        jobsWithPhotoEvidence === 0
-          ? 0
-          : Object.entries(jobPhotoMap).reduce((acc, [jobId, firstPhotoAt]) => {
-              const job = jobs?.find((item) => item.id === jobId);
-              if (!job) return acc;
-              const jobCreated = new Date(job.created_at).getTime();
-              const photoCreated = new Date(firstPhotoAt).getTime();
-              const diffMinutes = (photoCreated - jobCreated) / (1000 * 60);
-              return acc + Math.max(diffMinutes, 0);
-            }, 0) / jobsWithPhotoEvidence;
-
-      // Trend (daily)
-      const trend: { date: string; completion_rate: number }[] = [];
-      const dateCursor = new Date(sinceDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      while (dateCursor <= today) {
-        const dateKey = dateCursor.toISOString().slice(0, 10);
-        const itemsForDay = mitigations.filter(
-          (item) => toDateKey(item.created_at) === dateKey
-        );
-        const dayCompleted = itemsForDay.filter((item) => {
-          if (!item.completed_at) return false;
-          return toDateKey(item.completed_at) === dateKey;
-        });
-
-        const dayRate =
-          itemsForDay.length === 0
-            ? 0
-            : dayCompleted.length / itemsForDay.length;
-
-        trend.push({
-          date: dateKey,
-          completion_rate: Number(dayRate.toFixed(3)),
-        });
-
-        dateCursor.setDate(dateCursor.getDate() + 1);
-      }
-
-      // Determine empty reasons
-      const trendEmptyReason = jobsTotal === 0 
-        ? 'no_jobs' 
-        : totalMitigations === 0 
-        ? 'no_events' 
-        : null;
 
       res.json({
         org_id: orgId,
         range_days: rangeDays,
-        completion_rate: Number(completionRate.toFixed(3)),
-        avg_time_to_close_hours: Number(avgTimeToCloseHours.toFixed(2)),
-        high_risk_jobs: highRiskJobs,
-        evidence_count: evidenceCount,
+        completion_rate: Number(kpiRow?.completion_rate ?? 0),
+        avg_time_to_close_hours: Number(kpiRow?.avg_time_to_close_hours ?? 0),
+        high_risk_jobs: Number(kpiRow?.high_risk_jobs ?? 0),
+        evidence_count: Number(kpiRow?.evidence_count ?? 0),
         jobs_with_evidence: jobsWithEvidence,
-        jobs_without_evidence: jobsWithoutEvidence,
-        avg_time_to_first_evidence_hours: Number(avgTimeToFirstEvidenceHours.toFixed(2)),
+        jobs_without_evidence: Number(kpiRow?.jobs_without_evidence ?? 0),
+        avg_time_to_first_evidence_hours: Number(kpiRow?.avg_time_to_first_evidence_hours ?? 0),
         trend,
-        // Explicit evidence denominators
         jobs_total: jobsTotal,
-        jobs_scored: (jobs || []).filter((job) => job.risk_score !== null).length,
-        jobs_with_any_evidence: jobsWithEvidence,
-        jobs_with_photo_evidence: jobsWithPhotoEvidence,
-        jobs_missing_required_evidence: jobsMissingRequiredEvidence,
-        required_evidence_policy: 'Photo required for high-risk jobs',
-        avg_time_to_first_photo_minutes: Math.round(avgTimeToFirstPhotoMinutes),
-        // Empty state reasons
+        jobs_scored: Number(kpiRow?.jobs_scored ?? 0),
+        jobs_with_any_evidence: Number(kpiRow?.jobs_with_any_evidence ?? 0),
+        jobs_with_photo_evidence: Number(kpiRow?.jobs_with_photo_evidence ?? 0),
+        jobs_missing_required_evidence: Number(kpiRow?.jobs_missing_required_evidence ?? 0),
+        required_evidence_policy: "Photo required for high-risk jobs",
+        avg_time_to_first_photo_minutes:
+          kpiRow?.avg_time_to_first_photo_minutes != null
+            ? Math.round(Number(kpiRow.avg_time_to_first_photo_minutes))
+            : null,
         trend_empty_reason: trendEmptyReason,
       });
     } catch (error: any) {
-      console.error("Analytics metrics error:", error);
-      res.status(500).json({ message: "Failed to fetch analytics metrics" });
+      console.error("Analytics mitigations error:", error);
+      res.status(500).json({ message: "Failed to fetch analytics mitigations" });
     }
   }
 );
