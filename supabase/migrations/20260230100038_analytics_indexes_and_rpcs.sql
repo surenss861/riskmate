@@ -86,7 +86,6 @@ BEGIN
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) != 'completed'
        AND j.due_date IS NOT NULL
        AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
-       AND j.created_at >= p_since AND j.created_at <= p_until
        AND j.due_date < v_now)
   ) INTO v_overdue_period;
 
