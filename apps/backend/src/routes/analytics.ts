@@ -419,7 +419,7 @@ analyticsRouter.get(
         jobs_assigned: number;
         jobs_completed: number;
         completion_rate: number;
-        avg_days_to_complete: number;
+        avg_days: number;
         overdue_count: number;
       };
       const byUser: Record<string, UserStats> = {};
@@ -433,7 +433,7 @@ analyticsRouter.get(
             jobs_assigned: 0,
             jobs_completed: 0,
             completion_rate: 0,
-            avg_days_to_complete: 0,
+            avg_days: 0,
             overdue_count: 0,
           };
         byUser[uid].jobs_assigned += 1;
@@ -465,14 +465,14 @@ analyticsRouter.get(
         const completion_rate =
           s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 10000;
         const durations = completedDurations[user_id] ?? [];
-        const avg_days_to_complete =
+        const avg_days =
           durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
         return {
           user_id,
           jobs_assigned: s.jobs_assigned,
           jobs_completed: s.jobs_completed,
           completion_rate,
-          avg_days_to_complete,
+          avg_days,
           overdue_count: s.overdue_count,
         };
       });
@@ -679,18 +679,22 @@ analyticsRouter.get(
       const jobsWithChecklistComplete = jobIds.filter(
         (jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total
       ).length;
-      const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
-      const signatureRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
+      const sigRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
       const photoRate = totalJobs === 0 ? 0 : jobsWithPhotoSet.size / totalJobs;
-      const overallRate =
-        totalJobs === 0 ? 0 : (signatureRate + photoRate + checklistRate) / 3;
+      const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
+      // Return percentages (0–100), not fractions: multiply by 100, then round; overall = average of percentage values
+      const signatures = Math.round(sigRate * 10000) / 100;
+      const photos = Math.round(photoRate * 10000) / 100;
+      const checklists = Math.round(checklistRate * 10000) / 100;
+      const overall =
+        totalJobs === 0 ? 0 : Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
 
       return res.json({
         period: `${days}d`,
-        signatures: Math.round(signatureRate * 10000) / 100,
-        photos: Math.round(photoRate * 10000) / 100,
-        checklists: Math.round(checklistRate * 10000) / 100,
-        overall: Math.round(overallRate * 10000) / 100,
+        signatures,
+        photos,
+        checklists,
+        overall,
       });
     } catch (error: any) {
       console.error("Analytics compliance-rate error:", error);
