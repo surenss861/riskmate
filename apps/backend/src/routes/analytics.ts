@@ -516,6 +516,7 @@ analyticsRouter.get(
         const { data: userRows } = await supabase
           .from("users")
           .select("id, full_name")
+          .eq("organization_id", orgId)
           .in("id", userIds);
         for (const u of userRows || []) {
           const name = (u as { id: string; full_name: string | null }).full_name ?? "";
