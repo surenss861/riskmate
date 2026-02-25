@@ -438,8 +438,7 @@ analyticsRouter.get(
         };
       });
       members.sort((a, b) => b.jobs_completed - a.jobs_completed);
-      const topMembers = members.slice(0, 50);
-      const userIds = topMembers.map((m) => m.user_id);
+      const userIds = members.map((m) => m.user_id);
       const userMap = new Map<string, string>();
       if (userIds.length > 0) {
         const { data: userRows } = await supabase
@@ -451,7 +450,7 @@ analyticsRouter.get(
           userMap.set((u as { id: string }).id, name.trim() || "Unknown");
         }
       }
-      const membersWithNames = topMembers.map((m) => ({
+      const membersWithNames = members.map((m) => ({
         ...m,
         name: userMap.get(m.user_id) ?? "Unknown",
       }));
