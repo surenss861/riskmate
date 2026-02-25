@@ -276,6 +276,7 @@ export async function GET(request: NextRequest) {
           const res = await supabase
             .from('documents')
             .select('id, job_id, created_at, type')
+            .eq('organization_id', orgId)
             .in('job_id', ids)
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)

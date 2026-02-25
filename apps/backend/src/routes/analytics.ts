@@ -317,7 +317,9 @@ analyticsRouter.get(
           const photoRate = n === 0 ? 0 : cur.photoCount / n;
           const checklistRate = n === 0 ? 0 : cur.checklistCompleteCount / n;
           const value = (sigRate + photoRate + checklistRate) / 3;
-          points.push({ period, value: Math.round(value * 10000) / 10000, label: period });
+          // Scale to 0–100 percentage to match /analytics/compliance-rate and other analytics endpoints
+          const valuePct = Math.round(value * 10000) / 100;
+          points.push({ period, value: valuePct, label: period });
         }
       } else {
         for (const j of jobList) {
@@ -1083,6 +1085,7 @@ analyticsRouter.get(
           supabase
             .from("documents")
             .select("id, job_id, created_at, type")
+            .eq("organization_id", orgId)
             .in("job_id", ids)
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1)
