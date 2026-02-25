@@ -15,6 +15,6 @@ $$;
 
 DROP TRIGGER IF EXISTS jobs_set_completed_at_on_completed ON jobs;
 CREATE TRIGGER jobs_set_completed_at_on_completed
-  BEFORE UPDATE ON jobs
+  BEFORE INSERT OR UPDATE ON jobs
   FOR EACH ROW
   EXECUTE FUNCTION public.set_jobs_completed_at_on_status_completed();

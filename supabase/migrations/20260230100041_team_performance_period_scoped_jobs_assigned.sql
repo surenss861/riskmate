@@ -37,8 +37,20 @@ AS $$
         OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
       )
   ),
-  -- Open assigned jobs: no created_at window so overdue_count includes pre-period backlog
+  -- Open assigned jobs with created_at in period (for period-scoped jobs_assigned)
   open_jobs AS (
+    SELECT j.assigned_to_id, j.id,
+      (j.due_date IS NOT NULL AND j.due_date < clock_timestamp()) AS is_overdue
+    FROM jobs j
+    WHERE j.organization_id = p_org_id
+      AND j.deleted_at IS NULL
+      AND LOWER(COALESCE(j.status, '')) != 'completed'
+      AND j.assigned_to_id IS NOT NULL
+      AND j.created_at >= p_since
+      AND j.created_at <= p_until
+  ),
+  -- All-time open jobs for overdue_count only (includes pre-period backlog)
+  open_jobs_all_time AS (
     SELECT j.assigned_to_id, j.id,
       (j.due_date IS NOT NULL AND j.due_date < clock_timestamp()) AS is_overdue
     FROM jobs j
@@ -71,7 +83,7 @@ AS $$
   ),
   open_overdue_per_user AS (
     SELECT assigned_to_id, COUNT(*) FILTER (WHERE is_overdue)::BIGINT AS overdue_open
-    FROM open_jobs
+    FROM open_jobs_all_time
     GROUP BY assigned_to_id
   )
   SELECT
@@ -88,4 +100,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned = completed in period + all open assigned; overdue_count includes all open overdue (no created_at window on open_jobs).';
+  'Returns per-user team performance aggregates; jobs_assigned = completed in period + open jobs created in [p_since, p_until]; overdue_count includes all open overdue (all-time open_jobs_all_time).';
