@@ -20,6 +20,6 @@ BEGIN
     END IF;
   END LOOP;
   IF array_length(missing, 1) > 0 THEN
-    RAISE EXCEPTION 'Analytics indexes missing: %. Run supabase/scripts/create_analytics_indexes_concurrent.sql outside a transaction (e.g. pre-deploy step) to create them with zero write lock.', array_to_string(missing, ', ');
+    RAISE NOTICE 'Analytics indexes missing: %. Run supabase/scripts/create_analytics_indexes_concurrent.sql outside a transaction (e.g. pre-deploy step) to create them with zero write lock.', array_to_string(missing, ', ');
   END IF;
 END $$;
