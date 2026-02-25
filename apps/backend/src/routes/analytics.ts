@@ -1073,6 +1073,7 @@ analyticsRouter.get(
               .select("id, job_id")
               .eq("organization_id", orgId)
               .in("job_id", idChunk)
+              .gte("created_at", sinceIso)
               .order("created_at", { ascending: false })
               .range(o, o + l - 1);
             return { data, error };

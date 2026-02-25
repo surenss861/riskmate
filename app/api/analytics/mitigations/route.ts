@@ -268,6 +268,8 @@ export async function GET(request: NextRequest) {
             query = query
               .gte('created_at', sinceIso)
               .or(`completed_at.is.null,completed_at.gte.${sinceIso}`)
+          } else {
+            query = query.or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
           }
           const res = await query
             .order('created_at', { ascending: true })
@@ -286,14 +288,12 @@ export async function GET(request: NextRequest) {
       const out: any[] = []
       for (const ids of documentsByChunk) {
         const { data, error } = await fetchAllPages<any>(async (offset, limit) => {
-          let query = supabase
+          const query = supabase
             .from('documents')
             .select('id, job_id, created_at, type')
             .eq('organization_id', orgId)
             .in('job_id', ids)
-          if (crewId) {
-            query = query.gte('created_at', sinceIso)
-          }
+            .gte('created_at', sinceIso)
           const res = await query
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)
