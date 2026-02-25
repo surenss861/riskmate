@@ -123,10 +123,13 @@ dashboardRouter.get(
         return (sigRate + photoRate + checklistRate) / 3;
       }
 
-      const [compliance_rate, prev_compliance_rate] = await Promise.all([
+      const [compliance_rate_fraction, prev_compliance_rate_fraction] = await Promise.all([
         computeComplianceRate(currentJobIds),
         computeComplianceRate(previousJobIds),
       ]);
+      // Expose as 0–100 percent to align with /api/analytics/compliance-rate
+      const compliance_rate = Math.round(compliance_rate_fraction * 10000) / 100;
+      const prev_compliance_rate = Math.round(prev_compliance_rate_fraction * 10000) / 100;
 
       const prev_total = previousJobs.length;
       const prev_completed = previousJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;

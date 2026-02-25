@@ -156,14 +156,21 @@ analyticsRouter.get(
       if (useMv) {
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
-        const { data: mvRows, error: mvError } = await supabase
-          .from("analytics_weekly_job_stats")
-          .select("week_start, jobs_created, jobs_completed, avg_risk")
-          .eq("organization_id", orgId)
-          .gte("week_start", sinceWeek)
-          .lte("week_start", untilWeek)
-          .order("week_start", { ascending: true })
-          .limit(MAX_FETCH_LIMIT);
+        const { data: mvRows, error: mvError } = await fetchAllPages<{
+          week_start: string;
+          jobs_created: number;
+          jobs_completed: number;
+          avg_risk: number | null;
+        }>((offset, limit) =>
+          supabase
+            .from("analytics_weekly_job_stats")
+            .select("week_start, jobs_created, jobs_completed, avg_risk")
+            .eq("organization_id", orgId)
+            .gte("week_start", sinceWeek)
+            .lte("week_start", untilWeek)
+            .order("week_start", { ascending: true })
+            .range(offset, offset + limit - 1)
+        );
 
         if (!mvError && mvRows && mvRows.length > 0) {
           const rows = mvRows as { week_start: string; jobs_created: number; jobs_completed: number; avg_risk: number | null }[];
@@ -205,15 +212,22 @@ analyticsRouter.get(
         }
       }
 
-      const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
-        .select("id, risk_score, status, created_at")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: jobs, error: jobsError } = await fetchAllPages<{
+        id: string;
+        risk_score: number | null;
+        status: string | null;
+        created_at: string;
+      }>((offset, limit) =>
+        supabase
+          .from("jobs")
+          .select("id, risk_score, status, created_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
 
       if (jobsError) throw jobsError;
       const jobList = (jobs || []) as { id: string; risk_score: number | null; status: string | null; created_at: string }[];
@@ -227,14 +241,47 @@ analyticsRouter.get(
 
       if (metric === "compliance" && jobList.length > 0) {
         const trendJobIds = jobList.map((j) => j.id);
-        const [sigRes, photoRes, checklistRes] = await Promise.all([
-          supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", trendJobIds).order("signed_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
-          supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", trendJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
-          supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", orgId).in("job_id", trendJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
-        ]);
-        const jobsWithSigSet = new Set((sigRes.data || []).map((r: { job_id: string }) => r.job_id));
-        const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: { job_id: string }) => r.job_id));
-        const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
+        const jobsWithSigSet = new Set<string>();
+        const jobsWithPhotoSet = new Set<string>();
+        const mitigationList: { job_id: string; completed_at: string | null }[] = [];
+        for (const idChunk of chunkArray(trendJobIds, 500)) {
+          const [sigRes, photoRes, checklistRes] = await Promise.all([
+            fetchAllPages<{ job_id: string }>((o, l) =>
+              supabase
+                .from("signatures")
+                .select("job_id")
+                .eq("organization_id", orgId)
+                .in("job_id", idChunk)
+                .order("signed_at", { ascending: false })
+                .range(o, o + l - 1)
+            ),
+            fetchAllPages<{ job_id: string }>((o, l) =>
+              supabase
+                .from("documents")
+                .select("job_id")
+                .eq("organization_id", orgId)
+                .eq("type", "photo")
+                .in("job_id", idChunk)
+                .order("created_at", { ascending: false })
+                .range(o, o + l - 1)
+            ),
+            fetchAllPages<{ job_id: string; completed_at: string | null }>((o, l) =>
+              supabase
+                .from("mitigation_items")
+                .select("job_id, completed_at")
+                .eq("organization_id", orgId)
+                .in("job_id", idChunk)
+                .order("created_at", { ascending: false })
+                .range(o, o + l - 1)
+            ),
+          ]);
+          if (sigRes.error) throw sigRes.error;
+          if (photoRes.error) throw photoRes.error;
+          if (checklistRes.error) throw checklistRes.error;
+          (sigRes.data ?? []).forEach((r) => jobsWithSigSet.add(r.job_id));
+          (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
+          mitigationList.push(...(checklistRes.data ?? []));
+        }
 
         // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
         const byJobTrend: Record<string, { total: number; completed: number }> = {};
