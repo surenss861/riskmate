@@ -2,8 +2,8 @@
 /**
  * Worker Metrics Endpoint
  *
- * Provides observability into export queue, worker health, and system state
- * Useful for monitoring and debugging
+ * Provides observability into export queue, worker health, analytics (cache, timings), and system state.
+ * Useful for monitoring and debugging.
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -14,6 +14,7 @@ const express_1 = __importDefault(require("express"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const auth_1 = require("../middleware/auth");
 const errorResponse_1 = require("../utils/errorResponse");
+const analytics_1 = require("./analytics");
 exports.metricsRouter = express_1.default.Router();
 // GET /api/metrics/exports
 // Returns export queue metrics
@@ -90,6 +91,27 @@ exports.metricsRouter.get('/exports', auth_1.authenticate, async (req, res) => {
         console.error('[Metrics] Error:', err);
         const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
             message: 'Failed to fetch metrics',
+            internalMessage: err?.message || String(err),
+            code: 'METRICS_ERROR',
+            requestId,
+            statusCode: 500,
+        });
+        res.setHeader('X-Error-ID', errorId);
+        res.status(500).json(errorResponse);
+    }
+});
+// GET /api/metrics/analytics — analytics observability (insights cache hit rate, etc.)
+exports.metricsRouter.get('/analytics', auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const requestId = authReq.requestId || 'unknown';
+    try {
+        const observability = (0, analytics_1.getAnalyticsObservability)();
+        res.json({ data: observability });
+    }
+    catch (err) {
+        console.error('[Metrics] Analytics observability error:', err);
+        const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+            message: 'Failed to fetch analytics metrics',
             internalMessage: err?.message || String(err),
             code: 'METRICS_ERROR',
             requestId,

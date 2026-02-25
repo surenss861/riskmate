@@ -172,7 +172,7 @@ analyticsRouter.get(
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];
-      const periodLabel = periodKey === "1y" ? "1y" : `${days}d";
+      const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
 
       // Compliance trend: SQL-side aggregation only (no full row fetch)
       if (metric === "compliance") {
@@ -371,7 +371,7 @@ analyticsRouter.get(
 );
 
 // GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days, overdue_count per user
-// Server-side aggregate via get_team_performance_kpis RPC; jobs_assigned includes all open assigned (including pre-period).
+// Server-side aggregate via get_team_performance_kpis RPC; jobs_assigned is period-scoped (completed in period + open jobs created in period).
 analyticsRouter.get(
   "/team-performance",
   authenticate as unknown as express.RequestHandler,

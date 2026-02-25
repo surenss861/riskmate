@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyticsRouter = void 0;
+exports.getAnalyticsObservability = getAnalyticsObservability;
 const express_1 = __importDefault(require("express"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const auth_1 = require("../middleware/auth");
@@ -12,13 +13,31 @@ exports.analyticsRouter = express_1.default.Router();
 // In-memory cache for insights: 1h TTL per org
 const INSIGHTS_CACHE_TTL_MS = 60 * 60 * 1000;
 const insightsCache = new Map();
+let insightsCacheHits = 0;
+let insightsCacheMisses = 0;
 async function getCachedInsights(orgId) {
     const entry = insightsCache.get(orgId);
-    if (entry && Date.now() < entry.expires)
+    if (entry && Date.now() < entry.expires) {
+        insightsCacheHits += 1;
         return entry.data;
+    }
+    insightsCacheMisses += 1;
     const data = await (0, insights_1.generateInsights)(orgId);
     insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
     return data;
+}
+/** Analytics observability: cache hit rates and entry count for metrics endpoint. */
+function getAnalyticsObservability() {
+    const total = insightsCacheHits + insightsCacheMisses;
+    const hit_rate = total === 0 ? 0 : Math.round((insightsCacheHits / total) * 10000) / 100;
+    return {
+        insights_cache: {
+            hits: insightsCacheHits,
+            misses: insightsCacheMisses,
+            hit_rate,
+            entries: insightsCache.size,
+        },
+    };
 }
 const PAGE_SIZE = 2000;
 /** Fetch all rows by paginating; no cap. */
@@ -118,6 +137,30 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
                     : "jobs";
         const { since, until } = dateRangeForDays(days);
         const points = [];
+        const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
+        // Compliance trend: SQL-side aggregation only (no full row fetch)
+        if (metric === "compliance") {
+            const { data: complianceRows, error: complianceError } = await supabaseClient_1.supabase.rpc("get_trends_compliance_buckets", {
+                p_org_id: orgId,
+                p_since: since,
+                p_until: until,
+                p_group_by: groupBy,
+            });
+            if (!complianceError && complianceRows && Array.isArray(complianceRows)) {
+                const compPoints = complianceRows.map((r) => {
+                    const total = Number(r.total ?? 0);
+                    const sigRate = total === 0 ? 0 : Number(r.with_signature ?? 0) / total;
+                    const photoRate = total === 0 ? 0 : Number(r.with_photo ?? 0) / total;
+                    const checklistRate = total === 0 ? 0 : Number(r.checklist_complete ?? 0) / total;
+                    const valuePct = total === 0 ? 0 : Math.round(((sigRate + photoRate + checklistRate) / 3) * 10000) / 100;
+                    const periodStr = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : new Date(r.period_key).toISOString().slice(0, 10);
+                    return { period: periodStr, value: valuePct, label: periodStr };
+                });
+                return res.json({ period: periodLabel, groupBy, metric, data: compPoints });
+            }
+            if (complianceError)
+                throw complianceError;
+        }
         const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
         if (useMv) {
             const sinceWeek = weekStart(new Date(since));
@@ -196,137 +239,45 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         const bucketValues = new Map();
         const bucketRiskSums = new Map();
         const bucketCompletion = new Map();
-        if (metric === "compliance" && jobList.length > 0) {
-            const trendJobIds = jobList.map((j) => j.id);
-            const jobsWithSigSet = new Set();
-            const jobsWithPhotoSet = new Set();
-            const mitigationList = [];
-            for (const idChunk of chunkArray(trendJobIds, 500)) {
-                const [sigRes, photoRes, checklistRes] = await Promise.all([
-                    fetchAllPages(async (o, l) => {
-                        const { data, error } = await supabaseClient_1.supabase
-                            .from("signatures")
-                            .select("job_id")
-                            .eq("organization_id", orgId)
-                            .in("job_id", idChunk)
-                            .order("signed_at", { ascending: false })
-                            .range(o, o + l - 1);
-                        return { data, error };
-                    }),
-                    fetchAllPages(async (o, l) => {
-                        const { data, error } = await supabaseClient_1.supabase
-                            .from("documents")
-                            .select("job_id")
-                            .eq("organization_id", orgId)
-                            .eq("type", "photo")
-                            .in("job_id", idChunk)
-                            .order("created_at", { ascending: false })
-                            .range(o, o + l - 1);
-                        return { data, error };
-                    }),
-                    fetchAllPages(async (o, l) => {
-                        const { data, error } = await supabaseClient_1.supabase
-                            .from("mitigation_items")
-                            .select("job_id, completed_at")
-                            .eq("organization_id", orgId)
-                            .in("job_id", idChunk)
-                            .order("created_at", { ascending: false })
-                            .range(o, o + l - 1);
-                        return { data, error };
-                    }),
-                ]);
-                if (sigRes.error)
-                    throw sigRes.error;
-                if (photoRes.error)
-                    throw photoRes.error;
-                if (checklistRes.error)
-                    throw checklistRes.error;
-                (sigRes.data ?? []).forEach((r) => jobsWithSigSet.add(r.job_id));
-                (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
-                mitigationList.push(...(checklistRes.data ?? []));
-            }
-            // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
-            const byJobTrend = {};
-            for (const j of jobList)
-                byJobTrend[j.id] = { total: 0, completed: 0 };
-            for (const m of mitigationList) {
-                if (!byJobTrend[m.job_id])
-                    continue;
-                byJobTrend[m.job_id].total += 1;
-                if (m.completed_at)
-                    byJobTrend[m.job_id].completed += 1;
-            }
-            const jobChecklistCompleteSet = new Set(jobList.filter((j) => byJobTrend[j.id].total === 0 || byJobTrend[j.id].completed === byJobTrend[j.id].total).map((j) => j.id));
-            const bucketCompliance = new Map();
-            for (const j of jobList) {
-                const key = getBucketKey(new Date(j.created_at));
-                let cur = bucketCompliance.get(key);
-                if (!cur) {
-                    cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistCompleteCount: 0 };
-                    bucketCompliance.set(key, cur);
-                }
-                cur.jobIds.push(j.id);
-                if (jobsWithSigSet.has(j.id))
-                    cur.sigCount += 1;
-                if (jobsWithPhotoSet.has(j.id))
-                    cur.photoCount += 1;
-                if (jobChecklistCompleteSet.has(j.id))
-                    cur.checklistCompleteCount += 1;
-            }
-            for (const [period] of [...bucketCompliance.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const cur = bucketCompliance.get(period);
-                const n = cur.jobIds.length;
-                const sigRate = n === 0 ? 0 : cur.sigCount / n;
-                const photoRate = n === 0 ? 0 : cur.photoCount / n;
-                const checklistRate = n === 0 ? 0 : cur.checklistCompleteCount / n;
-                const value = (sigRate + photoRate + checklistRate) / 3;
-                // Scale to 0–100 percentage to match /analytics/compliance-rate and other analytics endpoints
-                const valuePct = Math.round(value * 10000) / 100;
-                points.push({ period, value: valuePct, label: period });
-            }
-        }
-        else {
-            for (const j of jobList) {
-                const key = getBucketKey(new Date(j.created_at));
-                const completed = j.status?.toLowerCase() === "completed";
-                if (metric === "completion") {
-                    const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
-                    cur.total += 1;
-                    if (completed)
-                        cur.completed += 1;
-                    bucketCompletion.set(key, cur);
-                }
-                else if (metric === "jobs") {
-                    bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
-                }
-                else if (metric === "risk" && j.risk_score != null) {
-                    const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
-                    cur.sum += j.risk_score;
-                    cur.count += 1;
-                    bucketRiskSums.set(key, cur);
-                }
-            }
+        for (const j of jobList) {
+            const key = getBucketKey(new Date(j.created_at));
+            const completed = j.status?.toLowerCase() === "completed";
             if (metric === "completion") {
-                for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                    const { total, completed } = bucketCompletion.get(period);
-                    const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
-                    points.push({ period, value, label: period });
-                }
+                const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
+                cur.total += 1;
+                if (completed)
+                    cur.completed += 1;
+                bucketCompletion.set(key, cur);
             }
             else if (metric === "jobs") {
-                for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                    points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
-                }
+                bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
             }
-            else if (metric === "risk") {
-                for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                    const { sum, count } = bucketRiskSums.get(period);
-                    const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
-                    points.push({ period, value, label: period });
-                }
+            else if (metric === "risk" && j.risk_score != null) {
+                const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
+                cur.sum += j.risk_score;
+                cur.count += 1;
+                bucketRiskSums.set(key, cur);
             }
         }
-        const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
+        if (metric === "completion") {
+            for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                const { total, completed } = bucketCompletion.get(period);
+                const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
+                points.push({ period, value, label: period });
+            }
+        }
+        else if (metric === "jobs") {
+            for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
+            }
+        }
+        else if (metric === "risk") {
+            for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                const { sum, count } = bucketRiskSums.get(period);
+                const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+                points.push({ period, value, label: period });
+            }
+        }
         return res.json({ period: periodLabel, groupBy, metric, data: points });
     }
     catch (error) {
@@ -334,7 +285,7 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         return res.status(500).json({ message: "Failed to fetch analytics trends" });
     }
 });
-// GET /api/analytics/risk-heatmap — aggregate by job_type and day_of_week (30d/90d), avg_risk and count per bucket
+// GET /api/analytics/risk-heatmap — SQL-side aggregation by job_type and day_of_week
 exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -349,39 +300,20 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const { data: jobs, error } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("job_type, risk_score, created_at")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
+        const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_risk_heatmap_buckets", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
         });
         if (error)
             throw error;
-        const list = (jobs || []);
-        const bucketSums = {};
-        for (const j of list) {
-            const jobType = j.job_type ?? "other";
-            const dayOfWeek = new Date(j.created_at).getUTCDay();
-            const key = `${jobType}|${dayOfWeek}`;
-            if (!bucketSums[key])
-                bucketSums[key] = { sum: 0, count: 0, riskCount: 0 };
-            bucketSums[key].count += 1;
-            if (j.risk_score != null) {
-                bucketSums[key].sum += j.risk_score;
-                bucketSums[key].riskCount += 1;
-            }
-        }
-        const buckets = Object.entries(bucketSums).map(([key, { sum, count, riskCount }]) => {
-            const [job_type, day_of_week_str] = key.split("|");
-            const avg_risk = riskCount === 0 ? 0 : Math.round((sum / riskCount) * 100) / 100;
-            return { job_type, day_of_week: parseInt(day_of_week_str, 10), avg_risk, count };
-        });
+        const list = (Array.isArray(rows) ? rows : []);
+        const buckets = list.map((r) => ({
+            job_type: r.job_type ?? "other",
+            day_of_week: Number(r.day_of_week ?? 0),
+            avg_risk: Number(r.avg_risk ?? 0),
+            count: Number(r.count ?? 0),
+        }));
         return res.json({ period: `${days}d`, buckets });
     }
     catch (error) {
@@ -389,9 +321,8 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
         return res.status(500).json({ message: "Failed to fetch risk heatmap" });
     }
 });
-// GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days to complete, overdue_count per user
-// Per-user dataset is built from jobs completed within the requested period (completed_at with fallback updated_at), regardless of created_at.
-// Overdue counts are based on due_date vs completion/now for a clearly defined window, not restricted solely by created_at.
+// GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days, overdue_count per user
+// Server-side aggregate via get_team_performance_kpis RPC; jobs_assigned includes all open assigned (including pre-period).
 exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -406,158 +337,28 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const nowDate = new Date();
-        const nowIso = nowDate.toISOString();
-        const effectiveCompletion = (j) => j.completed_at ?? j.updated_at ?? j.created_at;
-        // Jobs completed within the requested period (completed_at fallback updated_at), regardless of created_at.
-        const completedById = new Map();
-        const addCompletedInPeriod = async (queryFn) => {
-            const { data, error } = await fetchAllPages(queryFn);
-            if (error)
-                throw error;
-            for (const j of data ?? []) {
-                const ts = effectiveCompletion(j);
-                if (ts >= since && ts <= until)
-                    completedById.set(j.id, j);
-            }
-        };
-        await addCompletedInPeriod(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .eq("status", "completed")
-                .gte("completed_at", since)
-                .lte("completed_at", until)
-                .order("completed_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data: data, error };
+        const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_team_performance_kpis", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
         });
-        await addCompletedInPeriod(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .eq("status", "completed")
-                .is("completed_at", null)
-                .gte("updated_at", since)
-                .lte("updated_at", until)
-                .order("updated_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data: data, error };
-        });
-        const completedInPeriodList = [...completedById.values()];
-        const byUser = {};
-        // Jobs assigned and created in period (for denominator: assigned-in-period = completed-in-period + open-created-in-period).
-        const { data: openCreatedInPeriod, error: openErr } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .neq("status", "completed")
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
-        });
-        if (openErr)
-            throw openErr;
-        const openInPeriodList = (openCreatedInPeriod ?? []);
-        const assignedInPeriodByUser = new Map();
-        for (const j of completedInPeriodList) {
-            const uid = j.assigned_to_id ?? "unassigned";
-            if (uid === "unassigned")
-                continue;
-            if (!assignedInPeriodByUser.has(uid))
-                assignedInPeriodByUser.set(uid, new Set());
-            assignedInPeriodByUser.get(uid).add(j.id);
-        }
-        for (const j of openInPeriodList) {
-            const uid = j.assigned_to_id ?? "unassigned";
-            if (uid === "unassigned")
-                continue;
-            if (!assignedInPeriodByUser.has(uid))
-                assignedInPeriodByUser.set(uid, new Set());
-            assignedInPeriodByUser.get(uid).add(j.id);
-        }
-        for (const uid of assignedInPeriodByUser.keys()) {
-            if (uid === "unassigned")
-                continue;
-            byUser[uid] = {
-                jobs_assigned: 0,
-                jobs_completed: 0,
-                completion_rate: 0,
-                avg_days: 0,
-                overdue_count: 0,
-            };
-        }
-        for (const j of completedInPeriodList) {
-            const uid = j.assigned_to_id ?? "unassigned";
-            if (uid === "unassigned")
-                continue;
-            byUser[uid].jobs_completed += 1;
-        }
-        for (const [uid, jobIds] of assignedInPeriodByUser) {
-            if (uid === "unassigned")
-                continue;
-            byUser[uid].jobs_assigned = jobIds.size;
-        }
-        const completedDurations = {};
-        for (const j of completedInPeriodList) {
-            if (j.assigned_to_id == null)
-                continue;
-            const completionTs = effectiveCompletion(j);
-            const created = new Date(j.created_at).getTime();
-            const completed = new Date(completionTs).getTime();
-            const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
-            if (!completedDurations[j.assigned_to_id])
-                completedDurations[j.assigned_to_id] = [];
-            completedDurations[j.assigned_to_id].push(daysToComplete);
-        }
-        // Overdue: (1) completed in period but completed after due_date, (2) currently open jobs assigned to user with due_date < now (all org, not restricted by created_at).
-        const { data: openJobsAll, error: openAllErr } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, assigned_to_id, status, due_date, completed_at, updated_at, created_at")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .neq("status", "completed")
-                .range(offset, offset + limit - 1);
-            return { data, error };
-        });
-        if (openAllErr)
-            throw openAllErr;
-        const openJobsList = (openJobsAll ?? []);
-        for (const j of completedInPeriodList) {
-            const uid = j.assigned_to_id ?? "unassigned";
-            if (uid === "unassigned" || !j.due_date)
-                continue;
-            const completionTs = effectiveCompletion(j);
-            if (new Date(completionTs) > new Date(j.due_date))
-                byUser[uid].overdue_count += 1;
-        }
-        for (const j of openJobsList) {
-            const uid = j.assigned_to_id ?? "unassigned";
-            if (uid === "unassigned" || !byUser[uid])
-                continue;
-            if (j.due_date && j.due_date < nowIso)
-                byUser[uid].overdue_count += 1;
-        }
-        const members = Object.entries(byUser).map(([user_id, s]) => {
-            const completion_rate = s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 100;
-            const durations = completedDurations[user_id] ?? [];
-            const avg_days = durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
+        if (rpcError)
+            throw rpcError;
+        const rows = (Array.isArray(kpiRows) ? kpiRows : []);
+        const members = rows.map((r) => {
+            const jobs_assigned = Number(r.jobs_assigned ?? 0);
+            const jobs_completed = Number(r.jobs_completed ?? 0);
+            const completion_rate = jobs_assigned === 0 ? 0 : Math.round((jobs_completed / jobs_assigned) * 10000) / 100;
+            const count_completed = Number(r.count_completed ?? 0);
+            const sum_days = Number(r.sum_days ?? 0);
+            const avg_days = count_completed === 0 ? 0 : Math.round((sum_days / count_completed) * 100) / 100;
             return {
-                user_id,
-                jobs_assigned: s.jobs_assigned,
-                jobs_completed: s.jobs_completed,
+                user_id: r.user_id,
+                jobs_assigned,
+                jobs_completed,
                 completion_rate,
                 avg_days,
-                overdue_count: s.overdue_count,
+                overdue_count: Number(r.overdue_count ?? 0),
             };
         });
         members.sort((a, b) => b.jobs_completed - a.jobs_completed);
@@ -585,7 +386,7 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
         return res.status(500).json({ message: "Failed to fetch team performance" });
     }
 });
-// GET /api/analytics/hazard-frequency — groupBy type|location, count and avg_risk per category, trend vs previous window
+// GET /api/analytics/hazard-frequency — SQL-side aggregation by type|location, trend vs previous window
 exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -601,94 +402,30 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
         const groupBy = authReq.query.groupBy === "location" ? "location" : "type";
-        const { data: items, error } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("mitigation_items")
-                .select("id, job_id, code, title, factor_id")
-                .eq("organization_id", orgId)
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
+        const prevUntil = since;
+        const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+        const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_hazard_frequency_buckets", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
+            p_prev_since: prevSince,
+            p_prev_until: prevUntil,
+            p_group_by: groupBy,
         });
         if (error)
             throw error;
-        const itemList = (items ?? []);
-        const jobIds = [...new Set(itemList.map((m) => m.job_id))];
-        const jobMap = new Map();
-        for (const idChunk of chunkArray(jobIds, 500)) {
-            const { data: jobsData } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, risk_score, location")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .in("id", idChunk);
-            for (const j of jobsData ?? []) {
-                const row = j;
-                jobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
-            }
-        }
-        const current = {};
-        for (const m of itemList) {
-            const category = groupBy === "location" ? (jobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
-            if (!current[category])
-                current[category] = { count: 0, riskSum: 0, riskCount: 0 };
-            current[category].count += 1;
-            const score = jobMap.get(m.job_id)?.risk_score;
-            if (score != null) {
-                current[category].riskSum += score;
-                current[category].riskCount += 1;
-            }
-        }
-        const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
-        const prevUntil = since;
-        const { data: prevItems } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("mitigation_items")
-                .select("id, job_id, code, title, factor_id")
-                .eq("organization_id", orgId)
-                .gte("created_at", prevSince)
-                .lt("created_at", prevUntil)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
+        const list = (Array.isArray(rows) ? rows : []);
+        const itemsOut = list.map((r) => {
+            const count = Number(r.count ?? 0);
+            const prevCount = Number(r.prev_count ?? 0);
+            const trend = prevCount === 0 ? (count > 0 ? "up" : "neutral") : count > prevCount ? "up" : count < prevCount ? "down" : "neutral";
+            return {
+                category: r.category ?? "unknown",
+                count,
+                avg_risk: Number(r.avg_risk ?? 0),
+                trend,
+            };
         });
-        const prevList = (prevItems ?? []);
-        const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
-        const prevJobMap = new Map();
-        for (const idChunk of chunkArray(prevJobIds, 500)) {
-            const { data: prevJobsData } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, risk_score, location")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .in("id", idChunk);
-            for (const j of prevJobsData ?? []) {
-                const row = j;
-                prevJobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
-            }
-        }
-        const prev = {};
-        for (const m of prevList) {
-            const category = groupBy === "location" ? (prevJobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
-            if (!prev[category])
-                prev[category] = { count: 0, riskSum: 0, riskCount: 0 };
-            prev[category].count += 1;
-            const score = prevJobMap.get(m.job_id)?.risk_score;
-            if (score != null) {
-                prev[category].riskSum += score;
-                prev[category].riskCount += 1;
-            }
-        }
-        const itemsOut = Object.entries(current).map(([category, s]) => {
-            const avg_risk = s.riskCount === 0 ? 0 : Math.round((s.riskSum / s.riskCount) * 100) / 100;
-            const prevS = prev[category];
-            const prevCount = prevS?.count ?? 0;
-            const trend = prevCount === 0 ? (s.count > 0 ? "up" : "neutral") : s.count > prevCount ? "up" : s.count < prevCount ? "down" : "neutral";
-            return { category, count: s.count, avg_risk, trend };
-        });
-        itemsOut.sort((a, b) => b.count - a.count);
         return res.json({ period: `${days}d`, groupBy, items: itemsOut.slice(0, 100) });
     }
     catch (error) {
@@ -696,7 +433,7 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         return res.status(500).json({ message: "Failed to fetch hazard frequency" });
     }
 });
-// GET /api/analytics/compliance-rate — signature completion, photo upload, checklist completion, overall rate
+// GET /api/analytics/compliance-rate — SQL-side aggregation: signature, photo, checklist, overall (0–100)
 exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -718,22 +455,15 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const { data: jobList, error: jobsError } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
+        const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_compliance_rate_kpis", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
         });
-        if (jobsError)
-            throw jobsError;
-        const jobIds = (jobList ?? []).map((j) => j.id);
-        const totalJobs = jobIds.length;
+        if (rpcError)
+            throw rpcError;
+        const row = Array.isArray(kpiRows) ? kpiRows[0] : kpiRows;
+        const totalJobs = Number(row?.total_jobs ?? 0);
         if (totalJobs === 0) {
             return res.json({
                 period: `${days}d`,
@@ -743,73 +473,13 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
                 overall: 0,
             });
         }
-        const jobsWithSignatureSet = new Set();
-        const jobsWithPhotoSet = new Set();
-        const mitigationList = [];
-        for (const idChunk of chunkArray(jobIds, 500)) {
-            const [sigRes, photoRes, checklistRes] = await Promise.all([
-                fetchAllPages(async (o, l) => {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("signatures")
-                        .select("job_id")
-                        .eq("organization_id", orgId)
-                        .in("job_id", idChunk)
-                        .order("signed_at", { ascending: false })
-                        .range(o, o + l - 1);
-                    return { data, error };
-                }),
-                fetchAllPages(async (o, l) => {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("documents")
-                        .select("job_id")
-                        .eq("organization_id", orgId)
-                        .eq("type", "photo")
-                        .in("job_id", idChunk)
-                        .order("created_at", { ascending: false })
-                        .range(o, o + l - 1);
-                    return { data, error };
-                }),
-                fetchAllPages(async (o, l) => {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("mitigation_items")
-                        .select("job_id, completed_at")
-                        .eq("organization_id", orgId)
-                        .in("job_id", idChunk)
-                        .order("created_at", { ascending: false })
-                        .range(o, o + l - 1);
-                    return { data, error };
-                }),
-            ]);
-            if (sigRes.error)
-                throw sigRes.error;
-            if (photoRes.error)
-                throw photoRes.error;
-            if (checklistRes.error)
-                throw checklistRes.error;
-            (sigRes.data ?? []).forEach((r) => jobsWithSignatureSet.add(r.job_id));
-            (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
-            mitigationList.push(...(checklistRes.data ?? []));
-        }
-        // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
-        const byJob = {};
-        for (const id of jobIds)
-            byJob[id] = { total: 0, completed: 0 };
-        for (const m of mitigationList) {
-            if (!byJob[m.job_id])
-                continue;
-            byJob[m.job_id].total += 1;
-            if (m.completed_at)
-                byJob[m.job_id].completed += 1;
-        }
-        const jobsWithChecklistComplete = jobIds.filter((jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total).length;
-        const sigRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
-        const photoRate = totalJobs === 0 ? 0 : jobsWithPhotoSet.size / totalJobs;
-        const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
-        // Return percentages (0–100), not fractions: multiply by 100, then round; overall = average of percentage values
-        const signatures = Math.round(sigRate * 10000) / 100;
-        const photos = Math.round(photoRate * 10000) / 100;
-        const checklists = Math.round(checklistRate * 10000) / 100;
-        const overall = totalJobs === 0 ? 0 : Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
+        const withSig = Number(row?.jobs_with_signature ?? 0);
+        const withPhoto = Number(row?.jobs_with_photo ?? 0);
+        const checklistComplete = Number(row?.jobs_checklist_complete ?? 0);
+        const signatures = Math.round((withSig / totalJobs) * 10000) / 100;
+        const photos = Math.round((withPhoto / totalJobs) * 10000) / 100;
+        const checklists = Math.round((checklistComplete / totalJobs) * 10000) / 100;
+        const overall = Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
         return res.json({
             period: `${days}d`,
             signatures,
@@ -824,8 +494,7 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
     }
 });
 // GET /api/analytics/job-completion — contract: completion_rate, avg_days, on_time_rate, overdue_count; optional: total, completed, period, avg_days_to_complete
-// Completion KPIs are scoped by jobs completed in the requested period (completed_at with fallback updated_at/created_at).
-// overdue_count is computed separately on currently open org jobs and is not mixed into the completion denominator.
+// Server-side aggregate via get_job_completion_kpis RPC; period-scoped overdue_count + overdue_count_all_time.
 exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -837,6 +506,7 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
             avg_days: 0,
             on_time_rate: 0,
             overdue_count: 0,
+            overdue_count_all_time: 0,
             total: 0,
             completed: 0,
             period: "30d",
@@ -849,113 +519,41 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const now = new Date().toISOString();
-        // Base set for completion KPIs: jobs completed within the requested period (completed_at, fallback updated_at, created_at).
-        const effectiveCompletionDate = (j) => j.completed_at ?? j.updated_at ?? j.created_at;
-        const completedById = new Map();
-        const addCompletedInPeriod = async (queryFn) => {
-            const { data, error } = await fetchAllPages(queryFn);
-            if (error)
-                throw error;
-            for (const j of data ?? []) {
-                const ts = effectiveCompletionDate(j);
-                if (ts >= since && ts <= until)
-                    completedById.set(j.id, j);
-            }
-        };
-        await addCompletedInPeriod(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .eq("status", "completed")
-                .gte("completed_at", since)
-                .lte("completed_at", until)
-                .order("completed_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data: data, error };
+        const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_job_completion_kpis", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
         });
-        await addCompletedInPeriod(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .eq("status", "completed")
-                .is("completed_at", null)
-                .gte("updated_at", since)
-                .lte("updated_at", until)
-                .order("updated_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data: data, error };
-        });
-        await addCompletedInPeriod(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .eq("status", "completed")
-                .is("completed_at", null)
-                .is("updated_at", null)
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data: data, error };
-        });
-        const completedList = [...completedById.values()];
-        const completed = completedList.length;
-        // Denominator for completion_rate: jobs completed in period + open jobs created in period (do not mix in overdue_count).
-        const { data: openInPeriodRows, error: openErr } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .neq("status", "completed")
-                .gte("created_at", since)
-                .lte("created_at", until)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
-        });
-        if (openErr)
-            throw openErr;
-        const openInPeriod = (openInPeriodRows ?? []).length;
-        const total = completed + openInPeriod;
-        const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
-        const durations = [];
-        let onTimeCount = 0;
-        for (const j of completedList) {
-            const completionTs = effectiveCompletionDate(j);
-            const daysToComplete = (new Date(completionTs).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
-            durations.push(daysToComplete);
-            if (j.due_date && new Date(completionTs) <= new Date(j.due_date))
-                onTimeCount += 1;
+        if (rpcError)
+            throw rpcError;
+        const row = Array.isArray(kpiRows) ? kpiRows[0] : kpiRows;
+        if (!row) {
+            return res.json({
+                completion_rate: 0,
+                avg_days: 0,
+                on_time_rate: 0,
+                overdue_count: 0,
+                overdue_count_all_time: 0,
+                total: 0,
+                completed: 0,
+                period: `${days}d`,
+                avg_days_to_complete: 0,
+            });
         }
-        const avg_days_to_complete = durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
-        const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 100;
-        // Overdue count: separately on currently open jobs (all org), not mixed into completion denominator.
-        const { data: openJobsRows, error: openAllErr } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, created_at, updated_at, completed_at, due_date")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .neq("status", "completed")
-                .range(offset, offset + limit - 1);
-            return { data, error };
-        });
-        if (openAllErr)
-            throw openAllErr;
-        const overdue_count = (openJobsRows ?? []).filter((j) => j.due_date != null && j.due_date < now).length;
+        const total = Number(row.total ?? 0);
+        const completed = Number(row.completed ?? 0);
+        const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
+        const avg_days_to_complete = Number(row.avg_days_to_complete ?? 0);
+        const on_time_count = Number(row.on_time_count ?? 0);
+        const on_time_rate = completed === 0 ? 0 : Math.round((on_time_count / completed) * 10000) / 100;
+        const overdue_count = Number(row.overdue_count_period ?? 0);
+        const overdue_count_all_time = Number(row.overdue_count_all_time ?? 0);
         return res.json({
             completion_rate,
             avg_days: avg_days_to_complete,
             on_time_rate,
             overdue_count,
+            overdue_count_all_time,
             total,
             completed,
             period: `${days}d`,
