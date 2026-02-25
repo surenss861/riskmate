@@ -20,7 +20,33 @@ async function getCachedInsights(orgId) {
     insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
     return data;
 }
+const PAGE_SIZE = 2000;
 const MAX_FETCH_LIMIT = 10000;
+/** Fetch all rows by paginating; no cap. */
+async function fetchAllPages(fetchPage) {
+    const out = [];
+    let offset = 0;
+    let hasMore = true;
+    let lastError = null;
+    while (hasMore) {
+        const { data, error } = await fetchPage(offset, PAGE_SIZE);
+        if (error)
+            return { data: out, error };
+        lastError = error;
+        const chunkData = data ?? [];
+        out.push(...chunkData);
+        hasMore = chunkData.length === PAGE_SIZE;
+        offset += chunkData.length;
+    }
+    return { data: out, error: lastError };
+}
+/** Chunk array into batches of at most size. */
+function chunkArray(arr, size) {
+    const result = [];
+    for (let i = 0; i < arr.length; i += size)
+        result.push(arr.slice(i, i + size));
+    return result;
+}
 const parseRangeDays = (value) => {
     if (!value)
         return 30;
@@ -49,6 +75,8 @@ const dateRangeForDays = (days) => {
     since.setHours(0, 0, 0, 0);
     return { since: since.toISOString(), until: until.toISOString() };
 };
+// MV covers last 2 years; use for week/month bucketed analytics when in range
+const MV_COVERAGE_DAYS = 730;
 // Helpers for trends: bucket keys and labels
 const weekStart = (d) => {
     const x = new Date(d);
@@ -75,66 +103,228 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         return res.json({ period: "30d", groupBy: "day", data: [], locked: true });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days, key: periodKey } = parsePeriod(authReq.query.period);
         const groupByRaw = authReq.query.groupBy || "day";
         const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
         const metricRaw = authReq.query.metric || "jobs";
-        const metric = metricRaw === "risk" ? "risk" : metricRaw === "compliance" ? "compliance" : "jobs";
+        const metric = metricRaw === "risk"
+            ? "risk"
+            : metricRaw === "compliance"
+                ? "compliance"
+                : metricRaw === "completion" || metricRaw === "completion_rate"
+                    ? "completion"
+                    : "jobs";
         const { since, until } = dateRangeForDays(days);
-        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id, risk_score, status, created_at")
-            .eq("organization_id", orgId)
-            .gte("created_at", since)
-            .lte("created_at", until)
-            .limit(MAX_FETCH_LIMIT);
+        const points = [];
+        const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
+        if (useMv) {
+            const sinceWeek = weekStart(new Date(since));
+            const untilWeek = weekStart(new Date(until));
+            const { data: mvRows, error: mvError } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
+                    .from("analytics_weekly_job_stats")
+                    .select("week_start, jobs_created, jobs_completed, avg_risk")
+                    .eq("organization_id", orgId)
+                    .gte("week_start", sinceWeek)
+                    .lte("week_start", untilWeek)
+                    .order("week_start", { ascending: true })
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            if (!mvError && mvRows && mvRows.length > 0) {
+                const rows = mvRows;
+                if (groupBy === "week") {
+                    for (const r of rows) {
+                        const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+                        let value = 0;
+                        if (metric === "jobs")
+                            value = r.jobs_created ?? 0;
+                        else if (metric === "risk")
+                            value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0;
+                        else if (metric === "completion")
+                            value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 10000;
+                        points.push({ period, value, label: period });
+                    }
+                }
+                else {
+                    const byMonth = new Map();
+                    for (const r of rows) {
+                        const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+                        const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0, riskSum: 0, riskWeight: 0 };
+                        cur.jobs_created += r.jobs_created ?? 0;
+                        cur.jobs_completed += r.jobs_completed ?? 0;
+                        if (r.avg_risk != null && (r.jobs_created ?? 0) > 0) {
+                            cur.riskSum += (r.avg_risk ?? 0) * (r.jobs_created ?? 0);
+                            cur.riskWeight += r.jobs_created ?? 0;
+                        }
+                        byMonth.set(period, cur);
+                    }
+                    for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                        const cur = byMonth.get(period);
+                        let value = 0;
+                        if (metric === "jobs")
+                            value = cur.jobs_created;
+                        else if (metric === "risk")
+                            value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100;
+                        else if (metric === "completion")
+                            value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 10000;
+                        points.push({ period, value, label: period });
+                    }
+                }
+                const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
+                return res.json({ period: periodLabel, groupBy, metric, data: points });
+            }
+        }
+        const { data: jobs, error: jobsError } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, risk_score, status, created_at")
+                .eq("organization_id", orgId)
+                .is("deleted_at", null)
+                .gte("created_at", since)
+                .lte("created_at", until)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (jobsError)
             throw jobsError;
         const jobList = (jobs || []);
         const getBucketKey = (date) => groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date.toISOString());
-        const points = [];
         const bucketValues = new Map();
         const bucketRiskSums = new Map();
         const bucketCompletion = new Map();
-        for (const j of jobList) {
-            const key = getBucketKey(new Date(j.created_at));
-            if (metric === "jobs") {
-                bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
+        if (metric === "compliance" && jobList.length > 0) {
+            const trendJobIds = jobList.map((j) => j.id);
+            const jobsWithSigSet = new Set();
+            const jobsWithPhotoSet = new Set();
+            const mitigationList = [];
+            for (const idChunk of chunkArray(trendJobIds, 500)) {
+                const [sigRes, photoRes, checklistRes] = await Promise.all([
+                    fetchAllPages(async (o, l) => {
+                        const { data, error } = await supabaseClient_1.supabase
+                            .from("signatures")
+                            .select("job_id")
+                            .eq("organization_id", orgId)
+                            .in("job_id", idChunk)
+                            .order("signed_at", { ascending: false })
+                            .range(o, o + l - 1);
+                        return { data, error };
+                    }),
+                    fetchAllPages(async (o, l) => {
+                        const { data, error } = await supabaseClient_1.supabase
+                            .from("documents")
+                            .select("job_id")
+                            .eq("organization_id", orgId)
+                            .eq("type", "photo")
+                            .in("job_id", idChunk)
+                            .order("created_at", { ascending: false })
+                            .range(o, o + l - 1);
+                        return { data, error };
+                    }),
+                    fetchAllPages(async (o, l) => {
+                        const { data, error } = await supabaseClient_1.supabase
+                            .from("mitigation_items")
+                            .select("job_id, completed_at")
+                            .eq("organization_id", orgId)
+                            .in("job_id", idChunk)
+                            .order("created_at", { ascending: false })
+                            .range(o, o + l - 1);
+                        return { data, error };
+                    }),
+                ]);
+                if (sigRes.error)
+                    throw sigRes.error;
+                if (photoRes.error)
+                    throw photoRes.error;
+                if (checklistRes.error)
+                    throw checklistRes.error;
+                (sigRes.data ?? []).forEach((r) => jobsWithSigSet.add(r.job_id));
+                (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
+                mitigationList.push(...(checklistRes.data ?? []));
             }
-            else if (metric === "risk" && j.risk_score != null) {
-                const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
-                cur.sum += j.risk_score;
-                cur.count += 1;
-                bucketRiskSums.set(key, cur);
+            // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
+            const byJobTrend = {};
+            for (const j of jobList)
+                byJobTrend[j.id] = { total: 0, completed: 0 };
+            for (const m of mitigationList) {
+                if (!byJobTrend[m.job_id])
+                    continue;
+                byJobTrend[m.job_id].total += 1;
+                if (m.completed_at)
+                    byJobTrend[m.job_id].completed += 1;
             }
-            else if (metric === "compliance") {
-                const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
-                cur.total += 1;
-                if (j.status?.toLowerCase() === "completed")
-                    cur.completed += 1;
-                bucketCompletion.set(key, cur);
+            const jobChecklistCompleteSet = new Set(jobList.filter((j) => byJobTrend[j.id].total === 0 || byJobTrend[j.id].completed === byJobTrend[j.id].total).map((j) => j.id));
+            const bucketCompliance = new Map();
+            for (const j of jobList) {
+                const key = getBucketKey(new Date(j.created_at));
+                let cur = bucketCompliance.get(key);
+                if (!cur) {
+                    cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistCompleteCount: 0 };
+                    bucketCompliance.set(key, cur);
+                }
+                cur.jobIds.push(j.id);
+                if (jobsWithSigSet.has(j.id))
+                    cur.sigCount += 1;
+                if (jobsWithPhotoSet.has(j.id))
+                    cur.photoCount += 1;
+                if (jobChecklistCompleteSet.has(j.id))
+                    cur.checklistCompleteCount += 1;
             }
-        }
-        if (metric === "jobs") {
-            for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
-            }
-        }
-        else if (metric === "risk") {
-            for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const { sum, count } = bucketRiskSums.get(period);
-                const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
-                points.push({ period, value, label: period });
+            for (const [period] of [...bucketCompliance.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                const cur = bucketCompliance.get(period);
+                const n = cur.jobIds.length;
+                const sigRate = n === 0 ? 0 : cur.sigCount / n;
+                const photoRate = n === 0 ? 0 : cur.photoCount / n;
+                const checklistRate = n === 0 ? 0 : cur.checklistCompleteCount / n;
+                const value = (sigRate + photoRate + checklistRate) / 3;
+                // Scale to 0–100 percentage to match /analytics/compliance-rate and other analytics endpoints
+                const valuePct = Math.round(value * 10000) / 100;
+                points.push({ period, value: valuePct, label: period });
             }
         }
         else {
-            for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const { total, completed } = bucketCompletion.get(period);
-                const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
-                points.push({ period, value, label: period });
+            for (const j of jobList) {
+                const key = getBucketKey(new Date(j.created_at));
+                const completed = j.status?.toLowerCase() === "completed";
+                if (metric === "completion") {
+                    const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
+                    cur.total += 1;
+                    if (completed)
+                        cur.completed += 1;
+                    bucketCompletion.set(key, cur);
+                }
+                else if (metric === "jobs") {
+                    bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
+                }
+                else if (metric === "risk" && j.risk_score != null) {
+                    const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
+                    cur.sum += j.risk_score;
+                    cur.count += 1;
+                    bucketRiskSums.set(key, cur);
+                }
+            }
+            if (metric === "completion") {
+                for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                    const { total, completed } = bucketCompletion.get(period);
+                    const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+                    points.push({ period, value, label: period });
+                }
+            }
+            else if (metric === "jobs") {
+                for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                    points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
+                }
+            }
+            else if (metric === "risk") {
+                for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                    const { sum, count } = bucketRiskSums.get(period);
+                    const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+                    points.push({ period, value, label: period });
+                }
             }
         }
         const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
@@ -155,7 +345,7 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
         return res.json({ buckets: [], locked: true });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
@@ -164,8 +354,10 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
             .from("jobs")
             .select("job_type, risk_score, created_at")
             .eq("organization_id", orgId)
+            .is("deleted_at", null)
             .gte("created_at", since)
             .lte("created_at", until)
+            .order("created_at", { ascending: false })
             .limit(MAX_FETCH_LIMIT);
         if (error)
             throw error;
@@ -173,17 +365,19 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
         const bucketSums = {};
         for (const j of list) {
             const jobType = j.job_type ?? "other";
-            const dayOfWeek = new Date(j.created_at).getDay();
+            const dayOfWeek = new Date(j.created_at).getUTCDay();
             const key = `${jobType}|${dayOfWeek}`;
             if (!bucketSums[key])
-                bucketSums[key] = { sum: 0, count: 0 };
+                bucketSums[key] = { sum: 0, count: 0, riskCount: 0 };
             bucketSums[key].count += 1;
-            if (j.risk_score != null)
+            if (j.risk_score != null) {
                 bucketSums[key].sum += j.risk_score;
+                bucketSums[key].riskCount += 1;
+            }
         }
-        const buckets = Object.entries(bucketSums).map(([key, { sum, count }]) => {
+        const buckets = Object.entries(bucketSums).map(([key, { sum, count, riskCount }]) => {
             const [job_type, day_of_week_str] = key.split("|");
-            const avg_risk = count === 0 ? 0 : Math.round((sum / count) * 100) / 100;
+            const avg_risk = riskCount === 0 ? 0 : Math.round((sum / riskCount) * 100) / 100;
             return { job_type, day_of_week: parseInt(day_of_week_str, 10), avg_risk, count };
         });
         return res.json({ period: `${days}d`, buckets });
@@ -203,23 +397,28 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
         return res.json({ members: [], locked: true });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const now = new Date().toISOString();
-        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id, assigned_to_id, status, created_at, updated_at, due_date")
-            .eq("organization_id", orgId)
-            .gte("created_at", since)
-            .lte("created_at", until)
-            .limit(MAX_FETCH_LIMIT);
+        const { data: jobs, error: jobsError } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
+                .eq("organization_id", orgId)
+                .is("deleted_at", null)
+                .gte("created_at", since)
+                .lte("created_at", until)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (jobsError)
             throw jobsError;
-        const jobList = (jobs || []);
+        const jobList = (jobs ?? []);
         const byUser = {};
+        const nowDate = new Date();
         for (const j of jobList) {
             const uid = j.assigned_to_id ?? "unassigned";
             if (uid === "unassigned")
@@ -229,23 +428,32 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
                     jobs_assigned: 0,
                     jobs_completed: 0,
                     completion_rate: 0,
-                    avg_days_to_complete: 0,
+                    avg_days: 0,
                     overdue_count: 0,
                 };
             byUser[uid].jobs_assigned += 1;
             const completed = j.status?.toLowerCase() === "completed";
             if (completed)
                 byUser[uid].jobs_completed += 1;
-            if (j.due_date && j.due_date < now && !completed)
-                byUser[uid].overdue_count += 1;
+            if (j.due_date) {
+                const dueDate = new Date(j.due_date);
+                const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
+                if (completed) {
+                    if (new Date(completionTs) > dueDate)
+                        byUser[uid].overdue_count += 1;
+                }
+                else if (nowDate > dueDate) {
+                    byUser[uid].overdue_count += 1;
+                }
+            }
         }
         const completedDurations = {};
         for (const j of jobList) {
             if (j.assigned_to_id == null || j.status?.toLowerCase() !== "completed")
                 continue;
-            const completedAt = j.updated_at ?? j.created_at;
+            const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
             const created = new Date(j.created_at).getTime();
-            const completed = new Date(completedAt).getTime();
+            const completed = new Date(completionTs).getTime();
             const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
             if (!completedDurations[j.assigned_to_id])
                 completedDurations[j.assigned_to_id] = [];
@@ -254,19 +462,35 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
         const members = Object.entries(byUser).map(([user_id, s]) => {
             const completion_rate = s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 10000;
             const durations = completedDurations[user_id] ?? [];
-            const avg_days_to_complete = durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
+            const avg_days = durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
             return {
                 user_id,
                 jobs_assigned: s.jobs_assigned,
                 jobs_completed: s.jobs_completed,
                 completion_rate,
-                avg_days_to_complete,
+                avg_days,
                 overdue_count: s.overdue_count,
             };
         });
         members.sort((a, b) => b.jobs_completed - a.jobs_completed);
         const topMembers = members.slice(0, 50);
-        return res.json({ period: `${days}d`, members: topMembers });
+        const userIds = topMembers.map((m) => m.user_id);
+        const userMap = new Map();
+        if (userIds.length > 0) {
+            const { data: userRows } = await supabaseClient_1.supabase
+                .from("users")
+                .select("id, full_name")
+                .in("id", userIds);
+            for (const u of userRows || []) {
+                const name = u.full_name ?? "";
+                userMap.set(u.id, name.trim() || "Unknown");
+            }
+        }
+        const membersWithNames = topMembers.map((m) => ({
+            ...m,
+            name: userMap.get(m.user_id) ?? "Unknown",
+        }));
+        return res.json({ period: `${days}d`, members: membersWithNames });
     }
     catch (error) {
         console.error("Analytics team-performance error:", error);
@@ -283,27 +507,39 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         return res.json({ items: [], locked: true });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
         const groupBy = authReq.query.groupBy === "location" ? "location" : "type";
-        const { data: items, error } = await supabaseClient_1.supabase
-            .from("mitigation_items")
-            .select("id, job_id, code, title, factor_id")
-            .eq("organization_id", orgId)
-            .gte("created_at", since)
-            .lte("created_at", until)
-            .limit(MAX_FETCH_LIMIT);
+        const { data: items, error } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("mitigation_items")
+                .select("id, job_id, code, title, factor_id")
+                .eq("organization_id", orgId)
+                .gte("created_at", since)
+                .lte("created_at", until)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (error)
             throw error;
-        const itemList = (items || []);
+        const itemList = (items ?? []);
         const jobIds = [...new Set(itemList.map((m) => m.job_id))];
-        const { data: jobsData } = jobIds.length > 0
-            ? await supabaseClient_1.supabase.from("jobs").select("id, risk_score, location").in("id", jobIds).limit(MAX_FETCH_LIMIT)
-            : { data: [] };
-        const jobMap = new Map((jobsData || []).map((j) => [j.id, { risk_score: j.risk_score, location: j.location ?? "unknown" }]));
+        const jobMap = new Map();
+        for (const idChunk of chunkArray(jobIds, 500)) {
+            const { data: jobsData } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, risk_score, location")
+                .is("deleted_at", null)
+                .in("id", idChunk);
+            for (const j of jobsData ?? []) {
+                const row = j;
+                jobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
+            }
+        }
         const current = {};
         for (const m of itemList) {
             const category = groupBy === "location" ? (jobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
@@ -318,19 +554,31 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         }
         const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
         const prevUntil = since;
-        const { data: prevItems } = await supabaseClient_1.supabase
-            .from("mitigation_items")
-            .select("id, job_id, code, title, factor_id")
-            .eq("organization_id", orgId)
-            .gte("created_at", prevSince)
-            .lt("created_at", prevUntil)
-            .limit(MAX_FETCH_LIMIT);
-        const prevList = (prevItems || []);
+        const { data: prevItems } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("mitigation_items")
+                .select("id, job_id, code, title, factor_id")
+                .eq("organization_id", orgId)
+                .gte("created_at", prevSince)
+                .lt("created_at", prevUntil)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
+        const prevList = (prevItems ?? []);
         const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
-        const { data: prevJobsData } = prevJobIds.length > 0
-            ? await supabaseClient_1.supabase.from("jobs").select("id, risk_score, location").in("id", prevJobIds).limit(MAX_FETCH_LIMIT)
-            : { data: [] };
-        const prevJobMap = new Map((prevJobsData || []).map((j) => [j.id, { risk_score: j.risk_score, location: j.location ?? "unknown" }]));
+        const prevJobMap = new Map();
+        for (const idChunk of chunkArray(prevJobIds, 500)) {
+            const { data: prevJobsData } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, risk_score, location")
+                .is("deleted_at", null)
+                .in("id", idChunk);
+            for (const j of prevJobsData ?? []) {
+                const row = j;
+                prevJobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
+            }
+        }
         const prev = {};
         for (const m of prevList) {
             const category = groupBy === "location" ? (prevJobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
@@ -366,75 +614,118 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
         return res.json({
-            signature_completion_rate: 0,
-            photo_upload_rate: 0,
-            checklist_completion_rate: 0,
-            overall_rate: 0,
+            signatures: 0,
+            photos: 0,
+            checklists: 0,
+            overall: 0,
             period: "30d",
             locked: true,
         });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
-        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id")
-            .eq("organization_id", orgId)
-            .gte("created_at", since)
-            .lte("created_at", until)
-            .limit(MAX_FETCH_LIMIT);
+        const { data: jobList, error: jobsError } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id")
+                .eq("organization_id", orgId)
+                .is("deleted_at", null)
+                .gte("created_at", since)
+                .lte("created_at", until)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (jobsError)
             throw jobsError;
-        const jobList = jobs || [];
-        const jobIds = jobList.map((j) => j.id);
+        const jobIds = (jobList ?? []).map((j) => j.id);
         const totalJobs = jobIds.length;
         if (totalJobs === 0) {
             return res.json({
                 period: `${days}d`,
-                signature_completion_rate: 0,
-                photo_upload_rate: 0,
-                checklist_completion_rate: 0,
-                overall_rate: 0,
+                signatures: 0,
+                photos: 0,
+                checklists: 0,
+                overall: 0,
             });
         }
-        const [sigRes, photoRes, checklistRes] = await Promise.all([
-            supabaseClient_1.supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", jobIds).limit(MAX_FETCH_LIMIT),
-            jobIds.length > 0
-                ? supabaseClient_1.supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", jobIds).limit(MAX_FETCH_LIMIT)
-                : Promise.resolve({ data: [] }),
-            supabaseClient_1.supabase
-                .from("mitigation_items")
-                .select("job_id, completed_at")
-                .eq("organization_id", orgId)
-                .in("job_id", jobIds)
-                .limit(MAX_FETCH_LIMIT),
-        ]);
-        const jobsWithSignature = new Set((sigRes.data || []).map((r) => r.job_id)).size;
-        const jobsWithPhoto = new Set((photoRes.data || []).map((r) => r.job_id)).size;
-        const mitigationList = (checklistRes.data || []);
-        let checklistTotal = 0;
-        let checklistCompleted = 0;
-        for (const m of mitigationList) {
-            checklistTotal += 1;
-            if (m.completed_at)
-                checklistCompleted += 1;
+        const jobsWithSignatureSet = new Set();
+        const jobsWithPhotoSet = new Set();
+        const mitigationList = [];
+        for (const idChunk of chunkArray(jobIds, 500)) {
+            const [sigRes, photoRes, checklistRes] = await Promise.all([
+                fetchAllPages(async (o, l) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("signatures")
+                        .select("job_id")
+                        .eq("organization_id", orgId)
+                        .in("job_id", idChunk)
+                        .order("signed_at", { ascending: false })
+                        .range(o, o + l - 1);
+                    return { data, error };
+                }),
+                fetchAllPages(async (o, l) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("documents")
+                        .select("job_id")
+                        .eq("organization_id", orgId)
+                        .eq("type", "photo")
+                        .in("job_id", idChunk)
+                        .order("created_at", { ascending: false })
+                        .range(o, o + l - 1);
+                    return { data, error };
+                }),
+                fetchAllPages(async (o, l) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("mitigation_items")
+                        .select("job_id, completed_at")
+                        .eq("organization_id", orgId)
+                        .in("job_id", idChunk)
+                        .order("created_at", { ascending: false })
+                        .range(o, o + l - 1);
+                    return { data, error };
+                }),
+            ]);
+            if (sigRes.error)
+                throw sigRes.error;
+            if (photoRes.error)
+                throw photoRes.error;
+            if (checklistRes.error)
+                throw checklistRes.error;
+            (sigRes.data ?? []).forEach((r) => jobsWithSignatureSet.add(r.job_id));
+            (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
+            mitigationList.push(...(checklistRes.data ?? []));
         }
-        const checklist_completion_rate = checklistTotal === 0 ? 0 : Math.round((checklistCompleted / checklistTotal) * 10000) / 10000;
-        const signature_completion_rate = totalJobs === 0 ? 0 : Math.round((jobsWithSignature / totalJobs) * 10000) / 10000;
-        const photo_upload_rate = totalJobs === 0 ? 0 : Math.round((jobsWithPhoto / totalJobs) * 10000) / 10000;
-        const overall_rate = totalJobs === 0
-            ? 0
-            : Math.round(((signature_completion_rate + photo_upload_rate + checklist_completion_rate) / 3) * 10000) / 10000;
+        // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
+        const byJob = {};
+        for (const id of jobIds)
+            byJob[id] = { total: 0, completed: 0 };
+        for (const m of mitigationList) {
+            if (!byJob[m.job_id])
+                continue;
+            byJob[m.job_id].total += 1;
+            if (m.completed_at)
+                byJob[m.job_id].completed += 1;
+        }
+        const jobsWithChecklistComplete = jobIds.filter((jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total).length;
+        const sigRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
+        const photoRate = totalJobs === 0 ? 0 : jobsWithPhotoSet.size / totalJobs;
+        const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
+        // Return percentages (0–100), not fractions: multiply by 100, then round; overall = average of percentage values
+        const signatures = Math.round(sigRate * 10000) / 100;
+        const photos = Math.round(photoRate * 10000) / 100;
+        const checklists = Math.round(checklistRate * 10000) / 100;
+        const overall = totalJobs === 0 ? 0 : Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
         return res.json({
             period: `${days}d`,
-            signature_completion_rate,
-            photo_upload_rate,
-            checklist_completion_rate,
-            overall_rate,
+            signatures,
+            photos,
+            checklists,
+            overall,
         });
     }
     catch (error) {
@@ -442,7 +733,7 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
         return res.status(500).json({ message: "Failed to fetch compliance rate" });
     }
 });
-// GET /api/analytics/job-completion — total, completed, completion_rate, avg_days to complete, on_time_rate, overdue_count
+// GET /api/analytics/job-completion — contract: completion_rate, avg_days, on_time_rate, overdue_count; optional: total, completed, period, avg_days_to_complete
 exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -450,57 +741,65 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
         return res.json({
-            total: 0,
-            completed: 0,
             completion_rate: 0,
-            avg_days_to_complete: 0,
+            avg_days: 0,
             on_time_rate: 0,
             overdue_count: 0,
+            total: 0,
+            completed: 0,
             period: "30d",
             locked: true,
         });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const { days } = parsePeriod(authReq.query.period);
         const { since, until } = dateRangeForDays(days);
         const now = new Date().toISOString();
-        const { data: jobs, error } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id, status, created_at, updated_at, due_date")
-            .eq("organization_id", orgId)
-            .gte("created_at", since)
-            .lte("created_at", until)
-            .limit(MAX_FETCH_LIMIT);
+        // Always use raw jobs filtered by created_at so total/completed and rates are over the exact requested range (no MV whole-week inflation).
+        const { data: jobs, error } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, status, created_at, updated_at, completed_at, due_date")
+                .eq("organization_id", orgId)
+                .is("deleted_at", null)
+                .gte("created_at", since)
+                .lte("created_at", until)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (error)
             throw error;
-        const list = (jobs || []);
+        const list = (jobs ?? []);
         const total = list.length;
-        const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
-        const completed = completedList.length;
+        const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
         const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+        const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
         const durations = [];
         let onTimeCount = 0;
         for (const j of completedList) {
-            const completedAt = j.updated_at ?? j.created_at;
-            const daysToComplete = (new Date(completedAt).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
+            const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
+            const daysToComplete = (new Date(completionTs).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
             durations.push(daysToComplete);
-            if (j.due_date && new Date(completedAt) <= new Date(j.due_date))
+            if (j.due_date && new Date(completionTs) <= new Date(j.due_date))
                 onTimeCount += 1;
         }
         const avg_days_to_complete = durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
         const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 10000;
         const overdue_count = list.filter((j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now).length;
+        // Contract: completion_rate, avg_days, on_time_rate, overdue_count. Optional extensions: total, completed, period, avg_days_to_complete.
         return res.json({
-            period: `${days}d`,
-            total,
-            completed,
             completion_rate,
-            avg_days_to_complete,
+            avg_days: avg_days_to_complete,
             on_time_rate,
             overdue_count,
+            total,
+            completed,
+            period: `${days}d`,
+            avg_days_to_complete,
         });
     }
     catch (error) {
@@ -518,7 +817,7 @@ exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) =
         return res.json({ insights: [], locked: true });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const all = await getCachedInsights(orgId);
@@ -564,7 +863,7 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId) {
             return res.status(400).json({ message: "Missing organization id" });
         }
@@ -576,46 +875,122 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         sinceDate.setHours(0, 0, 0, 0);
         sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
         const sinceIso = sinceDate.toISOString();
-        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id, risk_score, created_at")
-            .eq("organization_id", orgId)
-            .gte("created_at", sinceIso)
-            .limit(MAX_FETCH_LIMIT);
-        if (jobsError) {
-            throw jobsError;
+        // When crew_id is supplied, scope jobs to those that have mitigation activity by this crew (denominators consistent with crew filter).
+        let jobIdsFilter = null;
+        if (crewId) {
+            const { data: crewMitigationRows } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
+                    .from("mitigation_items")
+                    .select("job_id")
+                    .eq("organization_id", orgId)
+                    .eq("completed_by", crewId)
+                    .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            const crewJobIdsSet = new Set((crewMitigationRows ?? []).map((r) => r.job_id));
+            jobIdsFilter = crewJobIdsSet.size > 0 ? [...crewJobIdsSet] : [];
         }
-        const jobIds = (jobs || []).map((job) => job.id);
-        const [mitigationsResponse, documentsResponse] = await Promise.all([
-            jobIds.length
-                ? supabaseClient_1.supabase
+        let jobs;
+        if (jobIdsFilter !== null) {
+            if (jobIdsFilter.length === 0) {
+                jobs = [];
+            }
+            else {
+                const jobsList = [];
+                for (const idChunk of chunkArray(jobIdsFilter, 500)) {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .select("id, risk_score, created_at")
+                        .eq("organization_id", orgId)
+                        .is("deleted_at", null)
+                        .gte("created_at", sinceIso)
+                        .in("id", idChunk);
+                    if (error)
+                        throw error;
+                    jobsList.push(...(data ?? []));
+                }
+                jobs = jobsList;
+            }
+        }
+        else {
+            const { data: jobsData, error: jobsError } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
+                    .from("jobs")
+                    .select("id, risk_score, created_at")
+                    .eq("organization_id", orgId)
+                    .is("deleted_at", null)
+                    .gte("created_at", sinceIso)
+                    .order("created_at", { ascending: true })
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            if (jobsError)
+                throw jobsError;
+            jobs = jobsData ?? [];
+        }
+        const jobIds = jobs.map((j) => j.id);
+        if (jobIds.length === 0) {
+            return res.json({
+                org_id: orgId,
+                range_days: rangeDays,
+                completion_rate: 0,
+                avg_time_to_close_hours: 0,
+                high_risk_jobs: 0,
+                evidence_count: 0,
+                jobs_with_evidence: 0,
+                jobs_without_evidence: 0,
+                avg_time_to_first_evidence_hours: 0,
+                trend: [],
+                jobs_total: 0,
+                jobs_scored: 0,
+                jobs_with_any_evidence: 0,
+                jobs_with_photo_evidence: 0,
+                jobs_missing_required_evidence: 0,
+                required_evidence_policy: "Photo required for high-risk jobs",
+                avg_time_to_first_photo_minutes: null,
+                trend_empty_reason: "no_jobs",
+            });
+        }
+        const mitigationsByChunk = chunkArray(jobIds, 500);
+        const mitigationsRaw = [];
+        for (const ids of mitigationsByChunk) {
+            const { data, error } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
                     .from("mitigation_items")
                     .select("id, job_id, created_at, completed_at, completed_by")
-                    .in("job_id", jobIds)
+                    .in("job_id", ids)
                     .order("created_at", { ascending: true })
-                    .limit(MAX_FETCH_LIMIT)
-                : Promise.resolve({ data: [], error: null }),
-            jobIds.length
-                ? supabaseClient_1.supabase
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            if (error)
+                throw error;
+            mitigationsRaw.push(...(data ?? []));
+        }
+        const documentsByChunk = chunkArray(jobIds, 500);
+        const documentsRaw = [];
+        for (const ids of documentsByChunk) {
+            const { data, error } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
                     .from("documents")
-                    .select("id, job_id, created_at")
-                    .in("job_id", jobIds)
+                    .select("id, job_id, created_at, type")
+                    .eq("organization_id", orgId)
+                    .in("job_id", ids)
                     .order("created_at", { ascending: true })
-                    .limit(MAX_FETCH_LIMIT)
-                : Promise.resolve({ data: [], error: null }),
-        ]);
-        if (mitigationsResponse.error) {
-            throw mitigationsResponse.error;
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            if (error)
+                throw error;
+            documentsRaw.push(...(data ?? []));
         }
-        if (documentsResponse.error) {
-            throw documentsResponse.error;
-        }
-        const mitigations = (mitigationsResponse.data || []).filter((item) => {
+        const mitigations = mitigationsRaw.filter((item) => {
             if (!crewId)
                 return true;
             return item.completed_by === crewId;
         });
-        const documents = documentsResponse.data || [];
+        const documents = documentsRaw;
         const totalMitigations = mitigations.length;
         const completedMitigations = mitigations.filter((item) => item.completed_at);
         const completionRate = totalMitigations === 0
@@ -633,7 +1008,7 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
             if (job.risk_score === null || job.risk_score === undefined) {
                 return false;
             }
-            return job.risk_score > 75;
+            return job.risk_score >= 70;
         }).length;
         const evidenceCount = documents.length;
         const jobEvidenceMap = documents.reduce((acc, doc) => {
@@ -644,17 +1019,23 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         }, {});
         const jobsWithEvidence = Object.keys(jobEvidenceMap).length;
         const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
+        // Photo evidence: only documents with type === "photo"
+        const photoDocuments = documents.filter((d) => d.type === "photo");
+        const jobPhotoMap = photoDocuments.reduce((acc, doc) => {
+            if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
+                acc[doc.job_id] = doc.created_at;
+            }
+            return acc;
+        }, {});
+        const jobsWithPhotoEvidence = Object.keys(jobPhotoMap).length;
         // Calculate explicit evidence metrics
         const jobsTotal = jobIds.length;
-        // Jobs with photo evidence (assuming documents with type='photo' or checking file extensions)
-        // For now, count all documents as photo evidence (can be refined later)
-        const jobsWithPhotoEvidence = jobsWithEvidence;
-        // Jobs missing required evidence - use readiness rules or default: high-risk jobs without evidence
+        // Jobs missing required evidence: high-risk jobs without photo evidence (policy: photo required)
         const highRiskJobIds = (jobs || [])
-            .filter((job) => job.risk_score !== null && job.risk_score > 75)
+            .filter((job) => job.risk_score !== null && job.risk_score >= 70)
             .map((job) => job.id);
-        const highRiskJobsWithoutEvidence = highRiskJobIds.filter((jobId) => !jobEvidenceMap[jobId]).length;
-        const jobsMissingRequiredEvidence = highRiskJobsWithoutEvidence;
+        const highRiskJobsWithoutPhotoEvidence = highRiskJobIds.filter((jobId) => !jobPhotoMap[jobId]).length;
+        const jobsMissingRequiredEvidence = highRiskJobsWithoutPhotoEvidence;
         const avgTimeToFirstEvidenceHours = jobsWithEvidence === 0
             ? 0
             : Object.entries(jobEvidenceMap).reduce((acc, [jobId, firstEvidence]) => {
@@ -666,7 +1047,17 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
                 const diffHours = (evidenceCreated - jobCreated) / (1000 * 60 * 60);
                 return acc + Math.max(diffHours, 0);
             }, 0) / jobsWithEvidence;
-        const avgTimeToFirstPhotoMinutes = avgTimeToFirstEvidenceHours * 60;
+        const avgTimeToFirstPhotoMinutes = jobsWithPhotoEvidence === 0
+            ? 0
+            : Object.entries(jobPhotoMap).reduce((acc, [jobId, firstPhotoAt]) => {
+                const job = jobs?.find((item) => item.id === jobId);
+                if (!job)
+                    return acc;
+                const jobCreated = new Date(job.created_at).getTime();
+                const photoCreated = new Date(firstPhotoAt).getTime();
+                const diffMinutes = (photoCreated - jobCreated) / (1000 * 60);
+                return acc + Math.max(diffMinutes, 0);
+            }, 0) / jobsWithPhotoEvidence;
         // Trend (daily)
         const trend = [];
         const dateCursor = new Date(sinceDate);
@@ -713,7 +1104,7 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
             jobs_with_photo_evidence: jobsWithPhotoEvidence,
             jobs_missing_required_evidence: jobsMissingRequiredEvidence,
             required_evidence_policy: 'Photo required for high-risk jobs',
-            avg_time_to_first_photo_minutes: avgTimeToFirstPhotoMinutes ? Number(avgTimeToFirstPhotoMinutes.toFixed(0)) : null,
+            avg_time_to_first_photo_minutes: Math.round(avgTimeToFirstPhotoMinutes),
             // Empty state reasons
             trend_empty_reason: trendEmptyReason,
         });
@@ -747,7 +1138,7 @@ exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         });
     }
     try {
-        const orgId = authReq.query.org_id || authReq.user.organization_id;
+        const orgId = authReq.user.organization_id;
         if (!orgId) {
             return res.status(400).json({ message: "Missing organization id" });
         }
@@ -756,43 +1147,53 @@ exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         sinceDate.setHours(0, 0, 0, 0);
         sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
         const sinceIso = sinceDate.toISOString();
-        const { data: jobs, error: jobsError } = await supabaseClient_1.supabase
-            .from("jobs")
-            .select("id, status, risk_level, created_at")
-            .eq("organization_id", orgId)
-            .gte("created_at", sinceIso)
-            .limit(MAX_FETCH_LIMIT);
+        const { data: jobs, error: jobsError } = await fetchAllPages(async (offset, limit) => {
+            const { data, error } = await supabaseClient_1.supabase
+                .from("jobs")
+                .select("id, status, risk_level, created_at")
+                .eq("organization_id", orgId)
+                .is("deleted_at", null)
+                .gte("created_at", sinceIso)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+            return { data, error };
+        });
         if (jobsError)
             throw jobsError;
-        const jobList = (jobs || []);
+        const jobList = (jobs ?? []);
         const jobIds = jobList.map((j) => j.id);
-        const [documentsResponse, mitigationsResponse] = await Promise.all([
-            jobIds.length
-                ? supabaseClient_1.supabase
-                    .from("documents")
-                    .select("id, job_id")
-                    .in("job_id", jobIds)
-                    .limit(MAX_FETCH_LIMIT)
-                : Promise.resolve({ data: [], error: null }),
-            jobIds.length
-                ? supabaseClient_1.supabase
-                    .from("mitigation_items")
-                    .select("id, job_id, completed_at, completed_by")
-                    .in("job_id", jobIds)
-                    .not("completed_at", "is", null)
-                    .gte("completed_at", sinceIso)
-                    .limit(MAX_FETCH_LIMIT)
-                : Promise.resolve({
-                    data: [],
-                    error: null,
+        const documents = [];
+        const completions = [];
+        for (const idChunk of chunkArray(jobIds, 500)) {
+            const [docRes, mitRes] = await Promise.all([
+                fetchAllPages(async (o, l) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("documents")
+                        .select("id, job_id")
+                        .in("job_id", idChunk)
+                        .order("created_at", { ascending: false })
+                        .range(o, o + l - 1);
+                    return { data, error };
                 }),
-        ]);
-        if (documentsResponse.error)
-            throw documentsResponse.error;
-        if (mitigationsResponse.error)
-            throw mitigationsResponse.error;
-        const documents = documentsResponse.data || [];
-        const completions = mitigationsResponse.data || [];
+                fetchAllPages(async (o, l) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("mitigation_items")
+                        .select("id, job_id, completed_at, completed_by")
+                        .in("job_id", idChunk)
+                        .not("completed_at", "is", null)
+                        .gte("completed_at", sinceIso)
+                        .order("created_at", { ascending: false })
+                        .range(o, o + l - 1);
+                    return { data, error };
+                }),
+            ]);
+            if (docRes.error)
+                throw docRes.error;
+            if (mitRes.error)
+                throw mitRes.error;
+            documents.push(...(docRes.data ?? []));
+            completions.push(...(mitRes.data ?? []));
+        }
         const jobCountsByStatus = {};
         for (const job of jobList) {
             const s = job.status ?? "unknown";

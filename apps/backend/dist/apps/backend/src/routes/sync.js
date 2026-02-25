@@ -173,6 +173,9 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             if (data[src] !== undefined)
                                 updates[dest] = data[src];
                         }
+                        if (String(updates.status ?? "").toLowerCase() === "completed" && updates.completed_at == null) {
+                            updates.completed_at = new Date().toISOString();
+                        }
                         if (Object.keys(updates).length === 0) {
                             baseResult.server_id = jobId;
                             results.push(baseResult);

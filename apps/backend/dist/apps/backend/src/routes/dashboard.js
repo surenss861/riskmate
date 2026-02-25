@@ -24,10 +24,10 @@ function dateRangeForDays(days) {
 }
 function trendFromValues(current, previous) {
     if (previous === 0) {
-        return { trend_direction: current > 0 ? "up" : "neutral", trend_percentage: current > 0 ? 100 : 0 };
+        return { trend_direction: current > 0 ? "up" : "flat", trend_percentage: current > 0 ? 100 : 0 };
     }
     const pct = ((current - previous) / previous) * 100;
-    const trend_direction = pct > 0 ? "up" : pct < 0 ? "down" : "neutral";
+    const trend_direction = pct > 0 ? "up" : pct < 0 ? "down" : "flat";
     return { trend_direction, trend_percentage: Math.round(Math.abs(pct) * 100) / 100 };
 }
 // GET /api/dashboard/summary
@@ -50,12 +50,14 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
                 .from("jobs")
                 .select(selectFields)
                 .eq("organization_id", organization_id)
+                .is("deleted_at", null)
                 .gte("created_at", currentSince)
                 .lte("created_at", currentUntil),
             supabaseClient_1.supabase
                 .from("jobs")
                 .select(selectFields)
                 .eq("organization_id", organization_id)
+                .is("deleted_at", null)
                 .gte("created_at", previousRange.since)
                 .lte("created_at", previousRange.until),
         ]);
@@ -70,13 +72,48 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         const completion_rate = jobs_total === 0 ? 0 : Math.round((jobs_completed / jobs_total) * 10000) / 10000;
         const withRisk = currentJobs.filter((j) => j.risk_score != null);
         const avg_risk = withRisk.length === 0 ? 0 : Math.round((withRisk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / withRisk.length) * 100) / 100;
-        const compliance_rate = jobs_total === 0 ? 0 : Math.round((jobs_completed / jobs_total) * 10000) / 10000;
+        const currentJobIds = currentJobs.map((j) => j.id);
+        const previousJobIds = previousJobs.map((j) => j.id);
+        async function computeComplianceRate(jobIds) {
+            if (jobIds.length === 0)
+                return 0;
+            const [sigRes, photoRes, checklistRes] = await Promise.all([
+                supabaseClient_1.supabase.from("signatures").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds),
+                supabaseClient_1.supabase.from("documents").select("job_id").eq("organization_id", organization_id).eq("type", "photo").in("job_id", jobIds),
+                supabaseClient_1.supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", organization_id).in("job_id", jobIds),
+            ]);
+            const jobsWithSig = new Set((sigRes.data || []).map((r) => r.job_id)).size;
+            const jobsWithPhoto = new Set((photoRes.data || []).map((r) => r.job_id)).size;
+            const mitigationList = (checklistRes.data || []);
+            // Per-job tally: job is checklist-complete when it has zero items or all items have completed_at
+            const byJob = {};
+            for (const id of jobIds)
+                byJob[id] = { total: 0, completed: 0 };
+            for (const m of mitigationList) {
+                if (!byJob[m.job_id])
+                    continue;
+                byJob[m.job_id].total += 1;
+                if (m.completed_at)
+                    byJob[m.job_id].completed += 1;
+            }
+            const completedJobsWithChecklist = jobIds.filter((jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total).length;
+            const sigRate = jobsWithSig / jobIds.length;
+            const photoRate = jobsWithPhoto / jobIds.length;
+            const checklistRate = completedJobsWithChecklist / jobIds.length;
+            return (sigRate + photoRate + checklistRate) / 3;
+        }
+        const [compliance_rate_fraction, prev_compliance_rate_fraction] = await Promise.all([
+            computeComplianceRate(currentJobIds),
+            computeComplianceRate(previousJobIds),
+        ]);
+        // Expose as 0–100 percent to align with /api/analytics/compliance-rate
+        const compliance_rate = Math.round(compliance_rate_fraction * 10000) / 100;
+        const prev_compliance_rate = Math.round(prev_compliance_rate_fraction * 10000) / 100;
         const prev_total = previousJobs.length;
         const prev_completed = previousJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
         const prev_completion_rate = prev_total === 0 ? 0 : prev_completed / prev_total;
         const prev_with_risk = previousJobs.filter((j) => j.risk_score != null);
         const prev_avg_risk = prev_with_risk.length === 0 ? 0 : prev_with_risk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / prev_with_risk.length;
-        const prev_compliance_rate = prev_total === 0 ? 0 : prev_completed / prev_total;
         const now = new Date();
         const on_time_count = currentJobs.filter((j) => {
             if ((j.status?.toLowerCase() !== "completed") || !j.due_date)

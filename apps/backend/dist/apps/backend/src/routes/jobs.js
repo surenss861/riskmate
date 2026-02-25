@@ -1915,6 +1915,9 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         }
         // Update job fields
         if (Object.keys(jobUpdates).length > 0) {
+            if (String(jobUpdates.status ?? "").toLowerCase() === "completed" && jobUpdates.completed_at == null) {
+                jobUpdates.completed_at = new Date().toISOString();
+            }
             const { error: updateError } = await supabaseClient_1.supabase
                 .from("jobs")
                 .update(jobUpdates)
