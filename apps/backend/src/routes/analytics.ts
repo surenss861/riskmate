@@ -368,7 +368,7 @@ analyticsRouter.get(
 
       const bucketValues = new Map<string, number>();
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
-      // Completion (fallback path): bucket by completed_at (fallback created_at), value = completions count in bucket
+      // Completion (fallback path): use creation-date bucket for both numerator and denominator so rates match (completions of jobs created in bucket / jobs created in bucket).
       const bucketCompleted = new Map<string, number>();
 
       for (const j of jobList) {
@@ -378,8 +378,7 @@ analyticsRouter.get(
         if (metric === "completion") {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
           if (completed) {
-            const keyCompleted = getBucketKey(new Date(j.completed_at ?? j.created_at));
-            bucketCompleted.set(keyCompleted, (bucketCompleted.get(keyCompleted) ?? 0) + 1);
+            bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1);
           }
         } else if (metric === "jobs") {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
@@ -392,11 +391,10 @@ analyticsRouter.get(
       }
 
       if (metric === "completion") {
-        // Per-bucket completion rate (0–100): completions in bucket / jobs created in bucket
-        const allPeriods = new Set([...bucketCompleted.keys(), ...bucketValues.keys()]);
-        for (const period of [...allPeriods].sort((a, b) => a.localeCompare(b))) {
-          const completed = bucketCompleted.get(period) ?? 0;
+        // Per-bucket completion rate (0–100): completions (of jobs created in bucket) / jobs created in bucket; same bucket key for both.
+        for (const period of [...bucketValues.keys()].sort((a, b) => a.localeCompare(b))) {
           const total = bucketValues.get(period) ?? 0;
+          const completed = bucketCompleted.get(period) ?? 0;
           const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
           points.push({ period, value, label: period });
         }
