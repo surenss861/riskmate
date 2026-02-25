@@ -2148,6 +2148,9 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
 
     // Update job fields
     if (Object.keys(jobUpdates).length > 0) {
+      if (String(jobUpdates.status ?? "").toLowerCase() === "completed" && jobUpdates.completed_at == null) {
+        jobUpdates.completed_at = new Date().toISOString();
+      }
       const { error: updateError } = await supabase
         .from("jobs")
         .update(jobUpdates)

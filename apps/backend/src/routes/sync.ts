@@ -211,6 +211,9 @@ syncRouter.post(
               for (const [src, dest] of Object.entries(keyMap)) {
                 if (data[src] !== undefined) updates[dest] = data[src];
               }
+              if (String(updates.status ?? "").toLowerCase() === "completed" && updates.completed_at == null) {
+                updates.completed_at = new Date().toISOString();
+              }
               if (Object.keys(updates).length === 0) {
                 baseResult.server_id = jobId;
                 results.push(baseResult);

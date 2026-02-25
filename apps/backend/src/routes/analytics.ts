@@ -395,23 +395,34 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
-        .select("id, assigned_to_id, status, created_at, updated_at, due_date")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
-
-      if (jobsError) throw jobsError;
-      const jobList = (jobs || []) as {
+      const { data: jobs, error: jobsError } = await fetchAllPages<{
         id: string;
         assigned_to_id: string | null;
         status: string | null;
         created_at: string;
         updated_at: string | null;
+        completed_at: string | null;
+        due_date: string | null;
+      }>((offset, limit) =>
+        supabase
+          .from("jobs")
+          .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
+
+      if (jobsError) throw jobsError;
+      const jobList = (jobs ?? []) as {
+        id: string;
+        assigned_to_id: string | null;
+        status: string | null;
+        created_at: string;
+        updated_at: string | null;
+        completed_at: string | null;
         due_date: string | null;
       }[];
 
@@ -441,9 +452,9 @@ analyticsRouter.get(
         if (completed) byUser[uid].jobs_completed += 1;
         if (j.due_date) {
           const dueDate = new Date(j.due_date);
-          const completedAt = new Date(j.updated_at ?? j.created_at);
+          const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
           if (completed) {
-            if (completedAt > dueDate) byUser[uid].overdue_count += 1;
+            if (new Date(completionTs) > dueDate) byUser[uid].overdue_count += 1;
           } else if (nowDate > dueDate) {
             byUser[uid].overdue_count += 1;
           }
@@ -453,9 +464,9 @@ analyticsRouter.get(
       const completedDurations: Record<string, number[]> = {};
       for (const j of jobList) {
         if (j.assigned_to_id == null || j.status?.toLowerCase() !== "completed") continue;
-        const completedAt = j.updated_at ?? j.created_at;
+        const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
         const created = new Date(j.created_at).getTime();
-        const completed = new Date(completedAt).getTime();
+        const completed = new Date(completionTs).getTime();
         const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
         if (!completedDurations[j.assigned_to_id]) completedDurations[j.assigned_to_id] = [];
         completedDurations[j.assigned_to_id].push(daysToComplete);
@@ -521,26 +532,39 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
-      const { data: items, error } = await supabase
-        .from("mitigation_items")
-        .select("id, job_id, code, title, factor_id")
-        .eq("organization_id", orgId)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: items, error } = await fetchAllPages<{
+        id: string;
+        job_id: string;
+        code: string | null;
+        title: string | null;
+        factor_id: string | null;
+      }>((offset, limit) =>
+        supabase
+          .from("mitigation_items")
+          .select("id, job_id, code, title, factor_id")
+          .eq("organization_id", orgId)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
 
       if (error) throw error;
-      const itemList = (items || []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
+      const itemList = (items ?? []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
       const jobIds = [...new Set(itemList.map((m) => m.job_id))];
 
-      const { data: jobsData } =
-        jobIds.length > 0
-          ? await supabase.from("jobs").select("id, risk_score, location").is("deleted_at", null).in("id", jobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
-          : { data: [] };
-      const jobMap = new Map(
-        (jobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
-      );
+      const jobMap = new Map<string, { risk_score: number | null; location: string }>();
+      for (const idChunk of chunkArray(jobIds, 500)) {
+        const { data: jobsData } = await supabase
+          .from("jobs")
+          .select("id, risk_score, location")
+          .is("deleted_at", null)
+          .in("id", idChunk);
+        for (const j of jobsData ?? []) {
+          const row = j as { id: string; risk_score: number | null; location: string | null };
+          jobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
+        }
+      }
 
       type CatStats = { count: number; riskSum: number; riskCount: number };
       const current: Record<string, CatStats> = {};
@@ -557,23 +581,36 @@ analyticsRouter.get(
 
       const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
       const prevUntil = since;
-      const { data: prevItems } = await supabase
-        .from("mitigation_items")
-        .select("id, job_id, code, title, factor_id")
-        .eq("organization_id", orgId)
-        .gte("created_at", prevSince)
-        .lt("created_at", prevUntil)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
-      const prevList = (prevItems || []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
-      const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
-      const { data: prevJobsData } =
-        prevJobIds.length > 0
-          ? await supabase.from("jobs").select("id, risk_score, location").is("deleted_at", null).in("id", prevJobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
-          : { data: [] };
-      const prevJobMap = new Map(
-        (prevJobsData || []).map((j: any) => [j.id, { risk_score: j.risk_score as number | null, location: (j.location as string) ?? "unknown" }])
+      const { data: prevItems } = await fetchAllPages<{
+        id: string;
+        job_id: string;
+        code: string | null;
+        title: string | null;
+        factor_id: string | null;
+      }>((offset, limit) =>
+        supabase
+          .from("mitigation_items")
+          .select("id, job_id, code, title, factor_id")
+          .eq("organization_id", orgId)
+          .gte("created_at", prevSince)
+          .lt("created_at", prevUntil)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
       );
+      const prevList = (prevItems ?? []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
+      const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
+      const prevJobMap = new Map<string, { risk_score: number | null; location: string }>();
+      for (const idChunk of chunkArray(prevJobIds, 500)) {
+        const { data: prevJobsData } = await supabase
+          .from("jobs")
+          .select("id, risk_score, location")
+          .is("deleted_at", null)
+          .in("id", idChunk);
+        for (const j of prevJobsData ?? []) {
+          const row = j as { id: string; risk_score: number | null; location: string | null };
+          prevJobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
+        }
+      }
       const prev: Record<string, CatStats> = {};
       for (const m of prevList) {
         const category = groupBy === "location" ? (prevJobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
@@ -627,19 +664,20 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
-        .select("id")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: jobList, error: jobsError } = await fetchAllPages<{ id: string }>((offset, limit) =>
+        supabase
+          .from("jobs")
+          .select("id")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
 
       if (jobsError) throw jobsError;
-      const jobList = jobs || [];
-      const jobIds = jobList.map((j: any) => j.id);
+      const jobIds = (jobList ?? []).map((j) => j.id);
       const totalJobs = jobIds.length;
       if (totalJobs === 0) {
         return res.json({
@@ -651,23 +689,47 @@ analyticsRouter.get(
         });
       }
 
-      const [sigRes, photoRes, checklistRes] = await Promise.all([
-        supabase.from("signatures").select("job_id").eq("organization_id", orgId).in("job_id", jobIds).order("signed_at", { ascending: false }).limit(MAX_FETCH_LIMIT),
-        jobIds.length > 0
-          ? supabase.from("documents").select("job_id").eq("organization_id", orgId).eq("type", "photo").in("job_id", jobIds).order("created_at", { ascending: false }).limit(MAX_FETCH_LIMIT)
-          : Promise.resolve({ data: [] as { job_id: string }[] }),
-        supabase
-          .from("mitigation_items")
-          .select("job_id, completed_at")
-          .eq("organization_id", orgId)
-          .in("job_id", jobIds)
-          .order("created_at", { ascending: false })
-          .limit(MAX_FETCH_LIMIT),
-      ]);
-
-      const jobsWithSignatureSet = new Set((sigRes.data || []).map((r: any) => r.job_id));
-      const jobsWithPhotoSet = new Set((photoRes.data || []).map((r: any) => r.job_id));
-      const mitigationList = (checklistRes.data || []) as { job_id: string; completed_at: string | null }[];
+      const jobsWithSignatureSet = new Set<string>();
+      const jobsWithPhotoSet = new Set<string>();
+      const mitigationList: { job_id: string; completed_at: string | null }[] = [];
+      for (const idChunk of chunkArray(jobIds, 500)) {
+        const [sigRes, photoRes, checklistRes] = await Promise.all([
+          fetchAllPages<{ job_id: string }>((o, l) =>
+            supabase
+              .from("signatures")
+              .select("job_id")
+              .eq("organization_id", orgId)
+              .in("job_id", idChunk)
+              .order("signed_at", { ascending: false })
+              .range(o, o + l - 1)
+          ),
+          fetchAllPages<{ job_id: string }>((o, l) =>
+            supabase
+              .from("documents")
+              .select("job_id")
+              .eq("organization_id", orgId)
+              .eq("type", "photo")
+              .in("job_id", idChunk)
+              .order("created_at", { ascending: false })
+              .range(o, o + l - 1)
+          ),
+          fetchAllPages<{ job_id: string; completed_at: string | null }>((o, l) =>
+            supabase
+              .from("mitigation_items")
+              .select("job_id, completed_at")
+              .eq("organization_id", orgId)
+              .in("job_id", idChunk)
+              .order("created_at", { ascending: false })
+              .range(o, o + l - 1)
+          ),
+        ]);
+        if (sigRes.error) throw sigRes.error;
+        if (photoRes.error) throw photoRes.error;
+        if (checklistRes.error) throw checklistRes.error;
+        (sigRes.data ?? []).forEach((r) => jobsWithSignatureSet.add(r.job_id));
+        (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
+        mitigationList.push(...(checklistRes.data ?? []));
+      }
       // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
       const byJob: Record<string, { total: number; completed: number }> = {};
       for (const id of jobIds) byJob[id] = { total: 0, completed: 0 };
@@ -732,22 +794,27 @@ analyticsRouter.get(
       const now = new Date().toISOString();
 
       // Always use raw jobs filtered by created_at so total/completed and rates are over the exact requested range (no MV whole-week inflation).
-      const { data: jobs, error } = await supabase
-        .from("jobs")
-        .select("id, status, created_at, updated_at, due_date")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: jobs, error } = await fetchAllPages<
+        { id: string; status: string | null; created_at: string; updated_at: string | null; completed_at: string | null; due_date: string | null }
+      >((offset, limit) =>
+        supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
 
       if (error) throw error;
-      const list = (jobs || []) as {
+      const list = (jobs ?? []) as {
         id: string;
         status: string | null;
         created_at: string;
         updated_at: string | null;
+        completed_at: string | null;
         due_date: string | null;
       }[];
 
@@ -760,10 +827,10 @@ analyticsRouter.get(
       const durations: number[] = [];
       let onTimeCount = 0;
       for (const j of completedList) {
-        const completedAt = j.updated_at ?? j.created_at;
-        const daysToComplete = (new Date(completedAt).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
+        const daysToComplete = (new Date(completionTs).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
         durations.push(daysToComplete);
-        if (j.due_date && new Date(completedAt) <= new Date(j.due_date)) onTimeCount += 1;
+        if (j.due_date && new Date(completionTs) <= new Date(j.due_date)) onTimeCount += 1;
       }
       const avg_days_to_complete =
         durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
@@ -1186,49 +1253,50 @@ analyticsRouter.get(
       sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
       const sinceIso = sinceDate.toISOString();
 
-      const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
-        .select("id, status, risk_level, created_at")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", sinceIso)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: jobs, error: jobsError } = await fetchAllPages<JobSummaryRecord>((offset, limit) =>
+        supabase
+          .from("jobs")
+          .select("id, status, risk_level, created_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      );
 
       if (jobsError) throw jobsError;
 
-      const jobList = (jobs || []) as JobSummaryRecord[];
+      const jobList = (jobs ?? []) as JobSummaryRecord[];
       const jobIds = jobList.map((j) => j.id);
 
-      const [documentsResponse, mitigationsResponse] = await Promise.all([
-        jobIds.length
-          ? supabase
+      const documents: { job_id: string }[] = [];
+      const completions: { job_id: string; completed_by: string | null }[] = [];
+      for (const idChunk of chunkArray(jobIds, 500)) {
+        const [docRes, mitRes] = await Promise.all([
+          fetchAllPages<{ job_id: string }>((o, l) =>
+            supabase
               .from("documents")
               .select("id, job_id")
-              .in("job_id", jobIds)
+              .in("job_id", idChunk)
               .order("created_at", { ascending: false })
-              .limit(MAX_FETCH_LIMIT)
-          : Promise.resolve({ data: [] as { job_id: string }[], error: null }),
-        jobIds.length
-          ? supabase
+              .range(o, o + l - 1)
+          ),
+          fetchAllPages<{ job_id: string; completed_by: string | null }>((o, l) =>
+            supabase
               .from("mitigation_items")
               .select("id, job_id, completed_at, completed_by")
-              .in("job_id", jobIds)
+              .in("job_id", idChunk)
               .not("completed_at", "is", null)
               .gte("completed_at", sinceIso)
               .order("created_at", { ascending: false })
-              .limit(MAX_FETCH_LIMIT)
-          : Promise.resolve({
-              data: [] as { job_id: string; completed_by: string | null }[],
-              error: null,
-            }),
-      ]);
-
-      if (documentsResponse.error) throw documentsResponse.error;
-      if (mitigationsResponse.error) throw mitigationsResponse.error;
-
-      const documents = documentsResponse.data || [];
-      const completions = mitigationsResponse.data || [];
+              .range(o, o + l - 1)
+          ),
+        ]);
+        if (docRes.error) throw docRes.error;
+        if (mitRes.error) throw mitRes.error;
+        documents.push(...(docRes.data ?? []));
+        completions.push(...(mitRes.data ?? []));
+      }
 
       const jobCountsByStatus: Record<string, number> = {};
       for (const job of jobList) {
