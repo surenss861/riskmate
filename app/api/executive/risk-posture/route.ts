@@ -7,9 +7,10 @@ const PAGE_SIZE = 1000
 /**
  * Fetches all rows for a paginated Supabase query by requesting pages of PAGE_SIZE
  * until a partial page is returned. Avoids PostgREST default ~1k row limit.
+ * Accepts PromiseLike so Supabase client's thenable return type is valid.
  */
 async function fetchAllPages<T>(
-  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: { message: string } | null }>
+  fetchPage: (offset: number, limit: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 ): Promise<T[]> {
   const acc: T[] = []
   let offset = 0
