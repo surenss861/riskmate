@@ -1,6 +1,6 @@
--- Analytics indexes (same as 20260230100038 intent; split so RPCs run in 38).
--- Runs inside transaction. For zero write-lock in production, run
--- supabase/scripts/create_analytics_indexes_concurrent.sql manually first (outside a transaction).
+-- Analytics indexes (safe to run in SQL Editor or migrations).
+-- Same as migration 20260230100043; use this if you need to create indexes manually.
+-- (CONCURRENTLY is not used here so it runs inside a transaction; run each CONCURRENTLY statement separately if you need zero write-lock.)
 CREATE INDEX IF NOT EXISTS idx_mitigation_items_org_created
   ON mitigation_items(organization_id, created_at);
 

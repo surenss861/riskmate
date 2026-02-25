@@ -218,59 +218,39 @@ analyticsRouter.get(
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
 
-        // Completion trend: use completion-by-week MV (keyed by COALESCE(completed_at, created_at)) and jobs_created from job_stats.
+        // Completion trend: creation-scoped cohort — use analytics_weekly_job_stats only (jobs_created and jobs_completed are both creation-week keyed) so rate ≤ 100%.
         if (metric === "completion") {
-          const [jobStatsRes, completionRes] = await Promise.all([
-            fetchAllPages<{ week_start: string; jobs_created: number; avg_risk: number | null }>(async (offset, limit) => {
-              const { data, error } = await supabase
-                .from("analytics_weekly_job_stats")
-                .select("week_start, jobs_created, avg_risk")
-                .eq("organization_id", orgId)
-                .gte("week_start", sinceWeek)
-                .lte("week_start", untilWeek)
-                .order("week_start", { ascending: true })
-                .range(offset, offset + limit - 1);
-              return { data, error };
-            }),
-            fetchAllPages<{ week_start: string; jobs_completed: number }>(async (offset, limit) => {
-              const { data, error } = await supabase
-                .from("analytics_weekly_completion_stats")
-                .select("week_start, jobs_completed")
-                .eq("organization_id", orgId)
-                .gte("week_start", sinceWeek)
-                .lte("week_start", untilWeek)
-                .order("week_start", { ascending: true })
-                .range(offset, offset + limit - 1);
-              return { data, error };
-            }),
-          ]);
-          if (!jobStatsRes.error && !completionRes.error) {
-            const jobRows = (jobStatsRes.data ?? []) as { week_start: string; jobs_created: number }[];
-            const compRows = (completionRes.data ?? []) as { week_start: string; jobs_completed: number }[];
-            const compByWeek = new Map<string, number>();
-            for (const r of compRows) {
-              const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
-              compByWeek.set(w, (compByWeek.get(w) ?? 0) + (r.jobs_completed ?? 0));
-            }
+          const { data: jobStatsRows, error: jobStatsError } = await fetchAllPages<{
+            week_start: string;
+            jobs_created: number;
+            jobs_completed: number;
+          }>(async (offset, limit) => {
+            const { data, error } = await supabase
+              .from("analytics_weekly_job_stats")
+              .select("week_start, jobs_created, jobs_completed")
+              .eq("organization_id", orgId)
+              .gte("week_start", sinceWeek)
+              .lte("week_start", untilWeek)
+              .order("week_start", { ascending: true })
+              .range(offset, offset + limit - 1);
+            return { data, error };
+          });
+          if (!jobStatsError && jobStatsRows) {
+            const rows = jobStatsRows as { week_start: string; jobs_created: number; jobs_completed: number }[];
             if (groupBy === "week") {
-              for (const r of jobRows) {
+              for (const r of rows) {
                 const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
                 const created = r.jobs_created ?? 0;
-                const completed = compByWeek.get(period) ?? 0;
+                const completed = r.jobs_completed ?? 0;
                 const value = created === 0 ? 0 : Math.round((completed / created) * 10000) / 100;
                 points.push({ period, value, label: period });
               }
             } else {
               const byMonth = new Map<string, { jobs_created: number; jobs_completed: number }>();
-              for (const r of jobRows) {
+              for (const r of rows) {
                 const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
                 const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0 };
                 cur.jobs_created += r.jobs_created ?? 0;
-                byMonth.set(period, cur);
-              }
-              for (const r of compRows) {
-                const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
-                const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0 };
                 cur.jobs_completed += r.jobs_completed ?? 0;
                 byMonth.set(period, cur);
               }
@@ -369,19 +349,17 @@ analyticsRouter.get(
 
       const bucketValues = new Map<string, number>();
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
-      // Completion: bucket by creation date for denominator, by completion date (COALESCE(completed_at, created_at)) for numerator.
+      // Completion: creation-scoped — denominator and numerator keyed by job creation date; numerator = jobs created in period that are completed (rate ≤ 100%).
       const bucketCreated = new Map<string, number>();
       const bucketCompleted = new Map<string, number>();
 
       for (const j of jobList) {
         const keyCreated = getBucketKey(new Date(j.created_at));
         const completed = j.status?.toLowerCase() === "completed";
-        const completionTs = j.completed_at ?? j.created_at;
-        const keyCompleted = getBucketKey(new Date(completionTs));
 
         if (metric === "completion") {
           bucketCreated.set(keyCreated, (bucketCreated.get(keyCreated) ?? 0) + 1);
-          if (completed) bucketCompleted.set(keyCompleted, (bucketCompleted.get(keyCompleted) ?? 0) + 1);
+          if (completed) bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1);
         } else if (metric === "jobs") {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
         } else if (metric === "risk" && j.risk_score != null) {
