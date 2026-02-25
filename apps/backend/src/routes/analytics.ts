@@ -806,12 +806,9 @@ analyticsRouter.get(
             .from("mitigation_items")
             .select("id, job_id, created_at, completed_at, completed_by")
             .eq("organization_id", orgId)
-            .in("job_id", ids);
-          if (crewId) {
-            query = query
-              .gte("created_at", sinceIso)
-              .or(`completed_at.is.null,completed_at.gte.${sinceIso}`);
-          }
+            .in("job_id", ids)
+            .gte("created_at", sinceIso)
+            .or(`completed_at.is.null,completed_at.gte.${sinceIso}`);
           const { data, error } = await query
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1);
@@ -825,14 +822,12 @@ analyticsRouter.get(
       const documentsRaw: DocumentRecord[] = [];
       for (const ids of documentsByChunk) {
         const { data, error } = await fetchAllPages<DocumentRecord>(async (offset, limit) => {
-          let query = supabase
+          const query = supabase
             .from("documents")
             .select("id, job_id, created_at, type")
             .eq("organization_id", orgId)
-            .in("job_id", ids);
-          if (crewId) {
-            query = query.gte("created_at", sinceIso);
-          }
+            .in("job_id", ids)
+            .gte("created_at", sinceIso);
           const { data, error } = await query
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1);

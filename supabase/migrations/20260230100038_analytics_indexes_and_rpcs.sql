@@ -171,6 +171,8 @@ AS $$
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
+      AND j.created_at >= p_since
+      AND j.created_at <= p_until
   ),
   assigned_union AS (
     SELECT assigned_to_id, id FROM completed_in_period
@@ -213,4 +215,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned includes all open assigned jobs.';
+  'Returns per-user team performance aggregates; jobs_assigned and overdue_count are period-scoped (completed in period + open jobs created in period).';
