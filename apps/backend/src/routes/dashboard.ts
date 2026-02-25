@@ -183,7 +183,7 @@ dashboardRouter.get(
       const jobIds = allJobsForLists.map((j) => j.id);
       const evidenceByJob: Record<string, number> = {};
       if (jobIds.length > 0) {
-        const { data: docs } = await supabase.from("documents").select("job_id").in("job_id", jobIds);
+        const { data: docs } = await supabase.from("documents").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds);
         (docs || []).forEach((d: { job_id: string }) => {
           evidenceByJob[d.job_id] = (evidenceByJob[d.job_id] || 0) + 1;
         });

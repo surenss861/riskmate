@@ -621,6 +621,7 @@ analyticsRouter.get(
         const { data: jobsData } = await supabase
           .from("jobs")
           .select("id, risk_score, location")
+          .eq("organization_id", orgId)
           .is("deleted_at", null)
           .in("id", idChunk);
         for (const j of jobsData ?? []) {
@@ -668,6 +669,7 @@ analyticsRouter.get(
         const { data: prevJobsData } = await supabase
           .from("jobs")
           .select("id, risk_score, location")
+          .eq("organization_id", orgId)
           .is("deleted_at", null)
           .in("id", idChunk);
         for (const j of prevJobsData ?? []) {
