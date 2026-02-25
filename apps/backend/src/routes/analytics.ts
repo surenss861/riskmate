@@ -9,13 +9,35 @@ export const analyticsRouter: ExpressRouter = express.Router();
 // In-memory cache for insights: 1h TTL per org
 const INSIGHTS_CACHE_TTL_MS = 60 * 60 * 1000;
 const insightsCache = new Map<string, { data: ReturnType<typeof generateInsights> extends Promise<infer T> ? T : never; expires: number }>();
+let insightsCacheHits = 0;
+let insightsCacheMisses = 0;
 
 async function getCachedInsights(orgId: string) {
   const entry = insightsCache.get(orgId);
-  if (entry && Date.now() < entry.expires) return entry.data;
+  if (entry && Date.now() < entry.expires) {
+    insightsCacheHits += 1;
+    return entry.data;
+  }
+  insightsCacheMisses += 1;
   const data = await generateInsights(orgId);
   insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
   return data;
+}
+
+/** Analytics observability: cache hit rates and entry count for metrics endpoint. */
+export function getAnalyticsObservability(): {
+  insights_cache: { hits: number; misses: number; hit_rate: number; entries: number };
+} {
+  const total = insightsCacheHits + insightsCacheMisses;
+  const hit_rate = total === 0 ? 0 : Math.round((insightsCacheHits / total) * 10000) / 100;
+  return {
+    insights_cache: {
+      hits: insightsCacheHits,
+      misses: insightsCacheMisses,
+      hit_rate,
+      entries: insightsCache.size,
+    },
+  };
 }
 
 type MitigationItem = {
@@ -150,6 +172,31 @@ analyticsRouter.get(
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];
+      const periodLabel = periodKey === "1y" ? "1y" : `${days}d";
+
+      // Compliance trend: SQL-side aggregation only (no full row fetch)
+      if (metric === "compliance") {
+        const { data: complianceRows, error: complianceError } = await supabase.rpc("get_trends_compliance_buckets", {
+          p_org_id: orgId,
+          p_since: since,
+          p_until: until,
+          p_group_by: groupBy,
+        });
+        if (!complianceError && complianceRows && Array.isArray(complianceRows)) {
+          const compPoints: Point[] = (complianceRows as { period_key: string; total: number; with_signature: number; with_photo: number; checklist_complete: number }[]).map((r) => {
+            const total = Number(r.total ?? 0);
+            const sigRate = total === 0 ? 0 : Number(r.with_signature ?? 0) / total;
+            const photoRate = total === 0 ? 0 : Number(r.with_photo ?? 0) / total;
+            const checklistRate = total === 0 ? 0 : Number(r.checklist_complete ?? 0) / total;
+            const valuePct = total === 0 ? 0 : Math.round(((sigRate + photoRate + checklistRate) / 3) * 10000) / 100;
+            const periodStr = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : new Date(r.period_key).toISOString().slice(0, 10);
+            return { period: periodStr, value: valuePct, label: periodStr };
+          });
+          return res.json({ period: periodLabel, groupBy, metric, data: compPoints });
+        }
+        if (complianceError) throw complianceError;
+      }
+
       const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
 
       if (useMv) {
@@ -240,93 +287,7 @@ analyticsRouter.get(
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
       const bucketCompletion = new Map<string, { total: number; completed: number }>();
 
-      if (metric === "compliance" && jobList.length > 0) {
-        const trendJobIds = jobList.map((j) => j.id);
-        const jobsWithSigSet = new Set<string>();
-        const jobsWithPhotoSet = new Set<string>();
-        const mitigationList: { job_id: string; completed_at: string | null }[] = [];
-        for (const idChunk of chunkArray(trendJobIds, 500)) {
-          const [sigRes, photoRes, checklistRes] = await Promise.all([
-            fetchAllPages<{ job_id: string }>(async (o, l) => {
-              const { data, error } = await supabase
-                .from("signatures")
-                .select("job_id")
-                .eq("organization_id", orgId)
-                .in("job_id", idChunk)
-                .order("signed_at", { ascending: false })
-                .range(o, o + l - 1);
-              return { data, error };
-            }),
-            fetchAllPages<{ job_id: string }>(async (o, l) => {
-              const { data, error } = await supabase
-                .from("documents")
-                .select("job_id")
-                .eq("organization_id", orgId)
-                .eq("type", "photo")
-                .in("job_id", idChunk)
-                .order("created_at", { ascending: false })
-                .range(o, o + l - 1);
-              return { data, error };
-            }),
-            fetchAllPages<{ job_id: string; completed_at: string | null }>(async (o, l) => {
-              const { data, error } = await supabase
-                .from("mitigation_items")
-                .select("job_id, completed_at")
-                .eq("organization_id", orgId)
-                .in("job_id", idChunk)
-                .order("created_at", { ascending: false })
-                .range(o, o + l - 1);
-              return { data, error };
-            }),
-          ]);
-          if (sigRes.error) throw sigRes.error;
-          if (photoRes.error) throw photoRes.error;
-          if (checklistRes.error) throw checklistRes.error;
-          (sigRes.data ?? []).forEach((r) => jobsWithSigSet.add(r.job_id));
-          (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
-          mitigationList.push(...(checklistRes.data ?? []));
-        }
-
-        // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
-        const byJobTrend: Record<string, { total: number; completed: number }> = {};
-        for (const j of jobList) byJobTrend[j.id] = { total: 0, completed: 0 };
-        for (const m of mitigationList) {
-          if (!byJobTrend[m.job_id]) continue;
-          byJobTrend[m.job_id].total += 1;
-          if (m.completed_at) byJobTrend[m.job_id].completed += 1;
-        }
-        const jobChecklistCompleteSet = new Set(
-          jobList.filter(
-            (j) => byJobTrend[j.id].total === 0 || byJobTrend[j.id].completed === byJobTrend[j.id].total
-          ).map((j) => j.id)
-        );
-        type BucketCompliance = { jobIds: string[]; sigCount: number; photoCount: number; checklistCompleteCount: number };
-        const bucketCompliance = new Map<string, BucketCompliance>();
-        for (const j of jobList) {
-          const key = getBucketKey(new Date(j.created_at));
-          let cur = bucketCompliance.get(key);
-          if (!cur) {
-            cur = { jobIds: [], sigCount: 0, photoCount: 0, checklistCompleteCount: 0 };
-            bucketCompliance.set(key, cur);
-          }
-          cur.jobIds.push(j.id);
-          if (jobsWithSigSet.has(j.id)) cur.sigCount += 1;
-          if (jobsWithPhotoSet.has(j.id)) cur.photoCount += 1;
-          if (jobChecklistCompleteSet.has(j.id)) cur.checklistCompleteCount += 1;
-        }
-        for (const [period] of [...bucketCompliance.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          const cur = bucketCompliance.get(period)!;
-          const n = cur.jobIds.length;
-          const sigRate = n === 0 ? 0 : cur.sigCount / n;
-          const photoRate = n === 0 ? 0 : cur.photoCount / n;
-          const checklistRate = n === 0 ? 0 : cur.checklistCompleteCount / n;
-          const value = (sigRate + photoRate + checklistRate) / 3;
-          // Scale to 0–100 percentage to match /analytics/compliance-rate and other analytics endpoints
-          const valuePct = Math.round(value * 10000) / 100;
-          points.push({ period, value: valuePct, label: period });
-        }
-      } else {
-        for (const j of jobList) {
+      for (const j of jobList) {
           const key = getBucketKey(new Date(j.created_at));
           const completed = j.status?.toLowerCase() === "completed";
           if (metric === "completion") {
@@ -361,9 +322,7 @@ analyticsRouter.get(
             points.push({ period, value, label: period });
           }
         }
-      }
 
-      const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
       return res.json({ period: periodLabel, groupBy, metric, data: points });
     } catch (error: any) {
       console.error("Analytics trends error:", error);
@@ -372,7 +331,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/risk-heatmap — aggregate by job_type and day_of_week (30d/90d), avg_risk and count per bucket
+// GET /api/analytics/risk-heatmap — SQL-side aggregation by job_type and day_of_week
 analyticsRouter.get(
   "/risk-heatmap",
   authenticate as unknown as express.RequestHandler,
@@ -390,45 +349,19 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobs, error } = await fetchAllPages<{
-        job_type: string | null;
-        risk_score: number | null;
-        created_at: string;
-      }>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("jobs")
-          .select("job_type, risk_score, created_at")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .gte("created_at", since)
-          .lte("created_at", until)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
+      const { data: rows, error } = await supabase.rpc("get_risk_heatmap_buckets", {
+        p_org_id: orgId,
+        p_since: since,
+        p_until: until,
       });
-
       if (error) throw error;
-      const list = (jobs || []) as { job_type: string | null; risk_score: number | null; created_at: string }[];
-
-      type BucketKey = string;
-      const bucketSums: Record<BucketKey, { sum: number; count: number; riskCount: number }> = {};
-      for (const j of list) {
-        const jobType = j.job_type ?? "other";
-        const dayOfWeek = new Date(j.created_at).getUTCDay();
-        const key = `${jobType}|${dayOfWeek}`;
-        if (!bucketSums[key]) bucketSums[key] = { sum: 0, count: 0, riskCount: 0 };
-        bucketSums[key].count += 1;
-        if (j.risk_score != null) {
-          bucketSums[key].sum += j.risk_score;
-          bucketSums[key].riskCount += 1;
-        }
-      }
-
-      const buckets = Object.entries(bucketSums).map(([key, { sum, count, riskCount }]) => {
-        const [job_type, day_of_week_str] = key.split("|");
-        const avg_risk = riskCount === 0 ? 0 : Math.round((sum / riskCount) * 100) / 100;
-        return { job_type, day_of_week: parseInt(day_of_week_str, 10), avg_risk, count };
-      });
+      const list = (Array.isArray(rows) ? rows : []) as { job_type: string; day_of_week: number; avg_risk: number; count: number }[];
+      const buckets = list.map((r) => ({
+        job_type: r.job_type ?? "other",
+        day_of_week: Number(r.day_of_week ?? 0),
+        avg_risk: Number(r.avg_risk ?? 0),
+        count: Number(r.count ?? 0),
+      }));
       return res.json({ period: `${days}d`, buckets });
     } catch (error: any) {
       console.error("Analytics risk-heatmap error:", error);
@@ -515,7 +448,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/hazard-frequency — groupBy type|location, count and avg_risk per category, trend vs previous window
+// GET /api/analytics/hazard-frequency — SQL-side aggregation by type|location, trend vs previous window
 analyticsRouter.get(
   "/hazard-frequency",
   authenticate as unknown as express.RequestHandler,
@@ -534,109 +467,30 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
-      const { data: items, error } = await fetchAllPages<{
-        id: string;
-        job_id: string;
-        code: string | null;
-        title: string | null;
-        factor_id: string | null;
-      }>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("mitigation_items")
-          .select("id, job_id, code, title, factor_id")
-          .eq("organization_id", orgId)
-          .gte("created_at", since)
-          .lte("created_at", until)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
-      });
-
-      if (error) throw error;
-      const itemList = (items ?? []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
-      const jobIds = [...new Set(itemList.map((m) => m.job_id))];
-
-      const jobMap = new Map<string, { risk_score: number | null; location: string }>();
-      for (const idChunk of chunkArray(jobIds, 500)) {
-        const { data: jobsData } = await supabase
-          .from("jobs")
-          .select("id, risk_score, location")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .in("id", idChunk);
-        for (const j of jobsData ?? []) {
-          const row = j as { id: string; risk_score: number | null; location: string | null };
-          jobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
-        }
-      }
-
-      type CatStats = { count: number; riskSum: number; riskCount: number };
-      const current: Record<string, CatStats> = {};
-      for (const m of itemList) {
-        const category = groupBy === "location" ? (jobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
-        if (!current[category]) current[category] = { count: 0, riskSum: 0, riskCount: 0 };
-        current[category].count += 1;
-        const score = jobMap.get(m.job_id)?.risk_score;
-        if (score != null) {
-          current[category].riskSum += score;
-          current[category].riskCount += 1;
-        }
-      }
-
-      const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
       const prevUntil = since;
-      const { data: prevItems } = await fetchAllPages<{
-        id: string;
-        job_id: string;
-        code: string | null;
-        title: string | null;
-        factor_id: string | null;
-      }>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("mitigation_items")
-          .select("id, job_id, code, title, factor_id")
-          .eq("organization_id", orgId)
-          .gte("created_at", prevSince)
-          .lt("created_at", prevUntil)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
+      const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data: rows, error } = await supabase.rpc("get_hazard_frequency_buckets", {
+        p_org_id: orgId,
+        p_since: since,
+        p_until: until,
+        p_prev_since: prevSince,
+        p_prev_until: prevUntil,
+        p_group_by: groupBy,
       });
-      const prevList = (prevItems ?? []) as { id: string; job_id: string; code: string | null; title: string | null; factor_id: string | null }[];
-      const prevJobIds = [...new Set(prevList.map((m) => m.job_id))];
-      const prevJobMap = new Map<string, { risk_score: number | null; location: string }>();
-      for (const idChunk of chunkArray(prevJobIds, 500)) {
-        const { data: prevJobsData } = await supabase
-          .from("jobs")
-          .select("id, risk_score, location")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .in("id", idChunk);
-        for (const j of prevJobsData ?? []) {
-          const row = j as { id: string; risk_score: number | null; location: string | null };
-          prevJobMap.set(row.id, { risk_score: row.risk_score, location: row.location ?? "unknown" });
-        }
-      }
-      const prev: Record<string, CatStats> = {};
-      for (const m of prevList) {
-        const category = groupBy === "location" ? (prevJobMap.get(m.job_id)?.location ?? "unknown") : (m.code || m.factor_id || m.title || "unknown");
-        if (!prev[category]) prev[category] = { count: 0, riskSum: 0, riskCount: 0 };
-        prev[category].count += 1;
-        const score = prevJobMap.get(m.job_id)?.risk_score;
-        if (score != null) {
-          prev[category].riskSum += score;
-          prev[category].riskCount += 1;
-        }
-      }
-
-      const itemsOut = Object.entries(current).map(([category, s]) => {
-        const avg_risk = s.riskCount === 0 ? 0 : Math.round((s.riskSum / s.riskCount) * 100) / 100;
-        const prevS = prev[category];
-        const prevCount = prevS?.count ?? 0;
-        const trend = prevCount === 0 ? (s.count > 0 ? "up" : "neutral") : s.count > prevCount ? "up" : s.count < prevCount ? "down" : "neutral";
-        return { category, count: s.count, avg_risk, trend };
+      if (error) throw error;
+      const list = (Array.isArray(rows) ? rows : []) as { category: string; count: number; avg_risk: number; prev_count: number }[];
+      const itemsOut = list.map((r) => {
+        const count = Number(r.count ?? 0);
+        const prevCount = Number(r.prev_count ?? 0);
+        const trend =
+          prevCount === 0 ? (count > 0 ? "up" : "neutral") : count > prevCount ? "up" : count < prevCount ? "down" : "neutral";
+        return {
+          category: r.category ?? "unknown",
+          count,
+          avg_risk: Number(r.avg_risk ?? 0),
+          trend,
+        };
       });
-      itemsOut.sort((a, b) => b.count - a.count);
       return res.json({ period: `${days}d`, groupBy, items: itemsOut.slice(0, 100) });
     } catch (error: any) {
       console.error("Analytics hazard-frequency error:", error);
@@ -645,7 +499,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/compliance-rate — signature completion, photo upload, checklist completion, overall rate
+// GET /api/analytics/compliance-rate — SQL-side aggregation: signature, photo, checklist, overall (0–100)
 analyticsRouter.get(
   "/compliance-rate",
   authenticate as unknown as express.RequestHandler,
@@ -670,22 +524,14 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobList, error: jobsError } = await fetchAllPages<{ id: string }>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("jobs")
-          .select("id")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .gte("created_at", since)
-          .lte("created_at", until)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
+      const { data: kpiRows, error: rpcError } = await supabase.rpc("get_compliance_rate_kpis", {
+        p_org_id: orgId,
+        p_since: since,
+        p_until: until,
       });
-
-      if (jobsError) throw jobsError;
-      const jobIds = (jobList ?? []).map((j) => j.id);
-      const totalJobs = jobIds.length;
+      if (rpcError) throw rpcError;
+      const row = Array.isArray(kpiRows) ? kpiRows[0] : kpiRows;
+      const totalJobs = Number(row?.total_jobs ?? 0);
       if (totalJobs === 0) {
         return res.json({
           period: `${days}d`,
@@ -695,71 +541,13 @@ analyticsRouter.get(
           overall: 0,
         });
       }
-
-      const jobsWithSignatureSet = new Set<string>();
-      const jobsWithPhotoSet = new Set<string>();
-      const mitigationList: { job_id: string; completed_at: string | null }[] = [];
-      for (const idChunk of chunkArray(jobIds, 500)) {
-        const [sigRes, photoRes, checklistRes] = await Promise.all([
-          fetchAllPages<{ job_id: string }>(async (o, l) => {
-            const { data, error } = await supabase
-              .from("signatures")
-              .select("job_id")
-              .eq("organization_id", orgId)
-              .in("job_id", idChunk)
-              .order("signed_at", { ascending: false })
-              .range(o, o + l - 1);
-            return { data, error };
-          }),
-          fetchAllPages<{ job_id: string }>(async (o, l) => {
-            const { data, error } = await supabase
-              .from("documents")
-              .select("job_id")
-              .eq("organization_id", orgId)
-              .eq("type", "photo")
-              .in("job_id", idChunk)
-              .order("created_at", { ascending: false })
-              .range(o, o + l - 1);
-            return { data, error };
-          }),
-          fetchAllPages<{ job_id: string; completed_at: string | null }>(async (o, l) => {
-            const { data, error } = await supabase
-              .from("mitigation_items")
-              .select("job_id, completed_at")
-              .eq("organization_id", orgId)
-              .in("job_id", idChunk)
-              .order("created_at", { ascending: false })
-              .range(o, o + l - 1);
-            return { data, error };
-          }),
-        ]);
-        if (sigRes.error) throw sigRes.error;
-        if (photoRes.error) throw photoRes.error;
-        if (checklistRes.error) throw checklistRes.error;
-        (sigRes.data ?? []).forEach((r) => jobsWithSignatureSet.add(r.job_id));
-        (photoRes.data ?? []).forEach((r) => jobsWithPhotoSet.add(r.job_id));
-        mitigationList.push(...(checklistRes.data ?? []));
-      }
-      // Per-job checklist: job is checklist-complete when all its mitigation items are completed (or it has none).
-      const byJob: Record<string, { total: number; completed: number }> = {};
-      for (const id of jobIds) byJob[id] = { total: 0, completed: 0 };
-      for (const m of mitigationList) {
-        if (!byJob[m.job_id]) continue;
-        byJob[m.job_id].total += 1;
-        if (m.completed_at) byJob[m.job_id].completed += 1;
-      }
-      const jobsWithChecklistComplete = jobIds.filter(
-        (jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total
-      ).length;
-      const sigRate = totalJobs === 0 ? 0 : jobsWithSignatureSet.size / totalJobs;
-      const photoRate = totalJobs === 0 ? 0 : jobsWithPhotoSet.size / totalJobs;
-      const checklistRate = totalJobs === 0 ? 0 : jobsWithChecklistComplete / totalJobs;
-      // Return percentages (0–100), not fractions: multiply by 100, then round; overall = average of percentage values
-      const signatures = Math.round(sigRate * 10000) / 100;
-      const photos = Math.round(photoRate * 10000) / 100;
-      const checklists = Math.round(checklistRate * 10000) / 100;
-      const overall =
-        totalJobs === 0 ? 0 : Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
+      const withSig = Number(row?.jobs_with_signature ?? 0);
+      const withPhoto = Number(row?.jobs_with_photo ?? 0);
+      const checklistComplete = Number(row?.jobs_checklist_complete ?? 0);
+      const signatures = Math.round((withSig / totalJobs) * 10000) / 100;
+      const photos = Math.round((withPhoto / totalJobs) * 10000) / 100;
+      const checklists = Math.round((checklistComplete / totalJobs) * 10000) / 100;
+      const overall = Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
 
       return res.json({
         period: `${days}d`,

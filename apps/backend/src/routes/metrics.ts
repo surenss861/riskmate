@@ -1,8 +1,8 @@
 /**
  * Worker Metrics Endpoint
- * 
- * Provides observability into export queue, worker health, and system state
- * Useful for monitoring and debugging
+ *
+ * Provides observability into export queue, worker health, analytics (cache, timings), and system state.
+ * Useful for monitoring and debugging.
  */
 
 import express, { type Router as ExpressRouter } from 'express'
@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabaseClient'
 import { authenticate, AuthenticatedRequest } from '../middleware/auth'
 import { RequestWithId } from '../middleware/requestId'
 import { createErrorResponse } from '../utils/errorResponse'
+import { getAnalyticsObservability } from './analytics'
 
 export const metricsRouter: ExpressRouter = express.Router()
 
@@ -101,6 +102,32 @@ metricsRouter.get(
       console.error('[Metrics] Error:', err)
       const { response: errorResponse, errorId } = createErrorResponse({
         message: 'Failed to fetch metrics',
+        internalMessage: err?.message || String(err),
+        code: 'METRICS_ERROR',
+        requestId,
+        statusCode: 500,
+      })
+      res.setHeader('X-Error-ID', errorId)
+      res.status(500).json(errorResponse)
+    }
+  }
+)
+
+// GET /api/metrics/analytics — analytics observability (insights cache hit rate, etc.)
+metricsRouter.get(
+  '/analytics',
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest & RequestWithId
+    const requestId = authReq.requestId || 'unknown'
+
+    try {
+      const observability = getAnalyticsObservability()
+      res.json({ data: observability })
+    } catch (err: any) {
+      console.error('[Metrics] Analytics observability error:', err)
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: 'Failed to fetch analytics metrics',
         internalMessage: err?.message || String(err),
         code: 'METRICS_ERROR',
         requestId,

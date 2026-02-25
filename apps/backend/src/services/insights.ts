@@ -37,8 +37,6 @@ const MAX_JOBS = 10000;
 const DEADLINE_RISK_DAYS = 2;
 /** Window for due-soon / pending-signature insights (days from now). */
 const DUE_WINDOW_DAYS = 7;
-/** Cap for due-relevance job query (performance). */
-const DUE_JOBS_CAP = 2000;
 
 function dateRange(days: number): { since: string; until: string } {
   const until = new Date();
@@ -68,73 +66,34 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
     const twoDaysFromNow = new Date(now.getTime() + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
     const sevenDaysFromNow = new Date(now.getTime() + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    // Due-relevance: open/active jobs with due_date in window (overdue or due within 7 days). No created_at filter so older active jobs are included.
-    const { data: dueRelevanceJobs, error: dueJobsError } = await supabase
-      .from("jobs")
-      .select("id, status, risk_score, risk_level, created_at, due_date, job_type")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .not("due_date", "is", null)
-      .lte("due_date", sevenDaysFromNow.toISOString())
-      .order("due_date", { ascending: true })
-      .limit(DUE_JOBS_CAP);
+    // Full counts and limited payload via RPC (no cap; metrics reflect full set)
+    const { data: dueCountsRows, error: dueCountsError } = await supabase.rpc("get_insights_due_counts", {
+      p_org_id: orgId,
+      p_now: nowIso,
+      p_two_days_later: twoDaysFromNow.toISOString(),
+      p_seven_days_later: sevenDaysFromNow.toISOString(),
+    });
+    if (dueCountsError) return insights;
+    const dueCounts = Array.isArray(dueCountsRows) ? dueCountsRows[0] : dueCountsRows;
+    if (!dueCounts) return insights;
 
-    if (dueJobsError) return insights;
-    const dueJobList = (dueRelevanceJobs || []) as {
-      id: string;
-      status: string | null;
-      risk_score: number | null;
-      risk_level: string | null;
-      created_at: string;
-      due_date: string | null;
-      job_type: string | null;
-    }[];
+    const deadlineRiskCount = Number(dueCounts.deadline_risk_count ?? 0);
+    const deadlineRiskJobIds = (dueCounts.deadline_risk_job_ids ?? []) as string[];
 
-    // --- 1. Deadline risk: open jobs <50% complete with <2 days to due ---
-    const openJobIdsWithDueSoon = dueJobList
-      .filter((j) => {
-        if (j.status?.toLowerCase() === "completed") return false;
-        if (!j.due_date) return false;
-        const due = new Date(j.due_date).getTime();
-        return due <= twoDaysFromNow.getTime() && due >= now.getTime();
-      })
-      .map((j) => j.id);
-
-    let deadlineRiskJobIds: string[] = [];
-    if (openJobIdsWithDueSoon.length > 0) {
-      const { data: mitigations } = await supabase
-        .from("mitigation_items")
-        .select("job_id, completed_at")
-        .eq("organization_id", orgId)
-        .in("job_id", openJobIdsWithDueSoon)
-        .limit(MAX_JOBS);
-
-      const byJob: Record<string, { total: number; completed: number }> = {};
-      for (const jid of openJobIdsWithDueSoon) byJob[jid] = { total: 0, completed: 0 };
-      (mitigations || []).forEach((m: { job_id: string; completed_at: string | null }) => {
-        if (!byJob[m.job_id]) return;
-        byJob[m.job_id].total += 1;
-        if (m.completed_at) byJob[m.job_id].completed += 1;
-      });
-      deadlineRiskJobIds = openJobIdsWithDueSoon.filter((jid) => {
-        const { total, completed } = byJob[jid];
-        const pct = total === 0 ? 0 : completed / total;
-        return pct < 0.5;
-      });
-    }
-    if (deadlineRiskJobIds.length > 0) {
+    // --- 1. Deadline risk: open jobs <50% complete with <2 days to due (full count from RPC) ---
+    if (deadlineRiskCount > 0) {
       insights.push({
         id: id(),
         type: "deadline_risk",
         title: "Deadline risk",
-        description: `${deadlineRiskJobIds.length} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
-        severity: deadlineRiskJobIds.length > 5 ? "critical" : deadlineRiskJobIds.length > 2 ? "warning" : "info",
-        metric_value: deadlineRiskJobIds.length,
+        description: `${deadlineRiskCount} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
+        severity: deadlineRiskCount > 5 ? "critical" : deadlineRiskCount > 2 ? "warning" : "info",
+        metric_value: deadlineRiskCount,
         metric_label: "Jobs at risk",
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
         action_url: `${jobsPath}?due_soon=true`,
-        data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskJobIds.length },
+        data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskCount },
       });
     }
 
@@ -185,38 +144,23 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       });
     }
 
-    // --- 3. Pending signatures near compliance deadlines (due within 7 days, no created_at filter) ---
-    const dueInSevenDays = dueJobList.filter((j) => {
-      if (!j.due_date) return false;
-      const due = new Date(j.due_date).getTime();
-      const daysToDue = (due - now.getTime()) / (24 * 60 * 60 * 1000);
-      return daysToDue >= 0 && daysToDue <= DUE_WINDOW_DAYS;
-    });
-    const dueInSevenIds = dueInSevenDays.map((j) => j.id);
-    if (dueInSevenIds.length > 0) {
-      const { data: sigs } = await supabase
-        .from("signatures")
-        .select("job_id")
-        .eq("organization_id", orgId)
-        .in("job_id", dueInSevenIds)
-        .limit(MAX_JOBS);
-      const jobsWithSignature = new Set((sigs || []).map((r: { job_id: string }) => r.job_id));
-      const nearDeadline = dueInSevenDays.filter((j) => !jobsWithSignature.has(j.id));
-      if (nearDeadline.length > 0) {
-        insights.push({
-          id: id(),
-          type: "pending_signatures",
-          title: "Pending signatures near deadline",
-          description: `${nearDeadline.length} job(s) have no signature and are within 7 days of compliance deadline.`,
-          severity: nearDeadline.length > 3 ? "critical" : nearDeadline.length > 1 ? "warning" : "info",
-          metric_value: nearDeadline.length,
-          metric_label: "Jobs",
-          period_days: PERIOD_DAYS,
-          created_at: new Date().toISOString(),
-          action_url: `${jobsPath}?pending_signatures=true`,
-          data: { job_ids: nearDeadline.map((j) => j.id).slice(0, 50), count: nearDeadline.length },
-        });
-      }
+    // --- 3. Pending signatures near compliance deadlines (full count from RPC) ---
+    const pendingSignaturesCount = Number(dueCounts.pending_signatures_count ?? 0);
+    const pendingSignaturesJobIds = (dueCounts.pending_signatures_job_ids ?? []) as string[];
+    if (pendingSignaturesCount > 0) {
+      insights.push({
+        id: id(),
+        type: "pending_signatures",
+        title: "Pending signatures near deadline",
+        description: `${pendingSignaturesCount} job(s) have no signature and are within 7 days of compliance deadline.`,
+        severity: pendingSignaturesCount > 3 ? "critical" : pendingSignaturesCount > 1 ? "warning" : "info",
+        metric_value: pendingSignaturesCount,
+        metric_label: "Jobs",
+        period_days: PERIOD_DAYS,
+        created_at: new Date().toISOString(),
+        action_url: `${jobsPath}?pending_signatures=true`,
+        data: { job_ids: pendingSignaturesJobIds.slice(0, 50), count: pendingSignaturesCount },
+      });
     }
 
     // --- 4. Team productivity change vs previous period ---
@@ -259,14 +203,10 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
     });
 
-    // --- 5. Overdue tasks (open jobs with due_date < now; no created_at filter) ---
-    const overdueCount = dueJobList.filter(
-      (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso
-    ).length;
+    // --- 5. Overdue tasks (full count from RPC) ---
+    const overdueCount = Number(dueCounts.overdue_count ?? 0);
+    const overdueJobIds = (dueCounts.overdue_job_ids ?? []) as string[];
     if (overdueCount > 0) {
-      const overdueIds = dueJobList
-        .filter((j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < nowIso)
-        .map((j) => j.id);
       insights.push({
         id: id(),
         type: "overdue_tasks",
@@ -278,7 +218,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         period_days: PERIOD_DAYS,
         created_at: new Date().toISOString(),
         action_url: `${jobsPath}?overdue=true`,
-        data: { job_ids: overdueIds.slice(0, 50), count: overdueCount },
+        data: { job_ids: overdueJobIds.slice(0, 50), count: overdueCount },
       });
     }
 
