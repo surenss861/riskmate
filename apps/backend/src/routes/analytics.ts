@@ -438,6 +438,8 @@ analyticsRouter.get(
 );
 
 // GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days to complete, overdue_count per user
+// Per-user dataset is built from jobs completed within the requested period (completed_at with fallback updated_at), regardless of created_at.
+// Overdue counts are based on due_date vs completion/now for a clearly defined window, not restricted solely by created_at.
 analyticsRouter.get(
   "/team-performance",
   authenticate as unknown as express.RequestHandler,
@@ -454,8 +456,10 @@ analyticsRouter.get(
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
+      const nowDate = new Date();
+      const nowIso = nowDate.toISOString();
 
-      const { data: jobs, error: jobsError } = await fetchAllPages<{
+      type JobRow = {
         id: string;
         assigned_to_id: string | null;
         status: string | null;
@@ -463,29 +467,49 @@ analyticsRouter.get(
         updated_at: string | null;
         completed_at: string | null;
         due_date: string | null;
-      }>(async (offset, limit) => {
+      };
+      const effectiveCompletion = (j: JobRow) => j.completed_at ?? j.updated_at ?? j.created_at;
+
+      // Jobs completed within the requested period (completed_at fallback updated_at), regardless of created_at.
+      const completedById = new Map<string, JobRow>();
+      const addCompletedInPeriod = async (
+        queryFn: (offset: number, limit: number) => Promise<{ data: JobRow[] | null; error: any }>
+      ) => {
+        const { data, error } = await fetchAllPages<JobRow>(queryFn);
+        if (error) throw error;
+        for (const j of data ?? []) {
+          const ts = effectiveCompletion(j);
+          if (ts >= since && ts <= until) completedById.set(j.id, j);
+        }
+      };
+      await addCompletedInPeriod(async (offset, limit) => {
         const { data, error } = await supabase
           .from("jobs")
           .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
           .eq("organization_id", orgId)
           .is("deleted_at", null)
-          .gte("created_at", since)
-          .lte("created_at", until)
-          .order("created_at", { ascending: false })
+          .eq("status", "completed")
+          .gte("completed_at", since)
+          .lte("completed_at", until)
+          .order("completed_at", { ascending: false })
           .range(offset, offset + limit - 1);
-        return { data, error };
+        return { data: data as JobRow[] | null, error };
       });
-
-      if (jobsError) throw jobsError;
-      const jobList = (jobs ?? []) as {
-        id: string;
-        assigned_to_id: string | null;
-        status: string | null;
-        created_at: string;
-        updated_at: string | null;
-        completed_at: string | null;
-        due_date: string | null;
-      }[];
+      await addCompletedInPeriod(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .eq("status", "completed")
+          .is("completed_at", null)
+          .gte("updated_at", since)
+          .lte("updated_at", until)
+          .order("updated_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data: data as JobRow[] | null, error };
+      });
+      const completedInPeriodList = [...completedById.values()];
 
       type UserStats = {
         jobs_assigned: number;
@@ -496,36 +520,62 @@ analyticsRouter.get(
       };
       const byUser: Record<string, UserStats> = {};
 
-      const nowDate = new Date();
-      for (const j of jobList) {
+      // Jobs assigned and created in period (for denominator: assigned-in-period = completed-in-period + open-created-in-period).
+      const { data: openCreatedInPeriod, error: openErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, assigned_to_id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .neq("status", "completed")
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
+      if (openErr) throw openErr;
+      const openInPeriodList = (openCreatedInPeriod ?? []) as JobRow[];
+
+      const assignedInPeriodByUser = new Map<string, Set<string>>();
+      for (const j of completedInPeriodList) {
         const uid = j.assigned_to_id ?? "unassigned";
         if (uid === "unassigned") continue;
-        if (!byUser[uid])
-          byUser[uid] = {
-            jobs_assigned: 0,
-            jobs_completed: 0,
-            completion_rate: 0,
-            avg_days: 0,
-            overdue_count: 0,
-          };
-        byUser[uid].jobs_assigned += 1;
-        const completed = j.status?.toLowerCase() === "completed";
-        if (completed) byUser[uid].jobs_completed += 1;
-        if (j.due_date) {
-          const dueDate = new Date(j.due_date);
-          const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
-          if (completed) {
-            if (new Date(completionTs) > dueDate) byUser[uid].overdue_count += 1;
-          } else if (nowDate > dueDate) {
-            byUser[uid].overdue_count += 1;
-          }
-        }
+        if (!assignedInPeriodByUser.has(uid)) assignedInPeriodByUser.set(uid, new Set());
+        assignedInPeriodByUser.get(uid)!.add(j.id);
+      }
+      for (const j of openInPeriodList) {
+        const uid = j.assigned_to_id ?? "unassigned";
+        if (uid === "unassigned") continue;
+        if (!assignedInPeriodByUser.has(uid)) assignedInPeriodByUser.set(uid, new Set());
+        assignedInPeriodByUser.get(uid)!.add(j.id);
+      }
+
+      for (const uid of assignedInPeriodByUser.keys()) {
+        if (uid === "unassigned") continue;
+        byUser[uid] = {
+          jobs_assigned: 0,
+          jobs_completed: 0,
+          completion_rate: 0,
+          avg_days: 0,
+          overdue_count: 0,
+        };
+      }
+
+      for (const j of completedInPeriodList) {
+        const uid = j.assigned_to_id ?? "unassigned";
+        if (uid === "unassigned") continue;
+        byUser[uid].jobs_completed += 1;
+      }
+      for (const [uid, jobIds] of assignedInPeriodByUser) {
+        if (uid === "unassigned") continue;
+        byUser[uid].jobs_assigned = jobIds.size;
       }
 
       const completedDurations: Record<string, number[]> = {};
-      for (const j of jobList) {
-        if (j.assigned_to_id == null || j.status?.toLowerCase() !== "completed") continue;
-        const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
+      for (const j of completedInPeriodList) {
+        if (j.assigned_to_id == null) continue;
+        const completionTs = effectiveCompletion(j);
         const created = new Date(j.created_at).getTime();
         const completed = new Date(completionTs).getTime();
         const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
@@ -533,8 +583,32 @@ analyticsRouter.get(
         completedDurations[j.assigned_to_id].push(daysToComplete);
       }
 
+      // Overdue: (1) completed in period but completed after due_date, (2) currently open jobs assigned to user with due_date < now (all org, not restricted by created_at).
+      const { data: openJobsAll, error: openAllErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, assigned_to_id, status, due_date, completed_at, updated_at, created_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .neq("status", "completed")
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
+      if (openAllErr) throw openAllErr;
+      const openJobsList = (openJobsAll ?? []) as JobRow[];
+      for (const j of completedInPeriodList) {
+        const uid = j.assigned_to_id ?? "unassigned";
+        if (uid === "unassigned" || !j.due_date) continue;
+        const completionTs = effectiveCompletion(j);
+        if (new Date(completionTs) > new Date(j.due_date)) byUser[uid].overdue_count += 1;
+      }
+      for (const j of openJobsList) {
+        const uid = j.assigned_to_id ?? "unassigned";
+        if (uid === "unassigned" || !byUser[uid]) continue;
+        if (j.due_date && j.due_date < nowIso) byUser[uid].overdue_count += 1;
+      }
+
       const members = Object.entries(byUser).map(([user_id, s]) => {
-        // Return 0–100 percentage to align with other analytics endpoints
         const completion_rate =
           s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 100;
         const durations = completedDurations[user_id] ?? [];
@@ -836,6 +910,8 @@ analyticsRouter.get(
 );
 
 // GET /api/analytics/job-completion — contract: completion_rate, avg_days, on_time_rate, overdue_count; optional: total, completed, period, avg_days_to_complete
+// Completion KPIs are scoped by jobs completed in the requested period (completed_at with fallback updated_at/created_at).
+// overdue_count is computed separately on currently open org jobs and is not mixed into the completion denominator.
 analyticsRouter.get(
   "/job-completion",
   authenticate as unknown as express.RequestHandler,
@@ -863,8 +939,6 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const now = new Date().toISOString();
 
-      // Scope base job set by created_at in [since, until] (and deleted_at IS NULL); use this set for totals/denominators.
-      // For durations and on-time, use completed_at (fallback updated_at) but keep inclusion on created_at.
       type JobRow = {
         id: string;
         status: string | null;
@@ -873,47 +947,114 @@ analyticsRouter.get(
         completed_at: string | null;
         due_date: string | null;
       };
-      const { data: jobList, error: jobsErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
+
+      // Base set for completion KPIs: jobs completed within the requested period (completed_at, fallback updated_at, created_at).
+      const effectiveCompletionDate = (j: JobRow) => j.completed_at ?? j.updated_at ?? j.created_at;
+      const completedById = new Map<string, JobRow>();
+
+      const addCompletedInPeriod = async (
+        queryFn: (offset: number, limit: number) => Promise<{ data: JobRow[] | null; error: any }>
+      ) => {
+        const { data, error } = await fetchAllPages<JobRow>(queryFn);
+        if (error) throw error;
+        for (const j of data ?? []) {
+          const ts = effectiveCompletionDate(j);
+          if (ts >= since && ts <= until) completedById.set(j.id, j);
+        }
+      };
+      await addCompletedInPeriod(async (offset, limit) => {
         const { data, error } = await supabase
           .from("jobs")
           .select("id, status, created_at, updated_at, completed_at, due_date")
           .eq("organization_id", orgId)
           .is("deleted_at", null)
+          .eq("status", "completed")
+          .gte("completed_at", since)
+          .lte("completed_at", until)
+          .order("completed_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data: data as JobRow[] | null, error };
+      });
+      await addCompletedInPeriod(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .eq("status", "completed")
+          .is("completed_at", null)
+          .gte("updated_at", since)
+          .lte("updated_at", until)
+          .order("updated_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data: data as JobRow[] | null, error };
+      });
+      await addCompletedInPeriod(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .eq("status", "completed")
+          .is("completed_at", null)
+          .is("updated_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data: data as JobRow[] | null, error };
+      });
+      const completedList = [...completedById.values()];
+
+      const completed = completedList.length;
+
+      // Denominator for completion_rate: jobs completed in period + open jobs created in period (do not mix in overdue_count).
+      const { data: openInPeriodRows, error: openErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .neq("status", "completed")
           .gte("created_at", since)
           .lte("created_at", until)
           .order("created_at", { ascending: false })
           .range(offset, offset + limit - 1);
         return { data, error };
       });
-      if (jobsErr) throw jobsErr;
-      const list = jobList ?? [];
-
-      const total = list.length;
-      const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
-
-      // Return as 0–100 percentage (two decimals) to match other analytics responses
+      if (openErr) throw openErr;
+      const openInPeriod = (openInPeriodRows ?? []).length;
+      const total = completed + openInPeriod;
       const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
-      const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
 
       const durations: number[] = [];
       let onTimeCount = 0;
       for (const j of completedList) {
-        const completionTs = j.completed_at ?? j.updated_at ?? j.created_at;
+        const completionTs = effectiveCompletionDate(j);
         const daysToComplete = (new Date(completionTs).getTime() - new Date(j.created_at).getTime()) / (1000 * 60 * 60 * 24);
         durations.push(daysToComplete);
         if (j.due_date && new Date(completionTs) <= new Date(j.due_date)) onTimeCount += 1;
       }
       const avg_days_to_complete =
         durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
-      // Return as 0–100 percentage (two decimals) to match other analytics responses
       const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 100;
 
-      // Overdue count against the created-at-scoped set
-      const overdue_count = list.filter(
-        (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now
+      // Overdue count: separately on currently open jobs (all org), not mixed into completion denominator.
+      const { data: openJobsRows, error: openAllErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .neq("status", "completed")
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
+      if (openAllErr) throw openAllErr;
+      const overdue_count = (openJobsRows ?? []).filter(
+        (j) => j.due_date != null && j.due_date < now
       ).length;
 
-      // Contract: completion_rate, avg_days, on_time_rate, overdue_count. Optional extensions: total, completed, period, avg_days_to_complete.
       return res.json({
         completion_rate,
         avg_days: avg_days_to_complete,
