@@ -188,7 +188,26 @@ analyticsRouter.get(
       const points: Point[] = [];
       const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
 
-      // Compliance trend: SQL-side aggregation only (no full row fetch)
+      // Day grouping: SQL aggregation only — RPC returns { period_key, value } per bucket (no full job fetch)
+      if (groupBy === "day") {
+        const { data: dayRows, error: dayError } = await supabase.rpc("get_trends_day_buckets", {
+          p_org_id: orgId,
+          p_since: since,
+          p_until: until,
+          p_metric: metric,
+        });
+        if (!dayError && dayRows && Array.isArray(dayRows)) {
+          const dayPoints: Point[] = (dayRows as { period_key: string; value: number }[]).map((r) => {
+            const periodStr = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : new Date(r.period_key).toISOString().slice(0, 10);
+            const value = Number(r.value ?? 0);
+            return { period: periodStr, value, label: periodStr };
+          });
+          return res.json({ period: periodLabel, groupBy, metric, data: dayPoints });
+        }
+        if (dayError) throw dayError;
+      }
+
+      // Compliance trend (week/month): SQL-side aggregation only
       if (metric === "compliance") {
         const { data: complianceRows, error: complianceError } = await supabase.rpc("get_trends_compliance_buckets", {
           p_org_id: orgId,
@@ -218,16 +237,15 @@ analyticsRouter.get(
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
 
-        // Completion trend: creation-scoped cohort — use analytics_weekly_job_stats only (jobs_created and jobs_completed are both creation-week keyed) so rate ≤ 100%.
+        // Completion trend: use completion timestamps — query analytics_weekly_completion_stats (jobs_completed per org/week), value = completions in bucket; denominator = total completions in bucket for rate alignment.
         if (metric === "completion") {
-          const { data: jobStatsRows, error: jobStatsError } = await fetchAllPages<{
+          const { data: completionStatsRows, error: completionStatsError } = await fetchAllPages<{
             week_start: string;
-            jobs_created: number;
             jobs_completed: number;
           }>(async (offset, limit) => {
             const { data, error } = await supabase
-              .from("analytics_weekly_job_stats")
-              .select("week_start, jobs_created, jobs_completed")
+              .from("analytics_weekly_completion_stats")
+              .select("week_start, jobs_completed")
               .eq("organization_id", orgId)
               .gte("week_start", sinceWeek)
               .lte("week_start", untilWeek)
@@ -235,29 +253,22 @@ analyticsRouter.get(
               .range(offset, offset + limit - 1);
             return { data, error };
           });
-          if (!jobStatsError && jobStatsRows) {
-            const rows = jobStatsRows as { week_start: string; jobs_created: number; jobs_completed: number }[];
+          if (!completionStatsError && completionStatsRows) {
+            const rows = completionStatsRows as { week_start: string; jobs_completed: number }[];
             if (groupBy === "week") {
               for (const r of rows) {
                 const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
-                const created = r.jobs_created ?? 0;
-                const completed = r.jobs_completed ?? 0;
-                const value = created === 0 ? 0 : Math.round((completed / created) * 10000) / 100;
+                const value = Number(r.jobs_completed ?? 0);
                 points.push({ period, value, label: period });
               }
             } else {
-              const byMonth = new Map<string, { jobs_created: number; jobs_completed: number }>();
+              const byMonth = new Map<string, number>();
               for (const r of rows) {
                 const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
-                const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0 };
-                cur.jobs_created += r.jobs_created ?? 0;
-                cur.jobs_completed += r.jobs_completed ?? 0;
-                byMonth.set(period, cur);
+                byMonth.set(period, (byMonth.get(period) ?? 0) + Number(r.jobs_completed ?? 0));
               }
               for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const cur = byMonth.get(period)!;
-                const value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 100;
-                points.push({ period, value, label: period });
+                points.push({ period, value: byMonth.get(period) ?? 0, label: period });
               }
             }
             return res.json({ period: periodLabel, groupBy, metric, data: points });
@@ -349,8 +360,7 @@ analyticsRouter.get(
 
       const bucketValues = new Map<string, number>();
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
-      // Completion: creation-scoped — denominator and numerator keyed by job creation date; numerator = jobs created in period that are completed (rate ≤ 100%).
-      const bucketCreated = new Map<string, number>();
+      // Completion (fallback path): bucket by completed_at (fallback created_at), value = completions count in bucket
       const bucketCompleted = new Map<string, number>();
 
       for (const j of jobList) {
@@ -358,8 +368,10 @@ analyticsRouter.get(
         const completed = j.status?.toLowerCase() === "completed";
 
         if (metric === "completion") {
-          bucketCreated.set(keyCreated, (bucketCreated.get(keyCreated) ?? 0) + 1);
-          if (completed) bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1);
+          if (completed) {
+            const keyCompleted = getBucketKey(new Date(j.completed_at ?? j.created_at));
+            bucketCompleted.set(keyCompleted, (bucketCompleted.get(keyCompleted) ?? 0) + 1);
+          }
         } else if (metric === "jobs") {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
         } else if (metric === "risk" && j.risk_score != null) {
@@ -371,11 +383,8 @@ analyticsRouter.get(
       }
 
       if (metric === "completion") {
-        const allPeriods = new Set([...bucketCreated.keys(), ...bucketCompleted.keys()]);
-        for (const period of [...allPeriods].sort((a, b) => a.localeCompare(b))) {
-          const created = bucketCreated.get(period) ?? 0;
-          const completed = bucketCompleted.get(period) ?? 0;
-          const value = created === 0 ? 0 : Math.round((completed / created) * 10000) / 100;
+        for (const period of [...bucketCompleted.keys()].sort((a, b) => a.localeCompare(b))) {
+          const value = bucketCompleted.get(period) ?? 0;
           points.push({ period, value, label: period });
         }
       } else if (metric === "jobs") {
