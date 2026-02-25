@@ -1216,6 +1216,146 @@ export const analyticsApi = {
     const endpoint = qs ? `/api/analytics/summary?${qs}` : `/api/analytics/summary`;
     return apiRequest<AnalyticsSummaryResponse>(endpoint);
   },
+
+  /** Job completion KPIs: completion_rate, avg_days, on_time_rate, overdue counts. Maps to GET /api/analytics/job-completion. */
+  jobCompletion: async (params?: { period?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    const qs = query.toString();
+    return apiRequest<{
+      completion_rate: number;
+      avg_days: number;
+      on_time_rate: number;
+      overdue_count: number;
+      overdue_count_all_time: number;
+      total: number;
+      completed: number;
+      period: string;
+      avg_days_to_complete?: number;
+      locked?: boolean;
+    }>(`/api/analytics/job-completion${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Compliance rate KPIs: signatures, photos, checklists, overall (0–100). Maps to GET /api/analytics/compliance-rate. */
+  complianceRate: async (params?: { period?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    const qs = query.toString();
+    return apiRequest<{
+      period: string;
+      signatures: number;
+      photos: number;
+      checklists: number;
+      overall: number;
+      locked?: boolean;
+    }>(`/api/analytics/compliance-rate${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Team performance KPIs per user. Maps to GET /api/analytics/team-performance. */
+  teamPerformance: async (params?: { period?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    const qs = query.toString();
+    return apiRequest<{
+      period: string;
+      members: Array<{
+        user_id: string;
+        jobs_assigned: number;
+        jobs_completed: number;
+        completion_rate: number;
+        avg_days: number;
+        overdue_count: number;
+        name: string;
+      }>;
+      locked?: boolean;
+    }>(`/api/analytics/team-performance${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Risk heatmap by job_type and day_of_week. Maps to GET /api/analytics/risk-heatmap. */
+  riskHeatmap: async (params?: { period?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    const qs = query.toString();
+    return apiRequest<{
+      period: string;
+      buckets: Array<{
+        job_type: string;
+        day_of_week: number;
+        avg_risk: number;
+        count: number;
+      }>;
+      locked?: boolean;
+    }>(`/api/analytics/risk-heatmap${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Hazard frequency by type or location with trend. Maps to GET /api/analytics/hazard-frequency. */
+  hazardFrequency: async (params?: { period?: string; groupBy?: 'type' | 'location' }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    if (params?.groupBy) query.set('groupBy', params.groupBy);
+    const qs = query.toString();
+    return apiRequest<{
+      period: string;
+      groupBy: string;
+      items: Array<{
+        category: string;
+        count: number;
+        avg_risk: number;
+        trend: 'up' | 'down' | 'neutral';
+      }>;
+      locked?: boolean;
+    }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. */
+  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    if (params?.groupBy) query.set('groupBy', params.groupBy);
+    if (params?.metric) query.set('metric', params.metric);
+    const qs = query.toString();
+    return apiRequest<{
+      period: string;
+      groupBy: string;
+      metric: string;
+      data: Array<{ period: string; value: number; label: string }>;
+      locked?: boolean;
+    }>(`/api/analytics/trends${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Top predictive insights (cached). Maps to GET /api/analytics/insights. */
+  insights: async () => {
+    return apiRequest<{
+      insights: Array<{
+        id: string;
+        type: string;
+        title: string;
+        description: string;
+        severity: string;
+        metric_value?: number;
+        metric_label?: string;
+        period_days: number;
+        created_at: string;
+        action_url: string;
+        data: Record<string, unknown>;
+      }>;
+      locked?: boolean;
+    }>('/api/analytics/insights');
+  },
+
+  /** Analytics observability (insights cache hit rate, etc.). Maps to GET /api/metrics/analytics. */
+  analyticsMetrics: async () => {
+    return apiRequest<{
+      data: {
+        insights_cache: {
+          hits: number;
+          misses: number;
+          hit_rate: number;
+          entries: number;
+        };
+      };
+    }>('/api/metrics/analytics');
+  },
 };
 
 // Legal API - uses Next.js API routes (relative paths)

@@ -266,8 +266,8 @@ export async function GET(request: NextRequest) {
             .in('job_id', ids)
           if (crewId) {
             query = query
-              .gte('created_at', sinceIso)
-              .or(`completed_at.is.null,completed_at.gte.${sinceIso}`)
+              .eq('completed_by', crewId)
+              .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
           } else {
             query = query.or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
           }
