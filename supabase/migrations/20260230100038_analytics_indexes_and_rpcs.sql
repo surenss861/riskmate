@@ -84,7 +84,7 @@ BEGIN
       OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
-  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) all open jobs with due_date < now (includes long-overdue)
+  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) open overdue jobs whose due_date (and created_at) fall within period
   SELECT (
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) = 'completed'
@@ -99,6 +99,8 @@ BEGIN
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) != 'completed'
        AND j.due_date IS NOT NULL
+       AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
+       AND j.created_at >= p_since AND j.created_at <= p_until
        AND j.due_date < v_now)
   ) INTO v_overdue_period;
 
@@ -170,6 +172,7 @@ AS $$
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
+      AND j.created_at >= p_since
       AND j.created_at <= p_until
   ),
   assigned_union AS (
@@ -213,4 +216,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned and overdue_count include completed in period plus all open assigned jobs as of period end (backlog).';
+  'Returns per-user team performance aggregates; jobs_assigned, completion_rate, and overdue_count are period-scoped (completed in period plus open jobs created within the period).';
