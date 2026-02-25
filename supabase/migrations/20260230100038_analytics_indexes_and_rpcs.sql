@@ -1,20 +1,5 @@
--- Analytics: targeted indexes and server-side aggregate RPCs for <500ms SLA.
--- Indexes support range scans and lookups; RPCs avoid per-row pagination.
-
--- Indexes for analytics queries (avoid full table scans)
-CREATE INDEX IF NOT EXISTS idx_mitigation_items_org_created
-  ON mitigation_items(organization_id, created_at);
-
-CREATE INDEX IF NOT EXISTS idx_signatures_org_job
-  ON signatures(organization_id, job_id);
-
-CREATE INDEX IF NOT EXISTS idx_documents_org_job_type
-  ON documents(organization_id, job_id, type)
-  WHERE job_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_jobs_org_created
-  ON jobs(organization_id, created_at)
-  WHERE deleted_at IS NULL;
+-- Analytics: server-side aggregate RPCs for <500ms SLA.
+-- Indexes for analytics are in 20260230100043_analytics_indexes_concurrent.sql (CONCURRENTLY, no write locks).
 
 -- Job completion KPIs in one round-trip (organization_id + deleted_at IS NULL applied).
 -- Returns: total, completed, avg_days_to_complete, on_time_count, overdue_count_period, overdue_count_all_time

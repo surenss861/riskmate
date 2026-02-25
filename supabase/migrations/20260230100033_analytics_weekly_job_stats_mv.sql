@@ -8,7 +8,8 @@ RETURNS DATE AS $$
   SELECT (DATE_TRUNC('week', ts AT TIME ZONE 'UTC'))::DATE;
 $$ LANGUAGE SQL IMMUTABLE;
 
--- Materialized view: one row per (organization_id, week_start)
+-- Materialized view: one row per (organization_id, week_start) keyed by job creation week.
+-- For completion trends (keyed by completion date) see analytics_weekly_completion_stats in 20260230100042.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_matviews WHERE schemaname = 'public' AND matviewname = 'analytics_weekly_job_stats') THEN
@@ -25,11 +26,11 @@ BEGIN
       AND j.created_at >= (NOW() AT TIME ZONE 'UTC' - INTERVAL '2 years')
     GROUP BY j.organization_id, date_trunc_week_monday(j.created_at);
     CREATE UNIQUE INDEX ON analytics_weekly_job_stats (organization_id, week_start);
-    COMMENT ON MATERIALIZED VIEW analytics_weekly_job_stats IS 'Weekly aggregates for analytics; refresh via refresh_analytics_weekly_job_stats().';
+    COMMENT ON MATERIALIZED VIEW analytics_weekly_job_stats IS 'Weekly aggregates by creation week; refresh via refresh_analytics_weekly_job_stats().';
   END IF;
 END $$;
 
--- Refresh function (call from cron or app)
+-- Refresh function (call from cron or app); updated in 20260230100042 to also refresh analytics_weekly_completion_stats.
 CREATE OR REPLACE FUNCTION refresh_analytics_weekly_job_stats()
 RETURNS void
 LANGUAGE plpgsql
@@ -44,7 +45,7 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION refresh_analytics_weekly_job_stats() IS 'Refreshes analytics_weekly_job_stats MV. Call periodically (e.g. hourly) or after bulk job imports.';
+COMMENT ON FUNCTION refresh_analytics_weekly_job_stats() IS 'Refreshes analytics_weekly_job_stats (and completion_stats when present). Call periodically (e.g. hourly) or after bulk job imports.';
 
 -- Ensure index exists for analytics by (organization_id, created_at) — already in performance_indexes; add if missing for created_at ASC for range scans
 CREATE INDEX IF NOT EXISTS idx_jobs_org_created_at_asc
