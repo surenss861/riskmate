@@ -85,8 +85,8 @@ export async function GET(request: NextRequest) {
     // Query jobs scoped to organization_id (paginated to avoid ~1k limit)
     let jobsList: Array<{ id: string; risk_score: number | null; risk_level: string | null; status: string | null; review_flag: boolean | null; flagged_at: string | null; created_at: string }> = []
     try {
-      jobsList = await fetchAllPages((offset, limit) =>
-        supabase
+      jobsList = await fetchAllPages(async (offset, limit) => {
+        const r = await supabase
           .from('jobs')
           .select('id, risk_score, risk_level, status, review_flag, flagged_at, created_at')
           .eq('organization_id', orgContext.orgId)
@@ -95,8 +95,8 @@ export async function GET(request: NextRequest) {
           .is('deleted_at', null)
           .order('created_at', { ascending: true })
           .range(offset, offset + limit - 1)
-          .then(r => ({ data: r.data, error: r.error }))
-      )
+        return { data: r.data, error: r.error }
+      })
     } catch (e) {
       console.error('[executive/risk-posture] Error fetching jobs:', e)
     }
@@ -118,8 +118,8 @@ export async function GET(request: NextRequest) {
     // Query incidents scoped to organization_id (paginated)
     let incidentsList: Array<{ id: string; status: string | null; created_at: string }> = []
     try {
-      incidentsList = await fetchAllPages((offset, limit) =>
-        supabase
+      incidentsList = await fetchAllPages(async (offset, limit) => {
+        const r = await supabase
           .from('incidents')
           .select('id, status, created_at')
           .eq('organization_id', orgContext.orgId)
@@ -127,8 +127,8 @@ export async function GET(request: NextRequest) {
           .lte('created_at', endDate.toISOString())
           .order('created_at', { ascending: true })
           .range(offset, offset + limit - 1)
-          .then(r => ({ data: r.data, error: r.error }))
-      )
+        return { data: r.data, error: r.error }
+      })
     } catch (e) {
       console.error('[executive/risk-posture] Error fetching incidents:', e)
     }
@@ -138,8 +138,8 @@ export async function GET(request: NextRequest) {
     // Query signoffs scoped to organization_id (report_signatures has organization_id); paginated to avoid full-table scan and ~1k limit
     let orgSignoffs: Array<{ id: string; report_run_id: string; signed_at: string }> = []
     try {
-      orgSignoffs = await fetchAllPages((offset, limit) =>
-        supabase
+      orgSignoffs = await fetchAllPages(async (offset, limit) => {
+        const r = await supabase
           .from('report_signatures')
           .select('id, report_run_id, signed_at')
           .eq('organization_id', orgContext.orgId)
@@ -147,8 +147,8 @@ export async function GET(request: NextRequest) {
           .lte('signed_at', endDate.toISOString())
           .order('signed_at', { ascending: true })
           .range(offset, offset + limit - 1)
-          .then(r => ({ data: r.data, error: r.error }))
-      )
+        return { data: r.data, error: r.error }
+      })
     } catch (e) {
       console.error('[executive/risk-posture] Error fetching signoffs:', e)
     }
