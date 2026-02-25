@@ -181,7 +181,7 @@ analyticsRouter.get(
               if (metric === "jobs") value = r.jobs_created ?? 0;
               else if (metric === "risk") value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0;
               else if (metric === "completion")
-                value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 10000;
+                value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 100;
               points.push({ period, value, label: period });
             }
           } else {
@@ -203,7 +203,7 @@ analyticsRouter.get(
               if (metric === "jobs") value = cur.jobs_created;
               else if (metric === "risk") value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100;
               else if (metric === "completion")
-                value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 10000;
+                value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 100;
               points.push({ period, value, label: period });
             }
           }
@@ -347,7 +347,7 @@ analyticsRouter.get(
         if (metric === "completion") {
           for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
             const { total, completed } = bucketCompletion.get(period)!;
-            const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+            const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
             points.push({ period, value, label: period });
           }
         } else if (metric === "jobs") {
@@ -860,31 +860,47 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const now = new Date().toISOString();
 
-      // Always use raw jobs filtered by created_at so total/completed and rates are over the exact requested range (no MV whole-week inflation).
-      const { data: jobs, error } = await fetchAllPages<
-        { id: string; status: string | null; created_at: string; updated_at: string | null; completed_at: string | null; due_date: string | null }
-      >(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("jobs")
-          .select("id, status, created_at, updated_at, completed_at, due_date")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .gte("created_at", since)
-          .lte("created_at", until)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
-      });
-
-      if (error) throw error;
-      const list = (jobs ?? []) as {
+      // Scope by completion timestamp (completed_at, fallback updated_at) in [since, until]; use created_at only for duration.
+      type JobRow = {
         id: string;
         status: string | null;
         created_at: string;
         updated_at: string | null;
         completed_at: string | null;
         due_date: string | null;
-      }[];
+      };
+      const { data: jobsWithCompletedAt, error: err1 } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .not("completed_at", "is", null)
+          .gte("completed_at", since)
+          .lte("completed_at", until)
+          .order("completed_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
+      const { data: jobsWithUpdatedAt, error: err2 } = await fetchAllPages<JobRow>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .is("completed_at", null)
+          .gte("updated_at", since)
+          .lte("updated_at", until)
+          .order("updated_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
+      if (err1) throw err1;
+      if (err2) throw err2;
+      const byId = new Map<string, JobRow>();
+      for (const j of jobsWithUpdatedAt ?? []) byId.set(j.id, j);
+      for (const j of jobsWithCompletedAt ?? []) byId.set(j.id, j);
+      const list = [...byId.values()];
 
       const total = list.length;
       const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
