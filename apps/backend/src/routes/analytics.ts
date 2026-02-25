@@ -1031,7 +1031,6 @@ analyticsRouter.get(
               .select("id, risk_score, created_at")
               .eq("organization_id", orgId)
               .is("deleted_at", null)
-              .gte("created_at", sinceIso)
               .in("id", idChunk);
             if (error) throw error;
             jobsList.push(...((data as JobRecord[]) ?? []));
@@ -1347,6 +1346,7 @@ analyticsRouter.get(
             const { data, error } = await supabase
               .from("documents")
               .select("id, job_id")
+              .eq("organization_id", orgId)
               .in("job_id", idChunk)
               .order("created_at", { ascending: false })
               .range(o, o + l - 1);
@@ -1356,6 +1356,7 @@ analyticsRouter.get(
             const { data, error } = await supabase
               .from("mitigation_items")
               .select("id, job_id, completed_at, completed_by")
+              .eq("organization_id", orgId)
               .in("job_id", idChunk)
               .not("completed_at", "is", null)
               .gte("completed_at", sinceIso)

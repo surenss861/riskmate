@@ -196,7 +196,6 @@ export async function GET(request: NextRequest) {
             .select('id, risk_score, created_at')
             .eq('organization_id', orgId)
             .is('deleted_at', null)
-            .gte('created_at', sinceIso)
             .in('id', idChunk)
           if (error) throw error
           jobsList.push(...(data ?? []))
