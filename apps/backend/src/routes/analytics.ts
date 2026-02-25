@@ -40,7 +40,6 @@ type DocumentRecord = {
 };
 
 const PAGE_SIZE = 2000;
-const MAX_FETCH_LIMIT = 10000;
 
 /** Fetch all rows by paginating; no cap. */
 async function fetchAllPages<T>(
@@ -391,15 +390,22 @@ analyticsRouter.get(
       const { days } = parsePeriod(authReq.query.period as string);
       const { since, until } = dateRangeForDays(days);
 
-      const { data: jobs, error } = await supabase
-        .from("jobs")
-        .select("job_type, risk_score, created_at")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("created_at", since)
-        .lte("created_at", until)
-        .order("created_at", { ascending: false })
-        .limit(MAX_FETCH_LIMIT);
+      const { data: jobs, error } = await fetchAllPages<{
+        job_type: string | null;
+        risk_score: number | null;
+        created_at: string;
+      }>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("job_type, risk_score, created_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+        return { data, error };
+      });
 
       if (error) throw error;
       const list = (jobs || []) as { job_type: string | null; risk_score: number | null; created_at: string }[];
@@ -883,7 +889,8 @@ analyticsRouter.get(
       const total = list.length;
       const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
 
-      const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 10000;
+      // Return as 0–100 percentage (two decimals) to match other analytics responses
+      const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
       const completedList = list.filter((j) => j.status?.toLowerCase() === "completed");
 
       const durations: number[] = [];
@@ -896,7 +903,8 @@ analyticsRouter.get(
       }
       const avg_days_to_complete =
         durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
-      const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 10000;
+      // Return as 0–100 percentage (two decimals) to match other analytics responses
+      const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 100;
 
       const overdue_count = list.filter(
         (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now
