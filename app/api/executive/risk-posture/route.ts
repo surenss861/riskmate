@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { resolveOrgContext, hashId } from '@/lib/utils/orgContext'
 
+const PAGE_SIZE = 1000
+
+/**
+ * Fetches all rows for a paginated Supabase query by requesting pages of PAGE_SIZE
+ * until a partial page is returned. Avoids PostgREST default ~1k row limit.
+ */
+async function fetchAllPages<T>(
+  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const acc: T[] = []
+  let offset = 0
+  while (true) {
+    const { data, error } = await fetchPage(offset, PAGE_SIZE)
+    if (error) throw error
+    const list = data ?? []
+    acc.push(...list)
+    if (list.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+  return acc
+}
+
 /**
  * GET /api/executive/risk-posture
  * Returns risk posture metrics for executive dashboard
@@ -60,71 +82,76 @@ export async function GET(request: NextRequest) {
         startDate.setDate(endDate.getDate() - 30)
     }
 
-    // Query jobs scoped to organization_id
-    const { data: jobs, error: jobsError } = await supabase
-      .from('jobs')
-      .select('id, risk_score, risk_level, status, review_flag, flagged_at, created_at')
-      .eq('organization_id', orgContext.orgId)
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString())
-      .is('deleted_at', null)
-
-    if (jobsError) {
-      console.error('[executive/risk-posture] Error fetching jobs:', jobsError)
+    // Query jobs scoped to organization_id (paginated to avoid ~1k limit)
+    let jobsList: Array<{ id: string; risk_score: number | null; risk_level: string | null; status: string | null; review_flag: boolean | null; flagged_at: string | null; created_at: string }> = []
+    try {
+      jobsList = await fetchAllPages((offset, limit) =>
+        supabase
+          .from('jobs')
+          .select('id, risk_score, risk_level, status, review_flag, flagged_at, created_at')
+          .eq('organization_id', orgContext.orgId)
+          .gte('created_at', startDate.toISOString())
+          .lte('created_at', endDate.toISOString())
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + limit - 1)
+          .then(r => ({ data: r.data, error: r.error }))
+      )
+    } catch (e) {
+      console.error('[executive/risk-posture] Error fetching jobs:', e)
     }
 
-    const jobsList = jobs || []
     const totalJobs = jobsList.length
 
     // High risk jobs (risk_score >= 70 or risk_level = 'high' or 'critical')
-    const highRiskJobs = jobsList.filter(job => 
-      (job.risk_score && job.risk_score >= 70) || 
-      job.risk_level === 'high' || 
+    const highRiskJobs = jobsList.filter(job =>
+      (job.risk_score && job.risk_score >= 70) ||
+      job.risk_level === 'high' ||
       job.risk_level === 'critical'
     ).length
 
     // Flagged jobs (review_flag = true or flagged_at is not null)
-    const flaggedJobs = jobsList.filter(job => 
+    const flaggedJobs = jobsList.filter(job =>
       job.review_flag === true || job.flagged_at !== null
     ).length
 
-    // Query incidents scoped to organization_id
-    const { data: incidents, error: incidentsError } = await supabase
-      .from('incidents')
-      .select('id, status, created_at')
-      .eq('organization_id', orgContext.orgId)
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString())
-
-    if (incidentsError) {
-      console.error('[executive/risk-posture] Error fetching incidents:', incidentsError)
+    // Query incidents scoped to organization_id (paginated)
+    let incidentsList: Array<{ id: string; status: string | null; created_at: string }> = []
+    try {
+      incidentsList = await fetchAllPages((offset, limit) =>
+        supabase
+          .from('incidents')
+          .select('id, status, created_at')
+          .eq('organization_id', orgContext.orgId)
+          .gte('created_at', startDate.toISOString())
+          .lte('created_at', endDate.toISOString())
+          .order('created_at', { ascending: true })
+          .range(offset, offset + limit - 1)
+          .then(r => ({ data: r.data, error: r.error }))
+      )
+    } catch (e) {
+      console.error('[executive/risk-posture] Error fetching incidents:', e)
     }
 
-    const incidentsList = incidents || []
     const openIncidents = incidentsList.filter(inc => inc.status !== 'resolved' && inc.status !== 'closed').length
 
-    // Query attestations/signoffs scoped to organization_id
-    // Note: Adjust table/column names based on your actual schema
-    const { data: signoffs, error: signoffsError } = await supabase
-      .from('report_signatures')
-      .select('id, report_run_id, signed_at')
-      .gte('signed_at', startDate.toISOString())
-      .lte('signed_at', endDate.toISOString())
-
-    if (signoffsError) {
-      console.error('[executive/risk-posture] Error fetching signoffs:', signoffsError)
+    // Query signoffs scoped to organization_id (report_signatures has organization_id); paginated to avoid full-table scan and ~1k limit
+    let orgSignoffs: Array<{ id: string; report_run_id: string; signed_at: string }> = []
+    try {
+      orgSignoffs = await fetchAllPages((offset, limit) =>
+        supabase
+          .from('report_signatures')
+          .select('id, report_run_id, signed_at')
+          .eq('organization_id', orgContext.orgId)
+          .gte('signed_at', startDate.toISOString())
+          .lte('signed_at', endDate.toISOString())
+          .order('signed_at', { ascending: true })
+          .range(offset, offset + limit - 1)
+          .then(r => ({ data: r.data, error: r.error }))
+      )
+    } catch (e) {
+      console.error('[executive/risk-posture] Error fetching signoffs:', e)
     }
-
-    // Get report runs to filter by org (if report_runs has organization_id)
-    const { data: reportRuns } = await supabase
-      .from('report_runs')
-      .select('id, organization_id')
-      .eq('organization_id', orgContext.orgId)
-
-    const orgReportRunIds = new Set((reportRuns || []).map(r => r.id))
-    const orgSignoffs = (signoffs || []).filter(s => 
-      s.report_run_id && orgReportRunIds.has(s.report_run_id)
-    )
 
     const signedSignoffs = orgSignoffs.length
 
