@@ -102,8 +102,8 @@ $$;
 COMMENT ON FUNCTION get_job_completion_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
   'Returns job-completion KPIs for analytics in one round-trip; org-scoped, deleted_at IS NULL. total/completed scoped to jobs created in period so completion_rate cannot exceed 100%.';
 
--- Team performance: per-user aggregates (jobs_assigned = completed-in-period + all open assigned).
--- Returns: user_id, jobs_assigned, jobs_completed, sum_days, count_completed, overdue_count
+-- Team performance: per-user aggregates; jobs_assigned and overdue_count scoped to [p_since, p_until].
+-- jobs_assigned = completed-in-period + open jobs with created_at in period. overdue_count = overdue with due_date/completed_at in period.
 CREATE OR REPLACE FUNCTION get_team_performance_kpis(
   p_org_id UUID,
   p_since TIMESTAMPTZ,
@@ -128,7 +128,9 @@ AS $$
       j.id,
       j.due_date,
       EXTRACT(EPOCH FROM (COALESCE(j.completed_at, j.updated_at, j.created_at) - j.created_at)) / 86400.0 AS days_to_complete,
-      (j.due_date IS NOT NULL AND COALESCE(j.completed_at, j.updated_at, j.created_at) > j.due_date) AS completed_late
+      (j.due_date IS NOT NULL AND COALESCE(j.completed_at, j.updated_at, j.created_at) > j.due_date
+        AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
+        AND (j.completed_at IS NULL OR (j.completed_at >= p_since AND j.completed_at <= p_until))) AS completed_late_in_period
     FROM jobs j
     WHERE j.organization_id = p_org_id
       AND j.deleted_at IS NULL
@@ -140,15 +142,17 @@ AS $$
         OR (j.completed_at IS NULL AND j.updated_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
       )
   ),
-  -- All open jobs assigned to the user (no created_at filter) so overdue_count includes overdue jobs created before p_since
+  -- Open jobs assigned to the user with created_at in period (period-scoped jobs_assigned)
   open_jobs AS (
     SELECT j.assigned_to_id, j.id,
-      (j.due_date IS NOT NULL AND j.due_date < clock_timestamp()) AS is_overdue
+      (j.due_date IS NOT NULL AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date AND j.due_date < clock_timestamp()) AS is_overdue_in_period
     FROM jobs j
     WHERE j.organization_id = p_org_id
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
+      AND j.created_at >= p_since
+      AND j.created_at <= p_until
   ),
   assigned_union AS (
     SELECT assigned_to_id, id FROM completed_in_period
@@ -168,12 +172,12 @@ AS $$
       assigned_to_id,
       COUNT(*)::BIGINT AS jobs_completed,
       COALESCE(SUM(days_to_complete), 0) AS sum_days,
-      COUNT(*) FILTER (WHERE completed_late)::BIGINT AS overdue_completed
+      COUNT(*) FILTER (WHERE completed_late_in_period)::BIGINT AS overdue_completed
     FROM completed_in_period
     GROUP BY assigned_to_id
   ),
   open_overdue_per_user AS (
-    SELECT assigned_to_id, COUNT(*) FILTER (WHERE is_overdue)::BIGINT AS overdue_open
+    SELECT assigned_to_id, COUNT(*) FILTER (WHERE is_overdue_in_period)::BIGINT AS overdue_open
     FROM open_jobs
     GROUP BY assigned_to_id
   )
@@ -191,4 +195,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned = completed in period + all open assigned; overdue_count includes all currently overdue assigned jobs (no created_at filter on open jobs).';
+  'Per-user team performance; jobs_assigned and overdue_count scoped to [p_since, p_until]. jobs_assigned = completed in period + open jobs created in period; overdue_count = overdue with due_date/completed_at in period.';

@@ -47,27 +47,19 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Completion: scope both numerator and denominator to jobs created in the bucket; value = (jobs created that day that are completed) / (jobs created that day) * 100, clamped 0–100.
+  -- Completion: bucket by completion date (COALESCE(completed_at, created_at)); value = jobs completed that day (count).
   IF p_metric = 'completion' THEN
     RETURN QUERY
-    WITH day_buckets AS (
-      SELECT
-        (j.created_at AT TIME ZONE 'UTC')::DATE AS pk,
-        COUNT(*)::BIGINT AS total,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(j.status, '')) = 'completed')::BIGINT AS completed
-      FROM jobs j
-      WHERE j.organization_id = p_org_id
-        AND j.deleted_at IS NULL
-        AND j.created_at >= p_since
-        AND j.created_at <= p_until
-      GROUP BY (j.created_at AT TIME ZONE 'UTC')::DATE
-    )
     SELECT
-      d.pk AS period_key,
-      CASE WHEN COALESCE(d.total, 0) = 0 THEN 0
-           ELSE LEAST(100.0, ROUND((d.completed::NUMERIC / NULLIF(d.total, 0)) * 100.0, 2))
-      END AS value
-    FROM day_buckets d
+      (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE AS period_key,
+      COUNT(*)::NUMERIC AS value
+    FROM jobs j
+    WHERE j.organization_id = p_org_id
+      AND j.deleted_at IS NULL
+      AND LOWER(COALESCE(j.status, '')) = 'completed'
+      AND COALESCE(j.completed_at, j.created_at) >= p_since
+      AND COALESCE(j.completed_at, j.created_at) <= p_until
+    GROUP BY (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::DATE
     ORDER BY 1;
     RETURN;
   END IF;
@@ -135,4 +127,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_trends_day_buckets(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) IS
-  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (0–100 %), compliance. Completion = (jobs created that day that are completed) / (jobs created that day) * 100, clamped 0–100.';
+  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (count by completion date), compliance. Completion uses COALESCE(completed_at, created_at) as bucket key; value = jobs completed that day.';
