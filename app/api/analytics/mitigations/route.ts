@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
         jobs_with_any_evidence: 0,
         jobs_with_photo_evidence: 0,
         jobs_missing_required_evidence: 0,
-        required_evidence_policy: null,
+        required_evidence_policy: 'Photo required for high-risk jobs',
         avg_time_to_first_photo_minutes: null,
         trend_empty_reason: 'no_jobs',
       }, { status: 200, headers: { 'X-Request-ID': requestId } })

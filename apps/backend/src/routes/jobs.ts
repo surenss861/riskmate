@@ -2134,10 +2134,10 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
     let updatedRiskScore: number | null = null;
     let updatedClientName: string | null = null;
 
-    // Verify job belongs to organization
+    // Verify job belongs to organization and get current status/completed_at for transition logic
     const { data: existingJob, error: jobError } = await supabase
       .from("jobs")
-      .select("id, organization_id, risk_score, risk_level")
+      .select("id, organization_id, risk_score, risk_level, status, completed_at")
       .eq("id", jobId)
       .eq("organization_id", organization_id)
       .single();
@@ -2148,9 +2148,13 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
 
     // Update job fields
     if (Object.keys(jobUpdates).length > 0) {
-      if (String(jobUpdates.status ?? "").toLowerCase() === "completed" && jobUpdates.completed_at == null) {
+      const newStatus = String(jobUpdates.status ?? existingJob.status ?? "").toLowerCase();
+      const isTransitioningToCompleted = newStatus === "completed";
+      const existingCompletedAt = existingJob.completed_at ?? null;
+      if (isTransitioningToCompleted && existingCompletedAt == null) {
         jobUpdates.completed_at = new Date().toISOString();
       }
+      // If already completed, preserve existing completed_at (do not overwrite)
       const { error: updateError } = await supabase
         .from("jobs")
         .update(jobUpdates)
