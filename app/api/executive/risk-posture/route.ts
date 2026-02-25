@@ -156,12 +156,14 @@ export async function GET(request: NextRequest) {
 
     const signedSignoffs = orgSignoffs.length
 
-    // Query pending signoffs (report_runs with status = 'ready_for_signatures')
+    // Query pending signoffs (report_runs with status = 'ready_for_signatures') scoped to time range
     const { data: pendingRuns } = await supabase
       .from('report_runs')
       .select('id')
       .eq('organization_id', orgContext.orgId)
       .eq('status', 'ready_for_signatures')
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString())
 
     const pendingSignoffs = (pendingRuns || []).length
 
