@@ -56,12 +56,13 @@ BEGIN
       OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
-  -- Open jobs as of period end (denominator for completion_rate; includes backlog up to p_until)
+  -- Open jobs created within the period (denominator for completion_rate; period-scoped)
   SELECT COUNT(*)::BIGINT INTO v_open_in_period
   FROM jobs j
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) != 'completed'
+    AND j.created_at >= p_since
     AND j.created_at <= p_until;
 
   v_total := v_completed + v_open_in_period;
