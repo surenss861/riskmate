@@ -534,8 +534,9 @@ analyticsRouter.get(
       }
 
       const members = Object.entries(byUser).map(([user_id, s]) => {
+        // Return 0–100 percentage to align with other analytics endpoints
         const completion_rate =
-          s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 10000;
+          s.jobs_assigned === 0 ? 0 : Math.round((s.jobs_completed / s.jobs_assigned) * 10000) / 100;
         const durations = completedDurations[user_id] ?? [];
         const avg_days =
           durations.length === 0 ? 0 : Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 100) / 100;
@@ -860,7 +861,8 @@ analyticsRouter.get(
       const { since, until } = dateRangeForDays(days);
       const now = new Date().toISOString();
 
-      // Scope by completion timestamp (completed_at, fallback updated_at) in [since, until]; use created_at only for duration.
+      // Scope base job set by created_at in [since, until] (and deleted_at IS NULL); use this set for totals/denominators.
+      // For durations and on-time, use completed_at (fallback updated_at) but keep inclusion on created_at.
       type JobRow = {
         id: string;
         status: string | null;
@@ -869,38 +871,20 @@ analyticsRouter.get(
         completed_at: string | null;
         due_date: string | null;
       };
-      const { data: jobsWithCompletedAt, error: err1 } = await fetchAllPages<JobRow>(async (offset, limit) => {
+      const { data: jobList, error: jobsErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
         const { data, error } = await supabase
           .from("jobs")
           .select("id, status, created_at, updated_at, completed_at, due_date")
           .eq("organization_id", orgId)
           .is("deleted_at", null)
-          .not("completed_at", "is", null)
-          .gte("completed_at", since)
-          .lte("completed_at", until)
-          .order("completed_at", { ascending: false })
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .order("created_at", { ascending: false })
           .range(offset, offset + limit - 1);
         return { data, error };
       });
-      const { data: jobsWithUpdatedAt, error: err2 } = await fetchAllPages<JobRow>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("jobs")
-          .select("id, status, created_at, updated_at, completed_at, due_date")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .is("completed_at", null)
-          .gte("updated_at", since)
-          .lte("updated_at", until)
-          .order("updated_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
-      });
-      if (err1) throw err1;
-      if (err2) throw err2;
-      const byId = new Map<string, JobRow>();
-      for (const j of jobsWithUpdatedAt ?? []) byId.set(j.id, j);
-      for (const j of jobsWithCompletedAt ?? []) byId.set(j.id, j);
-      const list = [...byId.values()];
+      if (jobsErr) throw jobsErr;
+      const list = jobList ?? [];
 
       const total = list.length;
       const completed = list.filter((j) => j.status?.toLowerCase() === "completed").length;
@@ -922,6 +906,7 @@ analyticsRouter.get(
       // Return as 0–100 percentage (two decimals) to match other analytics responses
       const on_time_rate = completed === 0 ? 0 : Math.round((onTimeCount / completed) * 10000) / 100;
 
+      // Overdue count against the created-at-scoped set
       const overdue_count = list.filter(
         (j) => j.status?.toLowerCase() !== "completed" && j.due_date != null && j.due_date < now
       ).length;
