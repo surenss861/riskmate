@@ -56,13 +56,12 @@ BEGIN
       OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
-  -- Open jobs created in period (denominator for completion_rate)
+  -- Open jobs as of period end (denominator for completion_rate; includes backlog up to p_until)
   SELECT COUNT(*)::BIGINT INTO v_open_in_period
   FROM jobs j
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) != 'completed'
-    AND j.created_at >= p_since
     AND j.created_at <= p_until;
 
   v_total := v_completed + v_open_in_period;
@@ -85,7 +84,7 @@ BEGIN
       OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
     );
 
-  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) open with due in window and due < now
+  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) all open jobs with due_date < now (includes long-overdue)
   SELECT (
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) = 'completed'
@@ -100,7 +99,6 @@ BEGIN
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) != 'completed'
        AND j.due_date IS NOT NULL
-       AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
        AND j.due_date < v_now)
   ) INTO v_overdue_period;
 
@@ -172,7 +170,6 @@ AS $$
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) != 'completed'
       AND j.assigned_to_id IS NOT NULL
-      AND j.created_at >= p_since
       AND j.created_at <= p_until
   ),
   assigned_union AS (
@@ -216,4 +213,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_team_performance_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns per-user team performance aggregates; jobs_assigned and overdue_count are period-scoped (completed in period + open jobs created in period).';
+  'Returns per-user team performance aggregates; jobs_assigned and overdue_count include completed in period plus all open assigned jobs as of period end (backlog).';
