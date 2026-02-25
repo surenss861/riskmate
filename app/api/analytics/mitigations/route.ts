@@ -210,7 +210,21 @@ export async function GET(request: NextRequest) {
         jobs = jobsList
       }
     } else {
-      const { data: jobsData, error: jobsError } = await fetchAllPages<{
+      // Include jobs created in range OR jobs with mitigation items created or completed in range (so completions in-range for older items are counted).
+      const { data: mitigationJobRows } = await fetchAllPages<{ job_id: string }>(
+        async (offset, limit) => {
+          const { data, error } = await supabase
+            .from('mitigation_items')
+            .select('job_id')
+            .eq('organization_id', orgId)
+            .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
+            .range(offset, offset + limit - 1)
+          return { data, error }
+        }
+      )
+      const mitigationJobIds = new Set((mitigationJobRows ?? []).map((r) => r.job_id))
+
+      const { data: jobsInRangeData, error: jobsError } = await fetchAllPages<{
         id: string
         risk_score: number | null
         created_at: string
@@ -226,7 +240,26 @@ export async function GET(request: NextRequest) {
         return { data, error }
       })
       if (jobsError) throw jobsError
-      jobs = jobsData ?? []
+      const jobsInRange = jobsInRangeData ?? []
+      const allJobIdsSet = new Set(jobsInRange.map((j) => j.id))
+      for (const id of mitigationJobIds) allJobIdsSet.add(id)
+      const allJobIds = [...allJobIdsSet]
+      if (allJobIds.length === 0) {
+        jobs = []
+      } else {
+        const jobsList: Array<{ id: string; risk_score: number | null; created_at: string }> = []
+        for (const idChunk of chunk(allJobIds, 500)) {
+          const { data, error } = await supabase
+            .from('jobs')
+            .select('id, risk_score, created_at')
+            .eq('organization_id', orgId)
+            .is('deleted_at', null)
+            .in('id', idChunk)
+          if (error) throw error
+          jobsList.push(...(data ?? []))
+        }
+        jobs = jobsList
+      }
     }
     const jobIds = jobs.map((j) => j.id)
 

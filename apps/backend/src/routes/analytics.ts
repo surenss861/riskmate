@@ -772,7 +772,21 @@ analyticsRouter.get(
           jobs = jobsList;
         }
       } else {
-        const { data: jobsData, error: jobsError } = await fetchAllPages<JobRecord>(
+        // Include jobs created in range OR jobs with mitigation items created or completed in range (so completions in-range for older items are counted).
+        const { data: mitigationJobRows } = await fetchAllPages<{ job_id: string }>(
+          async (offset, limit) => {
+            const { data, error } = await supabase
+              .from("mitigation_items")
+              .select("job_id")
+              .eq("organization_id", orgId)
+              .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
+              .range(offset, offset + limit - 1);
+            return { data, error };
+          }
+        );
+        const mitigationJobIds = new Set((mitigationJobRows ?? []).map((r) => r.job_id));
+
+        const { data: jobsInRangeData, error: jobsError } = await fetchAllPages<JobRecord>(
           async (offset, limit) => {
             const { data, error } = await supabase
               .from("jobs")
@@ -786,7 +800,26 @@ analyticsRouter.get(
           }
         );
         if (jobsError) throw jobsError;
-        jobs = jobsData ?? [];
+        const jobsInRange = jobsInRangeData ?? [];
+        const allJobIdsSet = new Set(jobsInRange.map((j) => j.id));
+        for (const id of mitigationJobIds) allJobIdsSet.add(id);
+        const allJobIds = [...allJobIdsSet];
+        if (allJobIds.length === 0) {
+          jobs = [];
+        } else {
+          const jobsList: JobRecord[] = [];
+          for (const idChunk of chunkArray(allJobIds, 500)) {
+            const { data, error } = await supabase
+              .from("jobs")
+              .select("id, risk_score, created_at")
+              .eq("organization_id", orgId)
+              .is("deleted_at", null)
+              .in("id", idChunk);
+            if (error) throw error;
+            jobsList.push(...((data as JobRecord[]) ?? []));
+          }
+          jobs = jobsList;
+        }
       }
       const jobIds = jobs.map((j) => j.id);
 
@@ -817,13 +850,12 @@ analyticsRouter.get(
       const mitigationsRaw: MitigationItem[] = [];
       for (const ids of mitigationsByChunk) {
         const { data, error } = await fetchAllPages<MitigationItem>(async (offset, limit) => {
-          let query = supabase
+          const query = supabase
             .from("mitigation_items")
             .select("id, job_id, created_at, completed_at, completed_by")
             .eq("organization_id", orgId)
             .in("job_id", ids)
-            .gte("created_at", sinceIso)
-            .or(`completed_at.is.null,completed_at.gte.${sinceIso}`);
+            .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`);
           const { data, error } = await query
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1);
