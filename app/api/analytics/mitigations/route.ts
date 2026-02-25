@@ -161,6 +161,10 @@ export async function GET(request: NextRequest) {
     ])
 
     if (kpisResult.error) throw kpisResult.error
+    if (trendResult.error) {
+      console.error('Mitigations analytics trend RPC error:', trendResult.error)
+      throw trendResult.error
+    }
     const row = Array.isArray(kpisResult.data) ? kpisResult.data[0] : kpisResult.data
     const trendRows = (trendResult.data ?? []) as Array<{ period_key: string; completion_rate: number }>
 

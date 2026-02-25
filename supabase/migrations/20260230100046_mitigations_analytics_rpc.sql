@@ -39,7 +39,7 @@ BEGIN
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
       AND mi.completed_by = p_crew_id
-      AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo);
+      AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo));
   ELSE
     SELECT COALESCE(ARRAY_AGG(DISTINCT j.id), '{}')
     INTO v_job_ids
@@ -48,10 +48,11 @@ BEGIN
       WHERE j.organization_id = p_org_id
         AND j.deleted_at IS NULL
         AND j.created_at >= v_since_lo
+        AND j.created_at <= v_until_lo
       UNION
       SELECT mi.job_id FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
-        AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo)
+        AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo))
     ) u
     JOIN jobs j ON j.id = u.id
     WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL;
@@ -77,7 +78,7 @@ BEGIN
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
       AND mi.job_id = ANY(v_job_ids)
-      AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo)
+      AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo))
       AND (p_crew_id IS NULL OR mi.completed_by = p_crew_id)
   ),
   mit_agg AS (
@@ -94,6 +95,7 @@ BEGIN
     WHERE d.organization_id = p_org_id
       AND d.job_id = ANY(v_job_ids)
       AND d.created_at >= v_since_lo
+      AND d.created_at <= v_until_lo
     GROUP BY d.job_id
   ),
   docs_photo_first AS (
@@ -103,6 +105,7 @@ BEGIN
     WHERE d.organization_id = p_org_id
       AND d.job_id = ANY(v_job_ids)
       AND d.created_at >= v_since_lo
+      AND d.created_at <= v_until_lo
       AND d.type = 'photo'
     GROUP BY d.job_id
   ),
@@ -112,7 +115,7 @@ BEGIN
       (SELECT completed FROM mit_agg) AS completed,
       (SELECT avg_hrs FROM mit_agg) AS avg_hrs,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs WHERE risk_score IS NOT NULL AND risk_score >= 70) AS high_risk_jobs,
-      (SELECT COUNT(*)::BIGINT FROM documents d WHERE d.organization_id = p_org_id AND d.job_id = ANY(v_job_ids) AND d.created_at >= v_since_lo) AS evidence_count,
+      (SELECT COUNT(*)::BIGINT FROM documents d WHERE d.organization_id = p_org_id AND d.job_id = ANY(v_job_ids) AND d.created_at >= v_since_lo AND d.created_at <= v_until_lo) AS evidence_count,
       (SELECT COUNT(DISTINCT job_id)::BIGINT FROM docs_first) AS jobs_with_evidence,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs) AS jobs_total,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs WHERE risk_score IS NOT NULL) AS jobs_scored,
@@ -171,6 +174,7 @@ AS $$
 DECLARE
   v_job_ids UUID[];
   v_since_lo TIMESTAMPTZ := p_since;
+  v_until_lo TIMESTAMPTZ := p_until;
 BEGIN
   IF p_crew_id IS NOT NULL THEN
     SELECT COALESCE(ARRAY_AGG(DISTINCT mi.job_id), '{}')
@@ -178,17 +182,17 @@ BEGIN
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
       AND mi.completed_by = p_crew_id
-      AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo);
+      AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo));
   ELSE
     SELECT COALESCE(ARRAY_AGG(DISTINCT j.id), '{}')
     INTO v_job_ids
     FROM (
       SELECT id FROM jobs j
-      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND j.created_at >= v_since_lo
+      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND j.created_at >= v_since_lo AND j.created_at <= v_until_lo
       UNION
       SELECT mi.job_id FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
-        AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo)
+        AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo))
     ) u
     JOIN jobs j ON j.id = u.id
     WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL;
@@ -207,7 +211,7 @@ BEGIN
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
       AND mi.job_id = ANY(v_job_ids)
-      AND (mi.created_at >= v_since_lo OR mi.completed_at >= v_since_lo)
+      AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo))
       AND (p_crew_id IS NULL OR mi.completed_by = p_crew_id)
   ),
   by_day AS (
