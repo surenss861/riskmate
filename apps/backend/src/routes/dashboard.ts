@@ -7,6 +7,28 @@ export const dashboardRouter: ExpressRouter = express.Router();
 const PERIOD_DAYS = { "7d": 7, "30d": 30 } as const;
 type PeriodKey = keyof typeof PERIOD_DAYS;
 
+const PAGE_SIZE = 500;
+
+/** Fetch all rows by paginating with .range(); no default row limit. */
+async function fetchAllPages<T>(
+  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: any }>
+): Promise<{ data: T[]; error: any }> {
+  const out: T[] = [];
+  let offset = 0;
+  let hasMore = true;
+  let lastError: any = null;
+  while (hasMore) {
+    const { data, error } = await fetchPage(offset, PAGE_SIZE);
+    if (error) return { data: out, error };
+    lastError = error;
+    const chunkData = data ?? [];
+    out.push(...chunkData);
+    hasMore = chunkData.length === PAGE_SIZE;
+    offset += chunkData.length;
+  }
+  return { data: out, error: lastError };
+}
+
 function parsePeriod(value?: string | string[]): { days: number; key: PeriodKey } {
   const str = value ? (Array.isArray(value) ? value[0] : value) : "30d";
   const key = (str === "7d" || str === "30d" ? str : "30d") as PeriodKey;
@@ -65,21 +87,31 @@ dashboardRouter.get(
       const previousRange = { since: previousSince.toISOString(), until: previousEnd.toISOString() };
 
       const selectFields = "id, status, risk_score, risk_level, created_at, due_date, completed_at, updated_at, client_name, job_type, location";
-      const [currentRes, previousRes, currentKpisRes, previousKpisRes] = await Promise.all([
-        supabase
-          .from("jobs")
-          .select(selectFields)
-          .eq("organization_id", organization_id)
-          .is("deleted_at", null)
-          .gte("created_at", currentSince)
-          .lte("created_at", currentUntil),
-        supabase
-          .from("jobs")
-          .select(selectFields)
-          .eq("organization_id", organization_id)
-          .is("deleted_at", null)
-          .gte("created_at", previousRange.since)
-          .lte("created_at", previousRange.until),
+      const [currentPaginated, previousPaginated, currentKpisRes, previousKpisRes] = await Promise.all([
+        fetchAllPages<JobRow>(async (offset, limit) => {
+          const { data, error } = await supabase
+            .from("jobs")
+            .select(selectFields)
+            .eq("organization_id", organization_id)
+            .is("deleted_at", null)
+            .gte("created_at", currentSince)
+            .lte("created_at", currentUntil)
+            .order("created_at", { ascending: false })
+            .range(offset, offset + limit - 1);
+          return { data, error };
+        }),
+        fetchAllPages<JobRow>(async (offset, limit) => {
+          const { data, error } = await supabase
+            .from("jobs")
+            .select(selectFields)
+            .eq("organization_id", organization_id)
+            .is("deleted_at", null)
+            .gte("created_at", previousRange.since)
+            .lte("created_at", previousRange.until)
+            .order("created_at", { ascending: false })
+            .range(offset, offset + limit - 1);
+          return { data, error };
+        }),
         supabase.rpc("get_compliance_rate_kpis", {
           p_org_id: organization_id,
           p_since: currentSince,
@@ -92,13 +124,13 @@ dashboardRouter.get(
         }),
       ]);
 
-      if (currentRes.error) throw currentRes.error;
-      if (previousRes.error) throw previousRes.error;
+      if (currentPaginated.error) throw currentPaginated.error;
+      if (previousPaginated.error) throw previousPaginated.error;
       if (currentKpisRes.error) throw currentKpisRes.error;
       if (previousKpisRes.error) throw previousKpisRes.error;
 
-      const currentJobs = (currentRes.data || []) as JobRow[];
-      const previousJobs = (previousRes.data || []) as JobRow[];
+      const currentJobs = (currentPaginated.data || []) as JobRow[];
+      const previousJobs = (previousPaginated.data || []) as JobRow[];
 
       const jobs_total = currentJobs.length;
       const jobs_completed = currentJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
@@ -178,13 +210,16 @@ dashboardRouter.get(
           created_at: job.created_at,
         }));
 
-      const jobIds = allJobsForLists.map((j) => j.id);
+      const jobIds = currentJobs.map((j) => j.id);
       const evidenceByJob: Record<string, number> = {};
       if (jobIds.length > 0) {
-        const { data: docs } = await supabase.from("documents").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds);
-        (docs || []).forEach((d: { job_id: string }) => {
-          evidenceByJob[d.job_id] = (evidenceByJob[d.job_id] || 0) + 1;
-        });
+        for (let i = 0; i < jobIds.length; i += PAGE_SIZE) {
+          const chunk = jobIds.slice(i, i + PAGE_SIZE);
+          const { data: docs } = await supabase.from("documents").select("job_id").eq("organization_id", organization_id).in("job_id", chunk);
+          (docs || []).forEach((d: { job_id: string }) => {
+            evidenceByJob[d.job_id] = (evidenceByJob[d.job_id] || 0) + 1;
+          });
+        }
       }
       const missingEvidenceJobs = allJobsForLists
         .filter((job) => (evidenceByJob[job.id] || 0) < 3)
