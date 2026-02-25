@@ -1092,10 +1092,17 @@ analyticsRouter.get(
       const mitigationsRaw: MitigationItem[] = [];
       for (const ids of mitigationsByChunk) {
         const { data, error } = await fetchAllPages<MitigationItem>(async (offset, limit) => {
-          const { data, error } = await supabase
+          let query = supabase
             .from("mitigation_items")
             .select("id, job_id, created_at, completed_at, completed_by")
-            .in("job_id", ids)
+            .eq("organization_id", orgId)
+            .in("job_id", ids);
+          if (crewId) {
+            query = query
+              .gte("created_at", sinceIso)
+              .or(`completed_at.is.null,completed_at.gte.${sinceIso}`);
+          }
+          const { data, error } = await query
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1);
           return { data, error };
@@ -1108,11 +1115,15 @@ analyticsRouter.get(
       const documentsRaw: DocumentRecord[] = [];
       for (const ids of documentsByChunk) {
         const { data, error } = await fetchAllPages<DocumentRecord>(async (offset, limit) => {
-          const { data, error } = await supabase
+          let query = supabase
             .from("documents")
             .select("id, job_id, created_at, type")
             .eq("organization_id", orgId)
-            .in("job_id", ids)
+            .in("job_id", ids);
+          if (crewId) {
+            query = query.gte("created_at", sinceIso);
+          }
+          const { data, error } = await query
             .order("created_at", { ascending: true })
             .range(offset, offset + limit - 1);
           return { data, error };

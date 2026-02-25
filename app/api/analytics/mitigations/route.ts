@@ -11,10 +11,17 @@ const ROUTE = '/api/analytics/mitigations'
 
 const PAGE_SIZE = 2000
 
-function parseRangeDays(range?: string): number {
-  if (range === '30d') return 30
-  if (range === '90d') return 90
-  return 30
+function parseRangeDays(range?: string | null): number {
+  if (range == null || range === '') return 30
+  const str = String(range).trim().toLowerCase()
+  if (str === '7d') return 7
+  if (str === '30d') return 30
+  if (str === '90d') return 90
+  const match = str.match(/(\d+)/)
+  if (!match) return 30
+  const days = parseInt(match[1], 10)
+  if (Number.isNaN(days) || days <= 0) return 30
+  return Math.min(days, 180)
 }
 
 function toDateKey(date: Date | string): string {
@@ -252,10 +259,17 @@ export async function GET(request: NextRequest) {
       const out: any[] = []
       for (const ids of mitigationsByChunk) {
         const { data, error } = await fetchAllPages<any>(async (offset, limit) => {
-          const res = await supabase
+          let query = supabase
             .from('mitigation_items')
             .select('id, job_id, created_at, completed_at, completed_by')
+            .eq('organization_id', orgId)
             .in('job_id', ids)
+          if (crewId) {
+            query = query
+              .gte('created_at', sinceIso)
+              .or(`completed_at.is.null,completed_at.gte.${sinceIso}`)
+          }
+          const res = await query
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)
           return { data: res.data, error: res.error }
@@ -272,11 +286,15 @@ export async function GET(request: NextRequest) {
       const out: any[] = []
       for (const ids of documentsByChunk) {
         const { data, error } = await fetchAllPages<any>(async (offset, limit) => {
-          const res = await supabase
+          let query = supabase
             .from('documents')
             .select('id, job_id, created_at, type')
             .eq('organization_id', orgId)
             .in('job_id', ids)
+          if (crewId) {
+            query = query.gte('created_at', sinceIso)
+          }
+          const res = await query
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1)
           return { data: res.data, error: res.error }
