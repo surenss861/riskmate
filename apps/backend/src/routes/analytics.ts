@@ -218,16 +218,16 @@ analyticsRouter.get(
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
 
-        // Completion trend (week/month): use analytics_weekly_job_stats; value = (jobs_completed / jobs_created) * 100, 0–100
+        // Completion trend (week/month): use analytics_weekly_completion_stats (completion date), not creation week.
+        // Series = completions in each period by when they finished; value = count of completions in that period.
         if (metric === "completion") {
-          const { data: mvCompletionRows, error: mvCompletionError } = await fetchAllPages<{
+          const { data: completionRows, error: completionError } = await fetchAllPages<{
             week_start: string;
-            jobs_created: number;
             jobs_completed: number;
           }>(async (offset, limit) => {
             const { data, error } = await supabase
-              .from("analytics_weekly_job_stats")
-              .select("week_start, jobs_created, jobs_completed")
+              .from("analytics_weekly_completion_stats")
+              .select("week_start, jobs_completed")
               .eq("organization_id", orgId)
               .gte("week_start", sinceWeek)
               .lte("week_start", untilWeek)
@@ -235,36 +235,27 @@ analyticsRouter.get(
               .range(offset, offset + limit - 1);
             return { data, error };
           });
-          if (!mvCompletionError && mvCompletionRows && mvCompletionRows.length > 0) {
-            const rows = mvCompletionRows as { week_start: string; jobs_created: number; jobs_completed: number }[];
+          if (!completionError && completionRows && completionRows.length > 0) {
+            const rows = completionRows as { week_start: string; jobs_completed: number }[];
             if (groupBy === "week") {
               for (const r of rows) {
                 const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
-                const created = Number(r.jobs_created ?? 0);
-                const completed = Number(r.jobs_completed ?? 0);
-                const rate = created === 0 ? 0 : (completed / created) * 100;
-                const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100));
+                const value = Number(r.jobs_completed ?? 0);
                 points.push({ period, value, label: period });
               }
             } else {
-              const byMonth = new Map<string, { jobs_created: number; jobs_completed: number }>();
+              const byMonth = new Map<string, number>();
               for (const r of rows) {
                 const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
-                const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0 };
-                cur.jobs_created += Number(r.jobs_created ?? 0);
-                cur.jobs_completed += Number(r.jobs_completed ?? 0);
-                byMonth.set(period, cur);
+                byMonth.set(period, (byMonth.get(period) ?? 0) + Number(r.jobs_completed ?? 0));
               }
               for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const cur = byMonth.get(period)!;
-                const rate = cur.jobs_created === 0 ? 0 : (cur.jobs_completed / cur.jobs_created) * 100;
-                const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100));
-                points.push({ period, value, label: period });
+                points.push({ period, value: byMonth.get(period) ?? 0, label: period });
               }
             }
             return res.json({ period: periodLabel, groupBy, metric, data: points });
           }
-          if (mvCompletionError) throw mvCompletionError;
+          if (completionError) throw completionError;
         }
 
         const { data: mvRows, error: mvError } = await fetchAllPages<{
