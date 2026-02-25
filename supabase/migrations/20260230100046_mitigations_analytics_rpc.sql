@@ -98,6 +98,14 @@ BEGIN
       AND d.created_at <= v_until_lo
     GROUP BY d.job_id
   ),
+  -- Jobs with any evidence (distinct jobs with ≥1 document within scope/lifetime)
+  docs_any AS (
+    SELECT DISTINCT d.job_id
+    FROM documents d
+    WHERE d.organization_id = p_org_id
+      AND d.job_id = ANY(v_job_ids)
+      AND d.created_at <= v_until_lo
+  ),
   -- Photo evidence: job's lifetime up to p_until (honor previously satisfied evidence outside window)
   docs_photo_first AS (
     SELECT d.job_id,
@@ -119,6 +127,7 @@ BEGIN
       (SELECT COUNT(DISTINCT job_id)::BIGINT FROM docs_first) AS jobs_with_evidence,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs) AS jobs_total,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs WHERE risk_score IS NOT NULL) AS jobs_scored,
+      (SELECT COUNT(*)::BIGINT FROM docs_any) AS jobs_with_any_evidence,
       (SELECT COUNT(*)::BIGINT FROM docs_photo_first) AS jobs_with_photo_evidence,
       (SELECT COUNT(*)::BIGINT FROM scope_jobs j WHERE j.risk_score IS NOT NULL AND j.risk_score >= 70 AND NOT EXISTS (SELECT 1 FROM docs_photo_first dp WHERE dp.job_id = j.id)) AS jobs_missing_required_evidence
     FROM mit_agg
@@ -140,7 +149,7 @@ BEGIN
     END,
     k.jobs_total,
     k.jobs_scored,
-    k.jobs_with_evidence,
+    k.jobs_with_any_evidence,
     k.jobs_with_photo_evidence,
     k.jobs_missing_required_evidence,
     CASE WHEN k.jobs_with_photo_evidence = 0 THEN NULL::NUMERIC
