@@ -1903,10 +1903,10 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         const { risk_factor_codes, ...jobUpdates } = updateData;
         let updatedRiskScore = null;
         let updatedClientName = null;
-        // Verify job belongs to organization
+        // Verify job belongs to organization and get current status/completed_at for transition logic
         const { data: existingJob, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, organization_id, risk_score, risk_level")
+            .select("id, organization_id, risk_score, risk_level, status, completed_at")
             .eq("id", jobId)
             .eq("organization_id", organization_id)
             .single();
@@ -1915,9 +1915,13 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         }
         // Update job fields
         if (Object.keys(jobUpdates).length > 0) {
-            if (String(jobUpdates.status ?? "").toLowerCase() === "completed" && jobUpdates.completed_at == null) {
+            const newStatus = String(jobUpdates.status ?? existingJob.status ?? "").toLowerCase();
+            const isTransitioningToCompleted = newStatus === "completed";
+            const existingCompletedAt = existingJob.completed_at ?? null;
+            if (isTransitioningToCompleted && existingCompletedAt == null) {
                 jobUpdates.completed_at = new Date().toISOString();
             }
+            // If already completed, preserve existing completed_at (do not overwrite)
             const { error: updateError } = await supabaseClient_1.supabase
                 .from("jobs")
                 .update(jobUpdates)

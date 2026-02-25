@@ -69,7 +69,8 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         const previousJobs = (previousRes.data || []);
         const jobs_total = currentJobs.length;
         const jobs_completed = currentJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
-        const completion_rate = jobs_total === 0 ? 0 : Math.round((jobs_completed / jobs_total) * 10000) / 10000;
+        // Scale to 0–100 percentage to match compliance_rate and other analytics
+        const completion_rate = jobs_total === 0 ? 0 : Math.round((jobs_completed / jobs_total) * 10000) / 100;
         const withRisk = currentJobs.filter((j) => j.risk_score != null);
         const avg_risk = withRisk.length === 0 ? 0 : Math.round((withRisk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / withRisk.length) * 100) / 100;
         const currentJobIds = currentJobs.map((j) => j.id);
@@ -111,7 +112,8 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         const prev_compliance_rate = Math.round(prev_compliance_rate_fraction * 10000) / 100;
         const prev_total = previousJobs.length;
         const prev_completed = previousJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
-        const prev_completion_rate = prev_total === 0 ? 0 : prev_completed / prev_total;
+        // Same unit (0–100 percent) for trend comparison
+        const prev_completion_rate = prev_total === 0 ? 0 : Math.round((prev_completed / prev_total) * 10000) / 100;
         const prev_with_risk = previousJobs.filter((j) => j.risk_score != null);
         const prev_avg_risk = prev_with_risk.length === 0 ? 0 : prev_with_risk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / prev_with_risk.length;
         const now = new Date();
@@ -157,7 +159,7 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         const jobIds = allJobsForLists.map((j) => j.id);
         const evidenceByJob = {};
         if (jobIds.length > 0) {
-            const { data: docs } = await supabaseClient_1.supabase.from("documents").select("job_id").in("job_id", jobIds);
+            const { data: docs } = await supabaseClient_1.supabase.from("documents").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds);
             (docs || []).forEach((d) => {
                 evidenceByJob[d.job_id] = (evidenceByJob[d.job_id] || 0) + 1;
             });

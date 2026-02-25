@@ -1043,7 +1043,7 @@ analyticsRouter.get(
       const { data: openJobsRows, error: openAllErr } = await fetchAllPages<JobRow>(async (offset, limit) => {
         const { data, error } = await supabase
           .from("jobs")
-          .select("id, status, due_date")
+          .select("id, status, created_at, updated_at, completed_at, due_date")
           .eq("organization_id", orgId)
           .is("deleted_at", null)
           .neq("status", "completed")
