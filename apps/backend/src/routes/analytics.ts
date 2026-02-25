@@ -185,7 +185,11 @@ analyticsRouter.get(
           });
           return res.json({ period: periodLabel, groupBy, metric, data: dayPoints });
         }
-        if (dayError) throw dayError;
+        // RPC missing or failed: return empty set instead of 500
+        if (dayError) {
+          console.warn("Analytics trends day buckets RPC failed, returning empty data:", dayError);
+          return res.json({ period: periodLabel, groupBy, metric, data: [] });
+        }
       }
 
       // Compliance trend (week/month): SQL-side aggregation only
@@ -218,41 +222,67 @@ analyticsRouter.get(
         const sinceWeek = weekStart(new Date(since));
         const untilWeek = weekStart(new Date(until));
 
-        // Completion trend (week/month): use analytics_weekly_job_stats; value = completion rate 0–100 (jobs_completed / jobs_created in same period), consistent with day path.
+        // Completion trend (week/month): completion counts from analytics_weekly_completion_stats (keyed by completion week);
+        // jobs_created from analytics_weekly_job_stats (creation week) for rate denominator. Completion rates reflect completions in the charted period.
         if (metric === "completion") {
-          const { data: completionRows, error: completionError } = await fetchAllPages<{
-            week_start: string;
-            jobs_created: number;
-            jobs_completed: number;
-          }>(async (offset, limit) => {
-            const { data, error } = await supabase
-              .from("analytics_weekly_job_stats")
-              .select("week_start, jobs_created, jobs_completed")
-              .eq("organization_id", orgId)
-              .gte("week_start", sinceWeek)
-              .lte("week_start", untilWeek)
-              .order("week_start", { ascending: true })
-              .range(offset, offset + limit - 1);
-            return { data, error };
-          });
-          if (!completionError && completionRows && completionRows.length > 0) {
-            const rows = completionRows as { week_start: string; jobs_created: number; jobs_completed: number }[];
+          const [completionRes, creationRes] = await Promise.all([
+            fetchAllPages<{ week_start: string; jobs_completed: number }>(async (offset, limit) => {
+              const { data, error } = await supabase
+                .from("analytics_weekly_completion_stats")
+                .select("week_start, jobs_completed")
+                .eq("organization_id", orgId)
+                .gte("week_start", sinceWeek)
+                .lte("week_start", untilWeek)
+                .order("week_start", { ascending: true })
+                .range(offset, offset + limit - 1);
+              return { data, error };
+            }),
+            fetchAllPages<{ week_start: string; jobs_created: number }>(async (offset, limit) => {
+              const { data, error } = await supabase
+                .from("analytics_weekly_job_stats")
+                .select("week_start, jobs_created")
+                .eq("organization_id", orgId)
+                .gte("week_start", sinceWeek)
+                .lte("week_start", untilWeek)
+                .order("week_start", { ascending: true })
+                .range(offset, offset + limit - 1);
+              return { data, error };
+            }),
+          ]);
+          if (!completionRes.error && !creationRes.error) {
+            const completionRows = (completionRes.data ?? []) as { week_start: string; jobs_completed: number }[];
+            const creationRows = (creationRes.data ?? []) as { week_start: string; jobs_created: number }[];
+            const createdByWeek = new Map<string, number>();
+            const completedByWeek = new Map<string, number>();
+            for (const r of creationRows) {
+              const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+              createdByWeek.set(w, (createdByWeek.get(w) ?? 0) + Number(r.jobs_created ?? 0));
+            }
+            for (const r of completionRows) {
+              const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+              completedByWeek.set(w, (completedByWeek.get(w) ?? 0) + Number(r.jobs_completed ?? 0));
+            }
             if (groupBy === "week") {
-              for (const r of rows) {
-                const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
-                const created = Number(r.jobs_created ?? 0);
-                const completed = Number(r.jobs_completed ?? 0);
+              const allWeeks = [...new Set([...createdByWeek.keys(), ...completedByWeek.keys()])].sort();
+              for (const period of allWeeks) {
+                const created = createdByWeek.get(period) ?? 0;
+                const completed = completedByWeek.get(period) ?? 0;
                 const ratePct = created === 0 ? 0 : (completed / created) * 100;
                 const value = Math.min(100, Math.max(0, Math.round(ratePct * 100) / 100));
                 points.push({ period, value, label: period });
               }
             } else {
               const byMonth = new Map<string, { created: number; completed: number }>();
-              for (const r of rows) {
+              for (const r of completionRows) {
+                const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+                const cur = byMonth.get(period) ?? { created: 0, completed: 0 };
+                cur.completed += Number(r.jobs_completed ?? 0);
+                byMonth.set(period, cur);
+              }
+              for (const r of creationRows) {
                 const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
                 const cur = byMonth.get(period) ?? { created: 0, completed: 0 };
                 cur.created += Number(r.jobs_created ?? 0);
-                cur.completed += Number(r.jobs_completed ?? 0);
                 byMonth.set(period, cur);
               }
               for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -262,20 +292,20 @@ analyticsRouter.get(
                 points.push({ period, value, label: period });
               }
             }
-            return res.json({ period: periodLabel, groupBy, metric, data: points });
+            if (points.length > 0) return res.json({ period: periodLabel, groupBy, metric, data: points });
           }
-          if (completionError) throw completionError;
+          if (completionRes.error) throw completionRes.error;
+          if (creationRes.error) throw creationRes.error;
         }
 
         const { data: mvRows, error: mvError } = await fetchAllPages<{
           week_start: string;
           jobs_created: number;
-          jobs_completed: number;
           avg_risk: number | null;
         }>(async (offset, limit) => {
           const { data, error } = await supabase
             .from("analytics_weekly_job_stats")
-            .select("week_start, jobs_created, jobs_completed, avg_risk")
+            .select("week_start, jobs_created, avg_risk")
             .eq("organization_id", orgId)
             .gte("week_start", sinceWeek)
             .lte("week_start", untilWeek)
@@ -285,7 +315,7 @@ analyticsRouter.get(
         });
 
         if (!mvError && mvRows && mvRows.length > 0) {
-          const rows = mvRows as { week_start: string; jobs_created: number; jobs_completed: number; avg_risk: number | null }[];
+          const rows = mvRows as { week_start: string; jobs_created: number; avg_risk: number | null }[];
           if (groupBy === "week") {
             for (const r of rows) {
               const period = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
@@ -295,12 +325,11 @@ analyticsRouter.get(
               points.push({ period, value, label: period });
             }
           } else {
-            const byMonth = new Map<string, { jobs_created: number; jobs_completed: number; riskSum: number; riskWeight: number }>();
+            const byMonth = new Map<string, { jobs_created: number; riskSum: number; riskWeight: number }>();
             for (const r of rows) {
               const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
-              const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0, riskSum: 0, riskWeight: 0 };
+              const cur = byMonth.get(period) ?? { jobs_created: 0, riskSum: 0, riskWeight: 0 };
               cur.jobs_created += r.jobs_created ?? 0;
-              cur.jobs_completed += r.jobs_completed ?? 0;
               if (r.avg_risk != null && (r.jobs_created ?? 0) > 0) {
                 cur.riskSum += (r.avg_risk ?? 0) * (r.jobs_created ?? 0);
                 cur.riskWeight += r.jobs_created ?? 0;
