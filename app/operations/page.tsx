@@ -431,9 +431,16 @@ function DashboardPageInner() {
   }
 
   const handleAnalyticsPeriodChange = useCallback((period: DashboardPeriod, range?: CustomRange) => {
+    // When user selects "Custom" but has not yet applied a range, do not set dashboard period
+    // or trigger refetches; wait until CustomDateRangePicker passes a valid range.
+    if (period === 'custom' && !range) {
+      return
+    }
     setDashboardPeriod(period)
     if (period === 'custom' && range) {
       setCustomRange(range)
+      refetchAnalytics()
+      refetchDashboard()
     } else {
       setCustomRange(null)
       const newRange: TimeRange = period === '1y' ? 'all' : (period as TimeRange)
@@ -441,9 +448,9 @@ function DashboardPageInner() {
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', newRange)
       router.push(`/operations?${params.toString()}`, { scroll: false })
+      refetchAnalytics()
+      refetchDashboard()
     }
-    refetchAnalytics()
-    refetchDashboard()
   }, [searchParams, router, refetchAnalytics, refetchDashboard])
 
   const handleRangeChange = (nextRange: number) => {

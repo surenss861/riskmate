@@ -87,6 +87,11 @@ export function useAnalyticsDashboard(
   const refetch = useCallback(async () => {
     if (!enabled) return;
 
+    // Never send range: 'custom' or period: 'custom' to analyticsApi without explicit since/until.
+    if (period === 'custom' && (!customRange?.start || !customRange?.end)) {
+      return;
+    }
+
     setLoading(true);
     setError(false);
 

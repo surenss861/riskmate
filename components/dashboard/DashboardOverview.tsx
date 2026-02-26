@@ -169,6 +169,8 @@ export function DashboardOverview({
 }: DashboardOverviewProps) {
   const router = useRouter()
   const timeRangeParam = timeRange ? `time_range=${timeRange}` : ''
+  // Show custom date picker when user selects "Custom" from dropdown without calling parent until they apply a range.
+  const [customPickerOpen, setCustomPickerOpen] = useState(false)
 
   const handleExportCSV = () => {
     if (!enhancedAnalytics) return
@@ -264,11 +266,16 @@ export function DashboardOverview({
             <h2 className="text-2xl font-semibold text-white">Analytics</h2>
             <div className="flex flex-wrap items-center gap-3">
               <select
-                value={enhancedAnalytics.period}
+                value={enhancedAnalytics.period === 'custom' || customPickerOpen ? 'custom' : enhancedAnalytics.period}
                 onChange={(e) => {
                   const p = e.target.value as DashboardPeriod
-                  if (p !== 'custom') enhancedAnalytics.onPeriodChange(p)
-                  else enhancedAnalytics.onPeriodChange('custom')
+                  if (p !== 'custom') {
+                    setCustomPickerOpen(false)
+                    enhancedAnalytics.onPeriodChange(p)
+                  } else {
+                    setCustomPickerOpen(true)
+                    // Do not call onPeriodChange('custom') until user applies a range in CustomDateRangePicker
+                  }
                 }}
                 className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
                 aria-label="Time period"
@@ -279,10 +286,13 @@ export function DashboardOverview({
                   </option>
                 ))}
               </select>
-              {enhancedAnalytics.period === 'custom' && (
+              {(enhancedAnalytics.period === 'custom' || customPickerOpen) && (
                 <CustomDateRangePicker
                   customRange={enhancedAnalytics.customRange}
-                  onApply={(start, end) => enhancedAnalytics.onPeriodChange('custom', { start, end })}
+                  onApply={(start, end) => {
+                    setCustomPickerOpen(false)
+                    enhancedAnalytics.onPeriodChange('custom', { start, end })
+                  }}
                 />
               )}
               <div className="flex rounded-lg border border-white/10 overflow-hidden">
