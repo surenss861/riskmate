@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -17,21 +18,80 @@ import {
   type ExportInsight,
   type ExportTeamRow,
   type ExportHazardRow,
+  type ExportTrendSummary,
 } from '@/lib/utils/dashboardExport'
 
-export type DashboardPeriod = '7d' | '30d' | '90d' | '1y'
+export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom'
 
 const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
   { value: '90d', label: 'Last 90 Days' },
   { value: '1y', label: 'This Year' },
+  { value: 'custom', label: 'Custom' },
 ]
+
+export type CustomRange = { start: string; end: string }
+
+function CustomDateRangePicker({
+  customRange,
+  onApply,
+}: {
+  customRange?: CustomRange | null
+  onApply: (start: string, end: string) => void
+}) {
+  const defaultEnd = useMemo(() => {
+    const d = new Date()
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const defaultStart = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 29)
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const [start, setStart] = useState(customRange?.start ?? defaultStart)
+  const [end, setEnd] = useState(customRange?.end ?? defaultEnd)
+  useEffect(() => {
+    if (customRange?.start) setStart(customRange.start)
+    if (customRange?.end) setEnd(customRange.end)
+  }, [customRange?.start, customRange?.end])
+  const handleApply = () => {
+    if (start && end && start <= end) onApply(start, end)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="date"
+        value={start}
+        onChange={(e) => setStart(e.target.value)}
+        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
+        aria-label="Start date"
+      />
+      <span className="text-white/50 text-sm">to</span>
+      <input
+        type="date"
+        value={end}
+        onChange={(e) => setEnd(e.target.value)}
+        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
+        aria-label="End date"
+      />
+      <button
+        type="button"
+        onClick={handleApply}
+        className="rounded-lg bg-[#F97316] px-3 py-2 text-sm font-medium text-black hover:bg-[#F97316]/90 transition-colors"
+      >
+        Apply
+      </button>
+    </div>
+  )
+}
 
 export type EnhancedAnalyticsProps = {
   period: DashboardPeriod
-  onPeriodChange: (period: DashboardPeriod) => void
+  onPeriodChange: (period: DashboardPeriod, customRange?: CustomRange) => void
   periodLabel: string
+  /** When period is 'custom', the selected range for charts and KPIs. */
+  customRange?: CustomRange | null
   kpiItems: KpiGridItem[]
   insights: InsightItem[]
   insightsLoading: boolean
@@ -154,10 +214,42 @@ export function DashboardOverview({
       description: i.description,
       severity: i.severity,
     }))
+    const trendSummaries: ExportTrendSummary[] = []
+    const jobsData = enhancedAnalytics.trendsJobs?.data ?? []
+    const riskData = enhancedAnalytics.trendsRisk?.data ?? []
+    const completionData = enhancedAnalytics.trendsCompletion?.data ?? []
+    if (jobsData.length > 0) {
+      const totalCreated = jobsData.reduce((a, p) => a + p.value, 0)
+      trendSummaries.push({ label: 'Jobs (period)', value: String(totalCreated) })
+    }
+    if (riskData.length > 0) {
+      const avgRisk = riskData.reduce((a, p) => a + p.value, 0) / riskData.length
+      trendSummaries.push({ label: 'Avg risk (trend)', value: avgRisk.toFixed(1) })
+    }
+    if (completionData.length > 0) {
+      const avgComp = completionData.reduce((a, p) => a + p.value, 0) / completionData.length
+      trendSummaries.push({ label: 'Completion % (trend)', value: `${avgComp.toFixed(0)}%` })
+    }
+    const hazards: ExportHazardRow[] = enhancedAnalytics.hazardItems.slice(0, 10).map((h) => ({
+      category: h.category,
+      count: h.count,
+      avgRisk: h.avg_risk,
+    }))
+    const team: ExportTeamRow[] = enhancedAnalytics.teamMembers.map((m) => ({
+      name: m.name,
+      assigned: m.jobs_assigned,
+      completed: m.jobs_completed,
+      rate: m.completion_rate,
+      avgDays: m.avg_days,
+      overdue: m.overdue_count,
+    }))
     const pdfBytes = await buildDashboardPdf({
       periodLabel: enhancedAnalytics.periodLabel,
       kpis,
       insights,
+      trendSummaries: trendSummaries.length > 0 ? trendSummaries : undefined,
+      hazards: hazards.length > 0 ? hazards : undefined,
+      team: team.length > 0 ? team : undefined,
     })
     downloadPdf(pdfBytes, enhancedAnalytics.periodLabel)
   }
@@ -172,7 +264,11 @@ export function DashboardOverview({
             <div className="flex flex-wrap items-center gap-3">
               <select
                 value={enhancedAnalytics.period}
-                onChange={(e) => enhancedAnalytics.onPeriodChange(e.target.value as DashboardPeriod)}
+                onChange={(e) => {
+                  const p = e.target.value as DashboardPeriod
+                  if (p !== 'custom') enhancedAnalytics.onPeriodChange(p)
+                  else enhancedAnalytics.onPeriodChange('custom')
+                }}
                 className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
                 aria-label="Time period"
               >
@@ -182,6 +278,12 @@ export function DashboardOverview({
                   </option>
                 ))}
               </select>
+              {enhancedAnalytics.period === 'custom' && (
+                <CustomDateRangePicker
+                  customRange={enhancedAnalytics.customRange}
+                  onApply={(start, end) => enhancedAnalytics.onPeriodChange('custom', { start, end })}
+                />
+              )}
               <div className="flex rounded-lg border border-white/10 overflow-hidden">
                 <button
                   type="button"

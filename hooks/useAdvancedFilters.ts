@@ -22,6 +22,9 @@ export interface AdvancedFiltersState {
   page: number
   filterConfig: FilterGroup | null
   savedFilterId: string | null
+  /** Drill-down: filter jobs to created in this range (from chart click). */
+  createdAfter: string
+  createdBefore: string
   /** Quick filter: my jobs (assigned to me) */
   myJobs: boolean
   /** Quick filter: high risk */
@@ -50,6 +53,8 @@ const DEFAULT_STATE: AdvancedFiltersState = {
   page: 1,
   filterConfig: null,
   savedFilterId: null,
+  createdAfter: '',
+  createdBefore: '',
   myJobs: false,
   highRisk: false,
   overdue: false,
@@ -99,6 +104,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     page: Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1),
     filterConfig,
     savedFilterId,
+    createdAfter: searchParams.get('created_after') ?? '',
+    createdBefore: searchParams.get('created_before') ?? '',
     myJobs: searchParams.get('my_jobs') === 'true',
     highRisk: searchParams.get('high_risk') === 'true',
     overdue: searchParams.get('overdue') === 'true',
@@ -125,6 +132,8 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.needsSignatures === false) params.set('needs_signatures', 'false')
   if (state.page > 1) params.set('page', String(state.page))
   if (state.savedFilterId) params.set('saved_filter_id', state.savedFilterId)
+  if (state.createdAfter) params.set('created_after', state.createdAfter)
+  if (state.createdBefore) params.set('created_before', state.createdBefore)
   if (state.filterConfig && Object.keys(state.filterConfig).length > 0) {
     params.set('filter_config', JSON.stringify(state.filterConfig))
   }

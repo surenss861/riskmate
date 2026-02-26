@@ -100,6 +100,19 @@ const dateRangeForDays = (days: number): { since: string; until: string } => {
   return { since: since.toISOString(), until: until.toISOString() };
 };
 
+/** Optional since/until (ISO) for prior-period requests. If both valid, use them; else return null. */
+function parseSinceUntil(query: { since?: string | string[]; until?: string | string[] }): { since: string; until: string } | null {
+  const sinceRaw = query.since;
+  const untilRaw = query.until;
+  const since = sinceRaw ? (Array.isArray(sinceRaw) ? sinceRaw[0] : sinceRaw) : "";
+  const until = untilRaw ? (Array.isArray(untilRaw) ? untilRaw[0] : untilRaw) : "";
+  if (!since || !until) return null;
+  const sinceDate = new Date(since);
+  const untilDate = new Date(until);
+  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return null;
+  return { since: sinceDate.toISOString(), until: untilDate.toISOString() };
+}
+
 // MV covers last 2 years; use for week/month bucketed analytics when in range
 const MV_COVERAGE_DAYS = 730;
 
@@ -149,6 +162,7 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
       const groupByRaw = (authReq.query.groupBy as string) || "day";
       const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
@@ -162,7 +176,7 @@ analyticsRouter.get(
             : metricRaw === "completion" || metricRaw === "completion_rate"
               ? "completion"
               : "jobs";
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];
@@ -492,8 +506,9 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days } = parsePeriod(authReq.query.period as string);
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_team_performance_kpis", {
         p_org_id: orgId,
@@ -568,12 +583,14 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days } = parsePeriod(authReq.query.period as string);
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
       const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
+      const spanMs = new Date(until).getTime() - new Date(since).getTime();
       const prevUntil = since;
-      const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      const prevSince = new Date(new Date(since).getTime() - spanMs).toISOString();
       const { data: rows, error } = await supabase.rpc("get_hazard_frequency_buckets", {
         p_org_id: orgId,
         p_since: since,
@@ -626,8 +643,9 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days } = parsePeriod(authReq.query.period as string);
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_compliance_rate_kpis", {
         p_org_id: orgId,
@@ -694,8 +712,9 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days } = parsePeriod(authReq.query.period as string);
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_job_completion_kpis", {
         p_org_id: orgId,
@@ -933,8 +952,9 @@ analyticsRouter.get(
         return res.status(400).json({ message: "Missing organization id" });
       }
 
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
-      const { since, until } = dateRangeForDays(rangeDays);
+      const { since, until } = customRange ?? dateRangeForDays(rangeDays);
 
       const { data: row, error: rpcError } = await supabase.rpc("get_analytics_summary", {
         p_org_id: orgId,

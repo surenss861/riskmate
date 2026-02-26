@@ -177,6 +177,8 @@ export async function GET(request: NextRequest) {
       }
     }
     const filterConfig = normalizeFilterConfig(filterConfigRaw)
+    const createdAfter = searchParams.get('created_after')?.trim() ?? ''
+    const createdBefore = searchParams.get('created_before')?.trim() ?? ''
 
     if (filterConfigRaw && !filterConfig) {
       const { response, errorId } = createErrorResponse(
@@ -240,6 +242,28 @@ export async function GET(request: NextRequest) {
             total: 0,
             totalPages: 0,
           },
+        })
+      }
+    }
+
+    if (createdAfter && createdBefore) {
+      const dateFilter: FilterGroup = {
+        operator: 'and',
+        conditions: [
+          { field: 'created_at', operator: 'between', value: [createdAfter, createdBefore] },
+        ],
+      }
+      const dateFilterIds = await getMatchingJobIdsFromFilterGroup(
+        supabase as unknown as SupabaseClientLike,
+        organization_id,
+        dateFilter,
+        include_archived
+      )
+      requiredJobIds = intersectIds(requiredJobIds, dateFilterIds)
+      if (requiredJobIds !== null && requiredJobIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
         })
       }
     }

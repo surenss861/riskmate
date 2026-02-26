@@ -12,11 +12,11 @@ import UpgradeBanner from '@/components/UpgradeBanner'
 import { useAnalytics } from '@/hooks/useAnalytics'
 import { useDebounce } from '@/hooks/useDebounce'
 import { KpiGrid } from '@/components/dashboard/KpiGrid'
-import { TrendChart } from '@/components/dashboard/TrendChart'
+import { AnalyticsTrendCharts } from '@/components/dashboard/AnalyticsTrendCharts'
 import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
-import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview'
+import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps, type CustomRange } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { useAnalyticsDashboard } from '@/hooks/useAnalyticsDashboard'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
@@ -96,13 +96,19 @@ function DashboardPageInner() {
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })
 
-  const analyticsPeriod: DashboardPeriod = timeRange === 'all' ? '1y' : timeRange
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>(() => (timeRange === 'all' ? '1y' : timeRange))
+  const [customRange, setCustomRange] = useState<CustomRange | null>(null)
+  const analyticsPeriod = dashboardPeriod
   const {
     data: dashboardData,
     isLoading: dashboardLoading,
     isLocked: dashboardLocked,
     refetch: refetchDashboard,
-  } = useAnalyticsDashboard(analyticsPeriod, roleLoaded && !isMember && !analyticsLocked)
+  } = useAnalyticsDashboard(
+    analyticsPeriod,
+    roleLoaded && !isMember && !analyticsLocked,
+    analyticsPeriod === 'custom' ? customRange : null
+  )
 
   const loadData = useCallback(async () => {
     try {
@@ -409,6 +415,12 @@ function DashboardPageInner() {
     else if (param && ['7d', '30d', '90d', 'all'].includes(param)) setTimeRange(param as TimeRange)
   }, [searchParams])
 
+  // Sync dashboard period from main time range when it changes (e.g. header selector)
+  useEffect(() => {
+    const derived: DashboardPeriod = timeRange === 'all' ? '1y' : timeRange
+    setDashboardPeriod((p) => (p !== 'custom' ? derived : p))
+  }, [timeRange])
+
   const handleTimeRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange)
     const params = new URLSearchParams(searchParams.toString())
@@ -418,12 +430,18 @@ function DashboardPageInner() {
     refetchDashboard()
   }
 
-  const handleAnalyticsPeriodChange = useCallback((period: DashboardPeriod) => {
-    const newRange: TimeRange = period === '1y' ? 'all' : period
-    setTimeRange(newRange)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('time_range', newRange)
-    router.push(`/operations?${params.toString()}`, { scroll: false })
+  const handleAnalyticsPeriodChange = useCallback((period: DashboardPeriod, range?: CustomRange) => {
+    setDashboardPeriod(period)
+    if (period === 'custom' && range) {
+      setCustomRange(range)
+    } else {
+      setCustomRange(null)
+      const newRange: TimeRange = period === '1y' ? 'all' : period
+      setTimeRange(newRange)
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('time_range', newRange)
+      router.push(`/operations?${params.toString()}`, { scroll: false })
+    }
     refetchAnalytics()
     refetchDashboard()
   }, [searchParams, router, refetchAnalytics, refetchDashboard])
@@ -440,6 +458,9 @@ function DashboardPageInner() {
     '30d': 'Last 30 Days',
     '90d': 'Last 90 Days',
     '1y': 'This Year',
+    custom: customRange
+      ? `${new Date(customRange.start).toLocaleDateString()} – ${new Date(customRange.end).toLocaleDateString()}`
+      : 'Custom',
   }
 
   const enhancedAnalytics: EnhancedAnalyticsProps | undefined = useMemo(() => {
@@ -447,19 +468,55 @@ function DashboardPageInner() {
     const jc = dashboardData.jobCompletion
     const cr = dashboardData.complianceRate
     const summary = dashboardData.summary
+    const priorJc = dashboardData.priorJobCompletion
+    const priorCr = dashboardData.priorComplianceRate
     const jobCounts = summary?.job_counts_by_status ?? {}
     const totalJobs = jc?.total ?? 0
     const completionRate = jc?.completion_rate ?? 0
-    const avgRiskFromTrend = dashboardData.trendsRisk?.data?.length
-      ? dashboardData.trendsRisk.data.reduce((a, p) => a + p.value, 0) / dashboardData.trendsRisk.data.length
+    const riskData = dashboardData.trendsRisk?.data ?? []
+    const avgRiskFromTrend = riskData.length
+      ? riskData.reduce((a, p) => a + p.value, 0) / riskData.length
       : 0
     const complianceOverall = cr?.overall ?? 0
+
+    const priorTotal = priorJc?.total ?? 0
+    const priorCompletion = priorJc?.completion_rate ?? 0
+    const priorCompliance = priorCr?.overall ?? 0
+    const half = Math.floor(riskData.length / 2)
+    const priorAvgRisk = half > 0
+      ? riskData.slice(0, half).reduce((a, p) => a + p.value, 0) / half
+      : null
+
+    const percentChange = (current: number, previous: number): number | undefined => {
+      if (previous === 0) return current > 0 ? 100 : undefined
+      return Math.round(((current - previous) / previous) * 1000) / 10
+    }
+    const trendFromDelta = (delta: number | undefined): 'up' | 'down' | 'flat' => {
+      if (delta == null) return 'flat'
+      if (delta > 0) return 'up'
+      if (delta < 0) return 'down'
+      return 'flat'
+    }
+    const trendForMetric = (current: number, prior: number, higherIsBetter: boolean): 'up' | 'down' | 'flat' => {
+      const pct = percentChange(current, prior)
+      if (pct == null || pct === 0) return 'flat'
+      if (higherIsBetter) return pct > 0 ? 'up' : 'down'
+      return pct < 0 ? 'up' : 'down'
+    }
+
+    const totalJobsTrendPct = percentChange(totalJobs, priorTotal)
+    const completionTrendPct = percentChange(completionRate, priorCompletion)
+    const complianceTrendPct = percentChange(complianceOverall, priorCompliance)
+    const avgRiskPrior = priorAvgRisk ?? avgRiskFromTrend
+    const avgRiskTrendPct = priorAvgRisk != null ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
         id: 'total-jobs',
         title: 'Total Jobs',
         value: totalJobs,
-        trend: 'flat',
+        trend: trendFromDelta(totalJobsTrendPct),
+        trendPercent: totalJobsTrendPct,
+        previousValue: priorTotal,
         trendLabel: periodLabels[analyticsPeriod],
         sparklineData: dashboardData.trendsJobs?.data?.slice(-7).map((d) => d.value) ?? [],
       },
@@ -468,14 +525,18 @@ function DashboardPageInner() {
         title: 'Completion Rate',
         value: Math.round(completionRate),
         suffix: '%',
-        trend: completionRate >= 80 ? 'up' : completionRate <= 50 ? 'down' : 'flat',
+        trend: trendForMetric(completionRate, priorCompletion, true),
+        trendPercent: completionTrendPct,
+        previousValue: priorCompletion ? Math.round(priorCompletion) : undefined,
         sparklineData: dashboardData.trendsCompletion?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
         id: 'avg-risk',
         title: 'Avg Risk Score',
         value: Math.round(avgRiskFromTrend * 10) / 10,
-        trend: avgRiskFromTrend <= 25 ? 'up' : avgRiskFromTrend >= 75 ? 'down' : 'flat',
+        trend: trendForMetric(avgRiskFromTrend, avgRiskPrior, false),
+        trendPercent: avgRiskTrendPct,
+        previousValue: priorAvgRisk != null ? Math.round(priorAvgRisk * 10) / 10 : undefined,
         sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
@@ -483,13 +544,16 @@ function DashboardPageInner() {
         title: 'Compliance Rate',
         value: Math.round(complianceOverall),
         suffix: '%',
-        trend: complianceOverall >= 90 ? 'up' : complianceOverall <= 60 ? 'down' : 'flat',
+        trend: trendForMetric(complianceOverall, priorCompliance, true),
+        trendPercent: complianceTrendPct,
+        previousValue: priorCompliance ? Math.round(priorCompliance) : undefined,
       },
     ]
     return {
       period: analyticsPeriod,
       onPeriodChange: handleAnalyticsPeriodChange,
       periodLabel: periodLabels[analyticsPeriod],
+      customRange: analyticsPeriod === 'custom' ? customRange : null,
       kpiItems,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
@@ -510,13 +574,37 @@ function DashboardPageInner() {
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
       onPeriodClick: (period: string) => {
-        router.push(`/operations/jobs?time_range=${analyticsPeriod}&created_after=${period}`)
+        const groupBy = analyticsPeriod === '7d' ? 'day' : analyticsPeriod === '1y' ? 'month' : 'week'
+        const toStartISO = (d: Date) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x.toISOString() }
+        const toEndISO = (d: Date) => { const x = new Date(d); x.setUTCHours(23, 59, 59, 999); return x.toISOString() }
+        let start: string
+        let end: string
+        if (groupBy === 'day' || period.length === 10) {
+          const d = new Date(period.slice(0, 10))
+          start = toStartISO(d)
+          end = toEndISO(d)
+        } else if (groupBy === 'month' || period.length === 7) {
+          const y = parseInt(period.slice(0, 4), 10)
+          const m = parseInt(period.slice(5, 7), 10) - 1
+          start = toStartISO(new Date(Date.UTC(y, m, 1)))
+          end = toEndISO(new Date(Date.UTC(y, m + 1, 0)))
+        } else {
+          const d = new Date(period)
+          start = toStartISO(d)
+          const weekEnd = new Date(d)
+          weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+          end = toEndISO(weekEnd)
+        }
+        const params = new URLSearchParams()
+        params.set('created_after', start)
+        params.set('created_before', end)
+        router.push(`/operations/jobs?${params.toString()}`)
       },
       onHazardCategoryClick: (category: string) => {
         router.push(`/operations/jobs?time_range=${analyticsPeriod}&hazard=${encodeURIComponent(category)}`)
       },
     }
-  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, router, handleAnalyticsPeriodChange])
+  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {
@@ -780,14 +868,14 @@ function DashboardPageInner() {
               </div>
               <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
                 <GlassCard className="p-8">
-                  <TrendChart
-                    data={analyticsData.trend}
-                    rangeDays={analyticsRange}
-                    onRangeChange={handleRangeChange}
-                    isLoading={analyticsLoading}
-                    emptyReason={analyticsData.trend_empty_reason}
-                    onCreateJob={() => router.push('/operations/jobs/new')}
-                    onViewMitigations={() => router.push('/operations/audit/readiness?status=open')}
+                  <AnalyticsTrendCharts
+                    trendsJobs={dashboardData?.trendsJobs ?? null}
+                    trendsCompletion={dashboardData?.trendsCompletion ?? null}
+                    trendsRisk={dashboardData?.trendsRisk ?? null}
+                    jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
+                    periodLabel={periodLabels[analyticsPeriod]}
+                    isLoading={dashboardLoading}
+                    onPeriodClick={enhancedAnalytics?.onPeriodClick}
                   />
                 </GlassCard>
                 <GlassCard className="p-8">

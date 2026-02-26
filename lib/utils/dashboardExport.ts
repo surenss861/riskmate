@@ -49,21 +49,30 @@ export function downloadCsv(csv: string, periodLabel: string): void {
   URL.revokeObjectURL(url);
 }
 
+export type ExportTrendSummary = { label: string; value: string };
+
 export async function buildDashboardPdf(options: {
   periodLabel: string;
   kpis: ExportKpi[];
   insights: ExportInsight[];
+  /** Condensed trend summaries (e.g. "Jobs created", "Avg risk") for the period. */
+  trendSummaries?: ExportTrendSummary[];
+  /** Top hazards by frequency (e.g. top 10). */
+  hazards?: ExportHazardRow[];
+  /** Team performance rows. */
+  team?: ExportTeamRow[];
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const page = doc.addPage([595, 842]);
+  let currentPage = doc.addPage([595, 842]);
   const margin = 50;
-  let y = page.getHeight() - margin;
+  const minY = margin + 40;
+  let y = currentPage.getHeight() - margin;
 
   const draw = (text: string, size: number, bold = false) => {
     const f = bold ? fontBold : font;
-    page.drawText(text, { x: margin, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
+    currentPage.drawText(text, { x: margin, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
     y -= size + 4;
   };
 
@@ -75,13 +84,49 @@ export async function buildDashboardPdf(options: {
   options.kpis.forEach((k) => draw(`${k.title}: ${k.value}`, 10));
   y -= 12;
 
+  if (options.trendSummaries && options.trendSummaries.length > 0) {
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
+    draw('Trend summary', 14, true);
+    options.trendSummaries.slice(0, 8).forEach((t) => draw(`${t.label}: ${t.value}`, 10));
+    y -= 12;
+  }
+
   draw('Insights', 14, true);
   options.insights.slice(0, 10).forEach((i) => {
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
     draw(`${i.title} (${i.severity})`, 10);
     const desc = i.description.slice(0, 80) + (i.description.length > 80 ? '…' : '');
-    page.drawText(desc, { x: margin + 10, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+    currentPage.drawText(desc, { x: margin + 10, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
     y -= 20;
   });
+  y -= 12;
+
+  if (options.hazards && options.hazards.length > 0) {
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
+    draw('Top hazards', 14, true);
+    options.hazards.slice(0, 10).forEach((h) => draw(`${h.category}: ${h.count} (avg risk ${h.avgRisk})`, 9));
+    y -= 12;
+  }
+
+  if (options.team && options.team.length > 0) {
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
+    draw('Team performance', 14, true);
+    options.team.slice(0, 15).forEach((t) => {
+      draw(`${t.name}: ${t.completed}/${t.assigned} (${t.rate}%), avg ${t.avgDays}d, overdue ${t.overdue}`, 9);
+    });
+  }
 
   const pdfBytes = await doc.save();
   return pdfBytes;

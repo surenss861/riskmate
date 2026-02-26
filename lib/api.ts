@@ -369,6 +369,8 @@ export const jobsApi = {
     client?: string;
     template_source?: string;
     template_id?: string;
+    created_after?: string;
+    created_before?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -401,6 +403,8 @@ export const jobsApi = {
     if (params?.client) queryParams.set('client', params.client);
     if (params?.template_source) queryParams.set('template_source', params.template_source);
     if (params?.template_id) queryParams.set('template_id', params.template_id);
+    if (params?.created_after) queryParams.set('created_after', params.created_after);
+    if (params?.created_before) queryParams.set('created_before', params.created_before);
     if (params?.overdue === true) queryParams.set('overdue', 'true');
     if (params?.unassigned === true) queryParams.set('unassigned', 'true');
     if (params?.recent === true) queryParams.set('recent', 'true');
@@ -1208,19 +1212,23 @@ export const analyticsApi = {
   },
 
   /** Job counts by status, risk level distribution, evidence stats, team activity (mitigation completions by user). */
-  summary: async (params?: { orgId?: string; range?: string }) => {
+  summary: async (params?: { orgId?: string; range?: string; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.orgId) query.set('org_id', params.orgId);
     if (params?.range) query.set('range', params.range);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     const endpoint = qs ? `/api/analytics/summary?${qs}` : `/api/analytics/summary`;
     return apiRequest<AnalyticsSummaryResponse>(endpoint);
   },
 
   /** Job completion KPIs: completion_rate, avg_days, on_time_rate, overdue counts. Maps to GET /api/analytics/job-completion. */
-  jobCompletion: async (params?: { period?: string }) => {
+  jobCompletion: async (params?: { period?: string; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       completion_rate: number;
@@ -1237,9 +1245,11 @@ export const analyticsApi = {
   },
 
   /** Compliance rate KPIs: signatures, photos, checklists, overall (0–100). Maps to GET /api/analytics/compliance-rate. */
-  complianceRate: async (params?: { period?: string }) => {
+  complianceRate: async (params?: { period?: string; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       period: string;
@@ -1252,9 +1262,11 @@ export const analyticsApi = {
   },
 
   /** Team performance KPIs per user. Maps to GET /api/analytics/team-performance. */
-  teamPerformance: async (params?: { period?: string }) => {
+  teamPerformance: async (params?: { period?: string; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       period: string;
@@ -1289,10 +1301,12 @@ export const analyticsApi = {
   },
 
   /** Hazard frequency by type or location with trend. Maps to GET /api/analytics/hazard-frequency. */
-  hazardFrequency: async (params?: { period?: string; groupBy?: 'type' | 'location' }) => {
+  hazardFrequency: async (params?: { period?: string; groupBy?: 'type' | 'location'; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.groupBy) query.set('groupBy', params.groupBy);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       period: string;
@@ -1307,12 +1321,14 @@ export const analyticsApi = {
     }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`);
   },
 
-  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. metric: jobs | risk | compliance | completion */
-  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion' }) => {
+  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. metric: jobs | risk | compliance | completion. Pass since/until for custom range. */
+  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion'; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.groupBy) query.set('groupBy', params.groupBy);
     if (params?.metric) query.set('metric', params.metric);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       period: string;
