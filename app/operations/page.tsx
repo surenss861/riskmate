@@ -4,7 +4,7 @@
 
 
 import { useEffect, useMemo, useState, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi, subscriptionsApi, riskApi } from '@/lib/api'
@@ -48,6 +48,7 @@ export default function DashboardPage() {
 
 function DashboardPageInner() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -537,7 +538,7 @@ function DashboardPageInner() {
       params.set('time_range', 'custom')
       params.set('range_start', normalized.start.slice(0, 10))
       params.set('range_end', normalized.end.slice(0, 10))
-      router.push(`/operations?${params.toString()}`, { scroll: false })
+      router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
     } else {
@@ -548,11 +549,11 @@ function DashboardPageInner() {
       params.set('time_range', newRange)
       params.delete('range_start')
       params.delete('range_end')
-      router.push(`/operations?${params.toString()}`, { scroll: false })
+      router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
     }
-  }, [searchParams, router, refetchAnalytics, refetchDashboard])
+  }, [searchParams, pathname, router, refetchAnalytics, refetchDashboard])
 
   const handleRangeChange = (nextRange: number) => {
     // Convert number to TimeRange
@@ -655,6 +656,7 @@ function DashboardPageInner() {
         trend: trendForMetric(complianceOverall, priorCompliance, true),
         trendPercent: complianceTrendPct,
         previousValue: priorCompliance ? Math.round(priorCompliance) : undefined,
+        sparklineData: dashboardData.trendsCompliance?.data?.slice(-7).map((d) => d.value) ?? [],
       },
     ]
     const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end

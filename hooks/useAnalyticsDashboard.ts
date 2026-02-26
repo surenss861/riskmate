@@ -64,6 +64,8 @@ export type AnalyticsDashboardData = {
   trendsJobs: Trends | null;
   trendsRisk: Trends | null;
   trendsCompletion: Trends | null;
+  /** Compliance rate trend series (for Compliance KPI sparkline). */
+  trendsCompliance: Trends | null;
   /** Real completed job counts per period (by completion date); for Jobs-over-time chart completed series. */
   trendsCompletedCounts: Trends | null;
   insights: Insights | null;
@@ -75,6 +77,8 @@ export type AnalyticsDashboardData = {
   priorComplianceRate: ComplianceRate | null;
   /** Prior period risk trend (for avg-risk KPI trend vs prior period). */
   priorTrendsRisk: Trends | null;
+  /** Prior period compliance trend (for Compliance KPI prior comparison). */
+  priorTrendsCompliance: Trends | null;
 };
 
 export type AnalyticsDashboardState = {
@@ -94,6 +98,7 @@ const emptyData: AnalyticsDashboardData = {
   trendsJobs: null,
   trendsRisk: null,
   trendsCompletion: null,
+  trendsCompliance: null,
   trendsCompletedCounts: null,
   insights: null,
   statusByPeriod: null,
@@ -101,6 +106,7 @@ const emptyData: AnalyticsDashboardData = {
   priorJobCompletion: null,
   priorComplianceRate: null,
   priorTrendsRisk: null,
+  priorTrendsCompliance: null,
 };
 
 export type CustomRange = { start: string; end: string };
@@ -153,6 +159,7 @@ export function useAnalyticsDashboard(
         trendsJobsRes,
         trendsRiskRes,
         trendsCompletionRes,
+        trendsComplianceRes,
         trendsCompletedCountsRes,
         insightsRes,
         statusByPeriodRes,
@@ -160,6 +167,7 @@ export function useAnalyticsDashboard(
         priorJobCompletionRes,
         priorComplianceRes,
         priorTrendsRiskRes,
+        priorTrendsComplianceRes,
       ] = await Promise.all([
         useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
         useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
@@ -169,6 +177,7 @@ export function useAnalyticsDashboard(
         analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
         analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
         analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }),
         analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }),
         (() => {
           const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
@@ -179,6 +188,7 @@ export function useAnalyticsDashboard(
         prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }) : Promise.resolve(null),
+        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }) : Promise.resolve(null),
       ]);
 
       const locked =
@@ -200,6 +210,7 @@ export function useAnalyticsDashboard(
         trendsJobs: trendsJobsRes,
         trendsRisk: trendsRiskRes,
         trendsCompletion: trendsCompletionRes,
+        trendsCompliance: trendsComplianceRes,
         trendsCompletedCounts: trendsCompletedCountsRes,
         insights: insightsRes,
         statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : null,
@@ -207,6 +218,7 @@ export function useAnalyticsDashboard(
         priorJobCompletion: priorJobCompletionRes,
         priorComplianceRate: priorComplianceRes,
         priorTrendsRisk: priorTrendsRiskRes,
+        priorTrendsCompliance: priorTrendsComplianceRes,
       });
     } catch (e) {
       console.error('Analytics dashboard fetch failed', e);
