@@ -1,21 +1,34 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import { Suspense } from 'react'
 
-export default function DashboardRedirect() {
-  const router = useRouter()
-
-  useEffect(() => {
-    router.replace('/operations')
-  }, [router])
-
-  return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-white/60">Redirecting to Operations Dashboard...</p>
+const OperationsDashboard = dynamic(
+  () => import('../operations/page').then((mod) => mod.default),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-white/60">Loading dashboard...</p>
+        </div>
       </div>
-    </div>
+    ),
+  }
+)
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-white/60">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <OperationsDashboard />
+    </Suspense>
   )
 }
-

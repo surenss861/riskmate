@@ -25,7 +25,7 @@ import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-syst
 import { AppBackground, AppShell, PageHeader, Button as SharedButton, GlassCard } from '@/components/shared'
 import clsx from 'clsx'
 
-type TimeRange = '7d' | '30d' | '90d' | 'all'
+type TimeRange = '7d' | '30d' | '90d' | 'all' | 'custom'
 
 interface Job {
   id: string
@@ -60,12 +60,26 @@ function DashboardPageInner() {
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   
-  // Time range from query params, default to 30d
+  // Time range from query params, default to 30d; custom restored from range_start/range_end
   const timeRangeParam = searchParams.get('time_range') as string | null
-  const [timeRange, setTimeRange] = useState<TimeRange>(
-    timeRangeParam === '1y' ? 'all' : (timeRangeParam as TimeRange) || '30d'
-  )
-  const analyticsRange = timeRange === 'all' ? 365 : parseInt(timeRange.replace('d', ''))
+  const rangeStartParam = searchParams.get('range_start')?.trim() ?? ''
+  const rangeEndParam = searchParams.get('range_end')?.trim() ?? ''
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    if (timeRangeParam === 'custom' && rangeStartParam && rangeEndParam) return 'custom'
+    return timeRangeParam === '1y' ? 'all' : (timeRangeParam as TimeRange) || '30d'
+  })
+  const [customRange, setCustomRange] = useState<CustomRange | null>(() => {
+    if (timeRangeParam === 'custom' && rangeStartParam && rangeEndParam) {
+      return {
+        start: rangeStartParam.length === 10 ? `${rangeStartParam}T00:00:00.000Z` : rangeStartParam,
+        end: rangeEndParam.length === 10 ? `${rangeEndParam}T23:59:59.999Z` : rangeEndParam,
+      }
+    }
+    return null
+  })
+  const analyticsRange = timeRange === 'all' ? 365 : timeRange === 'custom' && customRange
+    ? Math.ceil((new Date(customRange.end).getTime() - new Date(customRange.start).getTime()) / (24 * 60 * 60 * 1000))
+    : parseInt((timeRange as string).replace('d', ''), 10) || 30
   
   // Job Roster filters from URL params
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') || '')
@@ -96,8 +110,9 @@ function DashboardPageInner() {
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })
 
-  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>(() => (timeRange === 'all' ? '1y' : timeRange))
-  const [customRange, setCustomRange] = useState<CustomRange | null>(null)
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>(() =>
+    timeRangeParam === 'custom' && rangeStartParam && rangeEndParam ? 'custom' : (timeRange === 'all' ? '1y' : timeRange as DashboardPeriod)
+  )
   const analyticsPeriod = dashboardPeriod
   const {
     data: dashboardData,
@@ -157,10 +172,13 @@ function DashboardPageInner() {
 
       // Load jobs from database for Job Roster
       try {
+        const isCustomRange = timeRange === 'custom' && customRange
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
-          time_range: timeRange, // Use global time range
+          ...(isCustomRange
+            ? { created_after: customRange!.start, created_before: customRange!.end }
+            : { time_range: timeRange }),
           q: debouncedSearchQuery || undefined, // Search query
           sort: sortBy || undefined, // Sort mode
           page: currentPage,
@@ -208,17 +226,26 @@ function DashboardPageInner() {
       }
       setLoading(false)
     }
-  }, [filterStatus, filterRiskLevel, timeRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
+  }, [filterStatus, filterRiskLevel, timeRange, customRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
   
-  // Update URL params when filters change (preserve time_range)
+  // Update URL params when filters change (preserve time_range and custom range)
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     
-    // Preserve time_range
+    // Preserve time_range and custom range (range_start, range_end)
     if (timeRange && timeRange !== '30d') {
       params.set('time_range', timeRange)
+      if (timeRange === 'custom' && customRange) {
+        params.set('range_start', customRange.start.slice(0, 10))
+        params.set('range_end', customRange.end.slice(0, 10))
+      } else {
+        params.delete('range_start')
+        params.delete('range_end')
+      }
     } else {
       params.delete('time_range')
+      params.delete('range_start')
+      params.delete('range_end')
     }
     
     // Update search
@@ -262,7 +289,7 @@ function DashboardPageInner() {
     // Update URL without triggering navigation
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
-  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, filterStatus, filterRiskLevel, searchParams])
+  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, customRange, filterStatus, filterRiskLevel, searchParams])
   
   // Initialize filters from URL on mount (for shareable links)
   useEffect(() => {
@@ -408,11 +435,27 @@ function DashboardPageInner() {
     ]
   )
 
-  // Sync time range with URL query params
+  // Sync time range and custom range from URL query params (e.g. refresh or navigation)
   useEffect(() => {
     const param = searchParams.get('time_range') as string | null
-    if (param === '1y') setTimeRange('all')
-    else if (param && ['7d', '30d', '90d', 'all'].includes(param)) setTimeRange(param as TimeRange)
+    const start = searchParams.get('range_start')?.trim() ?? ''
+    const end = searchParams.get('range_end')?.trim() ?? ''
+    if (param === 'custom' && start && end) {
+      setTimeRange('custom')
+      setCustomRange({
+        start: start.length === 10 ? `${start}T00:00:00.000Z` : start,
+        end: end.length === 10 ? `${end}T23:59:59.999Z` : end,
+      })
+      setDashboardPeriod('custom')
+    } else if (param === '1y') {
+      setTimeRange('all')
+      setCustomRange(null)
+      setDashboardPeriod('1y')
+    } else if (param && ['7d', '30d', '90d', 'all'].includes(param)) {
+      setTimeRange(param as TimeRange)
+      setCustomRange(null)
+      setDashboardPeriod(param === 'all' ? '1y' : (param as DashboardPeriod))
+    }
   }, [searchParams])
 
   // Sync dashboard period from main time range when it changes (e.g. header selector)
@@ -423,8 +466,12 @@ function DashboardPageInner() {
 
   const handleTimeRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange)
+    if (newRange !== 'custom') setCustomRange(null)
+    setDashboardPeriod(newRange === 'all' ? '1y' : (newRange as DashboardPeriod))
     const params = new URLSearchParams(searchParams.toString())
     params.set('time_range', newRange)
+    params.delete('range_start')
+    params.delete('range_end')
     router.push(`/operations?${params.toString()}`, { scroll: false })
     refetchAnalytics()
     refetchDashboard()
@@ -439,6 +486,12 @@ function DashboardPageInner() {
     setDashboardPeriod(period)
     if (period === 'custom' && range) {
       setCustomRange(range)
+      setTimeRange('custom')
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('time_range', 'custom')
+      params.set('range_start', range.start.slice(0, 10))
+      params.set('range_end', range.end.slice(0, 10))
+      router.push(`/operations?${params.toString()}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
     } else {
@@ -447,6 +500,8 @@ function DashboardPageInner() {
       setTimeRange(newRange)
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', newRange)
+      params.delete('range_start')
+      params.delete('range_end')
       router.push(`/operations?${params.toString()}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
@@ -731,10 +786,14 @@ function DashboardPageInner() {
 
   // Calculate KPI metrics for hero card (scoped to time range)
   const kpiMetrics = useMemo(() => {
-    // Calculate date cutoff based on time range
+    // Calculate date cutoff based on time range (including custom)
     const now = new Date()
     let dateCutoff: Date | null = null
-    if (timeRange === '7d') {
+    let dateCutoffEnd: Date | null = null
+    if (timeRange === 'custom' && customRange) {
+      dateCutoff = new Date(customRange.start)
+      dateCutoffEnd = new Date(customRange.end)
+    } else if (timeRange === '7d') {
       dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     } else if (timeRange === '30d') {
       dateCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
@@ -742,10 +801,13 @@ function DashboardPageInner() {
       dateCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
     }
     // 'all' means no cutoff
-    
+
     // Filter jobs by time range
-    const jobsInRange = dateCutoff 
-      ? jobs.filter(j => new Date(j.created_at) >= dateCutoff!)
+    const jobsInRange = dateCutoff
+      ? jobs.filter((j) => {
+          const d = new Date(j.created_at)
+          return d >= dateCutoff! && (!dateCutoffEnd || d <= dateCutoffEnd!)
+        })
       : jobs
     
     const activeJobs = jobsInRange.filter(j => j.status === 'active' || j.status === 'in_progress').length
@@ -760,7 +822,7 @@ function DashboardPageInner() {
       avgRiskScore,
       auditEvents30d: null as number | null, // Will be loaded separately
     }
-  }, [jobs, timeRange])
+  }, [jobs, timeRange, customRange])
   
   // Load audit events count
   const [auditEventsCount, setAuditEventsCount] = useState<number | null>(null)
@@ -779,24 +841,31 @@ function DashboardPageInner() {
         
         if (!userRow?.organization_id) return
         
-        // Calculate date cutoff
+        // Calculate date cutoff (including custom range)
         const now = new Date()
         let dateCutoff: Date | null = null
-        if (timeRange === '7d') {
+        let dateCutoffEnd: Date | null = null
+        if (timeRange === 'custom' && customRange) {
+          dateCutoff = new Date(customRange.start)
+          dateCutoffEnd = new Date(customRange.end)
+        } else if (timeRange === '7d') {
           dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         } else if (timeRange === '30d') {
           dateCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
         } else if (timeRange === '90d') {
           dateCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
         }
-        
+
         let query = supabase
           .from('audit_logs')
           .select('id', { count: 'exact', head: true })
           .eq('organization_id', userRow.organization_id)
-        
+
         if (dateCutoff) {
           query = query.gte('created_at', dateCutoff.toISOString())
+        }
+        if (dateCutoffEnd) {
+          query = query.lte('created_at', dateCutoffEnd.toISOString())
         }
         
         const { count, error } = await query
@@ -810,7 +879,7 @@ function DashboardPageInner() {
     }
     
     loadAuditEventsCount()
-  }, [timeRange])
+  }, [timeRange, customRange])
   
   // Update kpiMetrics with audit events count
   const kpiMetricsWithAudit = useMemo(() => ({
