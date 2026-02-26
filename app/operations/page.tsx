@@ -645,8 +645,10 @@ function DashboardPageInner() {
         const params = new URLSearchParams()
         params.set('hazard', category)
         if (analyticsPeriod === 'custom' && customRange) {
-          params.set('created_after', new Date(customRange.start).toISOString())
-          params.set('created_before', new Date(customRange.end).toISOString())
+          const startStr = customRange.start.slice(0, 10)
+          const endStr = customRange.end.slice(0, 10)
+          params.set('created_after', `${startStr}T00:00:00.000Z`)
+          params.set('created_before', `${endStr}T23:59:59.999Z`)
         } else {
           const timeRangeForJobs = analyticsPeriod === '1y' ? 'all' : analyticsPeriod
           params.set('time_range', timeRangeForJobs)

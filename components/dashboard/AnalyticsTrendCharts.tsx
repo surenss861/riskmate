@@ -298,7 +298,10 @@ export function AnalyticsTrendCharts({
                     onClick={(payload: unknown) => {
                       const row = payload as StatusByPeriodRow;
                       if (!row?.period || !isValidPeriod(row.period)) return;
-                      onStatusClick?.(key, row.period);
+                      if (onStatusClick) {
+                        onStatusClick(key, row.period);
+                        return;
+                      }
                       const statusNorm = key.replace(/\s+/g, '_').toLowerCase();
                       const useCompletionDate = statusNorm === 'completed';
                       onPeriodClick?.(row.period, { useCompletionDate });
