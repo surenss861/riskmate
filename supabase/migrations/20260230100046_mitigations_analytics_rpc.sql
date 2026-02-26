@@ -169,7 +169,7 @@ $$;
 COMMENT ON FUNCTION get_mitigations_analytics_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ, UUID) IS
   'Mitigations analytics KPIs in one call; p_crew_id optional. O(1) server-side aggregation.';
 
--- Daily trend: completion_rate per day (items created that day, rate = completed that day / total created that day)
+-- Daily trend: completion_rate per day (period_key = creation day; denominator = items created that day, numerator = those with completed_at set and in [p_since,p_until])
 CREATE OR REPLACE FUNCTION get_mitigations_analytics_trend(
   p_org_id UUID,
   p_since TIMESTAMPTZ,
@@ -224,19 +224,24 @@ BEGIN
   ),
   mit_base AS (
     SELECT
-      (COALESCE(mi.completed_at, mi.created_at) AT TIME ZONE 'UTC')::DATE AS pk,
+      (mi.created_at AT TIME ZONE 'UTC')::DATE AS pk,
       mi.completed_at
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
       AND mi.job_id = ANY(v_job_ids)
-      AND ((mi.created_at >= v_since_lo AND mi.created_at <= v_until_lo) OR (mi.completed_at >= v_since_lo AND mi.completed_at <= v_until_lo))
+      AND mi.created_at >= v_since_lo
+      AND mi.created_at <= v_until_lo
       AND (p_crew_id IS NULL OR mi.completed_by = p_crew_id)
   ),
   by_day AS (
     SELECT
       pk,
       COUNT(*)::BIGINT AS total,
-      COUNT(*) FILTER (WHERE completed_at IS NOT NULL)::BIGINT AS completed
+      COUNT(*) FILTER (
+        WHERE completed_at IS NOT NULL
+          AND completed_at >= v_since_lo
+          AND completed_at <= v_until_lo
+      )::BIGINT AS completed
     FROM mit_base
     WHERE pk >= (v_since_lo AT TIME ZONE 'UTC')::DATE
       AND pk <= (v_until_lo AT TIME ZONE 'UTC')::DATE

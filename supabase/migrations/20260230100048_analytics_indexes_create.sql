@@ -9,6 +9,9 @@ CREATE INDEX IF NOT EXISTS idx_mitigation_items_org_created
 CREATE INDEX IF NOT EXISTS idx_signatures_org_job
   ON signatures(organization_id, job_id);
 
+CREATE INDEX IF NOT EXISTS idx_signatures_org_signed_at
+  ON signatures(organization_id, signed_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_documents_org_job_type
   ON documents(organization_id, job_id, type)
   WHERE job_id IS NOT NULL;
