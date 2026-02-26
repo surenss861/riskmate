@@ -593,8 +593,9 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
       const { days } = parsePeriod(authReq.query.period as string);
-      const { since, until } = dateRangeForDays(days);
+      const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: rows, error } = await supabase.rpc("get_risk_heatmap_buckets", {
         p_org_id: orgId,

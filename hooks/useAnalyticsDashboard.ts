@@ -10,6 +10,7 @@ type JobCompletion = Awaited<ReturnType<typeof analyticsApi.jobCompletion>>;
 type ComplianceRate = Awaited<ReturnType<typeof analyticsApi.complianceRate>>;
 type TeamPerformance = Awaited<ReturnType<typeof analyticsApi.teamPerformance>>;
 type HazardFrequency = Awaited<ReturnType<typeof analyticsApi.hazardFrequency>>;
+type RiskHeatmap = Awaited<ReturnType<typeof analyticsApi.riskHeatmap>>;
 type Trends = Awaited<ReturnType<typeof analyticsApi.trends>>;
 type Insights = Awaited<ReturnType<typeof analyticsApi.insights>>;
 
@@ -61,6 +62,7 @@ export type AnalyticsDashboardData = {
   complianceRate: ComplianceRate | null;
   teamPerformance: TeamPerformance | null;
   hazardFrequency: HazardFrequency | null;
+  riskHeatmap: RiskHeatmap | null;
   trendsJobs: Trends | null;
   trendsRisk: Trends | null;
   trendsCompletion: Trends | null;
@@ -95,6 +97,7 @@ const emptyData: AnalyticsDashboardData = {
   complianceRate: null,
   teamPerformance: null,
   hazardFrequency: null,
+  riskHeatmap: null,
   trendsJobs: null,
   trendsRisk: null,
   trendsCompletion: null,
@@ -156,6 +159,7 @@ export function useAnalyticsDashboard(
         complianceRes,
         teamRes,
         hazardRes,
+        riskHeatmapRes,
         trendsJobsRes,
         trendsRiskRes,
         trendsCompletionRes,
@@ -174,6 +178,7 @@ export function useAnalyticsDashboard(
         useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
         useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
         useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
+        useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }) : analyticsApi.riskHeatmap({ period }),
         analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
         analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
         analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
@@ -207,6 +212,7 @@ export function useAnalyticsDashboard(
         complianceRate: complianceRes,
         teamPerformance: teamRes,
         hazardFrequency: hazardRes,
+        riskHeatmap: riskHeatmapRes,
         trendsJobs: trendsJobsRes,
         trendsRisk: trendsRiskRes,
         trendsCompletion: trendsCompletionRes,

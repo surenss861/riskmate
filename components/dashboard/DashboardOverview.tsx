@@ -8,6 +8,7 @@ import { KpiGrid, type KpiGridItem } from './KpiGrid'
 import { InsightsPanel, type InsightItem } from './InsightsPanel'
 import { AnalyticsTrendCharts } from './AnalyticsTrendCharts'
 import { HazardFrequencyChart } from './HazardFrequencyChart'
+import { RiskHeatmap } from './RiskHeatmap'
 import { TeamPerformanceTable } from './TeamPerformanceTable'
 import {
   buildDashboardCsv,
@@ -107,6 +108,8 @@ export type EnhancedAnalyticsProps = {
   periodRangeStart?: string
   periodRangeEnd?: string
   hazardItems: Array<{ category: string; count: number; avg_risk: number; trend: 'up' | 'down' | 'neutral' }>
+  /** Risk heatmap buckets: job_type × day_of_week (0=Sun..6=Sat) with avg_risk and count. */
+  riskHeatmap?: { period: string; buckets: Array<{ job_type: string; day_of_week: number; avg_risk: number; count: number }> } | null
   teamMembers: Array<{
     user_id: string
     name: string
@@ -363,6 +366,14 @@ export function DashboardOverview({
             onPeriodClick={enhancedAnalytics.onPeriodClick}
             onStatusClick={enhancedAnalytics.onStatusClick}
           />
+
+          {enhancedAnalytics.riskHeatmap != null && (
+            <RiskHeatmap
+              periodLabel={enhancedAnalytics.periodLabel}
+              buckets={enhancedAnalytics.riskHeatmap.buckets ?? []}
+              isLoading={enhancedAnalytics.isLoading}
+            />
+          )}
 
           <div className="grid gap-6 lg:grid-cols-2">
             <HazardFrequencyChart

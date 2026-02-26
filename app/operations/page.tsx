@@ -660,15 +660,24 @@ function DashboardPageInner() {
       },
     ]
     const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end
+    // Build calendar-year start/end in UTC so "This Year" does not shift a day in UTC- timezones
     const periodRangeStart = useCustom ? customRange!.start.slice(0, 10) : analyticsPeriod === '1y'
-      ? new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+      ? (() => {
+          const y = new Date().getUTCFullYear()
+          return new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0)).toISOString().slice(0, 10)
+        })()
       : (() => {
           const days = analyticsPeriod === '7d' ? 7 : analyticsPeriod === '90d' ? 90 : 30
           const d = new Date()
           d.setDate(d.getDate() - (days - 1))
           return d.toISOString().slice(0, 10)
         })()
-    const periodRangeEnd = useCustom ? customRange!.end.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    const periodRangeEnd = useCustom ? customRange!.end.slice(0, 10) : analyticsPeriod === '1y'
+      ? (() => {
+          const n = new Date()
+          return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), 0, 0, 0, 0)).toISOString().slice(0, 10)
+        })()
+      : new Date().toISOString().slice(0, 10)
 
     return {
       period: analyticsPeriod,
@@ -696,6 +705,7 @@ function DashboardPageInner() {
       jobCountsByStatus: jobCounts,
       statusByPeriod: dashboardData.statusByPeriod ?? undefined,
       hazardItems: dashboardData.hazardFrequency?.items ?? [],
+      riskHeatmap: dashboardData.riskHeatmap ?? null,
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
       onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => {

@@ -1290,9 +1290,11 @@ export const analyticsApi = {
   },
 
   /** Risk heatmap by job_type and day_of_week. Maps to GET /api/analytics/risk-heatmap. */
-  riskHeatmap: async (params?: { period?: string }) => {
+  riskHeatmap: async (params?: { period?: string; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     const qs = query.toString();
     return apiRequest<{
       period: string;
