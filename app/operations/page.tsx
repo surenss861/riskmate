@@ -556,11 +556,24 @@ function DashboardPageInner() {
         previousValue: priorCompliance ? Math.round(priorCompliance) : undefined,
       },
     ]
+    const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end
+    const periodRangeStart = useCustom ? customRange!.start.slice(0, 10) : analyticsPeriod === '1y'
+      ? new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+      : (() => {
+          const days = analyticsPeriod === '7d' ? 7 : analyticsPeriod === '90d' ? 90 : 30
+          const d = new Date()
+          d.setDate(d.getDate() - (days - 1))
+          return d.toISOString().slice(0, 10)
+        })()
+    const periodRangeEnd = useCustom ? customRange!.end.slice(0, 10) : new Date().toISOString().slice(0, 10)
+
     return {
       period: analyticsPeriod,
       onPeriodChange: handleAnalyticsPeriodChange,
       periodLabel: periodLabels[analyticsPeriod],
       customRange: analyticsPeriod === 'custom' ? customRange : null,
+      periodRangeStart,
+      periodRangeEnd,
       kpiItems,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
@@ -582,11 +595,14 @@ function DashboardPageInner() {
       hazardItems: dashboardData.hazardFrequency?.items ?? [],
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
-      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean }) => {
+      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => {
         const groupBy = analyticsPeriod === '7d' ? 'day' : analyticsPeriod === '1y' ? 'month' : 'week'
         let start: string
         let end: string
-        if (groupBy === 'day' || period.length === 10) {
+        if (opts?.rangeEnd) {
+          start = `${period.slice(0, 10)}T00:00:00.000Z`
+          end = `${opts.rangeEnd.slice(0, 10)}T23:59:59.999Z`
+        } else if (groupBy === 'day' || period.length === 10) {
           const dayStr = period.slice(0, 10)
           start = `${dayStr}T00:00:00.000Z`
           end = `${dayStr}T23:59:59.999Z`
@@ -612,7 +628,7 @@ function DashboardPageInner() {
         }
         router.push(`/operations/jobs?${params.toString()}`)
       },
-      onStatusClick: (status: string, period?: string) => {
+      onStatusClick: (status: string, period?: string, opts?: { rangeEnd?: string }) => {
         const params = new URLSearchParams()
         const statusKey = status.replace(/\s+/g, '_').toLowerCase()
         params.set('status', statusKey)
@@ -620,7 +636,10 @@ function DashboardPageInner() {
         if (period) {
           let start: string
           let end: string
-          if (period.length === 10) {
+          if (opts?.rangeEnd) {
+            start = `${period.slice(0, 10)}T00:00:00.000Z`
+            end = `${opts.rangeEnd.slice(0, 10)}T23:59:59.999Z`
+          } else if (period.length === 10) {
             const dayStr = period.slice(0, 10)
             start = `${dayStr}T00:00:00.000Z`
             end = `${dayStr}T23:59:59.999Z`

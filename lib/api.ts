@@ -1359,8 +1359,12 @@ export const analyticsApi = {
     }>(`/api/analytics/trends${qs ? `?${qs}` : ''}`);
   },
 
-  /** Top predictive insights (cached). Maps to GET /api/analytics/insights. */
-  insights: async () => {
+  /** Top predictive insights (cached). Maps to GET /api/analytics/insights. Pass since/until to scope to period. */
+  insights: async (params?: { since?: string; until?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.since) qs.set('since', params.since);
+    if (params?.until) qs.set('until', params.until);
+    const query = qs.toString();
     return apiRequest<{
       insights: Array<{
         id: string;
@@ -1376,7 +1380,7 @@ export const analyticsApi = {
         data: Record<string, unknown>;
       }>;
       locked?: boolean;
-    }>('/api/analytics/insights');
+    }>(`/api/analytics/insights${query ? `?${query}` : ''}`);
   },
 
   /** Analytics observability (insights cache hit rate, etc.). Maps to GET /api/metrics/analytics. */

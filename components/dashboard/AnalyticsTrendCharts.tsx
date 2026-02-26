@@ -34,9 +34,12 @@ type AnalyticsTrendChartsProps = {
   /** Optional: status counts per period (e.g. per week) for stacked bars by week. */
   statusByPeriod?: StatusByPeriodRow[];
   periodLabel?: string;
+  /** When statusByPeriod is absent, use this range for bar drill-down so Jobs-by-status remains clickable. */
+  periodRangeStart?: string;
+  periodRangeEnd?: string;
   isLoading?: boolean;
-  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean }) => void;
-  onStatusClick?: (status: string, period?: string) => void;
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => void;
+  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string }) => void;
 };
 
 function formatPeriodLabel(period: string): string {
@@ -84,6 +87,8 @@ export function AnalyticsTrendCharts({
   jobCountsByStatus = {},
   statusByPeriod,
   periodLabel = 'Last 30 days',
+  periodRangeStart,
+  periodRangeEnd,
   isLoading = false,
   onPeriodClick,
   onStatusClick,
@@ -297,18 +302,22 @@ export function AnalyticsTrendCharts({
                     name={key}
                     onClick={(payload: unknown) => {
                       const row = payload as StatusByPeriodRow;
-                      if (!row?.period || !isValidPeriod(row.period)) return;
+                      const periodValid = row?.period && isValidPeriod(row.period);
+                      const fallbackRange = !hasStatusByPeriod && periodRangeStart;
+                      if (!periodValid && !fallbackRange) return;
+                      const drillPeriod = periodValid ? row.period : periodRangeStart!;
+                      const rangeEndOpt = fallbackRange && periodRangeEnd ? { rangeEnd: periodRangeEnd } : undefined;
                       if (onStatusClick) {
-                        onStatusClick(key, row.period);
+                        onStatusClick(key, drillPeriod, rangeEndOpt);
                         return;
                       }
                       const statusNorm = key.replace(/\s+/g, '_').toLowerCase();
                       const useCompletionDate = statusNorm === 'completed';
-                      onPeriodClick?.(row.period, { useCompletionDate });
+                      onPeriodClick?.(drillPeriod, { useCompletionDate, ...rangeEndOpt });
                     }}
                     cursor={
                       (onStatusClick || onPeriodClick) &&
-                      statusChartData.some((row) => isValidPeriod(row.period))
+                      (statusChartData.some((row) => isValidPeriod(row.period)) || (!!periodRangeStart && !hasStatusByPeriod))
                         ? 'pointer'
                         : 'default'
                     }

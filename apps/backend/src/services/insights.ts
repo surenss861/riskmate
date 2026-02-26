@@ -47,13 +47,25 @@ function dateRange(days: number): { since: string; until: string } {
   return { since: since.toISOString(), until: until.toISOString() };
 }
 
+export type GenerateInsightsOptions = {
+  since?: string;
+  until?: string;
+};
+
 /**
  * Generate all candidate insights for an organization; caller may take top N.
  * Returns spec-compliant types: deadline_risk, risk_pattern, pending_signatures, team_productivity, overdue_tasks.
+ * When options.since/until are provided, insights are scoped to that window; otherwise uses PERIOD_DAYS.
  */
-export async function generateInsights(orgId: string): Promise<Insight[]> {
+export async function generateInsights(orgId: string, options?: GenerateInsightsOptions): Promise<Insight[]> {
   const insights: Insight[] = [];
-  const { since, until } = dateRange(PERIOD_DAYS);
+  const { since, until } =
+    options?.since && options?.until
+      ? { since: options.since, until: options.until }
+      : dateRange(PERIOD_DAYS);
+  const sinceDate = new Date(since);
+  const untilDate = new Date(until);
+  const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
   const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
   const basePath = "/dashboard";
@@ -90,7 +102,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         severity: deadlineRiskCount > 5 ? "critical" : deadlineRiskCount > 2 ? "warning" : "info",
         metric_value: deadlineRiskCount,
         metric_label: "Jobs at risk",
-        period_days: PERIOD_DAYS,
+        period_days: periodDays,
         created_at: new Date().toISOString(),
         action_url: `${jobsPath}?due_soon=true`,
         data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskCount },
@@ -137,7 +149,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         severity: top[1] >= 5 ? "critical" : top[1] >= 3 ? "warning" : "info",
         metric_value: top[1],
         metric_label: "Occurrences",
-        period_days: PERIOD_DAYS,
+        period_days: periodDays,
         created_at: new Date().toISOString(),
         action_url: `${analyticsPath}/risk-heatmap`,
         data: { job_type: jobType, day_of_week: parseInt(dayNum, 10), count: top[1], patterns: recurringEntries.slice(0, 10).map(([k, v]) => ({ bucket: k, count: v })) },
@@ -156,7 +168,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         severity: pendingSignaturesCount > 3 ? "critical" : pendingSignaturesCount > 1 ? "warning" : "info",
         metric_value: pendingSignaturesCount,
         metric_label: "Jobs",
-        period_days: PERIOD_DAYS,
+        period_days: periodDays,
         created_at: new Date().toISOString(),
         action_url: `${jobsPath}?pending_signatures=true`,
         data: { job_ids: pendingSignaturesJobIds.slice(0, 50), count: pendingSignaturesCount },
@@ -164,7 +176,9 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
     }
 
     // --- 4. Team productivity change vs previous period ---
-    const prevSince = new Date(new Date(since).getTime() - PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const periodMs = untilDate.getTime() - sinceDate.getTime();
+    const prevUntil = since;
+    const prevSince = new Date(sinceDate.getTime() - periodMs).toISOString();
     const [currentMit, previousMit] = await Promise.all([
       supabase
         .from("mitigation_items")
@@ -180,7 +194,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         .eq("organization_id", orgId)
         .not("completed_at", "is", null)
         .gte("completed_at", prevSince)
-        .lt("completed_at", since)
+        .lt("completed_at", prevUntil)
         .limit(MAX_JOBS),
     ]);
     const currentCompletions = (currentMit.data || []).length;
@@ -193,11 +207,11 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
       description:
         previousCompletions === 0
           ? `Current period: ${currentCompletions} completions (no prior period data).`
-          : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${PERIOD_DAYS} days (${currentCompletions} vs ${previousCompletions}).`,
+          : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${periodDays} days (${currentCompletions} vs ${previousCompletions}).`,
       severity: change < -40 ? "critical" : change < -20 ? "warning" : "info",
       metric_value: Math.round(change * 100) / 100,
       metric_label: "% change",
-      period_days: PERIOD_DAYS,
+      period_days: periodDays,
       created_at: new Date().toISOString(),
       action_url: `${analyticsPath}/team-performance`,
       data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
@@ -215,7 +229,7 @@ export async function generateInsights(orgId: string): Promise<Insight[]> {
         severity: overdueCount > 10 ? "critical" : overdueCount > 3 ? "warning" : "info",
         metric_value: overdueCount,
         metric_label: "Overdue",
-        period_days: PERIOD_DAYS,
+        period_days: periodDays,
         created_at: new Date().toISOString(),
         action_url: `${jobsPath}?overdue=true`,
         data: { job_ids: overdueJobIds.slice(0, 50), count: overdueCount },

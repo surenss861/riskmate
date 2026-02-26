@@ -13,6 +13,18 @@ type HazardFrequency = Awaited<ReturnType<typeof analyticsApi.hazardFrequency>>;
 type Trends = Awaited<ReturnType<typeof analyticsApi.trends>>;
 type Insights = Awaited<ReturnType<typeof analyticsApi.insights>>;
 
+/** Compute current period [since, until] for a preset (e.g. last 30 days). */
+function currentRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
+  const now = new Date();
+  const until = new Date(now);
+  until.setHours(23, 59, 59, 999);
+  const days = period === '1y' ? 365 : parseInt(period.replace('d', ''), 10) || 30;
+  const since = new Date(until.getTime());
+  since.setDate(since.getDate() - (days - 1));
+  since.setHours(0, 0, 0, 0);
+  return { since: since.toISOString(), until: until.toISOString() };
+}
+
 /** Compute prior period [since, until] (same length as current, immediately before). */
 function priorRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
   const now = new Date();
@@ -145,7 +157,10 @@ export function useAnalyticsDashboard(
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'risk' }),
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'completion' }),
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'jobs_completed' }),
-        analyticsApi.insights(),
+        (() => {
+          const insightsRange = useCustom ? { since: since!, until: until! } : currentRangeForPeriod(period);
+          return analyticsApi.insights(insightsRange);
+        })(),
         analyticsApi.statusByPeriod(statusByPeriodParams),
         prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),

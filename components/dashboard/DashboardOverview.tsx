@@ -103,6 +103,9 @@ export type EnhancedAnalyticsProps = {
   jobCountsByStatus: Record<string, number>
   /** Weekly (or daily) job status counts per period for Jobs-by-status chart; valid ISO period for drill-down. */
   statusByPeriod?: Array<{ period: string; [status: string]: string | number }>
+  /** When statusByPeriod is absent, range for Jobs-by-status bar drill-down (start/end YYYY-MM-DD or ISO). */
+  periodRangeStart?: string
+  periodRangeEnd?: string
   hazardItems: Array<{ category: string; count: number; avg_risk: number; trend: 'up' | 'down' | 'neutral' }>
   teamMembers: Array<{
     user_id: string
@@ -114,8 +117,8 @@ export type EnhancedAnalyticsProps = {
     overdue_count: number
   }>
   isLoading: boolean
-  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean }) => void
-  onStatusClick?: (status: string, period?: string) => void
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => void
+  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string }) => void
   onHazardCategoryClick?: (category: string) => void
 }
 
@@ -336,6 +339,8 @@ export function DashboardOverview({
             jobCountsByStatus={enhancedAnalytics.jobCountsByStatus}
             statusByPeriod={enhancedAnalytics.statusByPeriod}
             periodLabel={enhancedAnalytics.periodLabel}
+            periodRangeStart={enhancedAnalytics.periodRangeStart}
+            periodRangeEnd={enhancedAnalytics.periodRangeEnd}
             isLoading={enhancedAnalytics.isLoading}
             onPeriodClick={enhancedAnalytics.onPeriodClick}
             onStatusClick={enhancedAnalytics.onStatusClick}

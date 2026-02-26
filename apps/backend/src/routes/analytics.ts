@@ -6,21 +6,22 @@ import { generateInsights } from "../services/insights";
 
 export const analyticsRouter: ExpressRouter = express.Router();
 
-// In-memory cache for insights: 1h TTL per org
+// In-memory cache for insights: 1h TTL per org+range
 const INSIGHTS_CACHE_TTL_MS = 60 * 60 * 1000;
 const insightsCache = new Map<string, { data: ReturnType<typeof generateInsights> extends Promise<infer T> ? T : never; expires: number }>();
 let insightsCacheHits = 0;
 let insightsCacheMisses = 0;
 
-async function getCachedInsights(orgId: string) {
-  const entry = insightsCache.get(orgId);
+async function getCachedInsights(orgId: string, options?: { since?: string; until?: string }) {
+  const cacheKey = options?.since && options?.until ? `${orgId}:${options.since}:${options.until}` : orgId;
+  const entry = insightsCache.get(cacheKey);
   if (entry && Date.now() < entry.expires) {
     insightsCacheHits += 1;
     return entry.data;
   }
   insightsCacheMisses += 1;
-  const data = await generateInsights(orgId);
-  insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
+  const data = await generateInsights(orgId, options);
+  insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
   return data;
 }
 
@@ -890,7 +891,7 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/insights — top 5 predictive insights (cached 1h)
+// GET /api/analytics/insights — top 5 predictive insights (cached 1h). Optional since/until to scope to period.
 analyticsRouter.get(
   "/insights",
   authenticate as unknown as express.RequestHandler,
@@ -905,7 +906,10 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const all = await getCachedInsights(orgId);
+      const since = typeof req.query.since === "string" ? req.query.since : undefined;
+      const until = typeof req.query.until === "string" ? req.query.until : undefined;
+      const options = since && until ? { since, until } : undefined;
+      const all = await getCachedInsights(orgId, options);
       const insights = all.slice(0, 5);
       return res.json({ insights });
     } catch (error: any) {
