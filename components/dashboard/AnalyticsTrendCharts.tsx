@@ -153,7 +153,7 @@ export function AnalyticsTrendCharts({
                 <Tooltip
                   contentStyle={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
                   labelFormatter={(label) => formatPeriodLabel(String(label))}
-                  formatter={(value: number | undefined, name: string) => [
+                  formatter={(value: number | undefined, name?: string) => [
                     `${value ?? 0} jobs`,
                     name === 'created' ? 'Created' : 'Completed',
                   ]}
@@ -257,7 +257,7 @@ export function AnalyticsTrendCharts({
                 <Tooltip
                   contentStyle={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
                   labelFormatter={(label) => formatPeriodLabel(String(label))}
-                  formatter={(value: number | undefined, name: string) => [value ?? 0, name]}
+                  formatter={(value: number | undefined, name?: string) => [value ?? 0, name ?? '']}
                 />
                 {statusKeys.map((key) => (
                   <Bar

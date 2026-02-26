@@ -173,7 +173,7 @@ export function TrendChart({
                     borderRadius: 8,
                   }}
                   labelFormatter={(label) => formatPeriodLabel(String(label))}
-                  formatter={(value: number | undefined, name: string) => [
+                  formatter={(value: number | undefined, name?: string) => [
                     `${value ?? 0} jobs`,
                     name === 'created' ? 'Created' : 'Completed',
                   ]}
@@ -294,9 +294,9 @@ export function TrendChart({
                     borderRadius: 8,
                   }}
                   labelFormatter={(label) => formatPeriodLabel(String(label))}
-                  formatter={(value: number | undefined, name: string) => [
+                  formatter={(value: number | undefined, name?: string) => [
                     value ?? 0,
-                    name,
+                    name ?? '',
                   ]}
                 />
                 {statusKeys.map((key) => (

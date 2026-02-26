@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { analyticsApi } from '@/lib/api';
 
-export type DashboardPeriod = '7d' | '30d' | '90d' | '1y';
+export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom';
 
 type Summary = Awaited<ReturnType<typeof analyticsApi.summary>>;
 type JobCompletion = Awaited<ReturnType<typeof analyticsApi.jobCompletion>>;
@@ -92,7 +92,7 @@ export function useAnalyticsDashboard(
     const until = useCustom ? customRange!.end : undefined;
     const rangeForSummary = period === '1y' ? '365d' : period;
     const prior = useCustom ? null : priorRangeForPeriod(period);
-    const groupBy = period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
+    const groupBy: 'day' | 'week' | 'month' = period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
     const trendsParams = useCustom
       ? { since, until, groupBy: 'day' as const, metric: 'jobs' as const }
       : { period, groupBy, metric: 'jobs' as const };

@@ -436,7 +436,7 @@ function DashboardPageInner() {
       setCustomRange(range)
     } else {
       setCustomRange(null)
-      const newRange: TimeRange = period === '1y' ? 'all' : period
+      const newRange: TimeRange = period === '1y' ? 'all' : (period as TimeRange)
       setTimeRange(newRange)
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', newRange)
