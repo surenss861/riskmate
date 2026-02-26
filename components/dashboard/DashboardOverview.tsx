@@ -209,6 +209,11 @@ export function DashboardOverview({
       insights,
       team,
       hazards,
+      trendJobsCreated: enhancedAnalytics.trendsJobs?.data ?? undefined,
+      trendJobsCompleted: enhancedAnalytics.trendsCompletedCounts?.data ?? undefined,
+      trendCompletionPct: enhancedAnalytics.trendsCompletion?.data ?? undefined,
+      trendRisk: enhancedAnalytics.trendsRisk?.data ?? undefined,
+      statusByPeriod: enhancedAnalytics.statusByPeriod ?? undefined,
     })
     downloadCsv(csv, enhancedAnalytics.periodLabel)
   }

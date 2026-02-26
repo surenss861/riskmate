@@ -10,12 +10,28 @@ export type ExportInsight = { title: string; description: string; severity: stri
 export type ExportTeamRow = { name: string; assigned: number; completed: number; rate: number; avgDays: number; overdue: number };
 export type ExportHazardRow = { category: string; count: number; avgRisk: number };
 
+/** One data point for a trend series (e.g. jobs created, completion %, risk). */
+export type ExportTrendPoint = { period: string; value: number };
+
+/** Status-by-period row: period plus dynamic status columns. */
+export type ExportStatusByPeriodRow = { period: string; [status: string]: string | number };
+
 export function buildDashboardCsv(options: {
   periodLabel: string;
   kpis: ExportKpi[];
   insights: ExportInsight[];
   team: ExportTeamRow[];
   hazards: ExportHazardRow[];
+  /** Trend: jobs created per period (chart data). */
+  trendJobsCreated?: ExportTrendPoint[];
+  /** Trend: jobs completed per period (chart data). */
+  trendJobsCompleted?: ExportTrendPoint[];
+  /** Trend: completion % per period (chart data). */
+  trendCompletionPct?: ExportTrendPoint[];
+  /** Trend: risk values per period (chart data). */
+  trendRisk?: ExportTrendPoint[];
+  /** Status-by-period counts powering the Jobs-by-status chart. */
+  statusByPeriod?: ExportStatusByPeriodRow[];
 }): string {
   const rows: string[][] = [];
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
@@ -33,6 +49,44 @@ export function buildDashboardCsv(options: {
   rows.push([]);
   rows.push(['Hazard type', 'Count', 'Avg risk']);
   options.hazards.forEach((h) => rows.push([h.category, String(h.count), String(h.avgRisk)]));
+
+  // Trend series (chart underlying data)
+  if (options.trendJobsCreated && options.trendJobsCreated.length > 0) {
+    rows.push([]);
+    rows.push(['Trend: Jobs created (by period)', 'Period', 'Value']);
+    options.trendJobsCreated.forEach((p) => rows.push([p.period, String(p.value)]));
+  }
+  if (options.trendJobsCompleted && options.trendJobsCompleted.length > 0) {
+    rows.push([]);
+    rows.push(['Trend: Jobs completed (by period)', 'Period', 'Value']);
+    options.trendJobsCompleted.forEach((p) => rows.push([p.period, String(p.value)]));
+  }
+  if (options.trendCompletionPct && options.trendCompletionPct.length > 0) {
+    rows.push([]);
+    rows.push(['Trend: Completion % (by period)', 'Period', 'Value']);
+    options.trendCompletionPct.forEach((p) => rows.push([p.period, String(p.value)]));
+  }
+  if (options.trendRisk && options.trendRisk.length > 0) {
+    rows.push([]);
+    rows.push(['Trend: Risk (by period)', 'Period', 'Value']);
+    options.trendRisk.forEach((p) => rows.push([p.period, String(p.value)]));
+  }
+
+  // Status-by-period (Jobs-by-status chart)
+  if (options.statusByPeriod && options.statusByPeriod.length > 0) {
+    rows.push([]);
+    const statusCols = new Set<string>();
+    options.statusByPeriod.forEach((row) => {
+      Object.keys(row).forEach((k) => { if (k !== 'period') statusCols.add(k); });
+    });
+    const headers = ['Status by period', 'Period', ...Array.from(statusCols).sort()];
+    rows.push(headers);
+    options.statusByPeriod.forEach((row) => {
+      const r = [row.period];
+      headers.slice(2).forEach((col) => r.push(String(row[col] ?? '')));
+      rows.push(r);
+    });
+  }
 
   return rows.map((r) => r.map(escape).join(',')).join('\r\n');
 }

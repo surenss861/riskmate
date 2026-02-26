@@ -37,12 +37,15 @@ export function HazardFrequencyChart({
   isLoading = false,
   onCategoryClick,
 }: HazardFrequencyChartProps) {
-  const data = items.slice(0, 10).map((i) => ({
-    name: i.category || 'Unknown',
-    count: i.count,
-    avg_risk: i.avg_risk,
-    fill: riskToColor(i.avg_risk),
-  }));
+  const data = [...items]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+    .map((i) => ({
+      name: i.category || 'Unknown',
+      count: i.count,
+      avg_risk: i.avg_risk,
+      fill: riskToColor(i.avg_risk),
+    }));
 
   if (isLoading) {
     return (
