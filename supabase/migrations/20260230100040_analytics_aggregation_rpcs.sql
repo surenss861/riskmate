@@ -155,8 +155,8 @@ AS $$
     SELECT COUNT(DISTINCT s.job_id)::BIGINT AS cnt
     FROM signatures s
     WHERE s.organization_id = p_org_id
-      AND s.created_at >= p_since
-      AND s.created_at <= p_until
+      AND s.signed_at >= p_since
+      AND s.signed_at <= p_until
       AND EXISTS (SELECT 1 FROM period_jobs pj WHERE pj.id = s.job_id)
   ),
   with_photo AS (
@@ -225,7 +225,7 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.signed_at >= p_since AND s.signed_at <= p_until),
     photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,
@@ -265,7 +265,7 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.signed_at >= p_since AND s.signed_at <= p_until),
     photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,
@@ -305,7 +305,7 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.signed_at >= p_since AND s.signed_at <= p_until),
     photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,

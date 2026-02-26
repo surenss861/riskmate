@@ -9,6 +9,7 @@ DECLARE
   required text[] := ARRAY[
     'idx_mitigation_items_org_created',
     'idx_signatures_org_job',
+    'idx_signatures_org_signed_at',
     'idx_documents_org_job_type',
     'idx_jobs_org_created'
   ];

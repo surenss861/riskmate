@@ -15,20 +15,24 @@
 --
 -- Option C - Copy-paste: run each statement below separately in SQL Editor.
 
--- 1/4
+-- 1/5
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_mitigation_items_org_created
   ON mitigation_items(organization_id, created_at);
 
--- 2/4
+-- 2/5
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_signatures_org_job
   ON signatures(organization_id, job_id);
 
--- 3/4
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_signatures_org_signed_at
+  ON signatures(organization_id, signed_at DESC)
+  INCLUDE (job_id);
+
+-- 3/5
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_documents_org_job_type
   ON documents(organization_id, job_id, type)
   WHERE job_id IS NOT NULL;
 
--- 4/4
+-- 5/5
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_jobs_org_created
   ON jobs(organization_id, created_at)
   WHERE deleted_at IS NULL;

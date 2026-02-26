@@ -106,11 +106,11 @@ BEGIN
         AND j.created_at <= p_until
     ),
     sigs AS (
-      SELECT s.job_id, (s.created_at AT TIME ZONE 'UTC')::DATE AS sig_date
+      SELECT s.job_id, (s.signed_at AT TIME ZONE 'UTC')::DATE AS sig_date
       FROM signatures s
       WHERE s.organization_id = p_org_id
-        AND s.created_at >= p_since
-        AND s.created_at <= p_until
+        AND s.signed_at >= p_since
+        AND s.signed_at <= p_until
     ),
     photos AS (
       SELECT d.job_id, (d.created_at AT TIME ZONE 'UTC')::DATE AS photo_date
