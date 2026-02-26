@@ -25,6 +25,11 @@ export interface AdvancedFiltersState {
   /** Drill-down: filter jobs to created in this range (from chart click). */
   createdAfter: string
   createdBefore: string
+  /** Drill-down: filter jobs to completed in this range (from completion/status chart click). */
+  completedAfter: string
+  completedBefore: string
+  /** Filter jobs that have this hazard category (from hazard chart click). */
+  hazard: string
   /** Quick filter: my jobs (assigned to me) */
   myJobs: boolean
   /** Quick filter: high risk */
@@ -55,6 +60,9 @@ const DEFAULT_STATE: AdvancedFiltersState = {
   savedFilterId: null,
   createdAfter: '',
   createdBefore: '',
+  completedAfter: '',
+  completedBefore: '',
+  hazard: '',
   myJobs: false,
   highRisk: false,
   overdue: false,
@@ -106,6 +114,9 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     savedFilterId,
     createdAfter: searchParams.get('created_after') ?? '',
     createdBefore: searchParams.get('created_before') ?? '',
+    completedAfter: searchParams.get('completed_after') ?? '',
+    completedBefore: searchParams.get('completed_before') ?? '',
+    hazard: searchParams.get('hazard') ?? '',
     myJobs: searchParams.get('my_jobs') === 'true',
     highRisk: searchParams.get('high_risk') === 'true',
     overdue: searchParams.get('overdue') === 'true',
@@ -134,6 +145,9 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.savedFilterId) params.set('saved_filter_id', state.savedFilterId)
   if (state.createdAfter) params.set('created_after', state.createdAfter)
   if (state.createdBefore) params.set('created_before', state.createdBefore)
+  if (state.completedAfter) params.set('completed_after', state.completedAfter)
+  if (state.completedBefore) params.set('completed_before', state.completedBefore)
+  if (state.hazard) params.set('hazard', state.hazard)
   if (state.filterConfig && Object.keys(state.filterConfig).length > 0) {
     params.set('filter_config', JSON.stringify(state.filterConfig))
   }

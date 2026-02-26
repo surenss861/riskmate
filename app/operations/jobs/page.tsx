@@ -107,6 +107,9 @@ const JobsPageContent = () => {
         template_id: state.filterTemplateId || undefined,
         created_after: state.createdAfter || undefined,
         created_before: state.createdBefore || undefined,
+        completed_after: state.completedAfter || undefined,
+        completed_before: state.completedBefore || undefined,
+        hazard: state.hazard || undefined,
       })
 
       if (process.env.NODE_ENV === 'development' && response._meta) {
@@ -138,11 +141,14 @@ const JobsPageContent = () => {
       state.filterTemplateId,
       state.createdAfter,
       state.createdBefore,
+      state.completedAfter,
+      state.completedBefore,
+      state.hazard,
     ]
   )
 
   // Use debouncedSearchQuery (not state.searchQuery) so key and fetcher use the same value and results don't lag a keystroke
-  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}`
+  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}`
 
   const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: true,

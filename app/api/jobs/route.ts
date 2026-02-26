@@ -179,6 +179,9 @@ export async function GET(request: NextRequest) {
     const filterConfig = normalizeFilterConfig(filterConfigRaw)
     const createdAfter = searchParams.get('created_after')?.trim() ?? ''
     const createdBefore = searchParams.get('created_before')?.trim() ?? ''
+    const completedAfter = searchParams.get('completed_after')?.trim() ?? ''
+    const completedBefore = searchParams.get('completed_before')?.trim() ?? ''
+    const hazardCategory = searchParams.get('hazard')?.trim() ?? ''
 
     if (filterConfigRaw && !filterConfig) {
       const { response, errorId } = createErrorResponse(
@@ -260,6 +263,52 @@ export async function GET(request: NextRequest) {
         include_archived
       )
       requiredJobIds = intersectIds(requiredJobIds, dateFilterIds)
+      if (requiredJobIds !== null && requiredJobIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        })
+      }
+    }
+
+    if (completedAfter && completedBefore) {
+      const completedFilter: FilterGroup = {
+        operator: 'and',
+        conditions: [
+          { field: 'completed_at', operator: 'between', value: [completedAfter, completedBefore] },
+        ],
+      }
+      const completedFilterIds = await getMatchingJobIdsFromFilterGroup(
+        supabase as unknown as SupabaseClientLike,
+        organization_id,
+        completedFilter,
+        include_archived
+      )
+      requiredJobIds = intersectIds(requiredJobIds, completedFilterIds)
+      if (requiredJobIds !== null && requiredJobIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        })
+      }
+    }
+
+    if (hazardCategory) {
+      const { data: byCode } = await supabase
+        .from('mitigation_items')
+        .select('job_id')
+        .eq('organization_id', organization_id)
+        .eq('code', hazardCategory)
+      const { data: byTitle } = await supabase
+        .from('mitigation_items')
+        .select('job_id')
+        .eq('organization_id', organization_id)
+        .ilike('title', `%${hazardCategory}%`)
+      const hazardJobIds = [...new Set([
+        ...(byCode ?? []).map((r: { job_id: string }) => r.job_id),
+        ...(byTitle ?? []).map((r: { job_id: string }) => r.job_id),
+      ].filter(Boolean))]
+      requiredJobIds = intersectIds(requiredJobIds, hazardJobIds)
       if (requiredJobIds !== null && requiredJobIds.length === 0) {
         return NextResponse.json({
           data: [],

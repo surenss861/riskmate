@@ -26,6 +26,7 @@ export const FILTER_FIELD_ALLOWLIST = new Set([
   'end_date',
   'due_date',
   'created_at',
+  'completed_at',
   'has_photos',
   'has_signatures',
   'needs_signatures',

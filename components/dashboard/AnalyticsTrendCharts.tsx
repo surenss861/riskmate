@@ -33,7 +33,7 @@ type AnalyticsTrendChartsProps = {
   statusByPeriod?: StatusByPeriodRow[];
   periodLabel?: string;
   isLoading?: boolean;
-  onPeriodClick?: (period: string) => void;
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean }) => void;
   onStatusClick?: (status: string, period?: string) => void;
 };
 
@@ -183,7 +183,7 @@ export function AnalyticsTrendCharts({
                   connectNulls
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period) onPeriodClick?.(d.period);
+                    if (d?.period) onPeriodClick?.(d.period, { useCompletionDate: true });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -271,7 +271,9 @@ export function AnalyticsTrendCharts({
                       const row = payload as StatusByPeriodRow;
                       if (!row?.period) return;
                       onStatusClick?.(key, row.period);
-                      onPeriodClick?.(row.period);
+                      const statusNorm = key.replace(/\s+/g, '_').toLowerCase();
+                      const useCompletionDate = statusNorm === 'completed';
+                      onPeriodClick?.(row.period, { useCompletionDate });
                     }}
                     cursor={onStatusClick || onPeriodClick ? 'pointer' : 'default'}
                   />

@@ -371,6 +371,9 @@ export const jobsApi = {
     template_id?: string;
     created_after?: string;
     created_before?: string;
+    completed_after?: string;
+    completed_before?: string;
+    hazard?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -405,6 +408,9 @@ export const jobsApi = {
     if (params?.template_id) queryParams.set('template_id', params.template_id);
     if (params?.created_after) queryParams.set('created_after', params.created_after);
     if (params?.created_before) queryParams.set('created_before', params.created_before);
+    if (params?.completed_after) queryParams.set('completed_after', params.completed_after);
+    if (params?.completed_before) queryParams.set('completed_before', params.completed_before);
+    if (params?.hazard) queryParams.set('hazard', params.hazard);
     if (params?.overdue === true) queryParams.set('overdue', 'true');
     if (params?.unassigned === true) queryParams.set('unassigned', 'true');
     if (params?.recent === true) queryParams.set('recent', 'true');

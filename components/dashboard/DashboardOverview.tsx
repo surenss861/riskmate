@@ -110,7 +110,7 @@ export type EnhancedAnalyticsProps = {
     overdue_count: number
   }>
   isLoading: boolean
-  onPeriodClick?: (period: string) => void
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean }) => void
   onStatusClick?: (status: string, period?: string) => void
   onHazardCategoryClick?: (category: string) => void
 }

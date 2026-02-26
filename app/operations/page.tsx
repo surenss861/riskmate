@@ -580,7 +580,7 @@ function DashboardPageInner() {
       hazardItems: dashboardData.hazardFrequency?.items ?? [],
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
-      onPeriodClick: (period: string) => {
+      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean }) => {
         const groupBy = analyticsPeriod === '7d' ? 'day' : analyticsPeriod === '1y' ? 'month' : 'week'
         let start: string
         let end: string
@@ -601,26 +601,40 @@ function DashboardPageInner() {
           end = weekEndDate.toISOString()
         }
         const params = new URLSearchParams()
-        params.set('created_after', start)
-        params.set('created_before', end)
+        if (opts?.useCompletionDate) {
+          params.set('completed_after', start)
+          params.set('completed_before', end)
+        } else {
+          params.set('created_after', start)
+          params.set('created_before', end)
+        }
         router.push(`/operations/jobs?${params.toString()}`)
       },
       onStatusClick: (status: string, period?: string) => {
         const params = new URLSearchParams()
         const statusKey = status.replace(/\s+/g, '_').toLowerCase()
         params.set('status', statusKey)
+        const useCompletionDate = statusKey === 'completed'
         if (period) {
+          let start: string
+          let end: string
           if (period.length === 10) {
             const dayStr = period.slice(0, 10)
-            params.set('created_after', `${dayStr}T00:00:00.000Z`)
-            params.set('created_before', `${dayStr}T23:59:59.999Z`)
+            start = `${dayStr}T00:00:00.000Z`
+            end = `${dayStr}T23:59:59.999Z`
           } else {
             const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
-            const start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
+            start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
             const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
             weekEndDate.setUTCHours(23, 59, 59, 999)
+            end = weekEndDate.toISOString()
+          }
+          if (useCompletionDate) {
+            params.set('completed_after', start)
+            params.set('completed_before', end)
+          } else {
             params.set('created_after', start)
-            params.set('created_before', weekEndDate.toISOString())
+            params.set('created_before', end)
           }
         }
         router.push(`/operations/jobs?${params.toString()}`)
