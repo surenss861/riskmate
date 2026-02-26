@@ -1307,8 +1307,8 @@ export const analyticsApi = {
     }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`);
   },
 
-  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. */
-  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: string }) => {
+  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. metric: jobs | risk | compliance | completion */
+  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion' }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.groupBy) query.set('groupBy', params.groupBy);

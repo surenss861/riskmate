@@ -133,7 +133,7 @@ const monthStart = (d: Date): string => {
   return x.toISOString().slice(0, 10);
 };
 
-// GET /api/analytics/trends — metric (jobs|risk|compliance), period (7d|30d|90d|1y), groupBy (day|week|month)
+// GET /api/analytics/trends — metric (jobs|risk|compliance|completion), period (7d|30d|90d|1y), groupBy (day|week|month)
 // Response: { period, groupBy, metric, data: Array<{ period, value, label }> }
 analyticsRouter.get(
   "/trends",
@@ -153,6 +153,7 @@ analyticsRouter.get(
       const groupByRaw = (authReq.query.groupBy as string) || "day";
       const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
       const metricRaw = (authReq.query.metric as string) || "jobs";
+      // Spec-aligned metric enum: jobs | risk | compliance | completion
       const metric =
         metricRaw === "risk"
           ? "risk"
@@ -526,14 +527,13 @@ analyticsRouter.get(
       const userIds = members.map((m) => m.user_id);
       const userMap = new Map<string, string>();
       if (userIds.length > 0) {
-        const { data: userRows } = await supabase
-          .from("users")
-          .select("id, full_name")
-          .eq("organization_id", orgId)
-          .in("id", userIds);
-        for (const u of userRows || []) {
-          const name = (u as { id: string; full_name: string | null }).full_name ?? "";
-          userMap.set((u as { id: string }).id, name.trim() || "Unknown");
+        const { data: nameRows } = await supabase.rpc("get_team_member_display_names", {
+          p_org_id: orgId,
+          p_user_ids: userIds,
+        });
+        for (const row of (nameRows ?? []) as { user_id: string; display_name: string | null }[]) {
+          const name = (row.display_name ?? "").trim() || "Unknown";
+          userMap.set(row.user_id, name);
         }
       }
       const membersWithNames = members.map((m) => ({

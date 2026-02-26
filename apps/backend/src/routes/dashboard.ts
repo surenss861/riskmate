@@ -192,7 +192,10 @@ dashboardRouter.get(
         d.setHours(0, 0, 0, 0);
         const dateStr = d.toISOString().split("T")[0];
         const cur = chartByDate.get(dateStr) ?? { jobs_created: 0, jobs_completed: 0 };
-        const value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 100);
+        // Same-cohort rate (RPC returns jobs_completed only for jobs created that day); clamp to 0–100
+        const ratePct =
+          cur.jobs_created === 0 ? 0 : (cur.jobs_completed / cur.jobs_created) * 100;
+        const value = Math.min(100, Math.max(0, Math.round(ratePct)));
         chartData.push({ date: dateStr, value });
       }
 
