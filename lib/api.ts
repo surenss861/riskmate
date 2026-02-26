@@ -1341,8 +1341,8 @@ export const analyticsApi = {
     }>(`/api/analytics/status-by-period${qs ? `?${qs}` : ''}`);
   },
 
-  /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. metric: jobs | risk | compliance | completion. Pass since/until for custom range. */
-  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion'; since?: string; until?: string }) => {
+  /** Trends: jobs, risk, compliance, completion, or jobs_completed (real completed counts by completion date) by day/week/month. Maps to GET /api/analytics/trends. Pass since/until for custom range. */
+  trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion' | 'jobs_completed'; since?: string; until?: string }) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.groupBy) query.set('groupBy', params.groupBy);

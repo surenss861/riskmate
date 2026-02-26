@@ -98,6 +98,8 @@ export type EnhancedAnalyticsProps = {
   trendsJobs: { data: Array<{ period: string; value: number; label?: string }> } | null
   trendsRisk: { data: Array<{ period: string; value: number; label?: string }> } | null
   trendsCompletion: { data: Array<{ period: string; value: number; label?: string }> } | null
+  /** Real completed counts per period (by completion date); when set, chart uses these for completed series. */
+  trendsCompletedCounts?: { data: Array<{ period: string; value: number; label?: string }> } | null
   jobCountsByStatus: Record<string, number>
   /** Weekly (or daily) job status counts per period for Jobs-by-status chart; valid ISO period for drill-down. */
   statusByPeriod?: Array<{ period: string; [status: string]: string | number }>
@@ -329,6 +331,7 @@ export function DashboardOverview({
           <AnalyticsTrendCharts
             trendsJobs={enhancedAnalytics.trendsJobs}
             trendsCompletion={enhancedAnalytics.trendsCompletion}
+            trendsCompletedCounts={enhancedAnalytics.trendsCompletedCounts}
             trendsRisk={enhancedAnalytics.trendsRisk}
             jobCountsByStatus={enhancedAnalytics.jobCountsByStatus}
             statusByPeriod={enhancedAnalytics.statusByPeriod}

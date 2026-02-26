@@ -576,6 +576,7 @@ function DashboardPageInner() {
       trendsJobs: dashboardData.trendsJobs,
       trendsRisk: dashboardData.trendsRisk,
       trendsCompletion: dashboardData.trendsCompletion,
+      trendsCompletedCounts: dashboardData.trendsCompletedCounts ?? null,
       jobCountsByStatus: jobCounts,
       statusByPeriod: dashboardData.statusByPeriod ?? undefined,
       hazardItems: dashboardData.hazardFrequency?.items ?? [],
@@ -913,13 +914,14 @@ function DashboardPageInner() {
             <div className="mb-16 space-y-16">
               <div>
                 <h2 className="text-2xl font-bold font-display mb-6">Performance Metrics</h2>
-                <KpiGrid items={kpiItems} />
+                <KpiGrid items={enhancedAnalytics?.kpiItems ?? kpiItems} />
               </div>
               <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
                 <GlassCard className="p-8">
                   <AnalyticsTrendCharts
                     trendsJobs={dashboardData?.trendsJobs ?? null}
                     trendsCompletion={dashboardData?.trendsCompletion ?? null}
+                    trendsCompletedCounts={dashboardData?.trendsCompletedCounts ?? null}
                     trendsRisk={dashboardData?.trendsRisk ?? null}
                     jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
                     statusByPeriod={dashboardData?.statusByPeriod ?? undefined}

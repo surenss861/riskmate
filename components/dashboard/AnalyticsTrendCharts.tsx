@@ -27,6 +27,8 @@ type StatusByPeriodRow = { period: string; [status: string]: string | number };
 type AnalyticsTrendChartsProps = {
   trendsJobs: TrendsResponse;
   trendsCompletion: TrendsResponse;
+  /** Real completed counts per period (by completion date). When provided, used for the completed series instead of deriving from creation * rate. */
+  trendsCompletedCounts?: TrendsResponse | null;
   trendsRisk: TrendsResponse;
   jobCountsByStatus?: Record<string, number>;
   /** Optional: status counts per period (e.g. per week) for stacked bars by week. */
@@ -77,6 +79,7 @@ function getStatusColor(status: string): string {
 export function AnalyticsTrendCharts({
   trendsJobs,
   trendsCompletion,
+  trendsCompletedCounts,
   trendsRisk,
   jobCountsByStatus = {},
   statusByPeriod,
@@ -89,12 +92,19 @@ export function AnalyticsTrendCharts({
   (trendsJobs?.data ?? []).forEach((p: TrendPoint) =>
     jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value })
   );
-  (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
-    const cur = jobsByPeriod.get(p.period) ?? {};
-    const created = cur.created ?? 0;
-    const rate = Math.max(0, Math.min(100, p.value)) / 100;
-    jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
-  });
+  if (trendsCompletedCounts?.data?.length) {
+    (trendsCompletedCounts.data as TrendPoint[]).forEach((p: TrendPoint) => {
+      const cur = jobsByPeriod.get(p.period) ?? {};
+      jobsByPeriod.set(p.period, { ...cur, completed: Math.round(Number(p.value ?? 0)) });
+    });
+  } else {
+    (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
+      const cur = jobsByPeriod.get(p.period) ?? {};
+      const created = cur.created ?? 0;
+      const rate = Math.max(0, Math.min(100, p.value)) / 100;
+      jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
+    });
+  }
   const jobsChartData: JobsTrendData[] = Array.from(jobsByPeriod.entries())
     .map(([period, v]) => ({ period, ...v }))
     .sort((a, b) => a.period.localeCompare(b.period));

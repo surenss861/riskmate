@@ -42,6 +42,8 @@ export type AnalyticsDashboardData = {
   trendsJobs: Trends | null;
   trendsRisk: Trends | null;
   trendsCompletion: Trends | null;
+  /** Real completed job counts per period (by completion date); for Jobs-over-time chart completed series. */
+  trendsCompletedCounts: Trends | null;
   insights: Insights | null;
   /** Weekly (or daily) job status counts per period for Jobs-by-status chart; valid ISO period for drill-down. */
   statusByPeriod: StatusByPeriodRow[] | null;
@@ -70,6 +72,7 @@ const emptyData: AnalyticsDashboardData = {
   trendsJobs: null,
   trendsRisk: null,
   trendsCompletion: null,
+  trendsCompletedCounts: null,
   insights: null,
   statusByPeriod: null,
   priorSummary: null,
@@ -125,6 +128,7 @@ export function useAnalyticsDashboard(
         trendsJobsRes,
         trendsRiskRes,
         trendsCompletionRes,
+        trendsCompletedCountsRes,
         insightsRes,
         statusByPeriodRes,
         priorSummaryRes,
@@ -140,6 +144,7 @@ export function useAnalyticsDashboard(
         analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'risk' }),
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'completion' }),
+        analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'jobs_completed' }),
         analyticsApi.insights(),
         analyticsApi.statusByPeriod(statusByPeriodParams),
         prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
@@ -167,6 +172,7 @@ export function useAnalyticsDashboard(
         trendsJobs: trendsJobsRes,
         trendsRisk: trendsRiskRes,
         trendsCompletion: trendsCompletionRes,
+        trendsCompletedCounts: trendsCompletedCountsRes,
         insights: insightsRes,
         statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : null,
         priorSummary: priorSummaryRes,
