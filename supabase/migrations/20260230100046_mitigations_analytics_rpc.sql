@@ -98,21 +98,23 @@ BEGIN
       AND d.created_at <= v_until_lo
     GROUP BY d.job_id
   ),
-  -- Jobs with any evidence (distinct jobs with ≥1 document within scope/lifetime)
+  -- Jobs with any evidence (distinct jobs with ≥1 document within requested window)
   docs_any AS (
     SELECT DISTINCT d.job_id
     FROM documents d
     WHERE d.organization_id = p_org_id
       AND d.job_id = ANY(v_job_ids)
+      AND d.created_at >= v_since_lo
       AND d.created_at <= v_until_lo
   ),
-  -- Photo evidence: job's lifetime up to p_until (honor previously satisfied evidence outside window)
+  -- Photo evidence: first photo within requested window
   docs_photo_first AS (
     SELECT d.job_id,
       MIN(d.created_at) AS first_at
     FROM documents d
     WHERE d.organization_id = p_org_id
       AND d.job_id = ANY(v_job_ids)
+      AND d.created_at >= v_since_lo
       AND d.created_at <= v_until_lo
       AND d.type = 'photo'
     GROUP BY d.job_id
@@ -212,10 +214,17 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  WITH mit_base AS (
+  WITH date_series AS (
+    SELECT (d)::DATE AS d
+    FROM generate_series(
+      (v_since_lo AT TIME ZONE 'UTC')::DATE,
+      (v_until_lo AT TIME ZONE 'UTC')::DATE,
+      '1 day'::INTERVAL
+    ) AS d
+  ),
+  mit_base AS (
     SELECT
-      (mi.created_at AT TIME ZONE 'UTC')::DATE AS pk,
-      mi.created_at,
+      (COALESCE(mi.completed_at, mi.created_at) AT TIME ZONE 'UTC')::DATE AS pk,
       mi.completed_at
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
@@ -227,17 +236,20 @@ BEGIN
     SELECT
       pk,
       COUNT(*)::BIGINT AS total,
-      COUNT(*) FILTER (WHERE (completed_at AT TIME ZONE 'UTC')::DATE = pk)::BIGINT AS completed
+      COUNT(*) FILTER (WHERE completed_at IS NOT NULL)::BIGINT AS completed
     FROM mit_base
+    WHERE pk >= (v_since_lo AT TIME ZONE 'UTC')::DATE
+      AND pk <= (v_until_lo AT TIME ZONE 'UTC')::DATE
     GROUP BY pk
   )
   SELECT
-    by_day.pk,
-    CASE WHEN by_day.total = 0 THEN 0::NUMERIC
-         ELSE ROUND((by_day.completed::NUMERIC / NULLIF(by_day.total, 0))::NUMERIC, 3)
-    END
-  FROM by_day
-  ORDER BY by_day.pk;
+    ds.d AS period_key,
+    CASE WHEN COALESCE(b.total, 0) = 0 THEN 0::NUMERIC
+         ELSE ROUND((COALESCE(b.completed, 0)::NUMERIC / NULLIF(b.total, 0))::NUMERIC, 3)
+    END AS completion_rate
+  FROM date_series ds
+  LEFT JOIN by_day b ON b.pk = ds.d
+  ORDER BY ds.d;
 END;
 $$;
 

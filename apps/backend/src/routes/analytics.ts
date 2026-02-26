@@ -840,13 +840,24 @@ analyticsRouter.get(
       const trendEmptyReason =
         jobsTotal === 0 ? "no_jobs" : (trendRows.length === 0 ? "no_events" : null);
 
-      const trend = trendRows.map((r) => {
+      const trendByDate = new Map<string, number>();
+      for (const r of trendRows) {
         const dateStr =
           typeof r.period_key === "string"
             ? r.period_key.slice(0, 10)
             : new Date(r.period_key).toISOString().slice(0, 10);
-        return { date: dateStr, completion_rate: Number(r.completion_rate ?? 0) };
-      });
+        trendByDate.set(dateStr, Number(r.completion_rate ?? 0));
+      }
+      const trend: { date: string; completion_rate: number }[] = [];
+      const cursor = new Date(since);
+      cursor.setHours(0, 0, 0, 0);
+      const end = new Date(until);
+      end.setHours(23, 59, 59, 999);
+      while (cursor <= end) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        trend.push({ date: dateStr, completion_rate: trendByDate.get(dateStr) ?? 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
 
       res.json({
         org_id: orgId,
