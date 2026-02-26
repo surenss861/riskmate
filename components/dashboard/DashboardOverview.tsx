@@ -3,6 +3,56 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { KpiGrid, type KpiGridItem } from './KpiGrid'
+import { InsightsPanel, type InsightItem } from './InsightsPanel'
+import { AnalyticsTrendCharts } from './AnalyticsTrendCharts'
+import { HazardFrequencyChart } from './HazardFrequencyChart'
+import { TeamPerformanceTable } from './TeamPerformanceTable'
+import {
+  buildDashboardCsv,
+  downloadCsv,
+  buildDashboardPdf,
+  downloadPdf,
+  type ExportKpi,
+  type ExportInsight,
+  type ExportTeamRow,
+  type ExportHazardRow,
+} from '@/lib/utils/dashboardExport'
+
+export type DashboardPeriod = '7d' | '30d' | '90d' | '1y'
+
+const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: '90d', label: 'Last 90 Days' },
+  { value: '1y', label: 'This Year' },
+]
+
+export type EnhancedAnalyticsProps = {
+  period: DashboardPeriod
+  onPeriodChange: (period: DashboardPeriod) => void
+  periodLabel: string
+  kpiItems: KpiGridItem[]
+  insights: InsightItem[]
+  insightsLoading: boolean
+  trendsJobs: { data: Array<{ period: string; value: number; label?: string }> } | null
+  trendsRisk: { data: Array<{ period: string; value: number; label?: string }> } | null
+  trendsCompletion: { data: Array<{ period: string; value: number; label?: string }> } | null
+  jobCountsByStatus: Record<string, number>
+  hazardItems: Array<{ category: string; count: number; avg_risk: number; trend: 'up' | 'down' | 'neutral' }>
+  teamMembers: Array<{
+    user_id: string
+    name: string
+    jobs_assigned: number
+    jobs_completed: number
+    completion_rate: number
+    avg_days: number
+    overdue_count: number
+  }>
+  isLoading: boolean
+  onPeriodClick?: (period: string) => void
+  onHazardCategoryClick?: (category: string) => void
+}
 
 interface DashboardOverviewProps {
   todaysJobs: Array<{
@@ -41,7 +91,9 @@ interface DashboardOverviewProps {
     date: string
     rate: number
   }>
-  timeRange?: string // Add time_range prop for deep links
+  timeRange?: string
+  /** When set, shows enhanced analytics layout: KPIs → Insights → Charts → Tables + Export */
+  enhancedAnalytics?: EnhancedAnalyticsProps
 }
 
 export function DashboardOverview({
@@ -52,29 +104,156 @@ export function DashboardOverview({
   workforceActivity,
   complianceTrend,
   timeRange = '30d',
+  enhancedAnalytics,
 }: DashboardOverviewProps) {
   const router = useRouter()
   const timeRangeParam = timeRange ? `time_range=${timeRange}` : ''
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-white">What Needs Your Attention</h2>
-          <p className="text-sm text-white/60 mt-1">
-            A quick overview of today&apos;s priorities and recent activity
-          </p>
-        </div>
-        <Link
-          href="/operations/jobs"
-          className="text-sm text-[#F97316] hover:text-[#FB923C] transition-colors"
-        >
-          View All Jobs →
-        </Link>
-      </div>
+  const handleExportCSV = () => {
+    if (!enhancedAnalytics) return
+    const kpis: ExportKpi[] = enhancedAnalytics.kpiItems.map((k) => ({
+      title: k.title,
+      value: `${k.prefix ?? ''}${k.value}${k.suffix ?? ''}`,
+    }))
+    const insights: ExportInsight[] = enhancedAnalytics.insights.map((i) => ({
+      title: i.title,
+      description: i.description,
+      severity: i.severity,
+    }))
+    const team: ExportTeamRow[] = enhancedAnalytics.teamMembers.map((m) => ({
+      name: m.name,
+      assigned: m.jobs_assigned,
+      completed: m.jobs_completed,
+      rate: m.completion_rate,
+      avgDays: m.avg_days,
+      overdue: m.overdue_count,
+    }))
+    const hazards: ExportHazardRow[] = enhancedAnalytics.hazardItems.map((h) => ({
+      category: h.category,
+      count: h.count,
+      avgRisk: h.avg_risk,
+    }))
+    const csv = buildDashboardCsv({
+      periodLabel: enhancedAnalytics.periodLabel,
+      kpis,
+      insights,
+      team,
+      hazards,
+    })
+    downloadCsv(csv, enhancedAnalytics.periodLabel)
+  }
 
-      {/* Grid Layout */}
+  const handleExportPDF = async () => {
+    if (!enhancedAnalytics) return
+    const kpis: ExportKpi[] = enhancedAnalytics.kpiItems.map((k) => ({
+      title: k.title,
+      value: `${k.prefix ?? ''}${k.value}${k.suffix ?? ''}`,
+    }))
+    const insights: ExportInsight[] = enhancedAnalytics.insights.map((i) => ({
+      title: i.title,
+      description: i.description,
+      severity: i.severity,
+    }))
+    const pdfBytes = await buildDashboardPdf({
+      periodLabel: enhancedAnalytics.periodLabel,
+      kpis,
+      insights,
+    })
+    downloadPdf(pdfBytes, enhancedAnalytics.periodLabel)
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Enhanced Analytics: period selector, export, KPIs → Insights → Charts → Tables */}
+      {enhancedAnalytics && (
+        <section className="space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <h2 className="text-2xl font-semibold text-white">Analytics</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={enhancedAnalytics.period}
+                onChange={(e) => enhancedAnalytics.onPeriodChange(e.target.value as DashboardPeriod)}
+                className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
+                aria-label="Time period"
+              >
+                {PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex rounded-lg border border-white/10 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  disabled={enhancedAnalytics.isLoading}
+                  className="px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 border-r border-white/10 disabled:opacity-50"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportPDF()}
+                  disabled={enhancedAnalytics.isLoading}
+                  className="px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 disabled:opacity-50"
+                >
+                  Export PDF
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <KpiGrid items={enhancedAnalytics.kpiItems} />
+
+          <InsightsPanel
+            insights={enhancedAnalytics.insights}
+            isLoading={enhancedAnalytics.insightsLoading}
+            viewAllHref={`/operations?time_range=${enhancedAnalytics.period}`}
+          />
+
+          <AnalyticsTrendCharts
+            trendsJobs={enhancedAnalytics.trendsJobs}
+            trendsCompletion={enhancedAnalytics.trendsCompletion}
+            trendsRisk={enhancedAnalytics.trendsRisk}
+            jobCountsByStatus={enhancedAnalytics.jobCountsByStatus}
+            periodLabel={enhancedAnalytics.periodLabel}
+            isLoading={enhancedAnalytics.isLoading}
+            onPeriodClick={enhancedAnalytics.onPeriodClick}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <HazardFrequencyChart
+              items={enhancedAnalytics.hazardItems}
+              periodLabel={enhancedAnalytics.periodLabel}
+              isLoading={enhancedAnalytics.isLoading}
+              onCategoryClick={enhancedAnalytics.onHazardCategoryClick}
+            />
+            <TeamPerformanceTable
+              members={enhancedAnalytics.teamMembers}
+              periodLabel={enhancedAnalytics.periodLabel}
+              isLoading={enhancedAnalytics.isLoading}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* What Needs Your Attention */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-white">What Needs Your Attention</h2>
+            <p className="text-sm text-white/60 mt-1">
+              A quick overview of today&apos;s priorities and recent activity
+            </p>
+          </div>
+          <Link
+            href="/operations/jobs"
+            className="text-sm text-[#F97316] hover:text-[#FB923C] transition-colors"
+          >
+            View All Jobs →
+          </Link>
+        </div>
+
       <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {/* Today's Jobs */}
         <motion.div
@@ -369,6 +548,7 @@ export function DashboardOverview({
           </div>
         </motion.div>
       </div>
+      </section>
     </div>
   )
 }

@@ -13,6 +13,9 @@ export type KpiGridItem = {
   isLoading?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
+  trendPercent?: number;
+  previousValue?: number;
+  sparklineData?: number[];
   href?: string;
   onClick?: () => void;
 };

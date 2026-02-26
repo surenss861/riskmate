@@ -15,6 +15,12 @@ type KpiTileProps = {
   isLoading?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
+  /** Percentage change vs previous period (e.g. 12 for "↑ 12%") */
+  trendPercent?: number;
+  /** Previous period value for tooltip */
+  previousValue?: number;
+  /** Mini sparkline values (e.g. last 7 points) */
+  sparklineData?: number[];
   href?: string;
   onClick?: () => void;
 };
@@ -30,11 +36,39 @@ const formatNumber = (value: number) => {
   return value.toFixed(value % 1 === 0 ? 0 : value < 10 ? 1 : 0);
 };
 
-const trendColor = {
-  up: 'text-emerald-400',
-  down: 'text-red-400',
-  flat: 'text-[#A1A1A1]',
+const trendColorClass = {
+  up: 'text-emerald-400 bg-emerald-500/10',
+  down: 'text-red-400 bg-red-500/10',
+  flat: 'text-[#A1A1A1] bg-white/5',
 };
+
+function Sparkline({ data }: { data: number[] }) {
+  if (!data.length) return null;
+  const w = 64;
+  const h = 24;
+  const padding = 2;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => {
+    const x = padding + (i / Math.max(data.length - 1, 1)) * (w - padding * 2);
+    const y = h - padding - ((v - min) / range) * (h - padding * 2);
+    return `${x},${y}`;
+  });
+  return (
+    <svg width={w} height={h} className="overflow-visible" aria-hidden>
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-white/40"
+        points={points.join(' ')}
+      />
+    </svg>
+  );
+}
 
 export function KpiTile({
   title,
@@ -46,10 +80,14 @@ export function KpiTile({
   isLoading = false,
   trend = 'flat',
   trendLabel,
+  trendPercent,
+  previousValue,
+  sparklineData,
   href,
   onClick,
 }: KpiTileProps) {
   const [displayValue, setDisplayValue] = useState('0');
+  const [showTooltip, setShowTooltip] = useState(false);
   const spring = useSpring(0, {
     stiffness: 120,
     damping: 16,
@@ -68,10 +106,13 @@ export function KpiTile({
     };
   }, [spring]);
 
-  const trendText = useMemo(() => {
-    if (!trendLabel) return null;
-    return trendLabel;
-  }, [trendLabel]);
+  const trendDisplay = useMemo(() => {
+    const arrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
+    if (trendPercent != null && !Number.isNaN(trendPercent)) {
+      return `${arrow} ${trendPercent > 0 ? trendPercent : -trendPercent}%`;
+    }
+    return trendLabel ?? null;
+  }, [trend, trendLabel, trendPercent]);
 
   const tileContent = (
     <motion.div
@@ -86,6 +127,8 @@ export function KpiTile({
         (href || onClick) && "cursor-pointer"
       )}
       onClick={onClick}
+      onMouseEnter={() => setShowTooltip(previousValue != null)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
       <div className="text-xs uppercase tracking-wider text-white/50 mb-2">{title}</div>
       
@@ -104,16 +147,23 @@ export function KpiTile({
         <p className="mt-3 text-sm text-white/60 leading-relaxed">{description}</p>
       )}
 
-      {trendText && (
-        <div className="mt-4">
+      <div className="mt-4 flex items-center gap-3 flex-wrap">
+        {sparklineData && sparklineData.length > 0 && !isLoading && (
+          <Sparkline data={sparklineData} />
+        )}
+        {trendDisplay && (
           <span className={clsx(
-            'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium',
-            trend === 'up' ? 'bg-emerald-500/10 text-emerald-400/90' :
-            trend === 'down' ? 'bg-red-500/10 text-red-400/90' :
-            'bg-white/5 text-white/60'
+            'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium',
+            trendColorClass[trend]
           )}>
-            {trendText}
+            {trendDisplay}
           </span>
+        )}
+      </div>
+
+      {showTooltip && previousValue != null && (
+        <div className="absolute bottom-4 left-6 right-6 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-xs text-white/80">
+          Previous period: {prefix}{formatNumber(previousValue)}{suffix}
         </div>
       )}
     </motion.div>

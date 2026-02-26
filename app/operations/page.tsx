@@ -16,8 +16,9 @@ import { TrendChart } from '@/components/dashboard/TrendChart'
 import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
-import { DashboardOverview } from '@/components/dashboard/DashboardOverview'
+import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview'
 import { Changelog } from '@/components/dashboard/Changelog'
+import { useAnalyticsDashboard } from '@/hooks/useAnalyticsDashboard'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
@@ -60,8 +61,10 @@ function DashboardPageInner() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   
   // Time range from query params, default to 30d
-  const timeRangeParam = searchParams.get('time_range') as TimeRange | null
-  const [timeRange, setTimeRange] = useState<TimeRange>(timeRangeParam || '30d')
+  const timeRangeParam = searchParams.get('time_range') as string | null
+  const [timeRange, setTimeRange] = useState<TimeRange>(
+    timeRangeParam === '1y' ? 'all' : (timeRangeParam as TimeRange) || '30d'
+  )
   const analyticsRange = timeRange === 'all' ? 365 : parseInt(timeRange.replace('d', ''))
   
   // Job Roster filters from URL params
@@ -92,6 +95,14 @@ function DashboardPageInner() {
     refreshIntervalMs: 5 * 60 * 1000,
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })
+
+  const analyticsPeriod: DashboardPeriod = timeRange === 'all' ? '1y' : timeRange
+  const {
+    data: dashboardData,
+    isLoading: dashboardLoading,
+    isLocked: dashboardLocked,
+    refetch: refetchDashboard,
+  } = useAnalyticsDashboard(analyticsPeriod, roleLoaded && !isMember && !analyticsLocked)
 
   const loadData = useCallback(async () => {
     try {
@@ -393,10 +404,9 @@ function DashboardPageInner() {
 
   // Sync time range with URL query params
   useEffect(() => {
-    const param = searchParams.get('time_range') as TimeRange | null
-    if (param && ['7d', '30d', '90d', 'all'].includes(param)) {
-      setTimeRange(param)
-    }
+    const param = searchParams.get('time_range') as string | null
+    if (param === '1y') setTimeRange('all')
+    else if (param && ['7d', '30d', '90d', 'all'].includes(param)) setTimeRange(param as TimeRange)
   }, [searchParams])
 
   const handleTimeRangeChange = (newRange: TimeRange) => {
@@ -405,7 +415,18 @@ function DashboardPageInner() {
     params.set('time_range', newRange)
     router.push(`/operations?${params.toString()}`, { scroll: false })
     refetchAnalytics()
+    refetchDashboard()
   }
+
+  const handleAnalyticsPeriodChange = useCallback((period: DashboardPeriod) => {
+    const newRange: TimeRange = period === '1y' ? 'all' : period
+    setTimeRange(newRange)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('time_range', newRange)
+    router.push(`/operations?${params.toString()}`, { scroll: false })
+    refetchAnalytics()
+    refetchDashboard()
+  }, [searchParams, router, refetchAnalytics, refetchDashboard])
 
   const handleRangeChange = (nextRange: number) => {
     // Convert number to TimeRange
@@ -413,6 +434,89 @@ function DashboardPageInner() {
     const newTimeRange = rangeMap[nextRange] || '30d'
     handleTimeRangeChange(newTimeRange)
   }
+
+  const periodLabels: Record<DashboardPeriod, string> = {
+    '7d': 'Last 7 Days',
+    '30d': 'Last 30 Days',
+    '90d': 'Last 90 Days',
+    '1y': 'This Year',
+  }
+
+  const enhancedAnalytics: EnhancedAnalyticsProps | undefined = useMemo(() => {
+    if (!dashboardData || dashboardLocked) return undefined
+    const jc = dashboardData.jobCompletion
+    const cr = dashboardData.complianceRate
+    const summary = dashboardData.summary
+    const jobCounts = summary?.job_counts_by_status ?? {}
+    const totalJobs = jc?.total ?? 0
+    const completionRate = jc?.completion_rate ?? 0
+    const avgRiskFromTrend = dashboardData.trendsRisk?.data?.length
+      ? dashboardData.trendsRisk.data.reduce((a, p) => a + p.value, 0) / dashboardData.trendsRisk.data.length
+      : 0
+    const complianceOverall = cr?.overall ?? 0
+    const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
+      {
+        id: 'total-jobs',
+        title: 'Total Jobs',
+        value: totalJobs,
+        trend: 'flat',
+        trendLabel: periodLabels[analyticsPeriod],
+        sparklineData: dashboardData.trendsJobs?.data?.slice(-7).map((d) => d.value) ?? [],
+      },
+      {
+        id: 'completion-rate',
+        title: 'Completion Rate',
+        value: Math.round(completionRate),
+        suffix: '%',
+        trend: completionRate >= 80 ? 'up' : completionRate <= 50 ? 'down' : 'flat',
+        sparklineData: dashboardData.trendsCompletion?.data?.slice(-7).map((d) => d.value) ?? [],
+      },
+      {
+        id: 'avg-risk',
+        title: 'Avg Risk Score',
+        value: Math.round(avgRiskFromTrend * 10) / 10,
+        trend: avgRiskFromTrend <= 25 ? 'up' : avgRiskFromTrend >= 75 ? 'down' : 'flat',
+        sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
+      },
+      {
+        id: 'compliance-rate',
+        title: 'Compliance Rate',
+        value: Math.round(complianceOverall),
+        suffix: '%',
+        trend: complianceOverall >= 90 ? 'up' : complianceOverall <= 60 ? 'down' : 'flat',
+      },
+    ]
+    return {
+      period: analyticsPeriod,
+      onPeriodChange: handleAnalyticsPeriodChange,
+      periodLabel: periodLabels[analyticsPeriod],
+      kpiItems,
+      insights: (dashboardData.insights?.insights ?? []).map((i) => ({
+        id: i.id,
+        type: i.type,
+        title: i.title,
+        description: i.description,
+        severity: i.severity,
+        action_url: i.action_url,
+        metric_value: i.metric_value,
+        metric_label: i.metric_label,
+      })),
+      insightsLoading: dashboardLoading,
+      trendsJobs: dashboardData.trendsJobs,
+      trendsRisk: dashboardData.trendsRisk,
+      trendsCompletion: dashboardData.trendsCompletion,
+      jobCountsByStatus: jobCounts,
+      hazardItems: dashboardData.hazardFrequency?.items ?? [],
+      teamMembers: dashboardData.teamPerformance?.members ?? [],
+      isLoading: dashboardLoading,
+      onPeriodClick: (period: string) => {
+        router.push(`/operations/jobs?time_range=${analyticsPeriod}&created_after=${period}`)
+      },
+      onHazardCategoryClick: (category: string) => {
+        router.push(`/operations/jobs?time_range=${analyticsPeriod}&hazard=${encodeURIComponent(category)}`)
+      },
+    }
+  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, router, handleAnalyticsPeriodChange])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {
@@ -583,10 +687,10 @@ function DashboardPageInner() {
               <div className="flex items-center gap-4 mt-6 md:mt-0">
                 {/* Time Range Segmented Control */}
                 <div className="inline-flex bg-white/5 border border-white/10 rounded-lg p-1 backdrop-blur-sm">
-                  {(['30d', '90d', 'all'] as const).map((range) => (
+                  {(['7d', '30d', '90d', 'all'] as const).map((range) => (
                     <button
                       key={range}
-                      onClick={() => setTimeRange(range)}
+                      onClick={() => handleTimeRangeChange(range)}
                       className={clsx(
                         'px-4 py-2.5 text-sm font-medium rounded-md transition-all',
                         timeRange === range
@@ -594,7 +698,7 @@ function DashboardPageInner() {
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       )}
                     >
-                      {range === 'all' ? 'All' : range.toUpperCase()}
+                      {range === 'all' ? 'This Year' : range.toUpperCase()}
                     </button>
                   ))}
                 </div>
@@ -721,6 +825,7 @@ function DashboardPageInner() {
                 workforceActivity={workforceActivity}
                 complianceTrend={complianceTrend}
                 timeRange={timeRange}
+                enhancedAnalytics={enhancedAnalytics}
               />
             </div>
           )}
