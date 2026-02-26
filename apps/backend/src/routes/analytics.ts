@@ -890,15 +890,8 @@ analyticsRouter.get(
 );
 
 // GET /api/analytics/summary
-// Returns job counts by status, risk level distribution, evidence statistics, team activity
-// Spec: 10.2 Analytics API - summary endpoint
-type JobSummaryRecord = {
-  id: string;
-  status: string | null;
-  risk_level: string | null;
-  created_at: string;
-};
-
+// Returns job counts by status, risk level distribution, evidence statistics, team activity.
+// Single server-side RPC to avoid multi-page scans and meet <500ms SLA.
 analyticsRouter.get(
   "/summary",
   authenticate as unknown as express.RequestHandler,
@@ -936,104 +929,47 @@ analyticsRouter.get(
       }
 
       const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
-      const sinceDate = new Date();
-      sinceDate.setHours(0, 0, 0, 0);
-      sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
-      const sinceIso = sinceDate.toISOString();
+      const { since, until } = dateRangeForDays(rangeDays);
 
-      const { data: jobs, error: jobsError } = await fetchAllPages<JobSummaryRecord>(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("jobs")
-          .select("id, status, risk_level, created_at")
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-          .gte("created_at", sinceIso)
-          .order("created_at", { ascending: false })
-          .range(offset, offset + limit - 1);
-        return { data, error };
+      const { data: row, error: rpcError } = await supabase.rpc("get_analytics_summary", {
+        p_org_id: orgId,
+        p_since: since,
+        p_until: until,
       });
 
-      if (jobsError) throw jobsError;
+      if (rpcError) throw rpcError;
 
-      const jobList = (jobs ?? []) as JobSummaryRecord[];
-      const jobIds = jobList.map((j) => j.id);
-
-      const documents: { job_id: string }[] = [];
-      const completions: { job_id: string; completed_by: string | null }[] = [];
-      for (const idChunk of chunkArray(jobIds, 500)) {
-        const [docRes, mitRes] = await Promise.all([
-          fetchAllPages<{ job_id: string }>(async (o, l) => {
-            const { data, error } = await supabase
-              .from("documents")
-              .select("id, job_id")
-              .eq("organization_id", orgId)
-              .in("job_id", idChunk)
-              .gte("created_at", sinceIso)
-              .order("created_at", { ascending: false })
-              .range(o, o + l - 1);
-            return { data, error };
-          }),
-          fetchAllPages<{ job_id: string; completed_by: string | null }>(async (o, l) => {
-            const { data, error } = await supabase
-              .from("mitigation_items")
-              .select("id, job_id, completed_at, completed_by")
-              .eq("organization_id", orgId)
-              .in("job_id", idChunk)
-              .not("completed_at", "is", null)
-              .gte("completed_at", sinceIso)
-              .order("created_at", { ascending: false })
-              .range(o, o + l - 1);
-            return { data, error };
-          }),
-        ]);
-        if (docRes.error) throw docRes.error;
-        if (mitRes.error) throw mitRes.error;
-        documents.push(...(docRes.data ?? []));
-        completions.push(...(mitRes.data ?? []));
+      const r = Array.isArray(row) ? row[0] : row;
+      if (!r) {
+        return res.json({
+          org_id: orgId,
+          range_days: rangeDays,
+          job_counts_by_status: {},
+          risk_level_distribution: {},
+          evidence_statistics: { total_items: 0, jobs_with_evidence: 0, jobs_without_evidence: 0 },
+          team_activity: [],
+        });
       }
 
-      const jobCountsByStatus: Record<string, number> = {};
-      for (const job of jobList) {
-        const s = job.status ?? "unknown";
-        jobCountsByStatus[s] = (jobCountsByStatus[s] ?? 0) + 1;
-      }
-
-      const riskLevelDistribution: Record<string, number> = {};
-      for (const job of jobList) {
-        const level = (job.risk_level ?? "unscored").toLowerCase();
-        riskLevelDistribution[level] = (riskLevelDistribution[level] ?? 0) + 1;
-      }
-
-      const jobsWithEvidenceSet = new Set(
-        documents.map((d) => d.job_id).filter(Boolean)
-      );
-      const jobsWithEvidence = jobsWithEvidenceSet.size;
-      const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
-
-      const evidenceStatistics = {
-        total_items: documents.length,
-        jobs_with_evidence: jobsWithEvidence,
-        jobs_without_evidence: jobsWithoutEvidence,
+      const job_counts_by_status = (r.job_counts_by_status ?? {}) as Record<string, number>;
+      const risk_level_distribution = (r.risk_level_distribution ?? {}) as Record<string, number>;
+      const evidence_statistics = {
+        total_items: Number(r.total_evidence_items ?? 0),
+        jobs_with_evidence: Number(r.jobs_with_evidence ?? 0),
+        jobs_without_evidence: Number(r.jobs_without_evidence ?? 0),
       };
-
-      const completionsByUser: Record<string, number> = {};
-      for (const c of completions) {
-        const uid = c.completed_by ?? "unknown";
-        completionsByUser[uid] = (completionsByUser[uid] ?? 0) + 1;
-      }
-      const teamActivity = Object.entries(completionsByUser)
-        .filter(([id]) => id !== "unknown")
-        .map(([user_id, completions_count]) => ({ user_id, completions_count }))
-        .sort((a, b) => b.completions_count - a.completions_count)
-        .slice(0, 20);
+      const team_activity = (Array.isArray(r.team_activity) ? r.team_activity : []) as {
+        user_id: string;
+        completions_count: number;
+      }[];
 
       res.json({
         org_id: orgId,
         range_days: rangeDays,
-        job_counts_by_status: jobCountsByStatus,
-        risk_level_distribution: riskLevelDistribution,
-        evidence_statistics: evidenceStatistics,
-        team_activity: teamActivity,
+        job_counts_by_status,
+        risk_level_distribution,
+        evidence_statistics,
+        team_activity,
       });
     } catch (error: any) {
       console.error("Analytics summary error:", error);

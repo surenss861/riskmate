@@ -91,7 +91,8 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Compliance: day buckets, value = overall % (signature + photo + checklist) / 3, 0–100
+  -- Compliance: day buckets, value = overall % (signature + photo + checklist) / 3, 0–100.
+  -- Only evidence within the period counts: signatures/photos by created_at on that day, mitigation by completed_at on that day.
   IF p_metric = 'compliance' THEN
     RETURN QUERY
     WITH day_buckets AS (
@@ -104,21 +105,45 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id),
-    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo'),
-    mit_agg AS (
-      SELECT mi.job_id,
-        COUNT(*)::BIGINT AS total,
-        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+    sigs AS (
+      SELECT s.job_id, (s.created_at AT TIME ZONE 'UTC')::DATE AS sig_date
+      FROM signatures s
+      WHERE s.organization_id = p_org_id
+        AND s.created_at >= p_since
+        AND s.created_at <= p_until
+    ),
+    photos AS (
+      SELECT d.job_id, (d.created_at AT TIME ZONE 'UTC')::DATE AS photo_date
+      FROM documents d
+      WHERE d.organization_id = p_org_id
+        AND d.type = 'photo'
+        AND d.created_at >= p_since
+        AND d.created_at <= p_until
+    ),
+    total_per_job AS (
+      SELECT mi.job_id, COUNT(*)::BIGINT AS total
       FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
       GROUP BY mi.job_id
     ),
+    completed_per_job_day AS (
+      SELECT
+        mi.job_id,
+        (mi.completed_at AT TIME ZONE 'UTC')::DATE AS comp_date,
+        COUNT(*)::BIGINT AS completed
+      FROM mitigation_items mi
+      WHERE mi.organization_id = p_org_id
+        AND mi.completed_at IS NOT NULL
+        AND mi.completed_at >= p_since
+        AND mi.completed_at <= p_until
+      GROUP BY mi.job_id, (mi.completed_at AT TIME ZONE 'UTC')::DATE
+    ),
     with_check AS (
       SELECT b.pk, b.id
-      FROM day_buckets b
-      LEFT JOIN mit_agg m ON m.job_id = b.id
-      WHERE COALESCE(m.total, 0) = 0 OR (m.completed::NUMERIC / NULLIF(m.total, 0)) = 1
+      FROM (SELECT DISTINCT pk, id FROM day_buckets) b
+      LEFT JOIN total_per_job t ON t.job_id = b.id
+      LEFT JOIN completed_per_job_day c ON c.job_id = b.id AND c.comp_date = b.pk
+      WHERE COALESCE(t.total, 0) = 0 OR (COALESCE(c.completed, 0)::NUMERIC / NULLIF(t.total, 0)) = 1
     ),
     agg AS (
       SELECT
@@ -128,8 +153,8 @@ BEGIN
         COUNT(DISTINCT b.id) FILTER (WHERE p.job_id IS NOT NULL)::BIGINT AS with_photo,
         COUNT(DISTINCT b.id) FILTER (WHERE wc.id IS NOT NULL)::BIGINT AS checklist_ok
       FROM (SELECT DISTINCT pk, id FROM day_buckets) b
-      LEFT JOIN sigs s ON s.job_id = b.id
-      LEFT JOIN photos p ON p.job_id = b.id
+      LEFT JOIN sigs s ON s.job_id = b.id AND s.sig_date = b.pk
+      LEFT JOIN photos p ON p.job_id = b.id AND p.photo_date = b.pk
       LEFT JOIN with_check wc ON wc.pk = b.pk AND wc.id = b.id
       GROUP BY b.pk
     )

@@ -155,6 +155,8 @@ AS $$
     SELECT COUNT(DISTINCT s.job_id)::BIGINT AS cnt
     FROM signatures s
     WHERE s.organization_id = p_org_id
+      AND s.created_at >= p_since
+      AND s.created_at <= p_until
       AND EXISTS (SELECT 1 FROM period_jobs pj WHERE pj.id = s.job_id)
   ),
   with_photo AS (
@@ -162,13 +164,15 @@ AS $$
     FROM documents d
     WHERE d.organization_id = p_org_id
       AND d.type = 'photo'
+      AND d.created_at >= p_since
+      AND d.created_at <= p_until
       AND EXISTS (SELECT 1 FROM period_jobs pj WHERE pj.id = d.job_id)
   ),
   mit_agg AS (
     SELECT
       mi.job_id,
       COUNT(*)::BIGINT AS total,
-      COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+      COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL AND mi.completed_at >= p_since AND mi.completed_at <= p_until)::BIGINT AS completed
     FROM mitigation_items mi
     WHERE mi.organization_id = p_org_id
     GROUP BY mi.job_id
@@ -221,12 +225,12 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id),
-    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo'),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,
         COUNT(*)::BIGINT AS total,
-        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL AND mi.completed_at >= p_since AND mi.completed_at <= p_until)::BIGINT AS completed
       FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
       GROUP BY mi.job_id
@@ -261,12 +265,12 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id),
-    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo'),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,
         COUNT(*)::BIGINT AS total,
-        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL AND mi.completed_at >= p_since AND mi.completed_at <= p_until)::BIGINT AS completed
       FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
       GROUP BY mi.job_id
@@ -301,12 +305,12 @@ BEGIN
         AND j.created_at >= p_since
         AND j.created_at <= p_until
     ),
-    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id),
-    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo'),
+    sigs AS (SELECT s.job_id FROM signatures s WHERE s.organization_id = p_org_id AND s.created_at >= p_since AND s.created_at <= p_until),
+    photos AS (SELECT d.job_id FROM documents d WHERE d.organization_id = p_org_id AND d.type = 'photo' AND d.created_at >= p_since AND d.created_at <= p_until),
     mit_agg AS (
       SELECT mi.job_id,
         COUNT(*)::BIGINT AS total,
-        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+        COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL AND mi.completed_at >= p_since AND mi.completed_at <= p_until)::BIGINT AS completed
       FROM mitigation_items mi
       WHERE mi.organization_id = p_org_id
       GROUP BY mi.job_id
