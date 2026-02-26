@@ -43,13 +43,22 @@ function formatPeriodLabel(period: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: period.length > 10 ? 'numeric' : undefined });
 }
 
-/** True when period is a valid ISO date (YYYY-MM-DD) or week start for drill-down filters. */
+/** True when period is a valid ISO date (YYYY-MM-DD), YYYY-MM (month bucket for 1y), or week start for drill-down. */
 function isValidPeriod(period: string): boolean {
   if (!period || typeof period !== 'string') return false;
   const s = period.slice(0, 10);
-  if (s.length !== 10) return false;
-  const d = new Date(s + 'T00:00:00.000Z');
-  return !isNaN(d.getTime());
+  if (s.length === 10) {
+    const d = new Date(s + 'T00:00:00.000Z');
+    return !isNaN(d.getTime());
+  }
+  if (period.length >= 7) {
+    const y = parseInt(period.slice(0, 4), 10);
+    const m = parseInt(period.slice(5, 7), 10);
+    if (Number.isNaN(y) || Number.isNaN(m) || y < 1970 || y > 2100 || m < 1 || m > 12) return false;
+    const d = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
+    return !isNaN(d.getTime());
+  }
+  return false;
 }
 
 const STATUS_COLORS: Record<string, string> = {

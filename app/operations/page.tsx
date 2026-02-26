@@ -641,7 +641,16 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
       onHazardCategoryClick: (category: string) => {
-        router.push(`/operations/jobs?time_range=${analyticsPeriod}&hazard=${encodeURIComponent(category)}`)
+        const params = new URLSearchParams()
+        params.set('hazard', category)
+        if (analyticsPeriod === 'custom' && customRange) {
+          params.set('created_after', new Date(customRange.start).toISOString())
+          params.set('created_before', new Date(customRange.end).toISOString())
+        } else {
+          const timeRangeForJobs = analyticsPeriod === '1y' ? 'all' : analyticsPeriod
+          params.set('time_range', timeRangeForJobs)
+        }
+        router.push(`/operations/jobs?${params.toString()}`)
       },
     }
   }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange])
