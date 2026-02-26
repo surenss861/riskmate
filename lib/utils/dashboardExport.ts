@@ -82,7 +82,8 @@ export function buildDashboardCsv(options: {
     const headers = ['Status by period', 'Period', ...Array.from(statusCols).sort()];
     rows.push(headers);
     options.statusByPeriod.forEach((row) => {
-      const r = [row.period];
+      const r: string[] = [''];
+      r.push(row.period);
       headers.slice(2).forEach((col) => r.push(String(row[col] ?? '')));
       rows.push(r);
     });
