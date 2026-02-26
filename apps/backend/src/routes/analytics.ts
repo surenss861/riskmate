@@ -216,8 +216,8 @@ analyticsRouter.get(
         if (complianceError) throw complianceError;
       }
 
-      // Completion week/month: use creation-cohort rate (not completion-date MV) so numerator and denominator align; clamp 0–100 in fallback.
-      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance" && metric !== "completion";
+      // Week/month: use MV/RPC path for jobs, risk, and completion (analytics_weekly_completion_stats keyed by completion date); compliance uses its own RPC.
+      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
 
       if (useMv) {
         await ensureAnalyticsMvRefreshed();
@@ -383,12 +383,16 @@ analyticsRouter.get(
 
       const bucketValues = new Map<string, number>();
       const bucketRiskSums = new Map<string, { sum: number; count: number }>();
-      // Completion (fallback): bucket by creation; value = (jobs_completed / jobs_created) * 100, 0–100
+      // Completion (fallback): bucket by creation; value = (jobs_completed / jobs_created) * 100, 0–100. Count completions only when completed_at is within [since, until].
       const bucketCompleted = new Map<string, number>();
 
       for (const j of jobList) {
         const keyCreated = getBucketKey(new Date(j.created_at));
-        const completed = j.status?.toLowerCase() === "completed";
+        const completed =
+          j.status?.toLowerCase() === "completed" &&
+          j.completed_at != null &&
+          j.completed_at >= since &&
+          j.completed_at <= until;
 
         if (metric === "completion") {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
