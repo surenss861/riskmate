@@ -503,7 +503,7 @@ function DashboardPageInner() {
       params.set('time_range', 'custom')
       params.set('range_start', defaultRange.start.slice(0, 10))
       params.set('range_end', defaultRange.end.slice(0, 10))
-      router.push(`/operations?${params.toString()}`, { scroll: false })
+      router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
       return
@@ -515,7 +515,7 @@ function DashboardPageInner() {
     params.set('time_range', newRange)
     params.delete('range_start')
     params.delete('range_end')
-    router.push(`/operations?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
     refetchAnalytics()
     refetchDashboard()
   }
