@@ -43,6 +43,15 @@ function formatPeriodLabel(period: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: period.length > 10 ? 'numeric' : undefined });
 }
 
+/** True when period is a valid ISO date (YYYY-MM-DD) or week start for drill-down filters. */
+function isValidPeriod(period: string): boolean {
+  if (!period || typeof period !== 'string') return false;
+  const s = period.slice(0, 10);
+  if (s.length !== 10) return false;
+  const d = new Date(s + 'T00:00:00.000Z');
+  return !isNaN(d.getTime());
+}
+
 const STATUS_COLORS: Record<string, string> = {
   completed: '#22c55e',
   in_progress: '#F97316',
@@ -86,27 +95,16 @@ export function AnalyticsTrendCharts({
     value: p.value,
   }));
 
+  // Use only weekly statusByPeriod rows with valid ISO period for drill-down; no periodLabel fallback.
   const statusChartData: StatusByPeriodRow[] =
-    statusByPeriod && statusByPeriod.length > 0
-      ? statusByPeriod
-      : (() => {
-          const entries = Object.entries(jobCountsByStatus).filter(([, c]) => (c ?? 0) > 0);
-          if (entries.length === 0) return [];
-          const row: StatusByPeriodRow = { period: periodLabel };
-          entries.forEach(([status, count]) => {
-            row[status.replace(/_/g, ' ')] = count ?? 0;
-          });
-          return [row];
-        })();
+    statusByPeriod && statusByPeriod.length > 0 ? statusByPeriod : [];
 
   const statusKeys =
-    statusByPeriod && statusByPeriod.length > 0
+    statusChartData.length > 0
       ? Array.from(
-          new Set(statusByPeriod.flatMap((row) => Object.keys(row).filter((k) => k !== 'period')))
+          new Set(statusChartData.flatMap((row) => Object.keys(row).filter((k) => k !== 'period')))
         )
-      : Object.keys(jobCountsByStatus)
-          .filter((k) => (jobCountsByStatus[k] ?? 0) > 0)
-          .map((s) => s.replace(/_/g, ' '));
+      : [];
 
   if (isLoading) {
     return (
@@ -169,7 +167,7 @@ export function AnalyticsTrendCharts({
                   connectNulls
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period) onPeriodClick?.(d.period);
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period);
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -183,7 +181,7 @@ export function AnalyticsTrendCharts({
                   connectNulls
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period) onPeriodClick?.(d.period, { useCompletionDate: true });
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { useCompletionDate: true });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -229,7 +227,7 @@ export function AnalyticsTrendCharts({
                   strokeWidth={2}
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period) onPeriodClick?.(d.period);
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period);
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -269,13 +267,18 @@ export function AnalyticsTrendCharts({
                     name={key}
                     onClick={(payload: unknown) => {
                       const row = payload as StatusByPeriodRow;
-                      if (!row?.period) return;
+                      if (!row?.period || !isValidPeriod(row.period)) return;
                       onStatusClick?.(key, row.period);
                       const statusNorm = key.replace(/\s+/g, '_').toLowerCase();
                       const useCompletionDate = statusNorm === 'completed';
                       onPeriodClick?.(row.period, { useCompletionDate });
                     }}
-                    cursor={onStatusClick || onPeriodClick ? 'pointer' : 'default'}
+                    cursor={
+                      (onStatusClick || onPeriodClick) &&
+                      statusChartData.some((row) => isValidPeriod(row.period))
+                        ? 'pointer'
+                        : 'default'
+                    }
                   />
                 ))}
               </BarChart>

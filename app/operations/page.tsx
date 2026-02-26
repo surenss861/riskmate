@@ -577,6 +577,7 @@ function DashboardPageInner() {
       trendsRisk: dashboardData.trendsRisk,
       trendsCompletion: dashboardData.trendsCompletion,
       jobCountsByStatus: jobCounts,
+      statusByPeriod: dashboardData.statusByPeriod ?? undefined,
       hazardItems: dashboardData.hazardFrequency?.items ?? [],
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
@@ -912,6 +913,7 @@ function DashboardPageInner() {
                     trendsCompletion={dashboardData?.trendsCompletion ?? null}
                     trendsRisk={dashboardData?.trendsRisk ?? null}
                     jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
+                    statusByPeriod={dashboardData?.statusByPeriod ?? undefined}
                     periodLabel={periodLabels[analyticsPeriod]}
                     isLoading={dashboardLoading}
                     onPeriodClick={enhancedAnalytics?.onPeriodClick}

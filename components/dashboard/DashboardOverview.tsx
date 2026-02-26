@@ -99,6 +99,8 @@ export type EnhancedAnalyticsProps = {
   trendsRisk: { data: Array<{ period: string; value: number; label?: string }> } | null
   trendsCompletion: { data: Array<{ period: string; value: number; label?: string }> } | null
   jobCountsByStatus: Record<string, number>
+  /** Weekly (or daily) job status counts per period for Jobs-by-status chart; valid ISO period for drill-down. */
+  statusByPeriod?: Array<{ period: string; [status: string]: string | number }>
   hazardItems: Array<{ category: string; count: number; avg_risk: number; trend: 'up' | 'down' | 'neutral' }>
   teamMembers: Array<{
     user_id: string
@@ -329,6 +331,7 @@ export function DashboardOverview({
             trendsCompletion={enhancedAnalytics.trendsCompletion}
             trendsRisk={enhancedAnalytics.trendsRisk}
             jobCountsByStatus={enhancedAnalytics.jobCountsByStatus}
+            statusByPeriod={enhancedAnalytics.statusByPeriod}
             periodLabel={enhancedAnalytics.periodLabel}
             isLoading={enhancedAnalytics.isLoading}
             onPeriodClick={enhancedAnalytics.onPeriodClick}

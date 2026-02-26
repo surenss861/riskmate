@@ -451,6 +451,56 @@ analyticsRouter.get(
   }
 );
 
+// GET /api/analytics/status-by-period — weekly (or daily) job counts by status for Jobs-by-status chart
+analyticsRouter.get(
+  "/status-by-period",
+  authenticate as unknown as express.RequestHandler,
+  async (req: express.Request, res: express.Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+      return res.json({ data: [], locked: true });
+    }
+    try {
+      const orgId = authReq.user.organization_id;
+      if (!orgId) return res.status(400).json({ message: "Missing organization id" });
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriod(authReq.query.period as string);
+      const { since, until } = customRange ?? dateRangeForDays(days);
+      const groupByRaw = (authReq.query.groupBy as string) || "week";
+      const groupBy = groupByRaw === "day" ? "day" : "week";
+
+      const { data: rows, error } = await supabase.rpc("get_analytics_status_by_period", {
+        p_org_id: orgId,
+        p_since: since,
+        p_until: until,
+        p_group_by: groupBy,
+      });
+      if (error) throw error;
+
+      const raw = (Array.isArray(rows) ? rows : []) as { period_key: string; status: string; cnt: number }[];
+      const byPeriod = new Map<string, Record<string, number>>();
+      for (const r of raw) {
+        const period = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : String(r.period_key).slice(0, 10);
+        const statusKey = (r.status ?? "unknown").replace(/_/g, " ");
+        const cur = byPeriod.get(period) ?? {};
+        cur[statusKey] = Number(r.cnt ?? 0);
+        byPeriod.set(period, cur);
+      }
+      const data = [...byPeriod.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([period, counts]) => ({ period, ...counts }));
+
+      return res.json({ data });
+    } catch (error: any) {
+      console.error("Analytics status-by-period error:", error);
+      return res.status(500).json({ message: "Failed to fetch status by period" });
+    }
+  }
+);
+
 // GET /api/analytics/risk-heatmap — SQL-side aggregation by job_type and day_of_week
 analyticsRouter.get(
   "/risk-heatmap",

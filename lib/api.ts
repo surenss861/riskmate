@@ -1327,6 +1327,20 @@ export const analyticsApi = {
     }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`);
   },
 
+  /** Status-by-period: weekly (or daily) job counts by status for Jobs-by-status chart. Returns rows with valid ISO period for drill-down. */
+  statusByPeriod: async (params?: { period?: string; groupBy?: 'day' | 'week'; since?: string; until?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.period) query.set('period', params.period);
+    if (params?.groupBy) query.set('groupBy', params.groupBy);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
+    const qs = query.toString();
+    return apiRequest<{
+      data: Array<{ period: string; [status: string]: string | number }>;
+      locked?: boolean;
+    }>(`/api/analytics/status-by-period${qs ? `?${qs}` : ''}`);
+  },
+
   /** Trends: jobs, risk, compliance, or completion by day/week/month. Maps to GET /api/analytics/trends. metric: jobs | risk | compliance | completion. Pass since/until for custom range. */
   trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion'; since?: string; until?: string }) => {
     const query = new URLSearchParams();

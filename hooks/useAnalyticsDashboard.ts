@@ -30,6 +30,9 @@ function priorRangeForPeriod(period: DashboardPeriod): { since: string; until: s
   return { since: priorSince.toISOString(), until: priorUntil.toISOString() };
 }
 
+/** One row per period (e.g. week); keys are status names, values are counts. period is ISO date for drill-down. */
+export type StatusByPeriodRow = { period: string; [status: string]: string | number };
+
 export type AnalyticsDashboardData = {
   summary: Summary | null;
   jobCompletion: JobCompletion | null;
@@ -40,6 +43,8 @@ export type AnalyticsDashboardData = {
   trendsRisk: Trends | null;
   trendsCompletion: Trends | null;
   insights: Insights | null;
+  /** Weekly (or daily) job status counts per period for Jobs-by-status chart; valid ISO period for drill-down. */
+  statusByPeriod: StatusByPeriodRow[] | null;
   /** Prior period KPIs for trend comparison (same length window before current). */
   priorSummary: Summary | null;
   priorJobCompletion: JobCompletion | null;
@@ -66,6 +71,7 @@ const emptyData: AnalyticsDashboardData = {
   trendsRisk: null,
   trendsCompletion: null,
   insights: null,
+  statusByPeriod: null,
   priorSummary: null,
   priorJobCompletion: null,
   priorComplianceRate: null,
@@ -101,9 +107,13 @@ export function useAnalyticsDashboard(
     const rangeForSummary = period === '1y' ? '365d' : period;
     const prior = useCustom ? null : priorRangeForPeriod(period);
     const groupBy: 'day' | 'week' | 'month' = period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
+    const statusByPeriodGroupBy: 'day' | 'week' = period === '7d' ? 'day' : 'week';
     const trendsParams = useCustom
       ? { since, until, groupBy: 'day' as const, metric: 'jobs' as const }
       : { period, groupBy, metric: 'jobs' as const };
+    const statusByPeriodParams = useCustom
+      ? { since, until, groupBy: statusByPeriodGroupBy }
+      : { period, groupBy: statusByPeriodGroupBy };
 
     try {
       const [
@@ -116,6 +126,7 @@ export function useAnalyticsDashboard(
         trendsRiskRes,
         trendsCompletionRes,
         insightsRes,
+        statusByPeriodRes,
         priorSummaryRes,
         priorJobCompletionRes,
         priorComplianceRes,
@@ -130,6 +141,7 @@ export function useAnalyticsDashboard(
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'risk' }),
         analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'completion' }),
         analyticsApi.insights(),
+        analyticsApi.statusByPeriod(statusByPeriodParams),
         prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
@@ -145,6 +157,7 @@ export function useAnalyticsDashboard(
         insightsRes?.locked;
 
       setLocked(!!locked);
+      const statusByPeriod = statusByPeriodRes?.data ?? null;
       setData({
         summary: summaryRes,
         jobCompletion: jobCompletionRes,
@@ -155,6 +168,7 @@ export function useAnalyticsDashboard(
         trendsRisk: trendsRiskRes,
         trendsCompletion: trendsCompletionRes,
         insights: insightsRes,
+        statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : null,
         priorSummary: priorSummaryRes,
         priorJobCompletion: priorJobCompletionRes,
         priorComplianceRate: priorComplianceRes,
