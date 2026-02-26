@@ -216,7 +216,8 @@ analyticsRouter.get(
         if (complianceError) throw complianceError;
       }
 
-      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
+      // Completion week/month: use creation-cohort rate (not completion-date MV) so numerator and denominator align; clamp 0–100 in fallback.
+      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance" && metric !== "completion";
 
       if (useMv) {
         await ensureAnalyticsMvRefreshed();

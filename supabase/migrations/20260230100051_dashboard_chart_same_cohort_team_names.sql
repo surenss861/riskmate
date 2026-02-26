@@ -58,7 +58,7 @@ AS $$
       AND j.created_at <= p_until
     GROUP BY (j.created_at AT TIME ZONE 'UTC')::date
   ),
-  -- Same cohort: jobs created on period_key that are completed (any completion date)
+  -- Same cohort: jobs created on period_key that are completed and completed_at within the chart window (p_since..p_until)
   completed_same_cohort AS (
     SELECT (j.created_at AT TIME ZONE 'UTC')::date AS period_key,
       COUNT(*)::BIGINT AS jobs_completed
@@ -66,6 +66,9 @@ AS $$
     WHERE j.organization_id = p_org_id
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) = 'completed'
+      AND j.completed_at IS NOT NULL
+      AND j.completed_at >= p_since
+      AND j.completed_at <= p_until
       AND j.created_at >= p_since
       AND j.created_at <= p_until
     GROUP BY (j.created_at AT TIME ZONE 'UTC')::date
@@ -81,4 +84,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_dashboard_chart_data(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Per-day jobs_created and jobs_completed (same cohort: completed count is only jobs created that day); route clamps rate to 0–100.';
+  'Per-day jobs_created and jobs_completed (same cohort: jobs created that day and completed with completed_at in window); route clamps rate to 0–100.';
