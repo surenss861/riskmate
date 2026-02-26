@@ -482,9 +482,9 @@ function DashboardPageInner() {
     const priorTotal = priorJc?.total ?? 0
     const priorCompletion = priorJc?.completion_rate ?? 0
     const priorCompliance = priorCr?.overall ?? 0
-    const half = Math.floor(riskData.length / 2)
-    const priorAvgRisk = half > 0
-      ? riskData.slice(0, half).reduce((a, p) => a + p.value, 0) / half
+    const priorRiskData = dashboardData.priorTrendsRisk?.data ?? []
+    const priorAvgRisk = priorRiskData.length > 0
+      ? priorRiskData.reduce((a, p) => a + p.value, 0) / priorRiskData.length
       : null
 
     const percentChange = (current: number, previous: number): number | undefined => {
@@ -507,8 +507,8 @@ function DashboardPageInner() {
     const totalJobsTrendPct = percentChange(totalJobs, priorTotal)
     const completionTrendPct = percentChange(completionRate, priorCompletion)
     const complianceTrendPct = percentChange(complianceOverall, priorCompliance)
-    const avgRiskPrior = priorAvgRisk ?? avgRiskFromTrend
     const avgRiskTrendPct = priorAvgRisk != null ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
+    const avgRiskTrend = priorAvgRisk != null ? trendForMetric(avgRiskFromTrend, priorAvgRisk, false) : 'flat'
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
         id: 'total-jobs',
@@ -534,7 +534,7 @@ function DashboardPageInner() {
         id: 'avg-risk',
         title: 'Avg Risk Score',
         value: Math.round(avgRiskFromTrend * 10) / 10,
-        trend: trendForMetric(avgRiskFromTrend, avgRiskPrior, false),
+        trend: avgRiskTrend,
         trendPercent: avgRiskTrendPct,
         previousValue: priorAvgRisk != null ? Math.round(priorAvgRisk * 10) / 10 : undefined,
         sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
@@ -575,25 +575,23 @@ function DashboardPageInner() {
       isLoading: dashboardLoading,
       onPeriodClick: (period: string) => {
         const groupBy = analyticsPeriod === '7d' ? 'day' : analyticsPeriod === '1y' ? 'month' : 'week'
-        const toStartISO = (d: Date) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x.toISOString() }
-        const toEndISO = (d: Date) => { const x = new Date(d); x.setUTCHours(23, 59, 59, 999); return x.toISOString() }
         let start: string
         let end: string
         if (groupBy === 'day' || period.length === 10) {
-          const d = new Date(period.slice(0, 10))
-          start = toStartISO(d)
-          end = toEndISO(d)
+          const dayStr = period.slice(0, 10)
+          start = `${dayStr}T00:00:00.000Z`
+          end = `${dayStr}T23:59:59.999Z`
         } else if (groupBy === 'month' || period.length === 7) {
           const y = parseInt(period.slice(0, 4), 10)
           const m = parseInt(period.slice(5, 7), 10) - 1
-          start = toStartISO(new Date(Date.UTC(y, m, 1)))
-          end = toEndISO(new Date(Date.UTC(y, m + 1, 0)))
+          start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
+          end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
         } else {
-          const d = new Date(period)
-          start = toStartISO(d)
-          const weekEnd = new Date(d)
-          weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
-          end = toEndISO(weekEnd)
+          const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
+          start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
+          const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
+          weekEndDate.setUTCHours(23, 59, 59, 999)
+          end = weekEndDate.toISOString()
         }
         const params = new URLSearchParams()
         params.set('created_after', start)
@@ -605,18 +603,17 @@ function DashboardPageInner() {
         const statusKey = status.replace(/\s+/g, '_').toLowerCase()
         params.set('status', statusKey)
         if (period) {
-          const toStartISO = (d: Date) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x.toISOString() }
-          const toEndISO = (d: Date) => { const x = new Date(d); x.setUTCHours(23, 59, 59, 999); return x.toISOString() }
           if (period.length === 10) {
-            const d = new Date(period.slice(0, 10))
-            params.set('created_after', toStartISO(d))
-            params.set('created_before', toEndISO(d))
+            const dayStr = period.slice(0, 10)
+            params.set('created_after', `${dayStr}T00:00:00.000Z`)
+            params.set('created_before', `${dayStr}T23:59:59.999Z`)
           } else {
-            const d = new Date(period)
-            params.set('created_after', toStartISO(d))
-            const weekEnd = new Date(d)
-            weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
-            params.set('created_before', toEndISO(weekEnd))
+            const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
+            const start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
+            const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
+            weekEndDate.setUTCHours(23, 59, 59, 999)
+            params.set('created_after', start)
+            params.set('created_before', weekEndDate.toISOString())
           }
         }
         router.push(`/operations/jobs?${params.toString()}`)

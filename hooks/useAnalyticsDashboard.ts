@@ -44,6 +44,8 @@ export type AnalyticsDashboardData = {
   priorSummary: Summary | null;
   priorJobCompletion: JobCompletion | null;
   priorComplianceRate: ComplianceRate | null;
+  /** Prior period risk trend (for avg-risk KPI trend vs prior period). */
+  priorTrendsRisk: Trends | null;
 };
 
 export type AnalyticsDashboardState = {
@@ -67,6 +69,7 @@ const emptyData: AnalyticsDashboardData = {
   priorSummary: null,
   priorJobCompletion: null,
   priorComplianceRate: null,
+  priorTrendsRisk: null,
 };
 
 export type CustomRange = { start: string; end: string };
@@ -111,6 +114,7 @@ export function useAnalyticsDashboard(
         priorSummaryRes,
         priorJobCompletionRes,
         priorComplianceRes,
+        priorTrendsRiskRes,
       ] = await Promise.all([
         useCustom ? analyticsApi.summary({ since, until }) : analyticsApi.summary({ range: rangeForSummary }),
         useCustom ? analyticsApi.jobCompletion({ since, until }) : analyticsApi.jobCompletion({ period }),
@@ -124,6 +128,7 @@ export function useAnalyticsDashboard(
         prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
         prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
+        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }) : Promise.resolve(null),
       ]);
 
       const locked =
@@ -148,6 +153,7 @@ export function useAnalyticsDashboard(
         priorSummary: priorSummaryRes,
         priorJobCompletion: priorJobCompletionRes,
         priorComplianceRate: priorComplianceRes,
+        priorTrendsRisk: priorTrendsRiskRes,
       });
     } catch (e) {
       console.error('Analytics dashboard fetch failed', e);
