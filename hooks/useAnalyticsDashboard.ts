@@ -158,7 +158,11 @@ export function useAnalyticsDashboard(
             ? 'month'
             : 'week';
     const statusByPeriodGroupBy: 'day' | 'week' =
-      period === 'custom' && useCustom ? groupBy : period === '7d' ? 'day' : 'week';
+      period === 'custom' && useCustom
+        ? (groupBy === 'month' ? 'week' : groupBy)
+        : period === '7d'
+          ? 'day'
+          : 'week';
     const useExplicitRange = useCustom || useCalendarYear;
     const trendsParams = useExplicitRange
       ? { since: since!, until: until!, groupBy, metric: 'jobs' as const }
