@@ -1001,43 +1001,47 @@ function DashboardPageInner() {
               </div>
             </GlassCard>
           ) : (
-            <div className="mb-16 space-y-16">
-              <div>
-                <h2 className="text-2xl font-bold font-display mb-6">Performance Metrics</h2>
-                <KpiGrid items={enhancedAnalytics?.kpiItems ?? kpiItems} />
-              </div>
-              <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-                <GlassCard className="p-8">
-                  <AnalyticsTrendCharts
-                    trendsJobs={dashboardData?.trendsJobs ?? null}
-                    trendsCompletion={dashboardData?.trendsCompletion ?? null}
-                    trendsCompletedCounts={dashboardData?.trendsCompletedCounts ?? null}
-                    trendsRisk={dashboardData?.trendsRisk ?? null}
-                    jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
-                    statusByPeriod={dashboardData?.statusByPeriod ?? undefined}
-                    periodLabel={periodLabels[analyticsPeriod]}
-                    isLoading={dashboardLoading}
-                    onPeriodClick={enhancedAnalytics?.onPeriodClick}
-                    onStatusClick={enhancedAnalytics?.onStatusClick}
-                  />
-                </GlassCard>
-                <GlassCard className="p-8">
-                  <EvidenceWidget
-                    totalJobs={totalJobsForRange}
-                    jobsWithEvidence={jobsWithEvidence}
-                    evidenceCount={analyticsData.evidence_count}
-                    avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
-                    isLoading={analyticsLoading}
-                    jobs_total={analyticsData.jobs_total}
-                    jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
-                    jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
-                    required_evidence_policy={analyticsData.required_evidence_policy ?? undefined}
-                    avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
-                    timeRange={timeRange}
-                  />
-                </GlassCard>
-              </div>
-            </div>
+            <>
+              {!enhancedAnalytics && (
+                <div className="mb-16 space-y-16">
+                  <div>
+                    <h2 className="text-2xl font-bold font-display mb-6">Performance Metrics</h2>
+                    <KpiGrid items={kpiItems} />
+                  </div>
+                  <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+                    <GlassCard className="p-8">
+                      <AnalyticsTrendCharts
+                        trendsJobs={dashboardData?.trendsJobs ?? null}
+                        trendsCompletion={dashboardData?.trendsCompletion ?? null}
+                        trendsCompletedCounts={dashboardData?.trendsCompletedCounts ?? null}
+                        trendsRisk={dashboardData?.trendsRisk ?? null}
+                        jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
+                        statusByPeriod={dashboardData?.statusByPeriod ?? undefined}
+                        periodLabel={periodLabels[analyticsPeriod]}
+                        isLoading={dashboardLoading}
+                        onPeriodClick={undefined}
+                        onStatusClick={undefined}
+                      />
+                    </GlassCard>
+                    <GlassCard className="p-8">
+                      <EvidenceWidget
+                        totalJobs={totalJobsForRange}
+                        jobsWithEvidence={jobsWithEvidence}
+                        evidenceCount={analyticsData.evidence_count}
+                        avgTimeToFirstEvidenceHours={analyticsData.avg_time_to_first_evidence_hours}
+                        isLoading={analyticsLoading}
+                        jobs_total={analyticsData.jobs_total}
+                        jobs_with_photo_evidence={analyticsData.jobs_with_photo_evidence}
+                        jobs_missing_required_evidence={analyticsData.jobs_missing_required_evidence}
+                        required_evidence_policy={analyticsData.required_evidence_policy ?? undefined}
+                        avg_time_to_first_photo_minutes={analyticsData.avg_time_to_first_photo_minutes}
+                        timeRange={timeRange}
+                      />
+                    </GlassCard>
+                  </div>
+                </div>
+              )}
+            </>
           ))}
 
           {/* Enhanced Dashboard Overview - Only for owners/admins */}

@@ -328,7 +328,11 @@ export function DashboardOverview({
           <InsightsPanel
             insights={enhancedAnalytics.insights}
             isLoading={enhancedAnalytics.insightsLoading}
-            viewAllHref={`/operations?time_range=${enhancedAnalytics.period}`}
+            viewAllHref={
+              enhancedAnalytics.period === 'custom' && enhancedAnalytics.customRange
+                ? `/operations?time_range=custom&range_start=${enhancedAnalytics.customRange.start.slice(0, 10)}&range_end=${enhancedAnalytics.customRange.end.slice(0, 10)}`
+                : `/operations?time_range=${enhancedAnalytics.period}`
+            }
           />
 
           <AnalyticsTrendCharts
