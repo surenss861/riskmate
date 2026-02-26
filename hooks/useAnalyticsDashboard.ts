@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { analyticsApi } from '@/lib/api';
 
 export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom';
@@ -89,6 +89,8 @@ export type AnalyticsDashboardState = {
   isLocked: boolean;
   error: boolean;
   refetch: () => Promise<void>;
+  /** groupBy used for trends and statusByPeriod (day/week/month); use in drill-down for aligned ranges */
+  effectiveGroupBy: 'day' | 'week' | 'month';
 };
 
 const emptyData: AnalyticsDashboardData = {
@@ -142,11 +144,24 @@ export function useAnalyticsDashboard(
     const until = useCustom ? customRange!.end : useCalendarYear ? currentRange!.until : undefined;
     const rangeForSummary = period === '1y' ? undefined : period;
     const prior = useCustom ? null : priorRangeForPeriod(period);
-    const groupBy: 'day' | 'week' | 'month' = period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
-    const statusByPeriodGroupBy: 'day' | 'week' = period === '7d' ? 'day' : 'week';
+    // Single groupBy for custom: day for short ranges, week for longer; same for all trends and statusByPeriod
+    const groupBy: 'day' | 'week' | 'month' =
+      useCustom
+        ? (() => {
+            const rangeMs = new Date(customRange!.end).getTime() - new Date(customRange!.start).getTime();
+            const rangeDays = rangeMs / (24 * 60 * 60 * 1000);
+            return rangeDays <= 14 ? ('day' as const) : ('week' as const);
+          })()
+        : period === '7d'
+          ? 'day'
+          : period === '1y'
+            ? 'month'
+            : 'week';
+    const statusByPeriodGroupBy: 'day' | 'week' =
+      period === 'custom' && useCustom ? groupBy : period === '7d' ? 'day' : 'week';
     const useExplicitRange = useCustom || useCalendarYear;
     const trendsParams = useExplicitRange
-      ? { since: since!, until: until!, groupBy: useCalendarYear ? ('month' as const) : ('day' as const), metric: 'jobs' as const }
+      ? { since: since!, until: until!, groupBy, metric: 'jobs' as const }
       : { period, groupBy, metric: 'jobs' as const };
     const statusByPeriodParams = useExplicitRange
       ? { since: since!, until: until!, groupBy: statusByPeriodGroupBy }
@@ -239,5 +254,14 @@ export function useAnalyticsDashboard(
     refetch();
   }, [refetch]);
 
-  return { data, isLoading, isLocked, error, refetch };
+  const effectiveGroupBy: 'day' | 'week' | 'month' = useMemo(() => {
+    if (period === 'custom' && customRange?.start && customRange?.end) {
+      const rangeMs = new Date(customRange.end).getTime() - new Date(customRange.start).getTime();
+      const rangeDays = rangeMs / (24 * 60 * 60 * 1000);
+      return rangeDays <= 14 ? 'day' : 'week';
+    }
+    return period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
+  }, [period, customRange?.start, customRange?.end]);
+
+  return { data, isLoading, isLocked, error, refetch, effectiveGroupBy };
 }

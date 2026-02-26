@@ -121,6 +121,7 @@ function DashboardPageInner() {
     isLoading: dashboardLoading,
     isLocked: dashboardLocked,
     refetch: refetchDashboard,
+    effectiveGroupBy,
   } = useAnalyticsDashboard(
     analyticsPeriod,
     roleLoaded && !isMember && !analyticsLocked,
@@ -709,7 +710,7 @@ function DashboardPageInner() {
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
       onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => {
-        const groupBy = analyticsPeriod === '7d' ? 'day' : analyticsPeriod === '1y' ? 'month' : 'week'
+        const groupBy = effectiveGroupBy
         let start: string
         let end: string
         if (opts?.rangeEnd) {
@@ -749,13 +750,19 @@ function DashboardPageInner() {
         if (period) {
           let start: string
           let end: string
+          const groupBy = effectiveGroupBy
           if (opts?.rangeEnd) {
             start = `${period.slice(0, 10)}T00:00:00.000Z`
             end = `${opts.rangeEnd.slice(0, 10)}T23:59:59.999Z`
-          } else if (period.length === 10) {
+          } else if (groupBy === 'day' || period.length === 10) {
             const dayStr = period.slice(0, 10)
             start = `${dayStr}T00:00:00.000Z`
             end = `${dayStr}T23:59:59.999Z`
+          } else if (groupBy === 'month' || period.length === 7) {
+            const y = parseInt(period.slice(0, 4), 10)
+            const m = parseInt(period.slice(5, 7), 10) - 1
+            start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
+            end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
           } else {
             const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
             start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
@@ -788,7 +795,7 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
     }
-  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange])
+  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {

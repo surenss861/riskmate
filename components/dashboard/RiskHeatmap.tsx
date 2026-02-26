@@ -32,8 +32,9 @@ export function RiskHeatmap({
   const map = new Map<string, { avg_risk: number; count: number }>();
   const jobTypes = new Set<string>();
   for (const b of buckets) {
-    map.set(key(b.job_type, b.day_of_week), { avg_risk: b.avg_risk, count: b.count });
-    jobTypes.add(b.job_type || 'other');
+    const jobType = b.job_type || 'other';
+    map.set(key(jobType, b.day_of_week), { avg_risk: b.avg_risk, count: b.count });
+    jobTypes.add(jobType);
   }
   const jobList = [...jobTypes].sort();
 
