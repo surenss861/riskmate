@@ -19,18 +19,22 @@ export type TrendPoint = { period: string; value: number; label?: string };
 
 type TrendsResponse = { data: TrendPoint[] } | null;
 
-type JobsTrendData = { period: string; created?: number; completionRate?: number };
+type JobsTrendData = { period: string; created?: number; completed?: number };
 type RiskTrendData = { period: string; value: number };
-type StatusBarData = { status: string; count: number }[];
+/** One row per period (e.g. week); keys are status names, values are counts. */
+type StatusByPeriodRow = { period: string; [status: string]: string | number };
 
 type AnalyticsTrendChartsProps = {
   trendsJobs: TrendsResponse;
   trendsCompletion: TrendsResponse;
   trendsRisk: TrendsResponse;
   jobCountsByStatus?: Record<string, number>;
+  /** Optional: status counts per period (e.g. per week) for stacked bars by week. */
+  statusByPeriod?: StatusByPeriodRow[];
   periodLabel?: string;
   isLoading?: boolean;
   onPeriodClick?: (period: string) => void;
+  onStatusClick?: (status: string, period?: string) => void;
 };
 
 function formatPeriodLabel(period: string): string {
@@ -39,18 +43,40 @@ function formatPeriodLabel(period: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: period.length > 10 ? 'numeric' : undefined });
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  completed: '#22c55e',
+  in_progress: '#F97316',
+  pending: '#94a3b8',
+  open: '#94a3b8',
+  unknown: '#64748b',
+};
+
+function getStatusColor(status: string): string {
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  return STATUS_COLORS[key] ?? '#F97316';
+}
+
 export function AnalyticsTrendCharts({
   trendsJobs,
   trendsCompletion,
   trendsRisk,
   jobCountsByStatus = {},
+  statusByPeriod,
   periodLabel = 'Last 30 days',
   isLoading = false,
   onPeriodClick,
+  onStatusClick,
 }: AnalyticsTrendChartsProps) {
-  const jobsByPeriod = new Map<string, { created?: number; completionRate?: number }>();
-  (trendsJobs?.data ?? []).forEach((p: TrendPoint) => jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value }));
-  (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), completionRate: p.value }));
+  const jobsByPeriod = new Map<string, { created?: number; completed?: number }>();
+  (trendsJobs?.data ?? []).forEach((p: TrendPoint) =>
+    jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value })
+  );
+  (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
+    const cur = jobsByPeriod.get(p.period) ?? {};
+    const created = cur.created ?? 0;
+    const rate = Math.max(0, Math.min(100, p.value)) / 100;
+    jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
+  });
   const jobsChartData: JobsTrendData[] = Array.from(jobsByPeriod.entries())
     .map(([period, v]) => ({ period, ...v }))
     .sort((a, b) => a.period.localeCompare(b.period));
@@ -60,10 +86,27 @@ export function AnalyticsTrendCharts({
     value: p.value,
   }));
 
-  const statusBarData: StatusBarData = Object.entries(jobCountsByStatus).map(([status, count]) => ({
-    status: status.replace(/_/g, ' '),
-    count,
-  }));
+  const statusChartData: StatusByPeriodRow[] =
+    statusByPeriod && statusByPeriod.length > 0
+      ? statusByPeriod
+      : (() => {
+          const entries = Object.entries(jobCountsByStatus).filter(([, c]) => (c ?? 0) > 0);
+          if (entries.length === 0) return [];
+          const row: StatusByPeriodRow = { period: periodLabel };
+          entries.forEach(([status, count]) => {
+            row[status.replace(/_/g, ' ')] = count ?? 0;
+          });
+          return [row];
+        })();
+
+  const statusKeys =
+    statusByPeriod && statusByPeriod.length > 0
+      ? Array.from(
+          new Set(statusByPeriod.flatMap((row) => Object.keys(row).filter((k) => k !== 'period')))
+        )
+      : Object.keys(jobCountsByStatus)
+          .filter((k) => (jobCountsByStatus[k] ?? 0) > 0)
+          .map((s) => s.replace(/_/g, ' '));
 
   if (isLoading) {
     return (
@@ -87,7 +130,7 @@ export function AnalyticsTrendCharts({
 
   return (
     <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-      {/* Jobs over time: created + completion rate */}
+      {/* Jobs over time: created + completed */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h3 className="text-lg font-semibold text-white mb-2">Jobs over time</h3>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
@@ -104,19 +147,19 @@ export function AnalyticsTrendCharts({
                   tickFormatter={formatPeriodLabel}
                 />
                 <YAxis
-                  yAxisId="left"
                   tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
                   tickFormatter={(v) => String(v)}
                 />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
                 <Tooltip
                   contentStyle={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
                   labelFormatter={(label) => formatPeriodLabel(String(label))}
-                  formatter={(value: number | undefined, name: string | undefined) => [name === 'created' ? `${value ?? 0} jobs` : `${value ?? 0}%`, name === 'created' ? 'Created' : 'Completion rate']}
+                  formatter={(value: number | undefined, name: string) => [
+                    `${value ?? 0} jobs`,
+                    name === 'created' ? 'Created' : 'Completed',
+                  ]}
                 />
-                <Legend formatter={() => null} />
+                <Legend formatter={(value) => (value === 'created' ? 'Created' : 'Completed')} wrapperStyle={{ fontSize: 12 }} />
                 <Line
-                  yAxisId="left"
                   type="monotone"
                   dataKey="created"
                   name="created"
@@ -131,14 +174,18 @@ export function AnalyticsTrendCharts({
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
                 <Line
-                  yAxisId="right"
                   type="monotone"
-                  dataKey="completionRate"
-                  name="completionRate"
+                  dataKey="completed"
+                  name="completed"
                   stroke="#22c55e"
                   strokeWidth={2}
                   dot={{ r: 2, fill: '#22c55e' }}
                   connectNulls
+                  onClick={(props: unknown) => {
+                    const d = props as { period?: string };
+                    if (d?.period) onPeriodClick?.(d.period);
+                  }}
+                  cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -192,25 +239,43 @@ export function AnalyticsTrendCharts({
         )}
       </div>
 
-      {/* Jobs by status (bar) */}
-      {statusBarData.length > 0 && (
+      {/* Jobs by status per week (stacked bars with period on each bar) */}
+      {statusChartData.length > 0 && statusKeys.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 lg:col-span-2">
           <h3 className="text-lg font-semibold text-white mb-2">Jobs by status</h3>
           <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusBarData} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
+              <BarChart data={statusChartData} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
                 <XAxis
-                  dataKey="status"
+                  dataKey="period"
                   tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
+                  tickFormatter={formatPeriodLabel}
                 />
                 <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
                 <Tooltip
                   contentStyle={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-                  formatter={(value: number | undefined) => [value ?? 0, 'Jobs']}
+                  labelFormatter={(label) => formatPeriodLabel(String(label))}
+                  formatter={(value: number | undefined, name: string) => [value ?? 0, name]}
                 />
-                <Bar dataKey="count" fill="#F97316" radius={[4, 4, 0, 0]} name="Jobs" />
+                {statusKeys.map((key) => (
+                  <Bar
+                    key={key}
+                    dataKey={key}
+                    stackId="status"
+                    fill={getStatusColor(key)}
+                    radius={[0, 0, 0, 0]}
+                    name={key}
+                    onClick={(payload: unknown) => {
+                      const row = payload as StatusByPeriodRow;
+                      if (!row?.period) return;
+                      onStatusClick?.(key, row.period);
+                      onPeriodClick?.(row.period);
+                    }}
+                    cursor={onStatusClick || onPeriodClick ? 'pointer' : 'default'}
+                  />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>

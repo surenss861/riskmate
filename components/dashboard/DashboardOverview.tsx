@@ -111,6 +111,7 @@ export type EnhancedAnalyticsProps = {
   }>
   isLoading: boolean
   onPeriodClick?: (period: string) => void
+  onStatusClick?: (status: string, period?: string) => void
   onHazardCategoryClick?: (category: string) => void
 }
 
@@ -321,6 +322,7 @@ export function DashboardOverview({
             periodLabel={enhancedAnalytics.periodLabel}
             isLoading={enhancedAnalytics.isLoading}
             onPeriodClick={enhancedAnalytics.onPeriodClick}
+            onStatusClick={enhancedAnalytics.onStatusClick}
           />
 
           <div className="grid gap-6 lg:grid-cols-2">

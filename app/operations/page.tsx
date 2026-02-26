@@ -600,6 +600,27 @@ function DashboardPageInner() {
         params.set('created_before', end)
         router.push(`/operations/jobs?${params.toString()}`)
       },
+      onStatusClick: (status: string, period?: string) => {
+        const params = new URLSearchParams()
+        const statusKey = status.replace(/\s+/g, '_').toLowerCase()
+        params.set('status', statusKey)
+        if (period) {
+          const toStartISO = (d: Date) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x.toISOString() }
+          const toEndISO = (d: Date) => { const x = new Date(d); x.setUTCHours(23, 59, 59, 999); return x.toISOString() }
+          if (period.length === 10) {
+            const d = new Date(period.slice(0, 10))
+            params.set('created_after', toStartISO(d))
+            params.set('created_before', toEndISO(d))
+          } else {
+            const d = new Date(period)
+            params.set('created_after', toStartISO(d))
+            const weekEnd = new Date(d)
+            weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+            params.set('created_before', toEndISO(weekEnd))
+          }
+        }
+        router.push(`/operations/jobs?${params.toString()}`)
+      },
       onHazardCategoryClick: (category: string) => {
         router.push(`/operations/jobs?time_range=${analyticsPeriod}&hazard=${encodeURIComponent(category)}`)
       },
@@ -876,6 +897,7 @@ function DashboardPageInner() {
                     periodLabel={periodLabels[analyticsPeriod]}
                     isLoading={dashboardLoading}
                     onPeriodClick={enhancedAnalytics?.onPeriodClick}
+                    onStatusClick={enhancedAnalytics?.onStatusClick}
                   />
                 </GlassCard>
                 <GlassCard className="p-8">

@@ -1,242 +1,324 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
-type TrendPoint = {
-  date: string;
-  completion_rate: number;
-};
+export type TrendPoint = { period: string; value: number; label?: string };
+
+type TrendsResponse = { data: TrendPoint[] } | null;
+
+type JobsTrendData = { period: string; created?: number; completed?: number };
+type RiskTrendData = { period: string; value: number };
+/** One row per period (e.g. week); keys are status names, values are counts. */
+type StatusByPeriodRow = { period: string; [status: string]: string | number };
 
 type TrendChartProps = {
-  data: TrendPoint[];
-  rangeDays: number;
-  onRangeChange?: (next: number) => void;
+  trendsJobs: TrendsResponse;
+  trendsCompletion: TrendsResponse;
+  trendsRisk: TrendsResponse;
+  /** Flat counts for whole range; used when statusByPeriod is not provided. */
+  jobCountsByStatus?: Record<string, number>;
+  /** Optional: status counts per period (e.g. per week) for stacked/clustered bars. */
+  statusByPeriod?: StatusByPeriodRow[];
+  periodLabel?: string;
   isLoading?: boolean;
-  emptyReason?: 'no_jobs' | 'no_events' | null;
-  onCreateJob?: () => void;
-  onViewMitigations?: () => void;
+  onPeriodClick?: (period: string) => void;
+  onStatusClick?: (status: string, period?: string) => void;
 };
 
-const RANGES = [30, 90];
-
-const formatPercent = (value: number) =>
-  `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
-
-const formatDateLabel = (isoDate: string) => {
-  const date = new Date(isoDate);
-  const options: Intl.DateTimeFormatOptions = {
-    timeZone: 'America/New_York',
+function formatPeriodLabel(period: string): string {
+  const d = new Date(period);
+  if (isNaN(d.getTime())) return period;
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-  };
-  return date.toLocaleDateString('en-US', options);
+    year: period.length > 10 ? 'numeric' : undefined,
+  });
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  completed: '#22c55e',
+  in_progress: '#F97316',
+  pending: '#94a3b8',
+  open: '#94a3b8',
+  unknown: '#64748b',
 };
 
-const CHART_DIMENSIONS = {
-  width: 720,
-  height: 220,
-  paddingX: 20,
-  paddingY: 30,
-};
+function getStatusColor(status: string): string {
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  return STATUS_COLORS[key] ?? '#F97316';
+}
 
 export function TrendChart({
-  data,
-  rangeDays,
-  onRangeChange,
+  trendsJobs,
+  trendsCompletion,
+  trendsRisk,
+  jobCountsByStatus = {},
+  statusByPeriod,
+  periodLabel = 'Last 30 days',
   isLoading = false,
-  emptyReason,
-  onCreateJob,
-  onViewMitigations,
+  onPeriodClick,
+  onStatusClick,
 }: TrendChartProps) {
-  const paddedData = useMemo(() => {
-    return data.length > 0 ? data : [{ date: new Date().toISOString().slice(0, 10), completion_rate: 0 }];
-  }, [data]);
-
-  const points = useMemo(() => {
-    if (!paddedData.length) return [];
-    const { width, height, paddingX, paddingY } = CHART_DIMENSIONS;
-    const usableWidth = width - paddingX * 2;
-    const usableHeight = height - paddingY * 2;
-
-    return paddedData.map((point, index) => {
-      const x = paddingX + (usableWidth * index) / Math.max(paddedData.length - 1, 1);
-      const y =
-        paddingY + usableHeight * (1 - Math.max(0, Math.min(1, point.completion_rate)));
-      return { x, y, original: point };
+  const jobsChartData = useMemo((): JobsTrendData[] => {
+    const jobsByPeriod = new Map<string, { created?: number; completed?: number }>();
+    (trendsJobs?.data ?? []).forEach((p: TrendPoint) =>
+      jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value })
+    );
+    (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
+      const cur = jobsByPeriod.get(p.period) ?? {};
+      const created = cur.created ?? 0;
+      const rate = Math.max(0, Math.min(100, p.value)) / 100;
+      jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
     });
-  }, [paddedData]);
+    return Array.from(jobsByPeriod.entries())
+      .map(([period, v]) => ({ period, ...v }))
+      .sort((a, b) => a.period.localeCompare(b.period));
+  }, [trendsJobs, trendsCompletion]);
 
-  const areaPath = useMemo(() => {
-    if (points.length === 0) return '';
-    const start = points[0];
-    const { height, paddingX, paddingY } = CHART_DIMENSIONS;
-    const baseY = height - paddingY;
+  const riskChartData = useMemo(
+    (): RiskTrendData[] =>
+      (trendsRisk?.data ?? []).map((p: TrendPoint) => ({ period: p.period, value: p.value })),
+    [trendsRisk]
+  );
 
-    const line = points
-      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-      .join(' ');
+  const statusChartData = useMemo(() => {
+    if (statusByPeriod && statusByPeriod.length > 0) {
+      return statusByPeriod;
+    }
+    const statuses = Object.entries(jobCountsByStatus).filter(([, count]) => count > 0);
+    if (statuses.length === 0) return [];
+    const periodKey = periodLabel || 'Selected period';
+    const row: StatusByPeriodRow = { period: periodKey };
+    statuses.forEach(([status, count]) => {
+      row[status.replace(/_/g, ' ')] = count;
+    });
+    return [row];
+  }, [statusByPeriod, jobCountsByStatus, periodLabel]);
 
-    return `${line} L ${points[points.length - 1].x} ${baseY} L ${paddingX} ${baseY} Z`;
-  }, [points]);
+  const statusKeys = useMemo(() => {
+    if (statusByPeriod && statusByPeriod.length > 0) {
+      const keys = new Set<string>();
+      statusByPeriod.forEach((row) => {
+        Object.keys(row).forEach((k) => {
+          if (k !== 'period') keys.add(k);
+        });
+      });
+      return Array.from(keys);
+    }
+    return Object.keys(jobCountsByStatus)
+      .filter((k) => (jobCountsByStatus[k] ?? 0) > 0)
+      .map((s) => s.replace(/_/g, ' '));
+  }, [statusByPeriod, jobCountsByStatus]);
 
-  const linePath = useMemo(() => {
-    if (points.length === 0) return '';
-    return points
-      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-      .join(' ');
-  }, [points]);
+  const chartCommon = {
+    margin: { top: 8, right: 8, left: 0, bottom: 0 },
+    stroke: 'rgba(255,255,255,0.08)',
+  };
 
-  const latestPoint = points[points.length - 1];
+  if (isLoading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+          <h3 className="text-lg font-semibold text-white mb-2">Jobs over time</h3>
+          <div className="h-56 bg-white/5 rounded-lg animate-pulse" />
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+          <h3 className="text-lg font-semibold text-white mb-2">Risk score trend</h3>
+          <div className="h-56 bg-white/5 rounded-lg animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative">
-      <div className="mb-6">
-        <h3 className="text-xl font-bold font-display text-white mb-2">Mitigation Completion Trend</h3>
-        <p className="text-sm text-white/60">
-          How fast crews are closing mitigations over the last {rangeDays} days.
-        </p>
+    <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+      {/* Jobs over time: created + completed */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h3 className="text-lg font-semibold text-white mb-2">Jobs over time</h3>
+        <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
+        {jobsChartData.length === 0 ? (
+          <div className="h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
+        ) : (
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={jobsChartData} {...chartCommon}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
+                  tickFormatter={formatPeriodLabel}
+                />
+                <YAxis
+                  tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
+                  tickFormatter={(v) => String(v)}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                  }}
+                  labelFormatter={(label) => formatPeriodLabel(String(label))}
+                  formatter={(value: number | undefined, name: string) => [
+                    `${value ?? 0} jobs`,
+                    name === 'created' ? 'Created' : 'Completed',
+                  ]}
+                />
+                <Legend
+                  formatter={(value) => (value === 'created' ? 'Created' : 'Completed')}
+                  wrapperStyle={{ fontSize: 12 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="created"
+                  name="created"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: '#F97316' }}
+                  connectNulls
+                  onClick={(props: unknown) => {
+                    const d = props as { period?: string };
+                    if (d?.period) onPeriodClick?.(d.period);
+                  }}
+                  cursor={onPeriodClick ? 'pointer' : 'default'}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="completed"
+                  name="completed"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: '#22c55e' }}
+                  connectNulls
+                  onClick={(props: unknown) => {
+                    const d = props as { period?: string };
+                    if (d?.period) onPeriodClick?.(d.period);
+                  }}
+                  cursor={onPeriodClick ? 'pointer' : 'default'}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
-      {isLoading ? (
-        <div className="mt-10 h-[220px] w-full animate-pulse rounded-2xl bg-white/5" />
-      ) : (paddedData.length === 0 || emptyReason) ? (
-        <div className="mt-10 flex h-[220px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 p-8">
-          {emptyReason === 'no_jobs' ? (
-            <>
-              <svg className="w-12 h-12 text-white/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <p className="text-base font-medium text-white mb-1">No jobs in this range</p>
-              <p className="text-sm text-white/60 mb-4">Create a job to start tracking trends</p>
-              {onCreateJob && (
-                <button
-                  onClick={onCreateJob}
-                  className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium hover:bg-[#F97316]/90 transition-colors"
-                >
-                  Create Job
-                </button>
-              )}
-            </>
-          ) : emptyReason === 'no_events' ? (
-            <>
-              <svg className="w-12 h-12 text-white/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p className="text-base font-medium text-white mb-1">No completed controls yet</p>
-              <p className="text-sm text-white/60 mb-4">View open controls to track progress. Completed controls are recorded as ledger events.</p>
-              {onViewMitigations && (
-                <button
-                  onClick={onViewMitigations}
-                  className="px-4 py-2 bg-[#F97316] text-white rounded-lg text-sm font-medium hover:bg-[#F97316]/90 transition-colors"
-                >
-                  View Open Mitigations
-                </button>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-[#9FA6BE]">Insufficient data to display trend.</p>
-          )}
-        </div>
-      ) : (
-        <div className="relative mt-8 overflow-hidden">
-          <svg
-            viewBox={`0 0 ${CHART_DIMENSIONS.width} ${CHART_DIMENSIONS.height}`}
-            className="w-full"
-          >
-            <defs>
-              <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#29E673" stopOpacity="0.35" />
-                <stop offset="60%" stopColor="#FF6F30" stopOpacity="0.15" />
-              </linearGradient>
-              <linearGradient id="trendLine" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#29E673" />
-                <stop offset="100%" stopColor="#FF6F30" />
-              </linearGradient>
-            </defs>
-
-            <path
-              d={areaPath}
-              fill="url(#trendGradient)"
-            />
-
-            <path
-              d={linePath}
-              fill="none"
-              stroke="url(#trendLine)"
-              strokeWidth={3}
-              strokeLinecap="round"
-            />
-
-            {/* Y Axis ticks */}
-            {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-              const y =
-                CHART_DIMENSIONS.paddingY +
-                (CHART_DIMENSIONS.height - CHART_DIMENSIONS.paddingY * 2) * (1 - tick);
-              return (
-                <g key={tick}>
-                  <line
-                    x1={CHART_DIMENSIONS.paddingX}
-                    x2={CHART_DIMENSIONS.width - CHART_DIMENSIONS.paddingX}
-                    y1={y}
-                    y2={y}
-                    stroke="rgba(255,255,255,0.08)"
-                    strokeDasharray="4 8"
-                  />
-                  <text
-                    x={CHART_DIMENSIONS.paddingX - 10}
-                    y={y + 4}
-                    textAnchor="end"
-                    className="text-[10px] fill-white/45"
-                  >
-                    {formatPercent(tick)}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* X Axis labels */}
-            {points.map((point, index) => {
-              const showLabel =
-                index === 0 ||
-                index === points.length - 1 ||
-                (rangeDays === 90 ? index % 15 === 0 : index % 7 === 0);
-
-              if (!showLabel) return null;
-              return (
-                <text
-                  key={point.original.date}
-                  x={point.x}
-                  y={CHART_DIMENSIONS.height - CHART_DIMENSIONS.paddingY + 20}
-                  textAnchor="middle"
-                  className="text-[10px] fill-white/45"
-                >
-                  {formatDateLabel(point.original.date)}
-                </text>
-              );
-            })}
-
-            {/* Latest point marker */}
-            {latestPoint && (
-              <g>
-                <circle
-                  cx={latestPoint.x}
-                  cy={latestPoint.y}
-                  r={6}
-                  fill="#F97316"
-                  stroke="rgba(255,255,255,0.85)"
-                  strokeWidth={2}
+      {/* Risk score trend (area) */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h3 className="text-lg font-semibold text-white mb-2">Risk score trend</h3>
+        <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
+        {riskChartData.length === 0 ? (
+          <div className="h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
+        ) : (
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={riskChartData} {...chartCommon}>
+                <defs>
+                  <linearGradient id="trendRiskGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
+                  tickFormatter={formatPeriodLabel}
                 />
-                <text
-                  x={latestPoint.x}
-                  y={latestPoint.y - 14}
-                  textAnchor="middle"
-                  className="text-xs font-medium fill-[#F97316]"
-                >
-                  {formatPercent(latestPoint.original.completion_rate)}
-                </text>
-              </g>
-            )}
-          </svg>
+                <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                  }}
+                  labelFormatter={(label) => formatPeriodLabel(String(label))}
+                  formatter={(value: number | undefined) => [
+                    `Avg risk: ${(value ?? 0).toFixed(1)}`,
+                    '',
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#f97316"
+                  fill="url(#trendRiskGradient)"
+                  strokeWidth={2}
+                  onClick={(props: unknown) => {
+                    const d = props as { period?: string };
+                    if (d?.period) onPeriodClick?.(d.period);
+                  }}
+                  cursor={onPeriodClick ? 'pointer' : 'default'}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Jobs by status per week (stacked bars with period on each bar) */}
+      {statusChartData.length > 0 && statusKeys.length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 lg:col-span-2">
+          <h3 className="text-lg font-semibold text-white mb-2">Jobs by status</h3>
+          <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={statusChartData}
+                margin={{ top: 8, right: 8, left: 0, bottom: 24 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
+                  tickFormatter={formatPeriodLabel}
+                />
+                <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                  }}
+                  labelFormatter={(label) => formatPeriodLabel(String(label))}
+                  formatter={(value: number | undefined, name: string) => [
+                    value ?? 0,
+                    name,
+                  ]}
+                />
+                {statusKeys.map((key) => (
+                  <Bar
+                    key={key}
+                    dataKey={key}
+                    stackId="status"
+                    fill={getStatusColor(key)}
+                    radius={[0, 0, 0, 0]}
+                    name={key}
+                    onClick={(payload: unknown) => {
+                      const row = payload as StatusByPeriodRow;
+                      if (!row?.period) return;
+                      onStatusClick?.(key, row.period);
+                      onPeriodClick?.(row.period);
+                    }}
+                    cursor={onStatusClick || onPeriodClick ? 'pointer' : 'default'}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>
@@ -244,4 +326,3 @@ export function TrendChart({
 }
 
 export default TrendChart;
-
