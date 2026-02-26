@@ -114,9 +114,20 @@ export function AnalyticsTrendCharts({
     value: p.value,
   }));
 
-  // Use only weekly statusByPeriod rows with valid ISO period for drill-down; no periodLabel fallback.
-  const statusChartData: StatusByPeriodRow[] =
-    statusByPeriod && statusByPeriod.length > 0 ? statusByPeriod : [];
+  // Use statusByPeriod when available; otherwise build a single-row dataset from jobCountsByStatus so the Jobs-by-status chart still renders.
+  const hasStatusByPeriod = statusByPeriod && statusByPeriod.length > 0;
+  const statusChartData: StatusByPeriodRow[] = hasStatusByPeriod
+    ? statusByPeriod
+    : (() => {
+        const counts = jobCountsByStatus ?? {};
+        const keys = Object.keys(counts).filter(
+          (k) => typeof counts[k] === 'number' && (counts[k] as number) > 0
+        );
+        if (keys.length === 0) return [];
+        const row: StatusByPeriodRow = { period: periodLabel || 'Total' };
+        keys.forEach((k) => (row[k] = counts[k] as number));
+        return [row];
+      })();
 
   const statusKeys =
     statusChartData.length > 0
