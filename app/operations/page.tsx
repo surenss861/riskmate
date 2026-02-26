@@ -57,6 +57,7 @@ function DashboardPageInner() {
   const [hazards, setHazards] = useState<any[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterRiskLevel, setFilterRiskLevel] = useState<string>('')
+  const [filterHazard, setFilterHazard] = useState<string>(() => searchParams.get('hazard') || '')
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   
@@ -176,6 +177,7 @@ function DashboardPageInner() {
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
+          hazard: filterHazard || undefined,
           ...(isCustomRange
             ? { created_after: customRange!.start, created_before: customRange!.end }
             : { time_range: timeRange }),
@@ -226,7 +228,7 @@ function DashboardPageInner() {
       }
       setLoading(false)
     }
-  }, [filterStatus, filterRiskLevel, timeRange, customRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
+  }, [filterStatus, filterRiskLevel, filterHazard, timeRange, customRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
   
   // Update URL params when filters change (preserve time_range and custom range)
   useEffect(() => {
@@ -285,20 +287,33 @@ function DashboardPageInner() {
     } else {
       params.delete('risk_level')
     }
+    if (filterHazard) {
+      params.set('hazard', filterHazard)
+    } else {
+      params.delete('hazard')
+    }
     
     // Update URL without triggering navigation
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
-  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, customRange, filterStatus, filterRiskLevel, searchParams])
+  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, customRange, filterStatus, filterRiskLevel, filterHazard, searchParams])
   
   // Initialize filters from URL on mount (for shareable links)
   useEffect(() => {
     const statusParam = searchParams.get('status')
     const riskParam = searchParams.get('risk_level')
+    const hazardParam = searchParams.get('hazard')
     if (statusParam && !filterStatus) setFilterStatus(statusParam)
     if (riskParam && !filterRiskLevel) setFilterRiskLevel(riskParam)
+    if (hazardParam && !filterHazard) setFilterHazard(hazardParam)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only on mount - intentionally empty deps to run once
+
+  // Sync hazard filter from URL when it changes (e.g. drill-down from hazard chart)
+  const hazardParam = searchParams.get('hazard') ?? ''
+  useEffect(() => {
+    setFilterHazard(hazardParam)
+  }, [hazardParam])
 
   useEffect(() => {
     loadData()
@@ -485,12 +500,16 @@ function DashboardPageInner() {
     }
     setDashboardPeriod(period)
     if (period === 'custom' && range) {
-      setCustomRange(range)
+      // Normalize so start is start-of-day and end is end-of-day (include full end date)
+      const startNorm = range.start.length === 10 ? `${range.start}T00:00:00.000Z` : range.start
+      const endNorm = range.end.length === 10 ? `${range.end}T23:59:59.999Z` : range.end
+      const normalized: CustomRange = { start: startNorm, end: endNorm }
+      setCustomRange(normalized)
       setTimeRange('custom')
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', 'custom')
-      params.set('range_start', range.start.slice(0, 10))
-      params.set('range_end', range.end.slice(0, 10))
+      params.set('range_start', normalized.start.slice(0, 10))
+      params.set('range_end', normalized.end.slice(0, 10))
       router.push(`/operations?${params.toString()}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
@@ -1197,7 +1216,7 @@ function DashboardPageInner() {
 
             {jobs.length === 0 && !loading ? (
               <div className="px-12 py-16 text-center">
-                {debouncedSearchQuery || filterStatus || filterRiskLevel ? (
+                {debouncedSearchQuery || filterStatus || filterRiskLevel || filterHazard ? (
                   <>
                     <p className="mb-2 text-white font-medium">No jobs match your filters</p>
                     <p className="mb-6 text-sm text-white/60">
@@ -1209,6 +1228,7 @@ function DashboardPageInner() {
                         setSearchQuery('')
                         setFilterStatus('')
                         setFilterRiskLevel('')
+                        setFilterHazard('')
                         setCurrentPage(1)
                       }}
                     >

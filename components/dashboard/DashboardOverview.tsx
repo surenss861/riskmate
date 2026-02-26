@@ -203,6 +203,15 @@ export function DashboardOverview({
       count: h.count,
       avgRisk: h.avg_risk,
     }))
+    // When only aggregate counts exist (no per-period data), synthesize one status-by-period row so export mirrors the on-screen Jobs-by-status chart
+    const jobCounts = enhancedAnalytics.jobCountsByStatus ?? {}
+    const hasStatusAggregate = Object.keys(jobCounts).length > 0
+    const statusByPeriodForCsv =
+      (enhancedAnalytics.statusByPeriod && enhancedAnalytics.statusByPeriod.length > 0)
+        ? enhancedAnalytics.statusByPeriod
+        : hasStatusAggregate
+          ? [{ period: enhancedAnalytics.periodLabel, ...jobCounts }]
+          : undefined
     const csv = buildDashboardCsv({
       periodLabel: enhancedAnalytics.periodLabel,
       kpis,
@@ -213,7 +222,7 @@ export function DashboardOverview({
       trendJobsCompleted: enhancedAnalytics.trendsCompletedCounts?.data ?? undefined,
       trendCompletionPct: enhancedAnalytics.trendsCompletion?.data ?? undefined,
       trendRisk: enhancedAnalytics.trendsRisk?.data ?? undefined,
-      statusByPeriod: enhancedAnalytics.statusByPeriod ?? undefined,
+      statusByPeriod: statusByPeriodForCsv,
     })
     downloadCsv(csv, enhancedAnalytics.periodLabel)
   }
