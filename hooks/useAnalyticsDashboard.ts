@@ -13,24 +13,34 @@ type HazardFrequency = Awaited<ReturnType<typeof analyticsApi.hazardFrequency>>;
 type Trends = Awaited<ReturnType<typeof analyticsApi.trends>>;
 type Insights = Awaited<ReturnType<typeof analyticsApi.insights>>;
 
-/** Compute current period [since, until] for a preset (e.g. last 30 days). */
+/** Compute current period [since, until]. For '1y' uses calendar year (Jan 1–today); otherwise rolling window. */
 function currentRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
   const now = new Date();
   const until = new Date(now);
   until.setHours(23, 59, 59, 999);
-  const days = period === '1y' ? 365 : parseInt(period.replace('d', ''), 10) || 30;
+  if (period === '1y') {
+    const since = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    return { since: since.toISOString(), until: until.toISOString() };
+  }
+  const days = parseInt(period.replace('d', ''), 10) || 30;
   const since = new Date(until.getTime());
   since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
   return { since: since.toISOString(), until: until.toISOString() };
 }
 
-/** Compute prior period [since, until] (same length as current, immediately before). */
+/** Compute prior period [since, until]. For '1y' uses prior calendar year (Jan 1–Dec 31); otherwise same-length window before current. */
 function priorRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
   const now = new Date();
+  if (period === '1y') {
+    const y = now.getFullYear() - 1;
+    const priorSince = new Date(y, 0, 1, 0, 0, 0, 0);
+    const priorUntil = new Date(y, 11, 31, 23, 59, 59, 999);
+    return { since: priorSince.toISOString(), until: priorUntil.toISOString() };
+  }
   const until = new Date(now);
   until.setHours(23, 59, 59, 999);
-  const days = period === '1y' ? 365 : parseInt(period.replace('d', ''), 10) || 30;
+  const days = parseInt(period.replace('d', ''), 10) || 30;
   const currentSince = new Date(until.getTime());
   currentSince.setDate(currentSince.getDate() - (days - 1));
   currentSince.setHours(0, 0, 0, 0);
@@ -117,17 +127,20 @@ export function useAnalyticsDashboard(
     setError(false);
 
     const useCustom = period === 'custom' && customRange?.start && customRange?.end;
-    const since = useCustom ? customRange!.start : undefined;
-    const until = useCustom ? customRange!.end : undefined;
-    const rangeForSummary = period === '1y' ? '365d' : period;
+    const useCalendarYear = period === '1y';
+    const currentRange = useCalendarYear ? currentRangeForPeriod('1y') : null;
+    const since = useCustom ? customRange!.start : useCalendarYear ? currentRange!.since : undefined;
+    const until = useCustom ? customRange!.end : useCalendarYear ? currentRange!.until : undefined;
+    const rangeForSummary = period === '1y' ? undefined : period;
     const prior = useCustom ? null : priorRangeForPeriod(period);
     const groupBy: 'day' | 'week' | 'month' = period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
     const statusByPeriodGroupBy: 'day' | 'week' = period === '7d' ? 'day' : 'week';
-    const trendsParams = useCustom
-      ? { since, until, groupBy: 'day' as const, metric: 'jobs' as const }
+    const useExplicitRange = useCustom || useCalendarYear;
+    const trendsParams = useExplicitRange
+      ? { since: since!, until: until!, groupBy: useCalendarYear ? ('month' as const) : ('day' as const), metric: 'jobs' as const }
       : { period, groupBy, metric: 'jobs' as const };
-    const statusByPeriodParams = useCustom
-      ? { since, until, groupBy: statusByPeriodGroupBy }
+    const statusByPeriodParams = useExplicitRange
+      ? { since: since!, until: until!, groupBy: statusByPeriodGroupBy }
       : { period, groupBy: statusByPeriodGroupBy };
 
     try {
@@ -148,17 +161,17 @@ export function useAnalyticsDashboard(
         priorComplianceRes,
         priorTrendsRiskRes,
       ] = await Promise.all([
-        useCustom ? analyticsApi.summary({ since, until }) : analyticsApi.summary({ range: rangeForSummary }),
-        useCustom ? analyticsApi.jobCompletion({ since, until }) : analyticsApi.jobCompletion({ period }),
-        useCustom ? analyticsApi.complianceRate({ since, until }) : analyticsApi.complianceRate({ period }),
-        useCustom ? analyticsApi.teamPerformance({ since, until }) : analyticsApi.teamPerformance({ period }),
-        useCustom ? analyticsApi.hazardFrequency({ since, until, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
+        useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
+        useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
+        useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
+        useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
+        useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
         analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
-        analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'risk' }),
-        analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'completion' }),
-        analyticsApi.trends({ ...(useCustom ? { since, until, groupBy: 'day' as const } : { period, groupBy }), metric: 'jobs_completed' }),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }),
         (() => {
-          const insightsRange = useCustom ? { since: since!, until: until! } : currentRangeForPeriod(period);
+          const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
           return analyticsApi.insights(insightsRange);
         })(),
         analyticsApi.statusByPeriod(statusByPeriodParams),

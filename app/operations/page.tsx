@@ -480,8 +480,35 @@ function DashboardPageInner() {
   }, [timeRange])
 
   const handleTimeRangeChange = (newRange: TimeRange) => {
+    if (newRange === 'custom') {
+      if (timeRange === 'custom' && customRange) {
+        refetchAnalytics()
+        refetchDashboard()
+        return
+      }
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      const start = new Date(end.getTime())
+      start.setDate(start.getDate() - 29)
+      start.setHours(0, 0, 0, 0)
+      const defaultRange: CustomRange = {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      }
+      setCustomRange(defaultRange)
+      setTimeRange('custom')
+      setDashboardPeriod('custom')
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('time_range', 'custom')
+      params.set('range_start', defaultRange.start.slice(0, 10))
+      params.set('range_end', defaultRange.end.slice(0, 10))
+      router.push(`/operations?${params.toString()}`, { scroll: false })
+      refetchAnalytics()
+      refetchDashboard()
+      return
+    }
     setTimeRange(newRange)
-    if (newRange !== 'custom') setCustomRange(null)
+    setCustomRange(null)
     setDashboardPeriod(newRange === 'all' ? '1y' : (newRange as DashboardPeriod))
     const params = new URLSearchParams(searchParams.toString())
     params.set('time_range', newRange)
@@ -932,9 +959,9 @@ function DashboardPageInner() {
                 />
               </div>
               <div className="flex items-center gap-4 mt-6 md:mt-0">
-                {/* Time Range Segmented Control */}
+                {/* Time Range Segmented Control: presets + Custom so selected period is always represented */}
                 <div className="inline-flex bg-white/5 border border-white/10 rounded-lg p-1 backdrop-blur-sm">
-                  {(['7d', '30d', '90d', 'all'] as const).map((range) => (
+                  {(['7d', '30d', '90d', 'all', 'custom'] as const).map((range) => (
                     <button
                       key={range}
                       onClick={() => handleTimeRangeChange(range)}
@@ -945,7 +972,7 @@ function DashboardPageInner() {
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       )}
                     >
-                      {range === 'all' ? 'This Year' : range.toUpperCase()}
+                      {range === 'all' ? 'This Year' : range === 'custom' ? (timeRange === 'custom' && customRange ? `${new Date(customRange.start).toLocaleDateString()} – ${new Date(customRange.end).toLocaleDateString()}` : 'Custom') : range.toUpperCase()}
                     </button>
                   ))}
                 </div>
