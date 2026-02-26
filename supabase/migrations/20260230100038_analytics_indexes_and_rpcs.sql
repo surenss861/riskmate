@@ -3,6 +3,7 @@
 
 -- Job completion KPIs in one round-trip (organization_id + deleted_at IS NULL applied).
 -- Returns: total, completed, avg_days_to_complete, on_time_count, overdue_count_period, overdue_count_all_time
+-- Completed count and all completion-based metrics scoped to completed_at in [p_since, p_until]; total aligned to same cohort.
 CREATE OR REPLACE FUNCTION get_job_completion_kpis(
   p_org_id UUID,
   p_since TIMESTAMPTZ,
@@ -29,7 +30,7 @@ DECLARE
   v_overdue_all BIGINT;
   v_now TIMESTAMPTZ := clock_timestamp();
 BEGIN
-  -- Denominator and numerator aligned to jobs created in period: total = jobs created in period, completed = of those, count that are completed (completion_rate cannot exceed 100%).
+  -- Cohort = jobs created in period. Total = that cohort; completed = of that cohort, those with completed_at in [p_since, p_until] so numerator and denominator are consistent.
   SELECT COUNT(*)::BIGINT INTO v_total
   FROM jobs j
   WHERE j.organization_id = p_org_id
@@ -42,36 +43,38 @@ BEGIN
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) = 'completed'
+    AND j.completed_at IS NOT NULL
+    AND j.completed_at >= p_since
+    AND j.completed_at <= p_until
     AND j.created_at >= p_since
     AND j.created_at <= p_until;
 
-  -- Avg days to complete and on_time count: jobs created in period that are completed (same population as completion rate)
+  -- Avg days to complete and on_time count: only over period-scoped completion set (created in period and completed_at in [p_since, p_until])
   SELECT
     COALESCE(AVG(
-      EXTRACT(EPOCH FROM (
-        COALESCE(j.completed_at, j.created_at) - j.created_at
-      )) / 86400.0
+      EXTRACT(EPOCH FROM (j.completed_at - j.created_at)) / 86400.0
     ), 0),
-    COUNT(*) FILTER (WHERE j.due_date IS NOT NULL AND COALESCE(j.completed_at, j.created_at) <= j.due_date)::BIGINT
+    COUNT(*) FILTER (WHERE j.due_date IS NOT NULL AND j.completed_at <= j.due_date)::BIGINT
   INTO v_avg_days, v_on_time
   FROM jobs j
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND LOWER(COALESCE(j.status, '')) = 'completed'
+    AND j.completed_at IS NOT NULL
+    AND j.completed_at >= p_since
+    AND j.completed_at <= p_until
     AND j.created_at >= p_since
     AND j.created_at <= p_until;
 
-  -- Period-scoped overdue: (1) completed in period with due in window and completed after due (completed_at/created_at), (2) open overdue jobs whose due_date (and created_at) fall within period
+  -- Period-scoped overdue: (1) completed in period with completed_at after due_date, (2) open overdue jobs whose due_date falls within period
   SELECT (
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) = 'completed'
+       AND j.completed_at IS NOT NULL
+       AND j.completed_at >= p_since AND j.completed_at <= p_until
        AND j.due_date IS NOT NULL
        AND j.due_date::date >= p_since::date AND j.due_date::date <= p_until::date
-       AND COALESCE(j.completed_at, j.created_at) > j.due_date
-       AND (
-         (j.completed_at IS NOT NULL AND j.completed_at >= p_since AND j.completed_at <= p_until)
-         OR (j.completed_at IS NULL AND j.created_at >= p_since AND j.created_at <= p_until)
-       ))
+       AND j.completed_at > j.due_date)
     +
     (SELECT COUNT(*)::BIGINT FROM jobs j
      WHERE j.organization_id = p_org_id AND j.deleted_at IS NULL AND LOWER(COALESCE(j.status, '')) != 'completed'
@@ -100,7 +103,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_job_completion_kpis(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Returns job-completion KPIs for analytics in one round-trip; org-scoped, deleted_at IS NULL. total/completed scoped to jobs created in period so completion_rate cannot exceed 100%.';
+  'Returns job-completion KPIs; completed and completion-based metrics only where completed_at in [p_since, p_until]; total = jobs created in period for consistent cohort.';
 
 -- Team performance: per-user aggregates; jobs_assigned and overdue_count scoped to [p_since, p_until].
 -- jobs_assigned = completed-in-period + open jobs with created_at in period. overdue_count = overdue with due_date/completed_at in period.

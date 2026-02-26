@@ -47,8 +47,9 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Completion: one row per day in range; value = completion rate 0–100 (jobs created that day that are completed / jobs_created_that_day * 100).
-  -- Numerator and denominator both use creation cohort: count jobs whose created_at falls in each bucket and are completed.
+  -- Completion: one row per day in range; value = completion rate 0–100.
+  -- Bucket completion by completion_at within the requested window to match week/month completion-date cohort.
+  -- Numerator = jobs completed on that day (completed_at in bucket); denominator = jobs created that day (for rate); same contract as week/month; clamp 0–100.
   IF p_metric = 'completion' THEN
     RETURN QUERY
     WITH days AS (
@@ -68,14 +69,15 @@ BEGIN
       GROUP BY (j.created_at AT TIME ZONE 'UTC')::DATE
     ),
     completed AS (
-      SELECT (j.created_at AT TIME ZONE 'UTC')::DATE AS d, COUNT(*)::BIGINT AS c
+      SELECT (j.completed_at AT TIME ZONE 'UTC')::DATE AS d, COUNT(*)::BIGINT AS c
       FROM jobs j
       WHERE j.organization_id = p_org_id
         AND j.deleted_at IS NULL
         AND LOWER(COALESCE(j.status, '')) = 'completed'
-        AND j.created_at >= p_since
-        AND j.created_at <= p_until
-      GROUP BY (j.created_at AT TIME ZONE 'UTC')::DATE
+        AND j.completed_at IS NOT NULL
+        AND j.completed_at >= p_since
+        AND j.completed_at <= p_until
+      GROUP BY (j.completed_at AT TIME ZONE 'UTC')::DATE
     )
     SELECT
       days.period_key,
@@ -180,4 +182,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_trends_day_buckets(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) IS
-  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (rate 0–100: jobs created that day that are completed / jobs_created_that_day, same cohort), compliance.';
+  'Day-level trend buckets: period_key (date), value. p_metric: jobs, risk, completion (rate 0–100: completions that day / jobs created that day, completion-date cohort to match week/month), compliance.';

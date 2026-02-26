@@ -1,7 +1,6 @@
 /**
- * Dashboard summary: completion chart aligned to same cohort and clamped to 0–100.
- * When completions (same-cohort) exceed creations, rate is still at most 100.
- * Covers backlog completion scenario where raw completions could exceed creations.
+ * Dashboard summary: completion chart uses same-cohort data (get_dashboard_chart_data).
+ * Numerator and denominator both by creation date; jobs_completed ≤ jobs_created so rate is 0–100 without needing clamp for >100.
  */
 
 import request from "supertest";
@@ -56,7 +55,7 @@ describe("GET /api/dashboard/summary chartData", () => {
     jest.clearAllMocks();
   });
 
-  it("clamps chart completion rate to 0–100 when completions exceed creations (backlog)", async () => {
+  it("chart completion rate is 100 when all created that day are completed (same-cohort)", async () => {
     const chartUntil = new Date();
     chartUntil.setHours(23, 59, 59, 999);
     const chartSince = new Date(chartUntil.getTime());
@@ -66,7 +65,7 @@ describe("GET /api/dashboard/summary chartData", () => {
 
     setupDefaultMocks({
       data: [
-        { period_key: dateStr, jobs_created: 2, jobs_completed: 3 },
+        { period_key: dateStr, jobs_created: 2, jobs_completed: 2 },
       ],
       error: null,
     });
@@ -78,10 +77,9 @@ describe("GET /api/dashboard/summary chartData", () => {
     expect(chartData).toBeDefined();
     const point = chartData?.find((p: { date: string }) => p.date === dateStr);
     expect(point).toBeDefined();
-    // Clamped to 100 even when raw rate would be 150 (backlog completions)
+    expect(point!.value).toBe(100);
     expect(point!.value).toBeLessThanOrEqual(100);
     expect(point!.value).toBeGreaterThanOrEqual(0);
-    expect(point!.value).toBe(100);
   });
 
   it("chartData values are in 0–100 range for normal same-cohort rates", async () => {

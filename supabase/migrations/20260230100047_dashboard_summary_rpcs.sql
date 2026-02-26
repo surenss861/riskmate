@@ -159,7 +159,7 @@ $$;
 COMMENT ON FUNCTION get_dashboard_missing_evidence_jobs(UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT) IS
   'Jobs in period with fewer than 3 documents (missing evidence) for dashboard list.';
 
--- Chart data: one row per day in range. jobs_created by creation date; jobs_completed by completion date (COALESCE(completed_at, created_at)). Route: completion rate = jobs_completed / jobs_created * 100.
+-- Chart data: one row per day in range. Same cohort: jobs_created and jobs_completed both by creation date; jobs_completed = jobs created that day that are completed with completed_at within window. Rate = jobs_completed / jobs_created, 0–100.
 CREATE OR REPLACE FUNCTION get_dashboard_chart_data(
   p_org_id UUID,
   p_since TIMESTAMPTZ,
@@ -192,16 +192,19 @@ AS $$
       AND j.created_at <= p_until
     GROUP BY (j.created_at AT TIME ZONE 'UTC')::date
   ),
-  completed AS (
-    SELECT (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::date AS period_key,
+  completed_same_cohort AS (
+    SELECT (j.created_at AT TIME ZONE 'UTC')::date AS period_key,
       COUNT(*)::BIGINT AS jobs_completed
     FROM jobs j
     WHERE j.organization_id = p_org_id
       AND j.deleted_at IS NULL
       AND LOWER(COALESCE(j.status, '')) = 'completed'
-      AND COALESCE(j.completed_at, j.created_at) >= p_since
-      AND COALESCE(j.completed_at, j.created_at) <= p_until
-    GROUP BY (COALESCE(j.completed_at, j.created_at) AT TIME ZONE 'UTC')::date
+      AND j.completed_at IS NOT NULL
+      AND j.completed_at >= p_since
+      AND j.completed_at <= p_until
+      AND j.created_at >= p_since
+      AND j.created_at <= p_until
+    GROUP BY (j.created_at AT TIME ZONE 'UTC')::date
   )
   SELECT
     ds.period_key,
@@ -209,9 +212,9 @@ AS $$
     COALESCE(p.jobs_completed, 0)::BIGINT
   FROM date_series ds
   LEFT JOIN created c ON c.period_key = ds.period_key
-  LEFT JOIN completed p ON p.period_key = ds.period_key
+  LEFT JOIN completed_same_cohort p ON p.period_key = ds.period_key
   ORDER BY ds.period_key;
 $$;
 
 COMMENT ON FUNCTION get_dashboard_chart_data(UUID, TIMESTAMPTZ, TIMESTAMPTZ) IS
-  'Per-day jobs_created (by creation date) and jobs_completed (by completion date) for dashboard chart; route computes completion rate.';
+  'Per-day jobs_created and jobs_completed (same cohort: jobs created that day, completed with completed_at in window); rate never exceeds 100.';
