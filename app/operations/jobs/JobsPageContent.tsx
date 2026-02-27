@@ -89,6 +89,18 @@ interface JobsPageContentProps {
   onSaveFilter?: (payload: { name: string; is_shared?: boolean }) => Promise<void>
   /** Called after a saved filter is created or updated (e.g. share toggle) so parent can refresh jobs list */
   onFilterSaved?: () => void
+  /** Drill-down from dashboard/charts: date and cohort filters; shown as active filter pills and in empty state */
+  createdAfter?: string
+  createdBefore?: string
+  completedAfter?: string
+  completedBefore?: string
+  hazard?: string
+  insight?: string
+  reference_date?: string
+  onClearCreatedRange?: () => void
+  onClearCompletedRange?: () => void
+  onClearHazard?: () => void
+  onClearInsight?: () => void
 }
 
 export function JobsPageContentView(props: JobsPageContentProps) {
@@ -663,6 +675,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 { value: '7d', label: '7 days' },
                 { value: '30d', label: '30 days' },
                 { value: '90d', label: '90 days' },
+                { value: '1y', label: 'This year' },
               ]}
             />
             <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer hover:text-white/80 transition-colors whitespace-nowrap">
@@ -834,87 +847,150 @@ export function JobsPageContentView(props: JobsPageContentProps) {
               />
             </div>
           )}
-          {/* Active filters pills */}
-          {(props.searchQuery ||
-            props.filterStatus ||
-            props.filterRiskLevel ||
-            props.filterTemplateSource ||
-            props.filterTemplateId ||
-            (props.filterTimeRange && props.filterTimeRange !== 'all') ||
-            props.includeArchived ||
-            props.hasPhotos !== undefined ||
-            props.hasSignatures !== undefined ||
-            props.needsSignatures !== undefined) && (
-            <div className="flex flex-wrap items-center gap-2 text-sm mb-2">
-              <span className="text-white/50">Active:</span>
-              {props.searchQuery && (
-                <FilterPill
-                  label={`"${props.searchQuery}"`}
-                  onRemove={() => props.onSearchQueryChange('')}
-                />
-              )}
-              {props.filterStatus && (
-                <FilterPill
-                  label={`Status: ${props.filterStatus}`}
-                  onRemove={() => props.onFilterStatusChange('')}
-                />
-              )}
-              {props.filterRiskLevel && (
-                <FilterPill
-                  label={`Risk: ${props.filterRiskLevel}`}
-                  onRemove={() => props.onFilterRiskLevelChange('')}
-                />
-              )}
-              {props.filterTimeRange && props.filterTimeRange !== 'all' && (
-                <FilterPill
-                  label={`Time: ${props.filterTimeRange}`}
-                  onRemove={() => props.onFilterTimeRangeChange('all')}
-                />
-              )}
-              {props.includeArchived && (
-                <FilterPill label="Archived" onRemove={() => props.onIncludeArchivedChange(false)} />
-              )}
-              {props.hasPhotos === true && (
-                <FilterPill label="Has photos" onRemove={() => props.onHasPhotosChange(undefined)} />
-              )}
-              {props.hasPhotos === false && (
-                <FilterPill label="No photos" onRemove={() => props.onHasPhotosChange(undefined)} />
-              )}
-              {props.hasSignatures === true && (
-                <FilterPill label="Has signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
-              )}
-              {props.hasSignatures === false && (
-                <FilterPill label="No signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
-              )}
-              {props.needsSignatures === true && (
-                <FilterPill label="Needs signatures" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
-              )}
-              {props.needsSignatures === false && (
-                <FilterPill label="Signed" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
-              )}
-              {props.filterTemplateSource && (
-                <FilterPill
-                  label={props.filterTemplateSource === 'template' ? 'From Template' : 'Manual'}
-                  onRemove={() => {
-                    props.onFilterTemplateSourceChange('')
-                    props.onFilterTemplateIdChange('')
-                  }}
-                />
-              )}
-              {props.filterTemplateId && (
-                <FilterPill
-                  label={`Template: ${props.templates.find((t) => t.id === props.filterTemplateId)?.name ?? props.filterTemplateId}`}
-                  onRemove={() => props.onFilterTemplateIdChange('')}
-                />
-              )}
-              <button
-                onClick={props.onClearAllFilters}
-                className="px-2 py-0.5 text-xs text-white/60 hover:text-white/80 underline"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
+          {/* Active filters pills: include drill-down (created/completed range, hazard, insight) and quick filters */}
+          {(() => {
+            const hasDrillDown =
+              (props.createdAfter ?? '') !== '' ||
+              (props.createdBefore ?? '') !== '' ||
+              (props.completedAfter ?? '') !== '' ||
+              (props.completedBefore ?? '') !== '' ||
+              (props.hazard ?? '') !== '' ||
+              (props.insight ?? '') !== ''
+            const hasQuickFilter =
+              props.quickFilters?.myJobs ||
+              props.quickFilters?.highRisk ||
+              props.quickFilters?.overdue ||
+              props.quickFilters?.dueSoon ||
+              props.quickFilters?.needsSignatures ||
+              props.quickFilters?.unassigned ||
+              props.quickFilters?.recent
+            const hasActiveFilters =
+              props.searchQuery ||
+              props.filterStatus ||
+              props.filterRiskLevel ||
+              props.filterTemplateSource ||
+              props.filterTemplateId ||
+              (props.filterTimeRange && props.filterTimeRange !== 'all') ||
+              props.includeArchived ||
+              props.hasPhotos !== undefined ||
+              props.hasSignatures !== undefined ||
+              props.needsSignatures !== undefined ||
+              hasDrillDown ||
+              hasQuickFilter
+            return hasActiveFilters ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm mb-2">
+                <span className="text-white/50">Active:</span>
+                {props.searchQuery && (
+                  <FilterPill
+                    label={`"${props.searchQuery}"`}
+                    onRemove={() => props.onSearchQueryChange('')}
+                  />
+                )}
+                {props.filterStatus && (
+                  <FilterPill
+                    label={`Status: ${props.filterStatus}`}
+                    onRemove={() => props.onFilterStatusChange('')}
+                  />
+                )}
+                {props.filterRiskLevel && (
+                  <FilterPill
+                    label={`Risk: ${props.filterRiskLevel}`}
+                    onRemove={() => props.onFilterRiskLevelChange('')}
+                  />
+                )}
+                {props.filterTimeRange && props.filterTimeRange !== 'all' && (
+                  <FilterPill
+                    label={`Time: ${props.filterTimeRange}`}
+                    onRemove={() => props.onFilterTimeRangeChange('all')}
+                  />
+                )}
+                {props.includeArchived && (
+                  <FilterPill label="Archived" onRemove={() => props.onIncludeArchivedChange(false)} />
+                )}
+                {props.hasPhotos === true && (
+                  <FilterPill label="Has photos" onRemove={() => props.onHasPhotosChange(undefined)} />
+                )}
+                {props.hasPhotos === false && (
+                  <FilterPill label="No photos" onRemove={() => props.onHasPhotosChange(undefined)} />
+                )}
+                {props.hasSignatures === true && (
+                  <FilterPill label="Has signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
+                )}
+                {props.hasSignatures === false && (
+                  <FilterPill label="No signatures" onRemove={() => props.onHasSignaturesChange(undefined)} />
+                )}
+                {props.needsSignatures === true && (
+                  <FilterPill label="Needs signatures" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
+                )}
+                {props.needsSignatures === false && (
+                  <FilterPill label="Signed" onRemove={() => props.onNeedsSignaturesChange(undefined)} />
+                )}
+                {props.filterTemplateSource && (
+                  <FilterPill
+                    label={props.filterTemplateSource === 'template' ? 'From Template' : 'Manual'}
+                    onRemove={() => {
+                      props.onFilterTemplateSourceChange('')
+                      props.onFilterTemplateIdChange('')
+                    }}
+                  />
+                )}
+                {props.filterTemplateId && (
+                  <FilterPill
+                    label={`Template: ${props.templates.find((t) => t.id === props.filterTemplateId)?.name ?? props.filterTemplateId}`}
+                    onRemove={() => props.onFilterTemplateIdChange('')}
+                  />
+                )}
+                {(props.createdAfter ?? '') !== '' && (props.createdBefore ?? '') !== '' && props.onClearCreatedRange && (
+                  <FilterPill
+                    label={`Created: ${props.createdAfter} → ${props.createdBefore}`}
+                    onRemove={props.onClearCreatedRange}
+                  />
+                )}
+                {(props.completedAfter ?? '') !== '' && (props.completedBefore ?? '') !== '' && props.onClearCompletedRange && (
+                  <FilterPill
+                    label={`Completed: ${props.completedAfter} → ${props.completedBefore}`}
+                    onRemove={props.onClearCompletedRange}
+                  />
+                )}
+                {(props.hazard ?? '') !== '' && props.onClearHazard && (
+                  <FilterPill label={`Hazard: ${props.hazard}`} onRemove={props.onClearHazard} />
+                )}
+                {(props.insight ?? '') !== '' && props.onClearInsight && (
+                  <FilterPill
+                    label={`Insight: ${props.insight.replace(/_/g, ' ')}`}
+                    onRemove={props.onClearInsight}
+                  />
+                )}
+                {props.quickFilters?.myJobs && (
+                  <FilterPill label="My Jobs" onRemove={() => props.quickFilters!.onMyJobsChange(false)} />
+                )}
+                {props.quickFilters?.highRisk && (
+                  <FilterPill label="High Risk" onRemove={() => props.quickFilters!.onHighRiskChange(false)} />
+                )}
+                {props.quickFilters?.overdue && (
+                  <FilterPill label="Overdue" onRemove={() => props.quickFilters!.onOverdueChange(false)} />
+                )}
+                {props.quickFilters?.dueSoon && (
+                  <FilterPill label="Due Soon" onRemove={() => props.quickFilters!.onDueSoonChange(false)} />
+                )}
+                {props.quickFilters?.needsSignatures && (
+                  <FilterPill label="Needs Signatures" onRemove={() => props.quickFilters!.onNeedsSignaturesChange(false)} />
+                )}
+                {props.quickFilters?.unassigned && (
+                  <FilterPill label="Unassigned" onRemove={() => props.quickFilters!.onUnassignedChange(false)} />
+                )}
+                {props.quickFilters?.recent && (
+                  <FilterPill label="Recent" onRemove={() => props.quickFilters!.onRecentChange(false)} />
+                )}
+                <button
+                  onClick={props.onClearAllFilters}
+                  className="px-2 py-0.5 text-xs text-white/60 hover:text-white/80 underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            ) : null
+          })()}
         </PageSection>
 
         {/* Keyboard Hint (one-time) */}
@@ -943,40 +1019,62 @@ export function JobsPageContentView(props: JobsPageContentProps) {
           </div>
         ) : props.jobs.length === 0 ? (
           <GlassCard className="p-12 text-center">
-            {(props.searchQuery ||
-              props.filterStatus ||
-              props.filterRiskLevel ||
-              props.filterTemplateSource ||
-              props.filterTemplateId ||
-              (props.filterTimeRange && props.filterTimeRange !== 'all') ||
-              props.includeArchived ||
-              props.hasPhotos !== undefined ||
-              props.hasSignatures !== undefined ||
-              props.needsSignatures !== undefined) ? (
-              <>
-                <p className="text-white font-medium mb-2">No jobs match these filters</p>
-                <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
-                  Try adjusting your search, filters, or time range.
-                </p>
-                <Button variant="secondary" onClick={props.onClearAllFilters}>
-                  Clear Filters
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-white font-medium mb-2">No jobs yet</p>
-                <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
-                  Jobs are where you track safety, document hazards, and generate proof packs. Every action creates an immutable ledger event. Create your first job to get started.
-                </p>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => router.push('/operations/jobs/new')}
-                >
-                  Create Your First Job
-                </Button>
-              </>
-            )}
+            {(() => {
+              const hasDrillDown =
+                (props.createdAfter ?? '') !== '' ||
+                (props.createdBefore ?? '') !== '' ||
+                (props.completedAfter ?? '') !== '' ||
+                (props.completedBefore ?? '') !== '' ||
+                (props.hazard ?? '') !== '' ||
+                (props.insight ?? '') !== ''
+              const hasQuickFilter =
+                props.quickFilters?.myJobs ||
+                props.quickFilters?.highRisk ||
+                props.quickFilters?.overdue ||
+                props.quickFilters?.dueSoon ||
+                props.quickFilters?.needsSignatures ||
+                props.quickFilters?.unassigned ||
+                props.quickFilters?.recent
+              const hasFilters =
+                props.searchQuery ||
+                props.filterStatus ||
+                props.filterRiskLevel ||
+                props.filterTemplateSource ||
+                props.filterTemplateId ||
+                (props.filterTimeRange && props.filterTimeRange !== 'all') ||
+                props.includeArchived ||
+                props.hasPhotos !== undefined ||
+                props.hasSignatures !== undefined ||
+                props.needsSignatures !== undefined ||
+                hasDrillDown ||
+                hasQuickFilter
+              return hasFilters ? (
+                <>
+                  <p className="text-white font-medium mb-2">No jobs match these filters</p>
+                  <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
+                    Try adjusting your search, filters, or time range.
+                  </p>
+                  <Button variant="secondary" onClick={props.onClearAllFilters}>
+                    Clear Filters
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-white font-medium mb-2">No jobs yet</p>
+                  <p className="text-sm text-white/60 mb-6 max-w-md mx-auto">
+                    Jobs are where you track safety, document hazards, and generate proof packs. Every action creates an immutable ledger event. Create your first job to get started.
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => router.push('/operations/jobs/new')}
+                  >
+                    Create Your First Job
+                  </Button>
+                </>
+              )
+            }
+          )()}
           </GlassCard>
         ) : (
           <>

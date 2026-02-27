@@ -292,6 +292,17 @@ const JobsPageContent = () => {
       needsSignatures={state.needsSignatures}
       onNeedsSignaturesChange={adv.setNeedsSignatures}
       onClearAllFilters={adv.clearAllFilters}
+      createdAfter={state.createdAfter}
+      createdBefore={state.createdBefore}
+      completedAfter={state.completedAfter}
+      completedBefore={state.completedBefore}
+      hazard={state.hazard}
+      insight={state.insight}
+      reference_date={state.reference_date}
+      onClearCreatedRange={() => adv.setCreatedRange('', '')}
+      onClearCompletedRange={() => adv.setCompletedRange('', '')}
+      onClearHazard={() => adv.setHazard('')}
+      onClearInsight={() => adv.setInsight('')}
       quickFilters={{
         myJobs: state.myJobs,
         highRisk: state.highRisk,

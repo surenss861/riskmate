@@ -5,10 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { FilterGroup } from '@/lib/jobs/filterConfig'
 import { normalizeFilterConfig } from '@/lib/jobs/filterConfig'
 
-export type JobsTimeRange = 'all' | '7d' | '30d' | '90d'
+export type JobsTimeRange = 'all' | '7d' | '30d' | '90d' | '1y'
 
-const ALLOWED_TIME_RANGES: JobsTimeRange[] = ['all', '7d', '30d', '90d']
+const ALLOWED_TIME_RANGES: JobsTimeRange[] = ['all', '7d', '30d', '90d', '1y']
 const ALLOWED_TIME_RANGE_SET = new Set<string>(ALLOWED_TIME_RANGES)
+
+/** Current calendar year start (YYYY-MM-DD) and end of today (YYYY-MM-DD) for "This Year" scope. */
+function getYearBounds(): { start: string; end: string } {
+  const now = new Date()
+  const year = now.getFullYear()
+  const start = `${year}-01-01`
+  const end = now.toISOString().slice(0, 10)
+  return { start, end }
+}
 
 export interface AdvancedFiltersState {
   searchQuery: string
@@ -104,16 +113,33 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
   }
   const savedFilterId = searchParams.get('saved_filter_id')?.trim() ?? null
 
+  const timeRangeParam = searchParams.get('time_range')
+  const filterTimeRange: JobsTimeRange =
+    timeRangeParam && ALLOWED_TIME_RANGE_SET.has(timeRangeParam)
+      ? (timeRangeParam as JobsTimeRange)
+      : 'all'
+
+  const urlCreatedAfter = searchParams.get('created_after') ?? ''
+  const urlCreatedBefore = searchParams.get('created_before') ?? ''
+  const rangeStart = searchParams.get('range_start')?.trim() ?? ''
+  const rangeEnd = searchParams.get('range_end')?.trim() ?? ''
+
+  let createdAfter = urlCreatedAfter
+  let createdBefore = urlCreatedBefore
+  if (rangeStart && rangeEnd) {
+    createdAfter = rangeStart
+    createdBefore = rangeEnd
+  } else if (filterTimeRange === '1y' && !urlCreatedAfter && !urlCreatedBefore) {
+    const bounds = getYearBounds()
+    createdAfter = bounds.start
+    createdBefore = bounds.end
+  }
+
   return {
     searchQuery: searchParams.get('q') ?? '',
     filterStatus: searchParams.get('status') ?? '',
     filterRiskLevel: searchParams.get('risk_level') ?? '',
-    filterTimeRange: (() => {
-      const timeRangeParam = searchParams.get('time_range')
-      return timeRangeParam && ALLOWED_TIME_RANGE_SET.has(timeRangeParam)
-        ? (timeRangeParam as JobsTimeRange)
-        : 'all'
-    })(),
+    filterTimeRange,
     includeArchived: searchParams.get('include_archived') === 'true',
     hasPhotos: parseBoolParam(searchParams.get('has_photos')),
     hasSignatures: parseBoolParam(searchParams.get('has_signatures')),
@@ -122,8 +148,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     page: Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1),
     filterConfig,
     savedFilterId,
-    createdAfter: searchParams.get('created_after') ?? '',
-    createdBefore: searchParams.get('created_before') ?? '',
+    createdAfter,
+    createdBefore,
     completedAfter: searchParams.get('completed_after') ?? '',
     completedBefore: searchParams.get('completed_before') ?? '',
     hazard: searchParams.get('hazard') ?? '',
@@ -210,7 +236,13 @@ export function useAdvancedFilters() {
     [state, replaceUrl]
   )
   const setFilterTimeRange = useCallback(
-    (value: JobsTimeRange) => replaceUrl({ ...state, filterTimeRange: value, page: 1 }),
+    (value: JobsTimeRange) => {
+      if (value === '1y') {
+        const bounds = getYearBounds()
+        return replaceUrl({ ...state, filterTimeRange: value, createdAfter: bounds.start, createdBefore: bounds.end, page: 1 })
+      }
+      return replaceUrl({ ...state, filterTimeRange: value, page: 1 })
+    },
     [state, replaceUrl]
   )
   const setIncludeArchived = useCallback(
@@ -267,6 +299,26 @@ export function useAdvancedFilters() {
     (value: boolean) => replaceUrl({ ...state, recent: value, page: 1 }),
     [state, replaceUrl]
   )
+  const setCreatedRange = useCallback(
+    (after: string, before: string) => replaceUrl({ ...state, createdAfter: after, createdBefore: before, page: 1 }),
+    [state, replaceUrl]
+  )
+  const setCompletedRange = useCallback(
+    (after: string, before: string) => replaceUrl({ ...state, completedAfter: after, completedBefore: before, page: 1 }),
+    [state, replaceUrl]
+  )
+  const setHazard = useCallback(
+    (value: string) => replaceUrl({ ...state, hazard: value, page: 1 }),
+    [state, replaceUrl]
+  )
+  const setInsight = useCallback(
+    (value: string) => replaceUrl({ ...state, insight: value, reference_date: value ? state.reference_date : '', page: 1 }),
+    [state, replaceUrl]
+  )
+  const setReferenceDate = useCallback(
+    (value: string) => replaceUrl({ ...state, reference_date: value, page: 1 }),
+    [state, replaceUrl]
+  )
   const setFilterTemplateSource = useCallback(
     (value: string) => replaceUrl({ ...state, filterTemplateSource: value, filterTemplateId: value ? state.filterTemplateId : '', page: 1 }),
     [state, replaceUrl]
@@ -305,6 +357,11 @@ export function useAdvancedFilters() {
     setDueSoon,
     setUnassigned,
     setRecent,
+    setCreatedRange,
+    setCompletedRange,
+    setHazard,
+    setInsight,
+    setReferenceDate,
     setFilterTemplateSource,
     setFilterTemplateId,
     clearAllFilters,

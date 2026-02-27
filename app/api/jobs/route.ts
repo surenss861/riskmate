@@ -162,7 +162,9 @@ export async function GET(request: NextRequest) {
     const unassigned = parseBooleanParam(searchParams.get('unassigned'))
     const recent = parseBooleanParam(searchParams.get('recent'))
     const timeRangeParam = searchParams.get('time_range')?.trim() ?? ''
-    const recentDays = timeRangeParam === '7d' ? 7 : timeRangeParam === '30d' ? 30 : timeRangeParam === '90d' ? 90 : recent === true ? 7 : null
+    const rangeStartParam = searchParams.get('range_start')?.trim() ?? ''
+    const rangeEndParam = searchParams.get('range_end')?.trim() ?? ''
+    const recentDays = timeRangeParam === '7d' ? 7 : timeRangeParam === '30d' ? 30 : timeRangeParam === '90d' ? 90 : timeRangeParam === '1y' ? null : recent === true ? 7 : null
     const jobType = searchParams.get('job_type')
     const client = searchParams.get('client')
     const templateSourceParam = searchParams.get('template_source')?.trim() ?? ''
@@ -191,8 +193,16 @@ export async function GET(request: NextRequest) {
       }
     }
     const filterConfig = normalizeFilterConfig(filterConfigRaw)
-    const createdAfter = searchParams.get('created_after')?.trim() ?? ''
-    const createdBefore = searchParams.get('created_before')?.trim() ?? ''
+    let createdAfter = searchParams.get('created_after')?.trim() ?? ''
+    let createdBefore = searchParams.get('created_before')?.trim() ?? ''
+    if (rangeStartParam && rangeEndParam) {
+      createdAfter = rangeStartParam
+      createdBefore = rangeEndParam
+    } else if (timeRangeParam === '1y' && !createdAfter && !createdBefore) {
+      const now = new Date()
+      createdAfter = `${now.getFullYear()}-01-01`
+      createdBefore = now.toISOString().slice(0, 10)
+    }
     const completedAfter = searchParams.get('completed_after')?.trim() ?? ''
     const completedBefore = searchParams.get('completed_before')?.trim() ?? ''
     const hazardCategory = searchParams.get('hazard')?.trim() ?? ''
