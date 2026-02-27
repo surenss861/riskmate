@@ -291,7 +291,9 @@ async function updateDeliveryFailure(
     })
     .eq('id', deliveryId)
 
-  if (terminal) {
+  // Alert only when retry exhaustion reaches the configured threshold (5 consecutive failures).
+  // Do not alert for forceTerminal paths (e.g. blocked URL) to avoid false "5 consecutive failures" emails.
+  if (terminal && nextAttempt > MAX_ATTEMPTS) {
     await maybeAlertAdmin(endpointId)
   }
 }

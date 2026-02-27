@@ -45,30 +45,30 @@ export default function WebhooksPage() {
   useEffect(() => {
     if (endpoints.length === 0) return
     const loadStats = async () => {
-      const next: Record<string, DeliveryStats> = {}
-      for (const ep of endpoints) {
-        try {
-          const res = await fetch(`/api/webhooks/${ep.id}/deliveries?limit=100`, {
-            credentials: 'include',
-          })
-          const json = await res.json()
-          const list = Array.isArray(json.data) ? json.data : []
-          const delivered = list.filter((d: { delivered_at: string | null }) => d.delivered_at).length
-          const pending = list.filter(
-            (d: { delivered_at: string | null; next_retry_at: string | null }) =>
-              !d.delivered_at && !!d.next_retry_at
-          ).length
-          const failed = list.filter(
-            (d: { delivered_at: string | null; next_retry_at: string | null; attempt_count: number }) =>
-              !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
-          ).length
-          const last = list[0]?.created_at ?? null
-          next[ep.id] = { delivered, pending, failed, lastDelivery: last }
-        } catch {
-          next[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
+      try {
+        const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
+        const json = await res.json()
+        const data = json.data ?? {}
+        const next: Record<string, DeliveryStats> = {}
+        for (const ep of endpoints) {
+          const s = data[ep.id]
+          next[ep.id] = s
+            ? {
+                delivered: s.delivered ?? 0,
+                pending: s.pending ?? 0,
+                failed: s.failed ?? 0,
+                lastDelivery: s.lastDelivery ?? null,
+              }
+            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
         }
+        setStats(next)
+      } catch {
+        const fallback: Record<string, DeliveryStats> = {}
+        for (const ep of endpoints) {
+          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
+        }
+        setStats(fallback)
       }
-      setStats(next)
     }
     loadStats()
   }, [endpoints])
