@@ -237,11 +237,22 @@ export function useAdvancedFilters() {
   )
   const setFilterTimeRange = useCallback(
     (value: JobsTimeRange) => {
+      // Clear drill-down bounds when user selects a preset so Jobs list period is not unintentionally narrowed.
+      const next: AdvancedFiltersState = {
+        ...state,
+        filterTimeRange: value,
+        page: 1,
+        createdAfter: '',
+        createdBefore: '',
+        completedAfter: '',
+        completedBefore: '',
+      }
       if (value === '1y') {
         const bounds = getYearBounds()
-        return replaceUrl({ ...state, filterTimeRange: value, createdAfter: bounds.start, createdBefore: bounds.end, page: 1 })
+        next.createdAfter = bounds.start
+        next.createdBefore = bounds.end
       }
-      return replaceUrl({ ...state, filterTimeRange: value, page: 1 })
+      return replaceUrl(next)
     },
     [state, replaceUrl]
   )

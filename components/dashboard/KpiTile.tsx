@@ -16,6 +16,8 @@ type KpiTileProps = {
   /** When true, show "Unavailable" instead of value (endpoint failed). */
   unavailable?: boolean;
   trend?: 'up' | 'down' | 'flat';
+  /** When set, arrow reflects numerical direction (up = increase, down = decrease); color still uses trend for good/bad. */
+  trendDirection?: 'up' | 'down' | 'flat';
   trendLabel?: string;
   /** Percentage change vs previous period (e.g. 12 for "↑ 12%") */
   trendPercent?: number;
@@ -82,6 +84,7 @@ export function KpiTile({
   isLoading = false,
   unavailable = false,
   trend = 'flat',
+  trendDirection,
   trendLabel,
   trendPercent,
   previousValue,
@@ -111,12 +114,14 @@ export function KpiTile({
   }, [spring, unavailable]);
 
   const trendDisplay = useMemo(() => {
-    const arrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
+    const arrowSource = trendDirection ?? trend;
+    const arrow = arrowSource === 'up' ? '↑' : arrowSource === 'down' ? '↓' : '→';
     if (trendPercent != null && !Number.isNaN(trendPercent)) {
-      return `${arrow} ${trendPercent > 0 ? trendPercent : -trendPercent}%`;
+      const absPct = trendPercent > 0 ? trendPercent : -trendPercent;
+      return `${arrow} ${absPct}%`;
     }
     return trendLabel ?? null;
-  }, [trend, trendLabel, trendPercent]);
+  }, [trend, trendDirection, trendLabel, trendPercent]);
 
   const tileContent = (
     <motion.div

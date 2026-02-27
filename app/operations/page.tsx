@@ -646,6 +646,13 @@ function DashboardPageInner() {
     const completionTrendPct = priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined
     const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined
     const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskKpi, priorAvgRisk, false) : 'flat'
+    /** Arrow by numerical change (decrease = down, increase = up); color still from avgRiskTrend (good/bad). */
+    const avgRiskTrendDirection =
+      avgRiskTrendPct == null || avgRiskTrendPct === 0
+        ? 'flat'
+        : avgRiskTrendPct > 0
+          ? 'up'
+          : 'down'
     const se = dashboardSectionErrors
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
@@ -676,6 +683,7 @@ function DashboardPageInner() {
         value: Math.round(avgRiskKpi * 10) / 10,
         unavailable: se.trendsRisk,
         trend: avgRiskTrend,
+        trendDirection: avgRiskTrendDirection,
         trendPercent: avgRiskTrendPct,
         previousValue: priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined,
         sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],

@@ -14,6 +14,8 @@ export type KpiGridItem = {
   /** When true, show "Unavailable" instead of value (endpoint failed). */
   unavailable?: boolean;
   trend?: 'up' | 'down' | 'flat';
+  /** When set, arrow shows numerical direction (up/down); color still uses trend for good/bad. */
+  trendDirection?: 'up' | 'down' | 'flat';
   trendLabel?: string;
   trendPercent?: number;
   previousValue?: number;
