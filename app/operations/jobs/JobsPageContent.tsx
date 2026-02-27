@@ -957,7 +957,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 )}
                 {(props.insight ?? '') !== '' && props.onClearInsight && (
                   <FilterPill
-                    label={`Insight: ${props.insight.replace(/_/g, ' ')}`}
+                    label={`Insight: ${(props.insight ?? '').replace(/_/g, ' ')}`}
                     onRemove={props.onClearInsight}
                   />
                 )}
