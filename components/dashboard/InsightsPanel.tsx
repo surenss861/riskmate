@@ -97,7 +97,17 @@ export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?
   if (visible.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Insights</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold text-white">Insights</h3>
+          {viewAllHref && (
+            <Link
+              href={viewAllHref}
+              className="text-sm text-[#F97316] hover:text-[#FB923C] transition-colors"
+            >
+              View All →
+            </Link>
+          )}
+        </div>
         <p className="text-sm text-white/50">No actionable insights right now. Check back later.</p>
       </div>
     );

@@ -71,6 +71,17 @@ function isValidPeriod(period: string): boolean {
   return false;
 }
 
+/** Safely resolve the clicked data row from Recharts click event (e.g. unwrap event.payload). */
+function getClickedRow(event: unknown): { period?: string; [k: string]: unknown } | null {
+  if (event == null || typeof event !== 'object') return null;
+  const obj = event as Record<string, unknown>;
+  const row =
+    obj.payload != null && typeof obj.payload === 'object' && !Array.isArray(obj.payload)
+      ? (obj.payload as { period?: string; [k: string]: unknown })
+      : (obj as { period?: string; [k: string]: unknown });
+  return row;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   completed: '#22c55e',
   in_progress: '#F97316',
@@ -212,8 +223,8 @@ export function AnalyticsTrendCharts({
                   dot={{ r: 2, fill: '#F97316' }}
                   connectNulls
                   onClick={(props: unknown) => {
-                    const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { granularity: trendsGranularity });
+                    const row = getClickedRow(props);
+                    if (row?.period && isValidPeriod(row.period)) onPeriodClick?.(row.period, { granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -226,8 +237,8 @@ export function AnalyticsTrendCharts({
                   dot={{ r: 2, fill: '#22c55e' }}
                   connectNulls
                   onClick={(props: unknown) => {
-                    const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { useCompletionDate: true, granularity: trendsGranularity });
+                    const row = getClickedRow(props);
+                    if (row?.period && isValidPeriod(row.period)) onPeriodClick?.(row.period, { useCompletionDate: true, granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -272,8 +283,8 @@ export function AnalyticsTrendCharts({
                   fill="url(#analyticsRiskGradient)"
                   strokeWidth={2}
                   onClick={(props: unknown) => {
-                    const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { granularity: trendsGranularity });
+                    const row = getClickedRow(props);
+                    if (row?.period && isValidPeriod(row.period)) onPeriodClick?.(row.period, { granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -312,7 +323,7 @@ export function AnalyticsTrendCharts({
                     radius={[0, 0, 0, 0]}
                     name={key}
                     onClick={(payload: unknown) => {
-                      const row = payload as StatusByPeriodRow;
+                      const row = getClickedRow(payload) as StatusByPeriodRow | null;
                       const periodValid = row?.period && isValidPeriod(row.period);
                       const fallbackRange = !hasStatusByPeriod && periodRangeStart;
                       if (!periodValid && !fallbackRange) return;
