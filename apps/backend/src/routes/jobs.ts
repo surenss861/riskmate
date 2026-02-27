@@ -2215,6 +2215,15 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
     // Emit realtime event (push signal)
     await emitJobEvent(organization_id, "job.created", job.id, userId);
 
+    deliverEvent(organization_id, "job.created", {
+      id: job.id,
+      client_name,
+      job_type,
+      location,
+      status: job.status,
+      created_by: userId,
+    }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
+
     // Calculate risk score if risk factors provided
     let riskScoreResult = null;
     if (risk_factor_codes && risk_factor_codes.length > 0) {
@@ -2524,6 +2533,21 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
 
     // Emit realtime event (push signal)
     await emitJobEvent(organization_id, "job.updated", jobId, userId);
+
+    deliverEvent(organization_id, "job.updated", {
+      id: jobId,
+      ...updatedJob,
+    }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
+
+    const didTransitionToCompleted =
+      jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
+    if (didTransitionToCompleted) {
+      deliverEvent(organization_id, "job.completed", {
+        id: jobId,
+        completed_at: updatedJob?.completed_at ?? new Date().toISOString(),
+        status: "completed",
+      }).catch((e) => console.warn("[Jobs] Webhook job.completed enqueue failed:", e));
+    }
 
     // If risk score changed, log separate event
     if (riskScoreChanged) {
@@ -2988,6 +3012,15 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
 
     // Emit realtime event (push signal)
     await emitEvidenceEvent(organization_id, "evidence.uploaded", inserted.id, jobId, userId);
+
+    deliverEvent(organization_id, "evidence.uploaded", {
+      id: inserted.id,
+      job_id: jobId,
+      name: inserted.name,
+      type: inserted.type,
+      file_path: inserted.file_path,
+      uploaded_by: userId,
+    }).catch((e) => console.warn("[Jobs] Webhook evidence.uploaded enqueue failed:", e));
 
     invalidateJobReportCache(organization_id, jobId);
 
@@ -3913,6 +3946,15 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
         signer_role: signerRole,
       },
     });
+
+    deliverEvent(organization_id, "signature.added", {
+      id: data.id,
+      job_id: jobId,
+      signoff_type,
+      signer_id: userId,
+      signer_role: signerRole,
+      signed_at: data.signed_at,
+    }).catch((e) => console.warn("[Jobs] Webhook signature.added enqueue failed:", e));
 
     // After successful DB commit: trigger mention notifications when comments contain @mentions
     // (mentioned user id, signoff/comment id, org scoping, deep link riskmate://comments/{commentId})

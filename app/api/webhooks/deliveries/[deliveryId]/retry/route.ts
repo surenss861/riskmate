@@ -19,7 +19,7 @@ export async function POST(
 
     const { data: delivery, error: delError } = await supabase
       .from('webhook_deliveries')
-      .select('id, endpoint_id')
+      .select('id, endpoint_id, delivered_at, event_type, payload')
       .eq('id', deliveryId)
       .single()
 
@@ -31,6 +31,18 @@ export async function POST(
       )
       return NextResponse.json(response, {
         status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (delivery.delivered_at != null) {
+      const { response, errorId } = createErrorResponse(
+        'Delivery already succeeded; retry not allowed for successful deliveries',
+        'ALREADY_DELIVERED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
@@ -53,18 +65,21 @@ export async function POST(
       })
     }
 
-    const { error: updateError } = await supabase
+    const { data: newDelivery, error: insertError } = await supabase
       .from('webhook_deliveries')
-      .update({
-        next_retry_at: new Date().toISOString(),
-        delivered_at: null,
+      .insert({
+        endpoint_id: delivery.endpoint_id,
+        event_type: delivery.event_type,
+        payload: delivery.payload,
         attempt_count: 1,
+        next_retry_at: new Date().toISOString(),
       })
-      .eq('id', deliveryId)
+      .select('id')
+      .single()
 
-    if (updateError) {
+    if (insertError) {
       const { response, errorId } = createErrorResponse(
-        updateError.message,
+        insertError.message,
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
@@ -74,7 +89,10 @@ export async function POST(
       })
     }
 
-    return NextResponse.json({ data: { message: 'Retry scheduled' } })
+    return NextResponse.json(
+      { data: { message: 'Retry scheduled', delivery_id: newDelivery?.id } },
+      { status: 201 }
+    )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
     if (msg.includes('Unauthorized') || msg.includes('organization')) {

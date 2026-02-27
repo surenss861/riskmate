@@ -10,6 +10,7 @@ import { notifyReportReady, sendSignatureRequestNotification } from "../services
 import { buildJobReport } from "../utils/jobReport";
 import { requireFeature } from "../middleware/limits";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
+import { deliverEvent } from "../workers/webhookDelivery";
 
 export const reportsRouter: ExpressRouter = express.Router();
 
@@ -265,6 +266,17 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
         mitigation_count: (reportData.mitigations ?? []).length,
       },
     });
+
+    if (reportRecord) {
+      deliverEvent(organization_id, "report.generated", {
+        id: reportRecord.id,
+        job_id: jobId,
+        storage_path: storagePath ?? null,
+        hash,
+        snapshot_id: snapshotId,
+        generated_by: userId,
+      }).catch((e) => console.warn("[Reports] Webhook report.generated enqueue failed:", e));
+    }
 
     await notifyReportReady({
       organizationId: organization_id,

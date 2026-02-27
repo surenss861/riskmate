@@ -6,6 +6,7 @@ import { canInviteRole, onlyOwnerCanSetOwner, requireRole } from "../middleware/
 import { limitsFor } from "../auth/planRules";
 import { recordAuditLog, extractClientMetadata } from "../middleware/audit";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
+import { deliverEvent } from "../workers/webhookDelivery";
 
 export const teamRouter: ExpressRouter = express.Router();
 
@@ -301,6 +302,14 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
         invite_id: inviteRow?.id || null,
       },
     });
+
+    deliverEvent(organizationId, "team.member_added", {
+      user_id: newUserId,
+      email: normalizedEmail,
+      role,
+      invited_by: authReq.user.id,
+      invite_id: inviteRow?.id ?? null,
+    }).catch((e) => console.warn("[Team] Webhook team.member_added enqueue failed:", e));
 
     try {
       const [{ data: inviter }, { data: organization }] = await Promise.all([

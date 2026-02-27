@@ -6,6 +6,7 @@
 import crypto from 'crypto'
 import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
+import { sendEmail } from '../utils/email'
 
 const RETRY_DELAYS_MS = [
   0,           // attempt 1: immediate
@@ -17,6 +18,7 @@ const RETRY_DELAYS_MS = [
 
 const MAX_ATTEMPTS = 5
 const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
+const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 
 export type WebhookEventType =
   | 'job.created'
@@ -269,6 +271,7 @@ async function updateDeliveryResult(
 
 /**
  * Check consecutive failures for an endpoint and alert if >= CONSECUTIVE_FAILURES_BEFORE_ALERT.
+ * Sends email to org owners/admins and persists alert state to avoid spamming.
  */
 async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const { data: recent } = await supabase
@@ -282,11 +285,60 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const allFailed = recent.every((r: { delivered_at: string | null }) => !r.delivered_at)
   if (!allFailed) return
 
-  // TODO: send email to org admin (e.g. use existing email queue or a simple notification)
-  console.warn(
-    '[WebhookDelivery] Endpoint has 5+ consecutive failures; org admin should be notified. endpoint_id=%s',
-    endpointId
-  )
+  const { data: endpoint, error: epError } = await supabase
+    .from('webhook_endpoints')
+    .select('id, organization_id, url')
+    .eq('id', endpointId)
+    .single()
+
+  if (epError || !endpoint) return
+
+  const { data: alertState } = await supabase
+    .from('webhook_endpoint_alert_state')
+    .select('last_alert_at')
+    .eq('endpoint_id', endpointId)
+    .maybeSingle()
+
+  const lastAlertAt = alertState?.last_alert_at ? new Date(alertState.last_alert_at).getTime() : 0
+  if (Date.now() - lastAlertAt < WEBHOOK_ALERT_COOLDOWN_MS) {
+    return
+  }
+
+  const { data: admins } = await supabase
+    .from('users')
+    .select('id, email')
+    .eq('organization_id', endpoint.organization_id)
+    .in('role', ['owner', 'admin'])
+    .not('email', 'is', null)
+
+  const recipientEmails = (admins || []).map((a: { email: string }) => a.email).filter(Boolean)
+  if (recipientEmails.length === 0) return
+
+  const subject = 'Riskmate: Webhook delivery failures'
+  const html = `
+    <p>Your webhook endpoint has had ${CONSECUTIVE_FAILURES_BEFORE_ALERT} consecutive delivery failures.</p>
+    <p><strong>Endpoint URL:</strong> ${endpoint.url || '(not set)'}</p>
+    <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
+  `
+
+  try {
+    await sendEmail({
+      to: recipientEmails,
+      subject,
+      html,
+    })
+    const now = new Date().toISOString()
+    await supabase.from('webhook_endpoint_alert_state').upsert(
+      {
+        endpoint_id: endpointId,
+        last_alert_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'endpoint_id' }
+    )
+  } catch (err) {
+    console.error('[WebhookDelivery] Admin alert email failed:', err)
+  }
 }
 
 /**
@@ -323,7 +375,7 @@ let workerInterval: NodeJS.Timeout | null = null
 
 export function startWebhookDeliveryWorker(): void {
   if (workerInterval) return
-  const intervalMs = Math.max(5000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '10000', 10))
+  const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '5000', 10))
   workerInterval = setInterval(() => {
     processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e))
   }, intervalMs)
