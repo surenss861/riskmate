@@ -36,8 +36,10 @@ export interface AdvancedFiltersState {
   highRisk: boolean
   /** Quick filter: overdue */
   overdue: boolean
-  /** Quick filter: needs signatures */
+  /** Quick filter: needs signatures (also set by pending_signatures URL param for insight links) */
   needsSignaturesQuick: boolean
+  /** Quick filter: due soon (jobs due within 7 days, for deadline-risk insight links) */
+  dueSoon: boolean
   /** Quick filter: unassigned */
   unassigned: boolean
   /** Quick filter: recent (e.g. last 7 days) */
@@ -108,7 +110,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     includeArchived: searchParams.get('include_archived') === 'true',
     hasPhotos: parseBoolParam(searchParams.get('has_photos')),
     hasSignatures: parseBoolParam(searchParams.get('has_signatures')),
-    needsSignatures: parseBoolParam(searchParams.get('needs_signatures')),
+    needsSignatures:
+      parseBoolParam(searchParams.get('needs_signatures')) ?? parseBoolParam(searchParams.get('pending_signatures')),
     page: Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1),
     filterConfig,
     savedFilterId,
@@ -120,7 +123,9 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     myJobs: searchParams.get('my_jobs') === 'true',
     highRisk: searchParams.get('high_risk') === 'true',
     overdue: searchParams.get('overdue') === 'true',
-    needsSignaturesQuick: searchParams.get('needs_signatures') === 'true',
+    needsSignaturesQuick:
+      searchParams.get('needs_signatures') === 'true' || searchParams.get('pending_signatures') === 'true',
+    dueSoon: searchParams.get('due_soon') === 'true',
     unassigned: searchParams.get('unassigned') === 'true',
     recent: searchParams.get('recent') === 'true',
     filterTemplateSource: searchParams.get('template_source') ?? '',
@@ -154,6 +159,7 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.myJobs) params.set('my_jobs', 'true')
   if (state.highRisk) params.set('high_risk', 'true')
   if (state.overdue) params.set('overdue', 'true')
+  if (state.dueSoon) params.set('due_soon', 'true')
   if (state.unassigned) params.set('unassigned', 'true')
   if (state.recent) params.set('recent', 'true')
   if (state.filterTemplateSource) params.set('template_source', state.filterTemplateSource)
@@ -238,6 +244,10 @@ export function useAdvancedFilters() {
     (value: boolean) => replaceUrl({ ...state, needsSignaturesQuick: value, needsSignatures: value ? true : undefined, page: 1 }),
     [state, replaceUrl]
   )
+  const setDueSoon = useCallback(
+    (value: boolean) => replaceUrl({ ...state, dueSoon: value, page: 1 }),
+    [state, replaceUrl]
+  )
   const setUnassigned = useCallback(
     (value: boolean) => replaceUrl({ ...state, unassigned: value, page: 1 }),
     [state, replaceUrl]
@@ -281,6 +291,7 @@ export function useAdvancedFilters() {
     setHighRisk,
     setOverdue,
     setNeedsSignaturesQuick,
+    setDueSoon,
     setUnassigned,
     setRecent,
     setFilterTemplateSource,

@@ -357,7 +357,9 @@ export const jobsApi = {
     has_photos?: boolean;
     has_signatures?: boolean;
     needs_signatures?: boolean;
+    pending_signatures?: boolean;
     overdue?: boolean;
+    due_soon?: boolean;
     unassigned?: boolean;
     recent?: boolean;
     assigned_to?: string;
@@ -393,6 +395,8 @@ export const jobsApi = {
     if (params?.has_signatures === false) queryParams.set('has_signatures', 'false');
     if (params?.needs_signatures === true) queryParams.set('needs_signatures', 'true');
     if (params?.needs_signatures === false) queryParams.set('needs_signatures', 'false');
+    if (params?.pending_signatures === true) queryParams.set('pending_signatures', 'true');
+    if (params?.due_soon === true) queryParams.set('due_soon', 'true');
     if (params?.filter_config != null) {
       const raw = typeof params.filter_config === 'string'
         ? params.filter_config

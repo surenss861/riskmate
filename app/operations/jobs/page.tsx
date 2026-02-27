@@ -98,6 +98,7 @@ const JobsPageContent = () => {
         has_signatures: state.hasSignatures,
         needs_signatures: state.needsSignatures,
         overdue: state.overdue || undefined,
+        due_soon: state.dueSoon || undefined,
         unassigned: state.unassigned || undefined,
         recent: state.recent || undefined,
         assigned_to: state.myJobs ? 'me' : undefined,
@@ -132,6 +133,7 @@ const JobsPageContent = () => {
       state.hasSignatures,
       state.needsSignatures,
       state.overdue,
+      state.dueSoon,
       state.unassigned,
       state.recent,
       state.myJobs,
@@ -148,7 +150,7 @@ const JobsPageContent = () => {
   )
 
   // Use debouncedSearchQuery (not state.searchQuery) so key and fetcher use the same value and results don't lag a keystroke
-  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}`
+  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.dueSoon}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}`
 
   const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: true,
@@ -288,12 +290,14 @@ const JobsPageContent = () => {
         myJobs: state.myJobs,
         highRisk: state.highRisk,
         overdue: state.overdue,
+        dueSoon: state.dueSoon,
         needsSignatures: state.needsSignaturesQuick,
         unassigned: state.unassigned,
         recent: state.recent,
         onMyJobsChange: adv.setMyJobs,
         onHighRiskChange: adv.setHighRisk,
         onOverdueChange: adv.setOverdue,
+        onDueSoonChange: adv.setDueSoon,
         onNeedsSignaturesChange: adv.setNeedsSignaturesQuick,
         onUnassignedChange: adv.setUnassigned,
         onRecentChange: adv.setRecent,

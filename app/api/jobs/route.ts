@@ -144,7 +144,10 @@ export async function GET(request: NextRequest) {
     const hasPhotos = parseBooleanParam(searchParams.get('has_photos'))
     const hasSignatures = parseBooleanParam(searchParams.get('has_signatures'))
     const overdue = parseBooleanParam(searchParams.get('overdue'))
-    const needsSignatures = parseBooleanParam(searchParams.get('needs_signatures'))
+    const needsSignatures =
+      parseBooleanParam(searchParams.get('needs_signatures')) ??
+      parseBooleanParam(searchParams.get('pending_signatures'))
+    const dueSoon = parseBooleanParam(searchParams.get('due_soon'))
     const unassigned = parseBooleanParam(searchParams.get('unassigned'))
     const recent = parseBooleanParam(searchParams.get('recent'))
     const timeRangeParam = searchParams.get('time_range')?.trim() ?? ''
@@ -346,6 +349,7 @@ export async function GET(request: NextRequest) {
       p_needs_signatures: needsSignatures ?? null,
       p_template_source: template_source,
       p_template_id: template_id,
+      p_due_soon: dueSoon === true ? true : null,
     }
 
     let jobs: JobsListJob[] = []

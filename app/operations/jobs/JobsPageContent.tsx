@@ -27,12 +27,14 @@ export interface QuickFiltersProps {
   myJobs: boolean
   highRisk: boolean
   overdue: boolean
+  dueSoon: boolean
   needsSignatures: boolean
   unassigned: boolean
   recent: boolean
   onMyJobsChange: (value: boolean) => void
   onHighRiskChange: (value: boolean) => void
   onOverdueChange: (value: boolean) => void
+  onDueSoonChange: (value: boolean) => void
   onNeedsSignaturesChange: (value: boolean) => void
   onUnassignedChange: (value: boolean) => void
   onRecentChange: (value: boolean) => void
@@ -798,6 +800,7 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 { key: 'myJobs' as const, label: 'My Jobs', active: props.quickFilters.myJobs, toggle: props.quickFilters.onMyJobsChange },
                 { key: 'highRisk' as const, label: 'High Risk', active: props.quickFilters.highRisk, toggle: props.quickFilters.onHighRiskChange },
                 { key: 'overdue' as const, label: 'Overdue', active: props.quickFilters.overdue, toggle: props.quickFilters.onOverdueChange },
+                { key: 'dueSoon' as const, label: 'Due Soon', active: props.quickFilters.dueSoon, toggle: props.quickFilters.onDueSoonChange },
                 { key: 'needsSignatures' as const, label: 'Needs Signatures', active: props.quickFilters.needsSignatures, toggle: props.quickFilters.onNeedsSignaturesChange },
                 { key: 'unassigned' as const, label: 'Unassigned', active: props.quickFilters.unassigned, toggle: props.quickFilters.onUnassignedChange },
                 { key: 'recent' as const, label: 'Recent', active: props.quickFilters.recent, toggle: props.quickFilters.onRecentChange },
