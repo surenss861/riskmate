@@ -74,7 +74,35 @@ export async function GET(
       })
     }
 
-    return NextResponse.json({ data: deliveries ?? [] })
+    const list = deliveries ?? []
+    const deliveryIds = list.map((d: { id: string }) => d.id)
+    const attemptsByDelivery: Record<string, Array<{ attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
+
+    if (deliveryIds.length > 0) {
+      const { data: attempts } = await supabase
+        .from('webhook_delivery_attempts')
+        .select('delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
+        .in('delivery_id', deliveryIds)
+        .order('attempt_number', { ascending: true })
+      for (const a of attempts ?? []) {
+        const d = a as { delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }
+        if (!attemptsByDelivery[d.delivery_id]) attemptsByDelivery[d.delivery_id] = []
+        attemptsByDelivery[d.delivery_id].push({
+          attempt_number: d.attempt_number,
+          response_status: d.response_status,
+          response_body: d.response_body,
+          duration_ms: d.duration_ms,
+          created_at: d.created_at,
+        })
+      }
+    }
+
+    const data = list.map((d: { id: string; [k: string]: unknown }) => ({
+      ...d,
+      attempts: attemptsByDelivery[d.id] ?? [],
+    }))
+
+    return NextResponse.json({ data })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
     if (msg.includes('Unauthorized') || msg.includes('organization')) {

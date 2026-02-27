@@ -119,7 +119,26 @@ export async function deliverEvent(
 }
 
 /**
- * Send one delivery: POST to endpoint URL with signed payload, update row.
+ * Record one send attempt in webhook_delivery_attempts for immutable per-attempt history.
+ */
+async function recordAttempt(
+  deliveryId: string,
+  attemptNumber: number,
+  responseStatus: number | null,
+  responseBody: string | null,
+  durationMs: number
+): Promise<void> {
+  await supabase.from('webhook_delivery_attempts').insert({
+    delivery_id: deliveryId,
+    attempt_number: attemptNumber,
+    response_status: responseStatus,
+    response_body: responseBody,
+    duration_ms: durationMs,
+  })
+}
+
+/**
+ * Send one delivery: POST to endpoint URL with signed payload, update row, record attempt.
  */
 export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> {
   const { data: endpoint, error: epError } = await supabase
@@ -130,7 +149,18 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
 
   if (epError || !endpoint) {
     console.error('[WebhookDelivery] Endpoint not found:', delivery.endpoint_id)
-    await updateDeliveryResult(delivery.id, null, null, 0, false)
+    const attemptNumber = delivery.attempt_count
+    await recordAttempt(delivery.id, attemptNumber, null, 'Endpoint not found (missing or deleted)', 0)
+    // Terminalize so this row is not retried indefinitely (missing/deleted endpoint is undeliverable)
+    await supabase
+      .from('webhook_deliveries')
+      .update({
+        response_status: null,
+        response_body: 'Endpoint not found (missing or deleted)',
+        duration_ms: 0,
+        next_retry_at: null,
+      })
+      .eq('id', delivery.id)
     return
   }
 
@@ -152,6 +182,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     responseBody = await res.text().catch(() => null)
     const durationMs = Date.now() - start
 
+    await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
     const success = res.ok
     await updateDeliveryResult(delivery.id, responseStatus, responseBody, durationMs, success)
 
@@ -187,6 +218,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     const durationMs = Date.now() - start
     const msg = err instanceof Error ? err.message : String(err)
     responseBody = msg
+    await recordAttempt(delivery.id, delivery.attempt_count, null, responseBody, durationMs)
     await updateDeliveryResult(delivery.id, null, responseBody, durationMs, false)
     const nextAttempt = delivery.attempt_count + 1
     if (nextAttempt <= MAX_ATTEMPTS) {
@@ -259,7 +291,7 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
 /**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
- * and attempt_count < MAX_ATTEMPTS (exclude terminally failed; manual retry resets attempt_count).
+ * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
  */
 async function processPendingDeliveries(): Promise<void> {
   const now = new Date().toISOString()
@@ -269,7 +301,7 @@ async function processPendingDeliveries(): Promise<void> {
     .is('delivered_at', null)
     .not('next_retry_at', 'is', null)
     .lte('next_retry_at', now)
-    .lt('attempt_count', MAX_ATTEMPTS)
+    .lte('attempt_count', MAX_ATTEMPTS)
     .order('created_at', { ascending: true })
     .limit(50)
 
@@ -281,7 +313,7 @@ async function processPendingDeliveries(): Promise<void> {
   for (const row of pending || []) {
     const d = row as unknown as WebhookDeliveryRow
     await sendDelivery(d)
-    if (d.attempt_count >= MAX_ATTEMPTS && !d.delivered_at) {
+    if (d.attempt_count === MAX_ATTEMPTS) {
       await maybeAlertAdmin(d.endpoint_id)
     }
   }

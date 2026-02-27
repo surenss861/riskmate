@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
 
+export interface DeliveryAttemptEntry {
+  attempt_number: number
+  response_status: number | null
+  response_body: string | null
+  duration_ms: number | null
+  created_at: string
+}
+
 export interface DeliveryLogEntry {
   id: string
   event_type: string
@@ -14,6 +22,7 @@ export interface DeliveryLogEntry {
   delivered_at: string | null
   next_retry_at: string | null
   created_at: string
+  attempts?: DeliveryAttemptEntry[]
 }
 
 interface DeliveryLogsModalProps {
@@ -162,24 +171,47 @@ export function DeliveryLogsModal({
           )}
         </div>
         {deliveries.some((d) => expandedId === d.id) && (
-          <div className="mt-4 rounded-lg bg-white/5 border border-white/10 p-4 text-sm overflow-auto max-h-48">
+          <div className="mt-4 rounded-lg bg-white/5 border border-white/10 p-4 text-sm overflow-auto max-h-64">
             {deliveries
               .filter((d) => d.id === expandedId)
               .map((d) => (
-                <div key={d.id} className="space-y-3">
+                <div key={d.id} className="space-y-4">
                   <div>
                     <span className="text-white/60">Request payload:</span>
                     <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
                       {JSON.stringify(d.payload ?? {}, null, 2)}
                     </pre>
                   </div>
-                  {d.response_body != null && (
+                  {(d.attempts?.length ?? 0) > 0 ? (
                     <div>
-                      <span className="text-white/60">Response body:</span>
-                      <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
-                        {d.response_body}
-                      </pre>
+                      <span className="text-white/60">Attempts:</span>
+                      <div className="mt-2 space-y-3">
+                        {d.attempts!.map((a) => (
+                          <div key={a.attempt_number} className="rounded bg-black/30 p-3 border border-white/5">
+                            <div className="flex flex-wrap gap-3 text-xs text-white/80 mb-1">
+                              <span>Attempt {a.attempt_number}</span>
+                              <span>{a.response_status != null ? `HTTP ${a.response_status}` : '—'}</span>
+                              <span>{a.duration_ms != null ? `${a.duration_ms}ms` : '—'}</span>
+                              <span>{formatTime(a.created_at)}</span>
+                            </div>
+                            {a.response_body != null && a.response_body !== '' && (
+                              <pre className="mt-1 p-2 rounded bg-black/20 font-mono text-xs whitespace-pre-wrap break-all text-white/90">
+                                {a.response_body}
+                              </pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
+                  ) : (
+                    d.response_body != null && (
+                      <div>
+                        <span className="text-white/60">Response body:</span>
+                        <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
+                          {d.response_body}
+                        </pre>
+                      </div>
+                    )
                   )}
                 </div>
               ))}
