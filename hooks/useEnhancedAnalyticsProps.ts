@@ -88,7 +88,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     const totalJobs = jc?.total ?? 0;
     const completionRate = jc?.completion_rate ?? 0;
     const avgRiskFromSummary = summary?.avg_risk != null ? Number(summary.avg_risk) : null;
-    const avgRiskUnavailable = se.summary || (avgRiskFromSummary == null && !se.summary);
+    const avgRiskUnavailable = se.summary;
     const complianceOverall = cr?.overall ?? 0;
 
     const priorTotal = priorJc != null ? priorJc.total : undefined;
@@ -200,7 +200,9 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
       trendsGranularity: effectiveGroupBy,
       statusChartGranularity: statusChartGroupBy,
       kpiItems,
-      insightsDismissalScope: `${userId ?? ''}-${organizationId ?? ''}-${periodRangeStart}-${periodRangeEnd}`,
+      insightsDismissalScope: analyticsPeriod === 'custom' && customRange?.start && customRange?.end
+        ? `${userId ?? ''}-${organizationId ?? ''}-${analyticsPeriod}-${periodRangeStart}-${periodRangeEnd}`
+        : `${userId ?? ''}-${organizationId ?? ''}-${analyticsPeriod}`,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
         type: i.type,

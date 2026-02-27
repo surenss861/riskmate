@@ -166,7 +166,16 @@ export async function buildDashboardPdf(options: {
       currentPage = doc.addPage([595, 842]);
       y = currentPage.getHeight() - margin;
     }
-    const desc = i.description.slice(0, 80) + (i.description.length > 80 ? '…' : '');
+    const maxLen = 60;
+    const raw = i.description;
+    const desc = raw.length <= maxLen
+      ? raw
+      : (() => {
+          const chunk = raw.slice(0, maxLen);
+          const lastSpace = chunk.lastIndexOf(' ');
+          const cut = lastSpace > 0 ? lastSpace : maxLen;
+          return raw.slice(0, cut) + '…';
+        })();
     currentPage.drawText(desc, { x: margin + 10, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
     y -= 20;
   });

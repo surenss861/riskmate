@@ -24,11 +24,11 @@ function currentRangeForPeriod(period: DashboardPeriod): { since: string; until:
     return { since: since.toISOString(), until: until.toISOString() };
   }
   const until = new Date(now);
-  until.setHours(23, 59, 59, 999);
+  until.setUTCHours(23, 59, 59, 999);
   const days = parseInt(period.replace('d', ''), 10) || 30;
   const since = new Date(until.getTime());
   since.setDate(since.getDate() - (days - 1));
-  since.setHours(0, 0, 0, 0);
+  since.setUTCHours(0, 0, 0, 0);
   return { since: since.toISOString(), until: until.toISOString() };
 }
 
@@ -42,16 +42,16 @@ function priorRangeForPeriod(period: DashboardPeriod): { since: string; until: s
     return { since: priorSince.toISOString(), until: priorUntil.toISOString() };
   }
   const until = new Date(now);
-  until.setHours(23, 59, 59, 999);
+  until.setUTCHours(23, 59, 59, 999);
   const days = parseInt(period.replace('d', ''), 10) || 30;
   const currentSince = new Date(until.getTime());
   currentSince.setDate(currentSince.getDate() - (days - 1));
-  currentSince.setHours(0, 0, 0, 0);
+  currentSince.setUTCHours(0, 0, 0, 0);
   const priorUntil = new Date(currentSince.getTime());
   priorUntil.setMilliseconds(priorUntil.getMilliseconds() - 1);
   const priorSince = new Date(priorUntil.getTime());
   priorSince.setDate(priorSince.getDate() - (days - 1));
-  priorSince.setHours(0, 0, 0, 0);
+  priorSince.setUTCHours(0, 0, 0, 0);
   return { since: priorSince.toISOString(), until: priorUntil.toISOString() };
 }
 
@@ -177,6 +177,7 @@ export function useAnalyticsDashboard(
   const [sectionErrors, setSectionErrors] = useState<AnalyticsSectionErrors>(noSectionErrors);
   const fetchGenRef = useRef(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** AbortController for the current refetch; its signal is passed to analyticsApi calls so in-flight requests are cancelled when refetch runs again. */
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const refetch = useCallback(async () => {
@@ -186,6 +187,10 @@ export function useAnalyticsDashboard(
     if (period === 'custom' && (!customRange?.start || !customRange?.end)) {
       return;
     }
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     setLoading(true);
     setError(false);
@@ -229,30 +234,30 @@ export function useAnalyticsDashboard(
 
     // Wave 1: KPI-critical endpoints (summary, jobCompletion, complianceRate) for fast above-the-fold metrics
     const wave1Promises = [
-      useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
-      useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
-      useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
+      useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }, signal) : analyticsApi.summary({ range: rangeForSummary! }, signal),
+      useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }, signal) : analyticsApi.jobCompletion({ period }, signal),
+      useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }, signal) : analyticsApi.complianceRate({ period }, signal),
     ];
     // Wave 2: Team, hazards, heatmap, trends, insights, statusByPeriod, prior-period
     const wave2Promises = [
-      useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
-      useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
-      useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }) : analyticsApi.riskHeatmap({ period }),
-      analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }),
+      useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }, signal) : analyticsApi.teamPerformance({ period }, signal),
+      useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }, signal) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }, signal),
+      useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }, signal) : analyticsApi.riskHeatmap({ period }, signal),
+      analyticsApi.trends({ ...trendsParams, metric: 'jobs' }, signal),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }, signal),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }, signal),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }, signal),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }, signal),
       (() => {
         const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
-        return analyticsApi.insights(insightsRange);
+        return analyticsApi.insights(insightsRange, signal);
       })(),
-      analyticsApi.statusByPeriod(statusByPeriodParams),
-      prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-      prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-      prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }) : Promise.resolve(null),
-      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }) : Promise.resolve(null),
+      analyticsApi.statusByPeriod(statusByPeriodParams, signal),
+      prior ? analyticsApi.summary({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+      prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+      prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }, signal) : Promise.resolve(null),
+      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }, signal) : Promise.resolve(null),
     ];
 
     try {

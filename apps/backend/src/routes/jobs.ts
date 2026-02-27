@@ -79,6 +79,11 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       created_before: createdBeforeParam,
       completed_after: completedAfterParam,
       completed_before: completedBeforeParam,
+      hazard: hazardParam,
+      insight: insightParam,
+      reference_date: referenceDateParam,
+      due_soon: dueSoonParam,
+      pending_signatures: pendingSignaturesParam,
     } = authReq.query;
     const includeArchived = include_archived === 'true' || include_archived === '1';
     // Map UI filter status to DB values (active -> in_progress, on-hold -> on_hold)
@@ -102,6 +107,22 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     const completedBefore = normalizeBoundary(String(completedBeforeParam ?? ''), 'end') || null;
     const hasExplicitCreatedRange = createdAfter != null || createdBefore != null;
     const hasExplicitCompletedRange = completedAfter != null || completedBefore != null;
+
+    /** Reference date for time-relative insight filters (default: now). */
+    const referenceDate = (() => {
+      const raw = referenceDateParam && typeof referenceDateParam === 'string' ? referenceDateParam.trim() : '';
+      if (!raw || raw.length < 10) return new Date();
+      const dateOnly = raw.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+        return new Date(`${dateOnly}T12:00:00.000Z`);
+      }
+      return new Date();
+    })();
+
+    const hazardCategory = hazardParam && typeof hazardParam === 'string' ? hazardParam.trim() : null;
+    const insight = insightParam && typeof insightParam === 'string' ? insightParam.trim() : null;
+    const dueSoon = dueSoonParam === 'true' || dueSoonParam === '1';
+    const pendingSignatures = pendingSignaturesParam === 'true' || pendingSignaturesParam === '1';
 
     // Parse time_range to date cutoff (only used when explicit created_after/created_before are not provided — backward compatibility)
     let dateCutoff: Date | null = null;
@@ -260,13 +281,110 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     const baseColumns = "id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
     // Optional columns (may not exist if migration hasn't run)
     const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
-    
+
+    // Resolve hazard / insight / due_soon / pending_signatures filters (need job ID sets from related tables)
+    let hazardJobIds: string[] = [];
+    let signedJobIds: string[] = [];
+    let lowReadinessJobIds: string[] = [];
+    const refStart = new Date(referenceDate);
+    refStart.setUTCHours(0, 0, 0, 0);
+    const refEnd2d = new Date(referenceDate);
+    refEnd2d.setUTCDate(refEnd2d.getUTCDate() + 2);
+    refEnd2d.setUTCHours(23, 59, 59, 999);
+    const refEnd7d = new Date(referenceDate);
+    refEnd7d.setUTCDate(refEnd7d.getUTCDate() + 7);
+    refEnd7d.setUTCHours(23, 59, 59, 999);
+
+    if (hazardCategory) {
+      try {
+        const { data: orgJobs } = await supabase.from("jobs").select("id").eq("organization_id", organization_id).is("deleted_at", null);
+        const oids = (orgJobs ?? []).map((j: { id: string }) => j.id);
+        if (oids.length > 0) {
+          const { data: rfRows } = await supabase.from("risk_factors").select("id").eq("category", hazardCategory);
+          const rfIds = new Set((rfRows ?? []).map((r: { id: string }) => r.id));
+          const { data: miRows } = await supabase.from("mitigation_items").select("job_id, risk_factor_id").in("job_id", oids);
+          const oidSet = new Set(oids);
+          hazardJobIds = [...new Set((miRows ?? []).filter((mi: any) => rfIds.has(mi.risk_factor_id) && oidSet.has(mi.job_id)).map((mi: any) => mi.job_id))];
+        }
+      } catch (e) {
+        console.warn("[JOBS] Hazard filter lookup failed:", e);
+      }
+    }
+
+    if (pendingSignatures || insight === "pending_signatures_near_deadline") {
+      try {
+        const { data: sigRows } = await supabase.from("signatures").select("job_id").eq("organization_id", organization_id);
+        signedJobIds = [...new Set((sigRows ?? []).map((s: { job_id: string }) => s.job_id))];
+      } catch (e) {
+        console.warn("[JOBS] Signatures lookup failed:", e);
+      }
+    }
+
+    if (insight === "deadline_risk") {
+      try {
+        const { data: orgJobs } = await supabase.from("jobs").select("id").eq("organization_id", organization_id).is("deleted_at", null);
+        const oids = (orgJobs ?? []).map((j: { id: string }) => j.id);
+        if (oids.length > 0) {
+          const { data: miRows } = await supabase.from("mitigation_items").select("job_id, done, is_completed").in("job_id", oids);
+          const byJob: Record<string, { total: number; completed: number }> = {};
+          (miRows ?? []).forEach((mi: any) => {
+            if (!byJob[mi.job_id]) byJob[mi.job_id] = { total: 0, completed: 0 };
+            byJob[mi.job_id].total++;
+            if (mi.done || mi.is_completed) byJob[mi.job_id].completed++;
+          });
+          lowReadinessJobIds = Object.entries(byJob)
+            .filter(([, v]) => v.total > 0 && v.completed / v.total < 0.5)
+            .map(([id]) => id);
+        }
+      } catch (e) {
+        console.warn("[JOBS] Low-readiness lookup failed:", e);
+      }
+    }
+
     let query = supabase
       .from("jobs")
       .select(`${baseColumns}, ${optionalColumns}`)
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
-    
+
+    if (hazardCategory) {
+      if (hazardJobIds.length === 0) {
+        query = query.in("id", ["00000000-0000-0000-0000-000000000000"] as any);
+      } else {
+        query = query.in("id", hazardJobIds);
+      }
+    }
+
+    if (insight === "deadline_risk") {
+      query = query.neq("status", "completed");
+      query = query.gte("due_date", refStart.toISOString()).lte("due_date", refEnd2d.toISOString());
+      if (lowReadinessJobIds.length === 0) {
+        query = query.in("id", ["00000000-0000-0000-0000-000000000000"] as any);
+      } else {
+        query = query.in("id", lowReadinessJobIds);
+      }
+    } else if (insight === "pending_signatures_near_deadline") {
+      query = query.neq("status", "completed");
+      query = query.gte("due_date", refStart.toISOString()).lte("due_date", refEnd7d.toISOString());
+      if (signedJobIds.length > 0) {
+        query = query.not("id", "in", `(${signedJobIds.join(",")})`);
+      }
+    } else if (insight === "overdue") {
+      query = query.neq("status", "completed");
+      query = query.lt("due_date", refStart.toISOString());
+    }
+
+    if (dueSoon && !insight) {
+      query = query.neq("status", "completed");
+      query = query.gte("due_date", refStart.toISOString()).lte("due_date", refEnd7d.toISOString());
+    }
+
+    if (pendingSignatures && !insight) {
+      if (signedJobIds.length > 0) {
+        query = query.not("id", "in", `(${signedJobIds.join(",")})`);
+      }
+    }
+
     // Apply time_range filter (only when explicit created_after/created_before not provided)
     if (dateCutoff) {
       query = query.gte("created_at", dateCutoff.toISOString());
@@ -757,6 +875,51 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     if (dateCutoff) {
       countQuery = countQuery.gte("created_at", dateCutoff.toISOString());
     }
+
+    if (createdAfter) {
+      countQuery = countQuery.gte("created_at", createdAfter);
+    }
+    if (createdBefore) {
+      countQuery = countQuery.lte("created_at", createdBefore);
+    }
+    if (hasExplicitCompletedRange) {
+      countQuery = countQuery.not("completed_at", "is", null);
+      if (completedAfter) {
+        countQuery = countQuery.gte("completed_at", completedAfter);
+      }
+      if (completedBefore) {
+        countQuery = countQuery.lte("completed_at", completedBefore);
+      }
+    }
+
+    if (hazardCategory) {
+      if (hazardJobIds.length === 0) {
+        countQuery = countQuery.in("id", ["00000000-0000-0000-0000-000000000000"] as any);
+      } else {
+        countQuery = countQuery.in("id", hazardJobIds);
+      }
+    }
+    if (insight === "deadline_risk") {
+      countQuery = countQuery.neq("status", "completed").gte("due_date", refStart.toISOString()).lte("due_date", refEnd2d.toISOString());
+      if (lowReadinessJobIds.length === 0) {
+        countQuery = countQuery.in("id", ["00000000-0000-0000-0000-000000000000"] as any);
+      } else {
+        countQuery = countQuery.in("id", lowReadinessJobIds);
+      }
+    } else if (insight === "pending_signatures_near_deadline") {
+      countQuery = countQuery.neq("status", "completed").gte("due_date", refStart.toISOString()).lte("due_date", refEnd7d.toISOString());
+      if (signedJobIds.length > 0) {
+        countQuery = countQuery.not("id", "in", `(${signedJobIds.join(",")})`);
+      }
+    } else if (insight === "overdue") {
+      countQuery = countQuery.neq("status", "completed").lt("due_date", refStart.toISOString());
+    }
+    if (dueSoon && !insight) {
+      countQuery = countQuery.neq("status", "completed").gte("due_date", refStart.toISOString()).lte("due_date", refEnd7d.toISOString());
+    }
+    if (pendingSignatures && !insight && signedJobIds.length > 0) {
+      countQuery = countQuery.not("id", "in", `(${signedJobIds.join(",")})`);
+    }
     
     if (q && typeof q === 'string' && q.trim()) {
       const searchTerm = q.trim();
@@ -795,6 +958,25 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         .from("jobs")
         .select("*", { count: "exact", head: true })
         .eq("organization_id", organization_id);
+
+      if (dateCutoff) {
+        fallbackCountQuery = fallbackCountQuery.gte("created_at", dateCutoff.toISOString());
+      }
+      if (createdAfter) {
+        fallbackCountQuery = fallbackCountQuery.gte("created_at", createdAfter);
+      }
+      if (createdBefore) {
+        fallbackCountQuery = fallbackCountQuery.lte("created_at", createdBefore);
+      }
+      if (hasExplicitCompletedRange) {
+        fallbackCountQuery = fallbackCountQuery.not("completed_at", "is", null);
+        if (completedAfter) {
+          fallbackCountQuery = fallbackCountQuery.gte("completed_at", completedAfter);
+        }
+        if (completedBefore) {
+          fallbackCountQuery = fallbackCountQuery.lte("completed_at", completedBefore);
+        }
+      }
       
       if (statusForQuery) {
         fallbackCountQuery = fallbackCountQuery.eq("status", statusForQuery);

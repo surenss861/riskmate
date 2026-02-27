@@ -249,57 +249,26 @@ function DashboardPageInner() {
     }
   }, [filterStatus, filterRiskLevel, filterHazard, timeRange, customRange, debouncedSearchQuery, sortBy, currentPage, pageSize])
   
-  // Update URL params when filters change (preserve time_range and custom range)
+  // Update URL params when filters change. Build params from filter state only (do not depend on searchParams) to avoid re-running when URL changes from this effect.
+  // Preserve time-range params by reading from current URL inside the effect (no searchParams in deps).
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    // Time range (time_range, range_start, range_end) is owned exclusively by useOperationsTimeRange; do not set it here.
-
-    // Update search
-    if (debouncedSearchQuery) {
-      params.set('q', debouncedSearchQuery)
-    } else {
-      params.delete('q')
-    }
-    
-    // Update sort (only if not default)
-    if (sortBy && sortBy !== 'blockers_desc') {
-      params.set('sort', sortBy)
-    } else {
-      params.delete('sort')
-    }
-    
-    // Update pagination
-    if (currentPage > 1) {
-      params.set('page', currentPage.toString())
-    } else {
-      params.delete('page')
-    }
-    if (pageSize !== 50) {
-      params.set('page_size', pageSize.toString())
-    } else {
-      params.delete('page_size')
-    }
-    
-    // Preserve status and risk_level filters
-    if (filterStatus) {
-      params.set('status', filterStatus)
-    } else {
-      params.delete('status')
-    }
-    if (filterRiskLevel) {
-      params.set('risk_level', filterRiskLevel)
-    } else {
-      params.delete('risk_level')
-    }
-    if (filterHazard) {
-      params.set('hazard', filterHazard)
-    } else {
-      params.delete('hazard')
-    }
-    
+    const params = new URLSearchParams()
+    if (debouncedSearchQuery) params.set('q', debouncedSearchQuery)
+    if (sortBy && sortBy !== 'blockers_desc') params.set('sort', sortBy)
+    if (currentPage > 1) params.set('page', currentPage.toString())
+    if (pageSize !== 50) params.set('page_size', pageSize.toString())
+    if (filterStatus) params.set('status', filterStatus)
+    if (filterRiskLevel) params.set('risk_level', filterRiskLevel)
+    if (filterHazard) params.set('hazard', filterHazard)
+    const tr = searchParams.get('time_range')
+    if (tr) params.set('time_range', tr)
+    const rs = searchParams.get('range_start')
+    if (rs) params.set('range_start', rs)
+    const re = searchParams.get('range_end')
+    if (re) params.set('range_end', re)
     const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`
     router.replace(newUrl, { scroll: false })
-  }, [router, pathname, debouncedSearchQuery, sortBy, currentPage, pageSize, filterStatus, filterRiskLevel, filterHazard, searchParams])
+  }, [router, pathname, debouncedSearchQuery, sortBy, currentPage, pageSize, filterStatus, filterRiskLevel, filterHazard])
   
   // Initialize filters from URL on mount (for shareable links)
   useEffect(() => {
@@ -783,18 +752,35 @@ function DashboardPageInner() {
                   </div>
                   <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
                     <GlassCard className="p-8">
-                      <AnalyticsTrendCharts
-                        trendsJobs={dashboardData?.trendsJobs ?? null}
-                        trendsCompletion={dashboardData?.trendsCompletion ?? null}
-                        trendsCompletedCounts={dashboardData?.trendsCompletedCounts ?? null}
-                        trendsRisk={dashboardData?.trendsRisk ?? null}
-                        jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
-                        statusByPeriod={dashboardData?.statusByPeriod ?? undefined}
-                        periodLabel={periodLabels[analyticsPeriod]}
-                        isLoading={dashboardLoading}
-                        onPeriodClick={undefined}
-                        onStatusClick={undefined}
-                      />
+                      {(() => {
+                        const trendsJobs = dashboardData?.trendsJobs?.data ?? []
+                        const trendsCompletion = dashboardData?.trendsCompletion?.data ?? []
+                        const trendsCompletedCounts = dashboardData?.trendsCompletedCounts?.data ?? []
+                        const trendsRisk = dashboardData?.trendsRisk?.data ?? []
+                        const allEmpty = trendsJobs.length === 0 && trendsCompletion.length === 0 && trendsCompletedCounts.length === 0 && trendsRisk.length === 0
+                        if (allEmpty && !dashboardLoading) {
+                          return (
+                            <div className="py-12 text-center">
+                              <p className="text-white/70 mb-1">No trend data in this range</p>
+                              <p className="text-sm text-white/50">Create jobs and complete controls to see trends here.</p>
+                            </div>
+                          )
+                        }
+                        return (
+                          <AnalyticsTrendCharts
+                            trendsJobs={dashboardData?.trendsJobs ?? null}
+                            trendsCompletion={dashboardData?.trendsCompletion ?? null}
+                            trendsCompletedCounts={dashboardData?.trendsCompletedCounts ?? null}
+                            trendsRisk={dashboardData?.trendsRisk ?? null}
+                            jobCountsByStatus={dashboardData?.summary?.job_counts_by_status}
+                            statusByPeriod={dashboardData?.statusByPeriod ?? undefined}
+                            periodLabel={periodLabels[analyticsPeriod]}
+                            isLoading={dashboardLoading}
+                            onPeriodClick={undefined}
+                            onStatusClick={undefined}
+                          />
+                        )
+                      })()}
                     </GlassCard>
                     <GlassCard className="p-8">
                       <EvidenceWidget

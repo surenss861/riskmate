@@ -649,17 +649,17 @@ export function DashboardOverview({
           ) : (
             <div className="h-32 flex items-end gap-2">
               {complianceTrend.slice(-7).map((point, i) => {
-                // Get last 7 days only and format correctly
+                // Get last 7 days only; rate is 0–1 (fraction). Bar height = rate as % of row height; inner div fills the bar.
                 const date = new Date(point.date)
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
                 return (
                   <div
                     key={i}
-                    className="flex-1 flex flex-col items-center"
-                    style={{ minHeight: '4px', height: `${Math.max(point.rate * 100, 4)}%` }}
+                    className="flex-1 flex flex-col items-center justify-end min-h-0"
+                    style={{ height: `${Math.max(point.rate * 100, 4)}%` }}
                   >
-                    <div className="w-full bg-gradient-to-t from-[#F97316] to-[#FF8A3D] rounded-t" />
-                    <span className="text-xs text-white/50 mt-1">
+                    <div className="w-full flex-1 min-h-[4px] bg-gradient-to-t from-[#F97316] to-[#FF8A3D] rounded-t" />
+                    <span className="text-xs text-white/50 mt-1 flex-shrink-0">
                       {dayName}
                     </span>
                   </div>

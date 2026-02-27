@@ -30,7 +30,7 @@ type KpiGridProps = {
 
 export function KpiGrid({ items }: KpiGridProps) {
   return (
-    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 overflow-visible">
       {items.map((item) => (
         <KpiTile key={item.id} {...item} />
       ))}
