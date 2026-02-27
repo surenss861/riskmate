@@ -147,7 +147,9 @@ export function KpiTile({
           style={{ fontVariantNumeric: 'tabular-nums slashed-zero' }}
         >
           {prefix}
-          {isLoading ? '—' : unavailable ? '—' : displayValue}
+          {isLoading ? (
+            <span className="inline-block min-w-[2ch] h-8 bg-white/10 rounded animate-pulse" aria-hidden />
+          ) : unavailable ? '—' : displayValue}
           {suffix}
         </span>
         {unavailable && !isLoading && (

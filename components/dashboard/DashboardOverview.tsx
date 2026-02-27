@@ -406,12 +406,24 @@ export function DashboardOverview({
             <HazardFrequencyChart
               items={enhancedAnalytics.hazardItems}
               periodLabel={enhancedAnalytics.periodLabel}
+              period={enhancedAnalytics.period}
+              periodOptions={PERIOD_OPTIONS}
+              onPeriodChange={(p, range) => {
+                if (p === 'custom') setCustomPickerOpen(true)
+                enhancedAnalytics.onPeriodChange(p, range)
+              }}
               isLoading={enhancedAnalytics.isLoading}
               onCategoryClick={enhancedAnalytics.onHazardCategoryClick}
             />
             <TeamPerformanceTable
               members={enhancedAnalytics.teamMembers}
               periodLabel={enhancedAnalytics.periodLabel}
+              period={enhancedAnalytics.period}
+              periodOptions={PERIOD_OPTIONS}
+              onPeriodChange={(p, range) => {
+                if (p === 'custom') setCustomPickerOpen(true)
+                enhancedAnalytics.onPeriodChange(p, range)
+              }}
               isLoading={enhancedAnalytics.isLoading}
             />
           </div>

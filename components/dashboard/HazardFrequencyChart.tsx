@@ -9,6 +9,8 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import type { DashboardPeriod } from '@/lib/types/analytics';
+import type { CustomRange } from '@/lib/utils/dateRange';
 
 /** Safely resolve the clicked data row from Recharts click event (prefer nested payload, with fallback). */
 function getClickedRow(event: unknown): { name?: string; category?: string; [k: string]: unknown } | null {
@@ -40,6 +42,9 @@ export type HazardFrequencyItem = {
 type HazardFrequencyChartProps = {
   items: HazardFrequencyItem[];
   periodLabel?: string;
+  period?: DashboardPeriod;
+  periodOptions?: { value: DashboardPeriod; label: string }[];
+  onPeriodChange?: (period: DashboardPeriod, customRange?: CustomRange) => void;
   isLoading?: boolean;
   onCategoryClick?: (category: string) => void;
 };
@@ -54,9 +59,13 @@ function riskToColor(avgRisk: number): string {
 export function HazardFrequencyChart({
   items,
   periodLabel = 'Last 30 days',
+  period,
+  periodOptions = [],
+  onPeriodChange,
   isLoading = false,
   onCategoryClick,
 }: HazardFrequencyChartProps) {
+  const showPeriodSelector = period != null && periodOptions.length > 0 && onPeriodChange != null;
   const data = [...items]
     .sort((a, b) => b.count - a.count)
     .slice(0, 10)
@@ -67,10 +76,28 @@ export function HazardFrequencyChart({
       fill: riskToColor(i.avg_risk),
     }));
 
+  const periodSelector = showPeriodSelector ? (
+    <select
+      value={period}
+      onChange={(e) => onPeriodChange!(e.target.value as DashboardPeriod)}
+      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
+      aria-label="Time period for hazard chart"
+    >
+      {periodOptions.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  ) : null;
+
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Top hazard types</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-lg font-semibold text-white">Top hazard types</h3>
+          {periodSelector}
+        </div>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         <div className="h-64 bg-white/5 rounded-lg animate-pulse" />
       </div>
@@ -80,7 +107,10 @@ export function HazardFrequencyChart({
   if (data.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Top hazard types</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-lg font-semibold text-white">Top hazard types</h3>
+          {periodSelector}
+        </div>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         <div className="h-64 flex items-center justify-center text-white/50 text-sm">
           No hazard data in this period
@@ -91,7 +121,10 @@ export function HazardFrequencyChart({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-      <h3 className="text-lg font-semibold text-white mb-2">Top hazard types</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="text-lg font-semibold text-white">Top hazard types</h3>
+        {periodSelector}
+      </div>
       <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">

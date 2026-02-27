@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import clsx from 'clsx';
+import type { DashboardPeriod } from '@/lib/types/analytics';
+import type { CustomRange } from '@/lib/utils/dateRange';
 
 export type TeamPerformanceMember = {
   user_id: string;
@@ -16,6 +18,9 @@ export type TeamPerformanceMember = {
 type TeamPerformanceTableProps = {
   members: TeamPerformanceMember[];
   periodLabel?: string;
+  period?: DashboardPeriod;
+  periodOptions?: { value: DashboardPeriod; label: string }[];
+  onPeriodChange?: (period: DashboardPeriod, customRange?: CustomRange) => void;
   isLoading?: boolean;
 };
 
@@ -68,10 +73,28 @@ function completionRateClass(rate: number): string {
 export function TeamPerformanceTable({
   members,
   periodLabel = 'Last 30 days',
+  period,
+  periodOptions = [],
+  onPeriodChange,
   isLoading = false,
 }: TeamPerformanceTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('completion_rate');
   const [sortAsc, setSortAsc] = useState(false);
+  const showPeriodSelector = period != null && periodOptions.length > 0 && onPeriodChange != null;
+  const periodSelector = showPeriodSelector ? (
+    <select
+      value={period}
+      onChange={(e) => onPeriodChange!(e.target.value as DashboardPeriod)}
+      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
+      aria-label="Time period for team performance"
+    >
+      {periodOptions.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  ) : null;
 
   const sorted = useMemo(() => {
     const list = [...members];
@@ -99,7 +122,10 @@ export function TeamPerformanceTable({
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Team performance</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-lg font-semibold text-white">Team performance</h3>
+          {periodSelector}
+        </div>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         <div className="h-48 bg-white/5 rounded-lg animate-pulse" />
       </div>
@@ -109,7 +135,10 @@ export function TeamPerformanceTable({
   if (members.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Team performance</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-lg font-semibold text-white">Team performance</h3>
+          {periodSelector}
+        </div>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         <p className="text-sm text-white/50">No team data in this period</p>
       </div>
@@ -118,7 +147,10 @@ export function TeamPerformanceTable({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 overflow-hidden">
-      <h3 className="text-lg font-semibold text-white mb-2">Team performance</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="text-lg font-semibold text-white">Team performance</h3>
+        {periodSelector}
+      </div>
       <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
       <div className="overflow-x-auto -mx-2">
         <table className="w-full min-w-[520px]">
