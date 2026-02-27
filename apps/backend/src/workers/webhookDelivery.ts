@@ -171,7 +171,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  const urlCheck = validateWebhookUrl(endpoint.url)
+  const urlCheck = await validateWebhookUrl(endpoint.url)
   if (!urlCheck.valid) {
     console.error('[WebhookDelivery] Blocked unsafe URL:', delivery.endpoint_id, urlCheck.reason)
     await recordAttempt(delivery.id, delivery.attempt_count, null, `Blocked: ${urlCheck.reason}`, 0)

@@ -6,7 +6,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
 
-/** POST - Reschedule a terminally failed delivery for retry (set next_retry_at = now on existing row). */
+/** POST - Reschedule a terminally failed delivery for retry. Sets next_retry_at = now and resets attempt_count to 1 so the worker (which selects attempt_count <= MAX_ATTEMPTS) can process it again. */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ deliveryId: string }> }
@@ -83,6 +83,7 @@ export async function POST(
       .update({
         next_retry_at: now,
         processing_since: null,
+        attempt_count: 1,
       })
       .eq('id', deliveryId)
       .is('delivered_at', null)

@@ -61,7 +61,7 @@ export async function PATCH(
 
     if (typeof body.url === 'string') {
       const url = body.url.trim()
-      const urlValidation = url ? validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required' }
+      const urlValidation = url ? await validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required' }
       if (!url || !urlValidation.valid) {
         const { response, errorId } = createErrorResponse(
           urlValidation.valid ? 'Valid URL is required' : urlValidation.reason,
