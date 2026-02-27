@@ -39,9 +39,9 @@ function InsightsPageInner() {
   const rangeEnd = searchParams.get('range_end')?.trim() ?? '';
 
   const [user, setUser] = useState<{ email?: string } | null>(null);
-  /** Resolved role from DB: only 'member' | 'owner' | 'admin' when explicitly returned; null while loading or on error. */
+  /** Resolved role from DB (e.g. owner, admin, member, safety_lead, executive); null while loading or on genuine lookup failure. */
   const [userRole, setUserRole] = useState<string | null>(null);
-  /** True when role lookup failed (network/DB error); do not treat as member. */
+  /** True only when role lookup genuinely failed (query error or unknown user); not for valid non-member roles. */
   const [roleFetchError, setRoleFetchError] = useState(false);
   const [insights, setInsights] = useState<Array<{
     id: string;
@@ -84,12 +84,12 @@ function InsightsPageInner() {
       setUserRole(null);
       return;
     }
-    if (userRow?.role === 'owner' || userRow?.role === 'admin' || userRow?.role === 'member') {
-      setUserRole(userRow.role);
-    } else {
+    if (userRow == null || userRow.role == null || userRow.role === '') {
       setRoleFetchError(true);
       setUserRole(null);
+      return;
     }
+    setUserRole(userRow.role);
   }, []);
 
   useEffect(() => {
