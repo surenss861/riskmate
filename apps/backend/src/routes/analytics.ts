@@ -12,15 +12,22 @@ const insightsCache = new Map<string, { data: ReturnType<typeof generateInsights
 let insightsCacheHits = 0;
 let insightsCacheMisses = 0;
 
-async function getCachedInsights(orgId: string) {
-  const cacheKey = orgId;
+/** Range context for insights cache key and generation. Normalized date-only (YYYY-MM-DD) for stable cache keys. */
+function insightsCacheKey(orgId: string, range: { since: string; until: string }): string {
+  const sinceKey = toDateKey(range.since);
+  const untilKey = toDateKey(range.until);
+  return `${orgId}:${sinceKey}:${untilKey}`;
+}
+
+async function getCachedInsights(orgId: string, range: { since: string; until: string }) {
+  const cacheKey = insightsCacheKey(orgId, range);
   const entry = insightsCache.get(cacheKey);
   if (entry && Date.now() < entry.expires) {
     insightsCacheHits += 1;
     return entry.data;
   }
   insightsCacheMisses += 1;
-  const data = await generateInsights(orgId);
+  const data = await generateInsights(orgId, { since: range.since, until: range.until });
   insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
   return data;
 }
@@ -909,6 +916,7 @@ analyticsRouter.get(
 );
 
 // GET /api/analytics/insights — top 5 predictive insights (cached 1h). Owner/admin only; members get 403.
+// Respects since/until query params; when absent, falls back to standard period (e.g. 30d) so insights match dashboard period.
 analyticsRouter.get(
   "/insights",
   authenticate as unknown as express.RequestHandler,
@@ -927,7 +935,12 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const all = await getCachedInsights(orgId);
+      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
+      const { since, until } =
+        customRange ??
+        (periodKey === "1y" ? calendarYearBounds() : dateRangeForDays(days));
+      const all = await getCachedInsights(orgId, { since, until });
       const insights = all.slice(0, 5);
       return res.json({ insights });
     } catch (error: any) {
