@@ -1,5 +1,6 @@
 -- Aggregate webhook delivery stats per endpoint for dashboard (full history, not paginated).
 -- Used by GET /api/webhooks/stats to show accurate delivered/pending/failed counts and last delivery.
+-- Tenant scoping: returns data only if p_org_id is an organization the caller belongs to (users or organization_members).
 
 CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
@@ -23,7 +24,18 @@ AS $$
   FROM webhook_deliveries wd
   JOIN webhook_endpoints we ON we.id = wd.endpoint_id
   WHERE we.organization_id = p_org_id
+    AND p_org_id IN (
+      SELECT organization_id FROM users WHERE id = auth.uid()
+      UNION
+      SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+    )
   GROUP BY wd.endpoint_id;
 $$;
 
-COMMENT ON FUNCTION get_webhook_endpoint_stats(uuid) IS 'Returns per-endpoint delivery counts and last delivery time for org; used by webhooks dashboard.';
+COMMENT ON FUNCTION get_webhook_endpoint_stats(uuid) IS 'Returns per-endpoint delivery counts and last delivery time for org; used by webhooks dashboard. Caller must belong to p_org_id (users or organization_members).';
+
+-- Privilege hardening: revoke broad execute, grant only to intended roles
+REVOKE EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) TO service_role;
