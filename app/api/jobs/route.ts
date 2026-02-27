@@ -147,6 +147,7 @@ export async function GET(request: NextRequest) {
     const needsSignatures =
       parseBooleanParam(searchParams.get('needs_signatures')) ??
       parseBooleanParam(searchParams.get('pending_signatures'))
+    // due_soon: jobs with due_date (fallback end_date for legacy nulls) in the next 7 days, not completed; aligns with insights/team analytics.
     const dueSoon = parseBooleanParam(searchParams.get('due_soon'))
     // Insight drill-down: same cohort as insights generation (deadline-risk, pending-signatures-near-deadline, overdue)
     const insightParam = searchParams.get('insight')?.trim() ?? ''

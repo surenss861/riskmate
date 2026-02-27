@@ -5,6 +5,8 @@ export type MitigationAnalytics = Awaited<ReturnType<typeof analyticsApi.mitigat
 
 type UseAnalyticsOptions = {
   range?: string;
+  since?: string;
+  until?: string;
   crewId?: string;
   orgId?: string;
   refreshIntervalMs?: number;
@@ -43,7 +45,7 @@ const DEFAULT_ANALYTICS: MitigationAnalytics = {
 };
 
 export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsResult {
-  const { range, crewId, orgId, refreshIntervalMs, enabled = true } = options;
+  const { range, since, until, crewId, orgId, refreshIntervalMs, enabled = true } = options;
   const [data, setData] = useState<MitigationAnalytics | null>(null);
   const [isLoading, setLoading] = useState<boolean>(false);
   const [isError, setError] = useState<boolean>(false);
@@ -68,6 +70,8 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
       const response = await analyticsApi.mitigations({
         orgId,
         range,
+        since,
+        until,
         crewId,
       });
 
@@ -96,7 +100,7 @@ export function useAnalytics(options: UseAnalyticsOptions = {}): UseAnalyticsRes
         setLoading(false);
       }
     }
-  }, [crewId, orgId, range, enabled]);
+  }, [crewId, orgId, range, since, until, enabled]);
 
   useEffect(() => {
     if (!enabled) return;

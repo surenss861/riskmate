@@ -1191,10 +1191,12 @@ export type AnalyticsSummaryResponse = {
 };
 
 export const analyticsApi = {
-  mitigations: async (params?: { orgId?: string; range?: string; crewId?: string }) => {
+  mitigations: async (params?: { orgId?: string; range?: string; since?: string; until?: string; crewId?: string }) => {
     const query = new URLSearchParams();
     if (params?.orgId) query.set('org_id', params.orgId);
     if (params?.range) query.set('range', params.range);
+    if (params?.since) query.set('since', params.since);
+    if (params?.until) query.set('until', params.until);
     if (params?.crewId) query.set('crew_id', params.crewId);
 
     const qs = query.toString();

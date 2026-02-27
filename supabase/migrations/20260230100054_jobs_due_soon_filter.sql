@@ -1,5 +1,6 @@
 -- Add p_due_soon to get_jobs_list and get_jobs_ranked for insight links (/operations/jobs?due_soon=true).
--- When true: jobs with end_date in the next 7 days that are not yet completed.
+-- When true: jobs with due_date (fallback end_date for legacy nulls) in the next 7 days that are not yet completed.
+-- Uses due_date to align with insights and team analytics; end_date used only when due_date is null.
 -- Insight-specific drill-down: p_insight_deadline_risk, p_insight_pending_signatures_near_deadline,
 -- p_insight_overdue use due_date and p_reference_date so list matches insight cohort (period-scoped).
 
@@ -107,9 +108,9 @@ AS $$
     ))
     AND (p_template_id IS NULL OR j.applied_template_id = p_template_id)
     AND (p_due_soon IS NOT TRUE OR (
-      j.end_date IS NOT NULL
-      AND j.end_date::date >= CURRENT_DATE
-      AND j.end_date::date <= (CURRENT_DATE + INTERVAL '7 days')
+      (COALESCE(j.due_date::date, j.end_date::date) IS NOT NULL)
+      AND COALESCE(j.due_date::date, j.end_date::date) >= CURRENT_DATE
+      AND COALESCE(j.due_date::date, j.end_date::date) <= (CURRENT_DATE + INTERVAL '7 days')
       AND LOWER(COALESCE(j.status, '')) <> 'completed'
     ))
     AND (p_insight_deadline_risk IS NOT TRUE OR (
@@ -270,9 +271,9 @@ AS $$
     ))
     AND (p_template_id IS NULL OR j.applied_template_id = p_template_id)
     AND (p_due_soon IS NOT TRUE OR (
-      j.end_date IS NOT NULL
-      AND j.end_date::date >= CURRENT_DATE
-      AND j.end_date::date <= (CURRENT_DATE + INTERVAL '7 days')
+      (COALESCE(j.due_date::date, j.end_date::date) IS NOT NULL)
+      AND COALESCE(j.due_date::date, j.end_date::date) >= CURRENT_DATE
+      AND COALESCE(j.due_date::date, j.end_date::date) <= (CURRENT_DATE + INTERVAL '7 days')
       AND LOWER(COALESCE(j.status, '')) <> 'completed'
     ))
     AND (p_insight_deadline_risk IS NOT TRUE OR (

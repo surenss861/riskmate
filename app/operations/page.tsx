@@ -77,7 +77,13 @@ function DashboardPageInner() {
     }
     return null
   })
-  const analyticsRange = timeRange === 'all' ? 365 : timeRange === 'custom' && customRange
+  // Mitigations/KPI period: "This Year" uses calendar-year bounds (via since/until); other presets use range days.
+  const mitigationsSinceUntil = useMemo(() => {
+    if (timeRange === 'all') return presetPeriodToApiBounds('1y')
+    if (timeRange === 'custom' && customRange) return dateOnlyToApiBounds(customRange.start, customRange.end)
+    return null
+  }, [timeRange, customRange])
+  const analyticsRange = timeRange === 'custom' && customRange
     ? Math.ceil((new Date(customRange.end + 'T12:00:00').getTime() - new Date(customRange.start + 'T12:00:00').getTime()) / (24 * 60 * 60 * 1000)) + 1
     : parseInt((timeRange as string).replace('d', ''), 10) || 30
   
@@ -105,7 +111,9 @@ function DashboardPageInner() {
     isFeatureLocked: analyticsLocked,
     refetch: refetchAnalytics,
   } = useAnalytics({
-    range: `${analyticsRange}d`,
+    range: mitigationsSinceUntil ? undefined : `${analyticsRange}d`,
+    since: mitigationsSinceUntil?.since,
+    until: mitigationsSinceUntil?.until,
     refreshIntervalMs: 5 * 60 * 1000,
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })

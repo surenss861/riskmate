@@ -73,12 +73,22 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 const parseRangeDays = (value?: string | string[]) => {
   if (!value) return 30;
   const str = Array.isArray(value) ? value[0] : value;
+  if (str === "1y" || str === "365d") return 365; // unclamped for calendar-year path
   const match = str.match(/(\d+)/);
   if (!match) return 30;
   const days = parseInt(match[1], 10);
   if (Number.isNaN(days) || days <= 0) return 30;
   return Math.min(days, 180);
 };
+
+/** Calendar-year bounds (Jan 1 00:00 to today 23:59:59 UTC). */
+function calendarYearBounds(): { since: string; until: string } {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+  const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+  return { since: since.toISOString(), until: until.toISOString() }
+}
 
 const toDateKey = (value: string) => value.slice(0, 10);
 
@@ -967,9 +977,20 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
 
-      const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
       const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
-      const { since, until } = dateRangeForDays(rangeDays);
+      const explicitRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const rangeParam = authReq.query.range as string | undefined;
+      const rangeDays = parseRangeDays(rangeParam);
+
+      const { since, until } = explicitRange ?? (
+        rangeParam === "1y" || rangeParam === "365d"
+          ? calendarYearBounds()
+          : dateRangeForDays(rangeDays)
+      );
+
+      const effectiveRangeDays = explicitRange
+        ? Math.ceil((new Date(until).getTime() - new Date(since).getTime()) / (24 * 60 * 60 * 1000)) + 1
+        : (rangeParam === "1y" || rangeParam === "365d" ? 365 : rangeDays);
 
       const [kpisRes, trendRes] = await Promise.all([
         supabase.rpc("get_mitigations_analytics_kpis", {
@@ -1020,7 +1041,7 @@ analyticsRouter.get(
 
       res.json({
         org_id: orgId,
-        range_days: rangeDays,
+        range_days: effectiveRangeDays,
         completion_rate: Number(kpiRow?.completion_rate ?? 0),
         avg_time_to_close_hours: Number(kpiRow?.avg_time_to_close_hours ?? 0),
         high_risk_jobs: Number(kpiRow?.high_risk_jobs ?? 0),

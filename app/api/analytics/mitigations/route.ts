@@ -15,11 +15,31 @@ function parseRangeDays(range?: string | null): number {
   if (str === '7d') return 7
   if (str === '30d') return 30
   if (str === '90d') return 90
+  if (str === '1y') return 365 // unclamped for calendar-year path
   const match = str.match(/(\d+)/)
   if (!match) return 30
   const days = parseInt(match[1], 10)
   if (Number.isNaN(days) || days <= 0) return 30
   return Math.min(days, 180)
+}
+
+/** Calendar-year bounds (Jan 1 00:00 to today 23:59:59 UTC). */
+function calendarYearBounds(): { since: string; until: string } {
+  const now = new Date()
+  const y = now.getUTCFullYear()
+  const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0))
+  const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999))
+  return { since: since.toISOString(), until: until.toISOString() }
+}
+
+/** Rolling-window bounds for the last N days. */
+function rollingDaysBounds(days: number): { since: string; until: string } {
+  const until = new Date()
+  until.setHours(23, 59, 59, 999)
+  const since = new Date(until.getTime())
+  since.setDate(since.getDate() - (days - 1))
+  since.setHours(0, 0, 0, 0)
+  return { since: since.toISOString(), until: until.toISOString() }
 }
 
 function toDateKey(date: Date | string): string {
@@ -133,16 +153,31 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const rangeDays = parseRangeDays(searchParams.get('range') || undefined)
-    const crewId = searchParams.get('crew_id') || undefined
+    const sinceParam = searchParams.get('since')?.trim()
+    const untilParam = searchParams.get('until')?.trim()
+    const rangeParam = searchParams.get('range')?.trim()?.toLowerCase()
 
-    const sinceDate = new Date()
-    sinceDate.setHours(0, 0, 0, 0)
-    sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1))
-    const sinceIso = sinceDate.toISOString()
-    const untilDate = new Date()
-    untilDate.setHours(23, 59, 59, 999)
-    const untilIso = untilDate.toISOString()
+    let sinceIso: string
+    let untilIso: string
+    let rangeDays: number
+
+    if (sinceParam && untilParam && !Number.isNaN(Date.parse(sinceParam)) && !Number.isNaN(Date.parse(untilParam))) {
+      sinceIso = new Date(sinceParam).toISOString()
+      untilIso = new Date(untilParam).toISOString()
+      rangeDays = Math.ceil((new Date(untilIso).getTime() - new Date(sinceIso).getTime()) / (24 * 60 * 60 * 1000)) + 1
+    } else if (rangeParam === '1y' || rangeParam === '365d') {
+      const bounds = calendarYearBounds()
+      sinceIso = bounds.since
+      untilIso = bounds.until
+      rangeDays = 365
+    } else {
+      rangeDays = parseRangeDays(searchParams.get('range') || undefined)
+      const bounds = rollingDaysBounds(rangeDays)
+      sinceIso = bounds.since
+      untilIso = bounds.until
+    }
+
+    const crewId = searchParams.get('crew_id') || undefined
 
     // Server-side aggregation: one RPC for KPIs, one for daily trend (O(1) queries)
     const [kpisResult, trendResult] = await Promise.all([
@@ -198,10 +233,11 @@ export async function GET(request: NextRequest) {
       trendByDate.set(key, Number(r.completion_rate))
     }
     const trend: { date: string; completion_rate: number }[] = []
-    const dateCursor = new Date(sinceDate)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    while (dateCursor <= today) {
+    const dateCursor = new Date(sinceIso)
+    dateCursor.setHours(0, 0, 0, 0)
+    const untilDate = new Date(untilIso)
+    untilDate.setHours(23, 59, 59, 999)
+    while (dateCursor <= untilDate) {
       const dateKey = toDateKey(dateCursor)
       trend.push({
         date: dateKey,
