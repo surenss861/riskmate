@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -85,7 +85,7 @@ export function TrendChart({
     return [row];
   }, [statusByPeriod, jobCountsByStatus, periodLabel]);
 
-  const gradientId = typeof React.useId === 'function' ? React.useId() : 'trendRiskGradient';
+  const gradientId = useId();
 
   const statusKeys = useMemo(() => {
     if (statusByPeriod && statusByPeriod.length > 0) {

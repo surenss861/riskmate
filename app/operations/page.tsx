@@ -119,9 +119,6 @@ function DashboardPageInner() {
     enabled: roleLoaded && !isMember, // Disable analytics for members, but wait for role to load
   })
 
-  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>(() =>
-    timeRangeParam === 'custom' && rangeStartParam && rangeEndParam ? 'custom' : (timeRange === 'all' ? '1y' : timeRange as DashboardPeriod)
-  )
   const analyticsPeriod = dashboardPeriod
   const {
     data: dashboardData,

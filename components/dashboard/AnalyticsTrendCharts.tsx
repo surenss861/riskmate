@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -134,7 +134,7 @@ export function AnalyticsTrendCharts({
     return [row];
   }, [statusByPeriod, jobCountsByStatus, periodLabel, hasStatusByPeriod]);
 
-  const gradientId = typeof React.useId === 'function' ? React.useId() : 'analyticsRiskGradient';
+  const gradientId = useId();
 
   const statusKeys = useMemo(
     () =>
