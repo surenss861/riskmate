@@ -19,6 +19,8 @@ const RETRY_DELAYS_MS = [
 const MAX_ATTEMPTS = 5
 const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
+/** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
+const STALE_CLAIM_MS = 10 * 60 * 1000 // 10 min
 
 export type WebhookEventType =
   | 'job.created'
@@ -357,9 +359,27 @@ async function claimDelivery(id: string): Promise<WebhookDeliveryRow | null> {
 }
 
 /**
+ * Reset stale claims so rows stuck after a worker crash can be picked again.
+ * Idempotent: only clears processing_since when it is older than STALE_CLAIM_MS; actively processing rows are untouched.
+ */
+async function recoverStaleClaims(): Promise<void> {
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString()
+  const { error } = await supabase
+    .from('webhook_deliveries')
+    .update({ processing_since: null })
+    .is('delivered_at', null)
+    .not('processing_since', 'is', null)
+    .lt('processing_since', staleBefore)
+  if (error) {
+    console.error('[WebhookDelivery] Stale claim recovery failed:', error)
+  }
+}
+
+/**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
  * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
  * Only processes rows that are successfully claimed (processing_since was null) to avoid duplicate sends and retry races.
+ * Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
  */
 let processPendingDeliveriesRunning = false
 
@@ -367,6 +387,7 @@ async function processPendingDeliveries(): Promise<void> {
   if (processPendingDeliveriesRunning) return
   processPendingDeliveriesRunning = true
   try {
+    await recoverStaleClaims()
     const now = new Date().toISOString()
     const { data: pending, error } = await supabase
       .from('webhook_deliveries')

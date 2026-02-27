@@ -6,7 +6,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
 
-/** POST - Reschedule a failed delivery for retry (set next_retry_at = now) */
+/** POST - Reschedule a terminally failed delivery for retry (set next_retry_at = now on existing row). */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ deliveryId: string }> }
@@ -19,7 +19,7 @@ export async function POST(
 
     const { data: delivery, error: delError } = await supabase
       .from('webhook_deliveries')
-      .select('id, endpoint_id, delivered_at, event_type, payload')
+      .select('id, endpoint_id, delivered_at, next_retry_at')
       .eq('id', deliveryId)
       .single()
 
@@ -47,6 +47,18 @@ export async function POST(
       })
     }
 
+    if (delivery.next_retry_at != null) {
+      const { response, errorId } = createErrorResponse(
+        'Delivery is already scheduled for retry; wait for it to run or fail before rescheduling',
+        'ALREADY_SCHEDULED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     const { data: endpoint, error: epError } = await supabase
       .from('webhook_endpoints')
       .select('id, organization_id')
@@ -65,21 +77,22 @@ export async function POST(
       })
     }
 
-    const { data: newDelivery, error: insertError } = await supabase
+    const now = new Date().toISOString()
+    const { data: updated, error: updateError } = await supabase
       .from('webhook_deliveries')
-      .insert({
-        endpoint_id: delivery.endpoint_id,
-        event_type: delivery.event_type,
-        payload: delivery.payload,
-        attempt_count: 1,
-        next_retry_at: new Date().toISOString(),
+      .update({
+        next_retry_at: now,
+        processing_since: null,
       })
+      .eq('id', deliveryId)
+      .is('delivered_at', null)
+      .is('next_retry_at', null)
       .select('id')
-      .single()
+      .maybeSingle()
 
-    if (insertError) {
+    if (updateError) {
       const { response, errorId } = createErrorResponse(
-        insertError.message,
+        updateError.message,
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
@@ -88,10 +101,21 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    if (!updated) {
+      const { response, errorId } = createErrorResponse(
+        'Delivery is no longer in a terminal state; it may have been rescheduled or delivered',
+        'ALREADY_SCHEDULED',
+        { requestId, statusCode: 409 }
+      )
+      return NextResponse.json(response, {
+        status: 409,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     return NextResponse.json(
-      { data: { message: 'Retry scheduled', delivery_id: newDelivery?.id } },
-      { status: 201 }
+      { data: { message: 'Retry scheduled', delivery_id: deliveryId } },
+      { status: 200 }
     )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'

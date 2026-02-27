@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -41,7 +42,7 @@ export async function PATCH(
       .update(updatePayload)
       .eq('id', mitigationId)
       .eq('job_id', jobId)
-      .select('id, title, description, done, is_completed, completed_at, created_at')
+      .select('id, title, description, done, is_completed, completed_at, created_at, hazard_id')
       .maybeSingle()
 
     if (updateError) {
@@ -59,6 +60,19 @@ export async function PATCH(
         { message: 'Mitigation item not found' },
         { status: 404 }
       )
+    }
+
+    if ((updatedItem as { hazard_id?: string | null }).hazard_id == null) {
+      triggerWebhookEvent(organization_id, 'hazard.updated', {
+        id: updatedItem.id,
+        job_id: jobId,
+        title: updatedItem.title ?? '',
+        description: updatedItem.description ?? '',
+        done: updatedItem.done,
+        is_completed: updatedItem.is_completed,
+        completed_at: updatedItem.completed_at,
+        created_at: updatedItem.created_at,
+      }).catch((e) => console.warn('[Mitigations] Webhook hazard.updated enqueue failed:', e))
     }
 
     return NextResponse.json({ data: updatedItem })
