@@ -589,13 +589,15 @@ function DashboardPageInner() {
       : 0
     const complianceOverall = cr?.overall ?? 0
 
-    const priorTotal = priorJc?.total ?? 0
-    const priorCompletion = priorJc?.completion_rate ?? 0
-    const priorCompliance = priorCr?.overall ?? 0
+    // Only use prior values when prior datasets were actually fetched (e.g. not for custom range).
+    // When prior is unavailable, keep trend neutral (undefined trendPercent/previousValue, trend 'flat').
+    const priorTotal = priorJc != null ? priorJc.total : undefined
+    const priorCompletion = priorJc != null ? priorJc.completion_rate : undefined
+    const priorCompliance = priorCr != null ? priorCr.overall : undefined
     const priorRiskData = dashboardData.priorTrendsRisk?.data ?? []
     const priorAvgRisk = priorRiskData.length > 0
       ? priorRiskData.reduce((a, p) => a + p.value, 0) / priorRiskData.length
-      : null
+      : undefined
 
     const percentChange = (current: number, previous: number): number | undefined => {
       if (previous === 0) return current > 0 ? 100 : undefined
@@ -614,11 +616,11 @@ function DashboardPageInner() {
       return pct < 0 ? 'up' : 'down'
     }
 
-    const totalJobsTrendPct = percentChange(totalJobs, priorTotal)
-    const completionTrendPct = percentChange(completionRate, priorCompletion)
-    const complianceTrendPct = percentChange(complianceOverall, priorCompliance)
-    const avgRiskTrendPct = priorAvgRisk != null ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
-    const avgRiskTrend = priorAvgRisk != null ? trendForMetric(avgRiskFromTrend, priorAvgRisk, false) : 'flat'
+    const totalJobsTrendPct = priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined
+    const completionTrendPct = priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined
+    const complianceTrendPct = priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined
+    const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
+    const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskFromTrend, priorAvgRisk, false) : 'flat'
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
         id: 'total-jobs',
@@ -635,9 +637,9 @@ function DashboardPageInner() {
         title: 'Completion Rate',
         value: Math.round(completionRate),
         suffix: '%',
-        trend: trendForMetric(completionRate, priorCompletion, true),
+        trend: priorCompletion !== undefined ? trendForMetric(completionRate, priorCompletion, true) : 'flat',
         trendPercent: completionTrendPct,
-        previousValue: priorCompletion ? Math.round(priorCompletion) : undefined,
+        previousValue: priorCompletion !== undefined ? Math.round(priorCompletion) : undefined,
         sparklineData: dashboardData.trendsCompletion?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
@@ -646,7 +648,7 @@ function DashboardPageInner() {
         value: Math.round(avgRiskFromTrend * 10) / 10,
         trend: avgRiskTrend,
         trendPercent: avgRiskTrendPct,
-        previousValue: priorAvgRisk != null ? Math.round(priorAvgRisk * 10) / 10 : undefined,
+        previousValue: priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined,
         sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
@@ -654,9 +656,9 @@ function DashboardPageInner() {
         title: 'Compliance Rate',
         value: Math.round(complianceOverall),
         suffix: '%',
-        trend: trendForMetric(complianceOverall, priorCompliance, true),
+        trend: priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat',
         trendPercent: complianceTrendPct,
-        previousValue: priorCompliance ? Math.round(priorCompliance) : undefined,
+        previousValue: priorCompliance !== undefined ? Math.round(priorCompliance) : undefined,
         sparklineData: dashboardData.trendsCompliance?.data?.slice(-7).map((d) => d.value) ?? [],
       },
     ]
@@ -746,7 +748,8 @@ function DashboardPageInner() {
         const params = new URLSearchParams()
         const statusKey = status.replace(/\s+/g, '_').toLowerCase()
         params.set('status', statusKey)
-        const useCompletionDate = statusKey === 'completed'
+        // Always use created_after/created_before so drill-down matches bar aggregation
+        // (get_analytics_status_by_period buckets by created_at for all statuses).
         if (period) {
           let start: string
           let end: string
@@ -770,13 +773,8 @@ function DashboardPageInner() {
             weekEndDate.setUTCHours(23, 59, 59, 999)
             end = weekEndDate.toISOString()
           }
-          if (useCompletionDate) {
-            params.set('completed_after', start)
-            params.set('completed_before', end)
-          } else {
-            params.set('created_after', start)
-            params.set('created_before', end)
-          }
+          params.set('created_after', start)
+          params.set('created_before', end)
         }
         router.push(`/operations/jobs?${params.toString()}`)
       },
