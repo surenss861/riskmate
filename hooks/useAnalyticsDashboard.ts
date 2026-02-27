@@ -137,8 +137,10 @@ export type AnalyticsDashboardState = {
   /** Per-section error flags; when true, that section's endpoint failed on last refresh (UI should show unavailable/error, not zero). */
   sectionErrors: AnalyticsSectionErrors;
   refetch: () => Promise<void>;
-  /** groupBy used for trends and statusByPeriod (day/week/month); use in drill-down for aligned ranges */
+  /** groupBy used for trends (day/week/month); use in drill-down for trend charts. */
   effectiveGroupBy: 'day' | 'week' | 'month';
+  /** groupBy used for statusByPeriod (day/week); use in status-chart drill-down so filters match bar buckets. */
+  statusChartGroupBy: 'day' | 'week';
 };
 
 const emptyData: AnalyticsDashboardData = {
@@ -345,5 +347,14 @@ export function useAnalyticsDashboard(
     return period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
   }, [period, customRange?.start, customRange?.end]);
 
-  return { data, isLoading, isLocked, error, sectionErrors, refetch, effectiveGroupBy };
+  const statusChartGroupBy: 'day' | 'week' = useMemo(() => {
+    if (period === 'custom' && customRange?.start && customRange?.end) {
+      const rangeMs = new Date(customRange.end + 'T12:00:00').getTime() - new Date(customRange.start + 'T12:00:00').getTime();
+      const rangeDays = rangeMs / (24 * 60 * 60 * 1000);
+      return rangeDays <= 14 ? 'day' : 'week';
+    }
+    return period === '7d' ? 'day' : 'week';
+  }, [period, customRange?.start, customRange?.end]);
+
+  return { data, isLoading, isLocked, error, sectionErrors, refetch, effectiveGroupBy, statusChartGroupBy };
 }

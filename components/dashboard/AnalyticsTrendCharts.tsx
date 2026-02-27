@@ -37,9 +37,13 @@ type AnalyticsTrendChartsProps = {
   /** When statusByPeriod is absent, use this range for bar drill-down so Jobs-by-status remains clickable. */
   periodRangeStart?: string;
   periodRangeEnd?: string;
+  /** Bucket granularity for trend charts (Jobs, Risk, Completion); passed to onPeriodClick for correct start/end. */
+  trendsGranularity?: 'day' | 'week' | 'month';
+  /** Bucket granularity for Jobs-by-status chart; passed to onStatusClick so drill-down uses same grouping as statusByPeriod. */
+  statusChartGranularity?: 'day' | 'week';
   isLoading?: boolean;
-  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => void;
-  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string }) => void;
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string; granularity?: 'day' | 'week' | 'month' }) => void;
+  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string; granularity?: 'day' | 'week' }) => void;
 };
 
 function formatPeriodLabel(period: string): string {
@@ -89,6 +93,8 @@ export function AnalyticsTrendCharts({
   periodLabel = 'Last 30 days',
   periodRangeStart,
   periodRangeEnd,
+  trendsGranularity,
+  statusChartGranularity,
   isLoading = false,
   onPeriodClick,
   onStatusClick,
@@ -202,7 +208,7 @@ export function AnalyticsTrendCharts({
                   connectNulls
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period);
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -216,7 +222,7 @@ export function AnalyticsTrendCharts({
                   connectNulls
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { useCompletionDate: true });
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { useCompletionDate: true, granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -262,7 +268,7 @@ export function AnalyticsTrendCharts({
                   strokeWidth={2}
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
-                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period);
+                    if (d?.period && isValidPeriod(d.period)) onPeriodClick?.(d.period, { granularity: trendsGranularity });
                   }}
                   cursor={onPeriodClick ? 'pointer' : 'default'}
                 />
@@ -307,13 +313,15 @@ export function AnalyticsTrendCharts({
                       if (!periodValid && !fallbackRange) return;
                       const drillPeriod = periodValid ? row.period : periodRangeStart!;
                       const rangeEndOpt = fallbackRange && periodRangeEnd ? { rangeEnd: periodRangeEnd } : undefined;
+                      const granularityOpt = statusChartGranularity != null ? { granularity: statusChartGranularity } : undefined;
+                      const statusOpts = { ...rangeEndOpt, ...granularityOpt };
                       if (onStatusClick) {
-                        onStatusClick(key, drillPeriod, rangeEndOpt);
+                        onStatusClick(key, drillPeriod, statusOpts);
                         return;
                       }
                       const statusNorm = key.replace(/\s+/g, '_').toLowerCase();
                       const useCompletionDate = statusNorm === 'completed';
-                      onPeriodClick?.(drillPeriod, { useCompletionDate, ...rangeEndOpt });
+                      onPeriodClick?.(drillPeriod, { useCompletionDate, ...rangeEndOpt, granularity: trendsGranularity });
                     }}
                     cursor={
                       (onStatusClick || onPeriodClick) &&

@@ -28,6 +28,42 @@ import clsx from 'clsx'
 
 type TimeRange = '7d' | '30d' | '90d' | 'all' | 'custom'
 
+/** Compute start/end ISO bounds for drill-down from chart bucket. Branches strictly by granularity (not period string length). */
+function periodRangeFromGranularity(
+  period: string,
+  granularity: 'day' | 'week' | 'month',
+  rangeEnd?: string
+): { start: string; end: string } {
+  if (rangeEnd != null && rangeEnd.length >= 10) {
+    const startDay = period.slice(0, 10)
+    const endDay = rangeEnd.slice(0, 10)
+    return {
+      start: `${startDay}T00:00:00.000Z`,
+      end: `${endDay}T23:59:59.999Z`,
+    }
+  }
+  if (granularity === 'day') {
+    const dayStr = period.slice(0, 10)
+    return {
+      start: `${dayStr}T00:00:00.000Z`,
+      end: `${dayStr}T23:59:59.999Z`,
+    }
+  }
+  if (granularity === 'month') {
+    const y = parseInt(period.slice(0, 4), 10)
+    const m = parseInt(period.slice(5, 7), 10) - 1
+    const start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
+    const end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
+    return { start, end }
+  }
+  // week: period is week start (YYYY-MM-DD)
+  const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
+  const start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
+  const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
+  weekEndDate.setUTCHours(23, 59, 59, 999)
+  return { start, end: weekEndDate.toISOString() }
+}
+
 interface Job {
   id: string
   client_name: string
@@ -128,6 +164,7 @@ function DashboardPageInner() {
     isLocked: dashboardLocked,
     refetch: refetchDashboard,
     effectiveGroupBy,
+    statusChartGroupBy,
     sectionErrors: dashboardSectionErrors,
   } = useAnalyticsDashboard(
     analyticsPeriod,
@@ -700,6 +737,8 @@ function DashboardPageInner() {
       customRange: analyticsPeriod === 'custom' ? customRange : null,
       periodRangeStart,
       periodRangeEnd,
+      trendsGranularity: effectiveGroupBy,
+      statusChartGranularity: statusChartGroupBy,
       kpiItems,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
@@ -722,29 +761,9 @@ function DashboardPageInner() {
       riskHeatmap: dashboardData.riskHeatmap ?? null,
       teamMembers: dashboardData.teamPerformance?.members ?? [],
       isLoading: dashboardLoading,
-      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => {
-        const groupBy = effectiveGroupBy
-        let start: string
-        let end: string
-        if (opts?.rangeEnd) {
-          start = `${period.slice(0, 10)}T00:00:00.000Z`
-          end = `${opts.rangeEnd.slice(0, 10)}T23:59:59.999Z`
-        } else if (groupBy === 'day' || period.length === 10) {
-          const dayStr = period.slice(0, 10)
-          start = `${dayStr}T00:00:00.000Z`
-          end = `${dayStr}T23:59:59.999Z`
-        } else if (groupBy === 'month' || period.length === 7) {
-          const y = parseInt(period.slice(0, 4), 10)
-          const m = parseInt(period.slice(5, 7), 10) - 1
-          start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
-          end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
-        } else {
-          const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
-          start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
-          const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-          weekEndDate.setUTCHours(23, 59, 59, 999)
-          end = weekEndDate.toISOString()
-        }
+      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string; granularity?: 'day' | 'week' | 'month' }) => {
+        const granularity = opts?.granularity ?? effectiveGroupBy
+        const { start, end } = periodRangeFromGranularity(period, granularity, opts?.rangeEnd)
         const params = new URLSearchParams()
         if (opts?.useCompletionDate) {
           params.set('completed_after', start)
@@ -755,35 +774,14 @@ function DashboardPageInner() {
         }
         router.push(`/operations/jobs?${params.toString()}`)
       },
-      onStatusClick: (status: string, period?: string, opts?: { rangeEnd?: string }) => {
+      onStatusClick: (status: string, period?: string, opts?: { rangeEnd?: string; granularity?: 'day' | 'week' }) => {
         const params = new URLSearchParams()
         const statusKey = status.replace(/\s+/g, '_').toLowerCase()
         params.set('status', statusKey)
-        // Always use created_after/created_before so drill-down matches bar aggregation
-        // (get_analytics_status_by_period buckets by created_at for all statuses).
+        // Use same grouping that produced statusByPeriod (not effectiveGroupBy) so weekly status bars map to full-week filters.
         if (period) {
-          let start: string
-          let end: string
-          const groupBy = effectiveGroupBy
-          if (opts?.rangeEnd) {
-            start = `${period.slice(0, 10)}T00:00:00.000Z`
-            end = `${opts.rangeEnd.slice(0, 10)}T23:59:59.999Z`
-          } else if (groupBy === 'day' || period.length === 10) {
-            const dayStr = period.slice(0, 10)
-            start = `${dayStr}T00:00:00.000Z`
-            end = `${dayStr}T23:59:59.999Z`
-          } else if (groupBy === 'month' || period.length === 7) {
-            const y = parseInt(period.slice(0, 4), 10)
-            const m = parseInt(period.slice(5, 7), 10) - 1
-            start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
-            end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
-          } else {
-            const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
-            start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
-            const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-            weekEndDate.setUTCHours(23, 59, 59, 999)
-            end = weekEndDate.toISOString()
-          }
+          const granularity = opts?.granularity ?? statusChartGroupBy
+          const { start, end } = periodRangeFromGranularity(period, granularity, opts?.rangeEnd)
           params.set('created_after', start)
           params.set('created_before', end)
         }
@@ -806,7 +804,7 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
     }
-  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
+  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy, statusChartGroupBy])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {

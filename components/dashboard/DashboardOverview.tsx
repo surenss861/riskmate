@@ -124,8 +124,12 @@ export type EnhancedAnalyticsProps = {
     overdue_count: number
   }>
   isLoading: boolean
-  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string }) => void
-  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string }) => void
+  /** Bucket granularity for trend charts; used by charts to pass in drill-down callbacks. */
+  trendsGranularity?: 'day' | 'week' | 'month'
+  /** Bucket granularity for Jobs-by-status chart; used so status drill-down matches statusByPeriod grouping. */
+  statusChartGranularity?: 'day' | 'week'
+  onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string; granularity?: 'day' | 'week' | 'month' }) => void
+  onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string; granularity?: 'day' | 'week' }) => void
   onHazardCategoryClick?: (category: string) => void
 }
 
@@ -374,6 +378,8 @@ export function DashboardOverview({
             periodLabel={enhancedAnalytics.periodLabel}
             periodRangeStart={enhancedAnalytics.periodRangeStart}
             periodRangeEnd={enhancedAnalytics.periodRangeEnd}
+            trendsGranularity={enhancedAnalytics.trendsGranularity}
+            statusChartGranularity={enhancedAnalytics.statusChartGranularity}
             isLoading={enhancedAnalytics.isLoading}
             onPeriodClick={enhancedAnalytics.onPeriodClick}
             onStatusClick={enhancedAnalytics.onStatusClick}
