@@ -69,6 +69,7 @@ const DEFAULT_STATE: AdvancedFiltersState = {
   highRisk: false,
   overdue: false,
   needsSignaturesQuick: false,
+  dueSoon: false,
   unassigned: false,
   recent: false,
   filterTemplateSource: '',
