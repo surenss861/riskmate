@@ -7,6 +7,7 @@ import { getRequestId } from '@/lib/featureEvents'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { normalizeSearchQueryForTsquery } from '@/lib/utils/normalizeSearchQuery'
+import { dateOnlyToApiBounds } from '@/lib/utils/dateRange'
 import {
   type FilterCondition,
   type FilterGroup,
@@ -15,6 +16,11 @@ import {
   normalizeFilterConfig as normalizeFilterConfigLib,
   getMatchingJobIdsFromFilterGroup,
 } from '@/lib/jobs/filterConfig'
+
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/
+function isDateOnly(value: string): boolean {
+  return DATE_ONLY_REGEX.test(value)
+}
 
 export const runtime = 'nodejs'
 
@@ -204,21 +210,33 @@ export async function GET(request: NextRequest) {
       createdAfter = `${y}-01-01`
       createdBefore = now.toISOString().slice(0, 10)
     }
-    // Normalize date-only bounds to full-day timestamps so the end date is inclusive (jobs on end date included)
-    if (createdAfter && /^\d{4}-\d{2}-\d{2}$/.test(createdAfter)) {
-      createdAfter = new Date(createdAfter + 'T00:00:00.000Z').toISOString()
-    }
-    if (createdBefore && /^\d{4}-\d{2}-\d{2}$/.test(createdBefore)) {
-      createdBefore = new Date(createdBefore + 'T23:59:59.999Z').toISOString()
+    // Normalize date-only bounds using same local-date-to-API-boundary logic as dashboard analytics (dateOnlyToApiBounds)
+    // so deep-linked jobs and dashboard metrics use identical time boundaries (avoids off-by-one-day in non-UTC zones).
+    if (createdAfter && createdBefore && isDateOnly(createdAfter) && isDateOnly(createdBefore)) {
+      const bounds = dateOnlyToApiBounds(createdAfter, createdBefore)
+      createdAfter = bounds.since
+      createdBefore = bounds.until
+    } else {
+      if (createdAfter && isDateOnly(createdAfter)) {
+        createdAfter = dateOnlyToApiBounds(createdAfter, createdAfter).since
+      }
+      if (createdBefore && isDateOnly(createdBefore)) {
+        createdBefore = dateOnlyToApiBounds(createdBefore, createdBefore).until
+      }
     }
     let completedAfter = searchParams.get('completed_after')?.trim() ?? ''
     let completedBefore = searchParams.get('completed_before')?.trim() ?? ''
-    // Normalize date-only bounds to full-day timestamps so the end date is inclusive (same as created_after/created_before)
-    if (completedAfter && /^\d{4}-\d{2}-\d{2}$/.test(completedAfter)) {
-      completedAfter = new Date(completedAfter + 'T00:00:00.000Z').toISOString()
-    }
-    if (completedBefore && /^\d{4}-\d{2}-\d{2}$/.test(completedBefore)) {
-      completedBefore = new Date(completedBefore + 'T23:59:59.999Z').toISOString()
+    if (completedAfter && completedBefore && isDateOnly(completedAfter) && isDateOnly(completedBefore)) {
+      const bounds = dateOnlyToApiBounds(completedAfter, completedBefore)
+      completedAfter = bounds.since
+      completedBefore = bounds.until
+    } else {
+      if (completedAfter && isDateOnly(completedAfter)) {
+        completedAfter = dateOnlyToApiBounds(completedAfter, completedAfter).since
+      }
+      if (completedBefore && isDateOnly(completedBefore)) {
+        completedBefore = dateOnlyToApiBounds(completedBefore, completedBefore).until
+      }
     }
     const hazardCategory = searchParams.get('hazard')?.trim() ?? ''
 
