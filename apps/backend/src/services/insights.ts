@@ -68,9 +68,10 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
   const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  const basePath = "/dashboard";
+  /** Use /operations routes so insight action links open valid filtered views (no /dashboard/* routes). */
+  const basePath = "/operations";
   const jobsPath = `${basePath}/jobs`;
-  const analyticsPath = `${basePath}/analytics`;
+  const analyticsPath = basePath;
 
   try {
     const now = new Date();
@@ -151,7 +152,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
         metric_label: "Occurrences",
         period_days: periodDays,
         created_at: new Date().toISOString(),
-        action_url: `${analyticsPath}/risk-heatmap`,
+        action_url: analyticsPath,
         data: { job_type: jobType, day_of_week: parseInt(dayNum, 10), count: top[1], patterns: recurringEntries.slice(0, 10).map(([k, v]) => ({ bucket: k, count: v })) },
       });
     }
@@ -213,7 +214,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
       metric_label: "% change",
       period_days: periodDays,
       created_at: new Date().toISOString(),
-      action_url: `${analyticsPath}/team-performance`,
+      action_url: analyticsPath,
       data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
     });
 

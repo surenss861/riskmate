@@ -34,6 +34,11 @@ const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
 
 export type CustomRange = { start: string; end: string }
 
+/** Normalize ISO datetime or date string to YYYY-MM-DD for <input type="date">. */
+function toDateOnly(value: string): string {
+  return value.slice(0, 10)
+}
+
 function CustomDateRangePicker({
   customRange,
   onApply,
@@ -50,11 +55,11 @@ function CustomDateRangePicker({
     d.setDate(d.getDate() - 29)
     return d.toISOString().slice(0, 10)
   }, [])
-  const [start, setStart] = useState(customRange?.start ?? defaultStart)
-  const [end, setEnd] = useState(customRange?.end ?? defaultEnd)
+  const [start, setStart] = useState(() => (customRange?.start ? toDateOnly(customRange.start) : defaultStart))
+  const [end, setEnd] = useState(() => (customRange?.end ? toDateOnly(customRange.end) : defaultEnd))
   useEffect(() => {
-    if (customRange?.start) setStart(customRange.start)
-    if (customRange?.end) setEnd(customRange.end)
+    if (customRange?.start) setStart(toDateOnly(customRange.start))
+    if (customRange?.end) setEnd(toDateOnly(customRange.end))
   }, [customRange?.start, customRange?.end])
   const handleApply = () => {
     if (start && end && start <= end) onApply(start, end)
