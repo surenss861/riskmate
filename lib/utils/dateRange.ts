@@ -46,10 +46,10 @@ export function presetPeriodToApiBounds(period: PresetPeriod): { since: string; 
     return { since: since.toISOString(), until: until.toISOString() };
   }
   const until = new Date(now);
-  until.setHours(23, 59, 59, 999);
+  until.setUTCHours(23, 59, 59, 999);
   const days = parseInt(period.replace('d', ''), 10) || 30;
   const since = new Date(until.getTime());
   since.setDate(since.getDate() - (days - 1));
-  since.setHours(0, 0, 0, 0);
+  since.setUTCHours(0, 0, 0, 0);
   return { since: since.toISOString(), until: until.toISOString() };
 }

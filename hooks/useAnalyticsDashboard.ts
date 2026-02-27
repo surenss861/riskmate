@@ -360,8 +360,6 @@ export function useAnalyticsDashboard(
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-      abortControllerRef.current = new AbortController();
       refetch();
     }, 300);
   }, [refetch]);

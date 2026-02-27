@@ -53,8 +53,8 @@ export function useUserRole() {
       setUserRole(userRow.role);
       setCachedRole(u.id, userRow.role);
     } else {
-      setError(true);
-      setUserRole(null);
+      setUserRole('member');
+      setCachedRole(u.id, 'member');
     }
   }, []);
 

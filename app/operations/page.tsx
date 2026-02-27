@@ -481,6 +481,8 @@ function DashboardPageInner() {
     return []
   }, [])
 
+  // Incomplete mitigations: derived from current job roster page only (max 50 jobs).
+  // Count reflects the current page, not org-wide. Consider a dedicated endpoint for accurate org-wide count (follow-up).
   const incompleteMitigations = useMemo(() => {
     return jobs
       .filter((j: Job) =>
@@ -720,7 +722,7 @@ function DashboardPageInner() {
           )}
 
           {/* KPI Tiles - Only for owners/admins */}
-          {!isMember && (analyticsLocked ? (
+          {!isMember && (analyticsLocked || dashboardLocked ? (
             <GlassCard className="p-10 text-center mb-16">
               <p className="text-xs uppercase tracking-wider text-white/50 mb-3">Analytics</p>
               <h2 className="text-3xl font-bold font-display text-white mb-4">Upgrade to unlock live analytics</h2>

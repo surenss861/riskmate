@@ -49,10 +49,14 @@ export function useOperationsTimeRange({ refetchRef }: UseOperationsTimeRangePar
       setTimeRange('all');
       setCustomRange(null);
       setDashboardPeriod('1y');
-    } else if (param && ['7d', '30d', '90d', 'all'].includes(param)) {
+    } else if (param && ['7d', '30d', '90d'].includes(param)) {
       setTimeRange(param as TimeRange);
       setCustomRange(null);
-      setDashboardPeriod(param === 'all' ? '1y' : (param as DashboardPeriod));
+      setDashboardPeriod(param as DashboardPeriod);
+    } else if (!param || param === '') {
+      setTimeRange('30d');
+      setCustomRange(null);
+      setDashboardPeriod('30d');
     }
   }, [searchParams]);
 

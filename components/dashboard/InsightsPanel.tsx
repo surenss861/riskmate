@@ -64,15 +64,16 @@ function getSeverityStyle(severity: string) {
   return severityConfig[severity.toLowerCase()] ?? severityConfig.info;
 }
 
-function getActionLabel(type: string): string {
+function getActionLabel(type: string, metricLabel?: string): string {
   const labels: Record<string, string> = {
     deadline_risk: 'View at-risk jobs',
     pending_signatures: 'View pending signatures',
+    pending_signatures_near_deadline: 'View pending signatures',
     overdue_tasks: 'View overdue jobs',
     risk_pattern: 'View risk details',
     team_productivity: 'View team performance',
   };
-  return labels[type] ?? 'View details';
+  return labels[type] ?? metricLabel ?? 'View details';
 }
 
 export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?time_range=30d', storageScope }: InsightsPanelProps) {
@@ -167,7 +168,7 @@ export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?
                     href={insight.action_url as string}
                     className="inline-block mt-2 text-xs text-[#F97316] hover:text-[#FB923C] transition-colors"
                   >
-                    {getActionLabel(insight.type)} →
+                    {getActionLabel(insight.type, insight.metric_label)} →
                   </Link>
                 ) : null}
               </div>

@@ -266,19 +266,18 @@ export function DashboardOverview({
     }))
     const trendSummaries: ExportTrendSummary[] = []
     const jobsData = enhancedAnalytics.trendsJobs?.data ?? []
-    const riskData = enhancedAnalytics.trendsRisk?.data ?? []
-    const completionData = enhancedAnalytics.trendsCompletion?.data ?? []
-    if (jobsData.length > 0) {
-      const totalCreated = jobsData.reduce((a, p) => a + p.value, 0)
-      trendSummaries.push({ label: 'Jobs (period)', value: String(totalCreated) })
+    // Use backend KPI values for trend summary (not unweighted averages of period buckets)
+    const totalJobsKpi = enhancedAnalytics.kpiItems.find((k) => k.id === 'total-jobs')?.value
+    const avgRiskKpi = enhancedAnalytics.kpiItems.find((k) => k.id === 'avg-risk')?.value
+    const completionRateKpi = enhancedAnalytics.kpiItems.find((k) => k.id === 'completion-rate')?.value
+    if (jobsData.length > 0 && totalJobsKpi != null) {
+      trendSummaries.push({ label: 'Jobs (period)', value: String(totalJobsKpi) })
     }
-    if (riskData.length > 0) {
-      const avgRisk = riskData.reduce((a, p) => a + p.value, 0) / riskData.length
-      trendSummaries.push({ label: 'Avg risk (trend)', value: avgRisk.toFixed(1) })
+    if (avgRiskKpi != null) {
+      trendSummaries.push({ label: 'Avg risk (trend)', value: Number(avgRiskKpi).toFixed(1) })
     }
-    if (completionData.length > 0) {
-      const avgComp = completionData.reduce((a, p) => a + p.value, 0) / completionData.length
-      trendSummaries.push({ label: 'Completion % (trend)', value: `${avgComp.toFixed(0)}%` })
+    if (completionRateKpi != null) {
+      trendSummaries.push({ label: 'Completion % (trend)', value: `${Math.round(Number(completionRateKpi))}%` })
     }
     const hazards: ExportHazardRow[] = enhancedAnalytics.hazardItems.slice(0, 10).map((h) => ({
       category: h.category,

@@ -12,15 +12,15 @@ const insightsCache = new Map<string, { data: ReturnType<typeof generateInsights
 let insightsCacheHits = 0;
 let insightsCacheMisses = 0;
 
-async function getCachedInsights(orgId: string, options?: { since?: string; until?: string }) {
-  const cacheKey = options?.since && options?.until ? `${orgId}:${options.since}:${options.until}` : orgId;
+async function getCachedInsights(orgId: string) {
+  const cacheKey = orgId;
   const entry = insightsCache.get(cacheKey);
   if (entry && Date.now() < entry.expires) {
     insightsCacheHits += 1;
     return entry.data;
   }
   insightsCacheMisses += 1;
-  const data = await generateInsights(orgId, options);
+  const data = await generateInsights(orgId);
   insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
   return data;
 }
@@ -927,10 +927,7 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const since = typeof req.query.since === "string" ? req.query.since : undefined;
-      const until = typeof req.query.until === "string" ? req.query.until : undefined;
-      const options = since && until ? { since, until } : undefined;
-      const all = await getCachedInsights(orgId, options);
+      const all = await getCachedInsights(orgId);
       const insights = all.slice(0, 5);
       return res.json({ insights });
     } catch (error: any) {

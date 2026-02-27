@@ -215,8 +215,8 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
       statusChartGranularity: statusChartGroupBy,
       kpiItems,
       insightsDismissalScope: analyticsPeriod === 'custom' && customRange?.start && customRange?.end
-        ? `${userId ?? ''}-${organizationId ?? ''}-${analyticsPeriod}-${periodRangeStart}-${periodRangeEnd}`
-        : `${userId ?? ''}-${organizationId ?? ''}-${analyticsPeriod}`,
+        ? `${userId ?? ''}-${organizationId ?? ''}-custom-${periodRangeStart}-${periodRangeEnd}`
+        : `${userId ?? ''}-${organizationId ?? ''}`,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
         type: i.type,

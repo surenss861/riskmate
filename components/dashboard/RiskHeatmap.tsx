@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 export type RiskHeatmapBucket = {
   job_type: string;
   day_of_week: number;
@@ -15,6 +17,10 @@ type RiskHeatmapProps = {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function heatmapKey(jobType: string, day: number): string {
+  return `${jobType}|${day}`;
+}
+
 function riskToBg(avgRisk: number): string {
   if (avgRisk >= 75) return 'bg-red-500/60';
   if (avgRisk >= 50) return 'bg-orange-500/60';
@@ -28,15 +34,16 @@ export function RiskHeatmap({
   buckets,
   isLoading = false,
 }: RiskHeatmapProps) {
-  const key = (jobType: string, day: number) => `${jobType}|${day}`;
-  const map = new Map<string, { avg_risk: number; count: number }>();
-  const jobTypes = new Set<string>();
-  for (const b of buckets) {
-    const jobType = b.job_type || 'other';
-    map.set(key(jobType, b.day_of_week), { avg_risk: b.avg_risk, count: b.count });
-    jobTypes.add(jobType);
-  }
-  const jobList = [...jobTypes].sort();
+  const { map, jobList } = useMemo(() => {
+    const m = new Map<string, { avg_risk: number; count: number }>();
+    const jobTypes = new Set<string>();
+    for (const b of buckets) {
+      const jobType = b.job_type || 'other';
+      m.set(heatmapKey(jobType, b.day_of_week), { avg_risk: b.avg_risk, count: b.count });
+      jobTypes.add(jobType);
+    }
+    return { map: m, jobList: [...jobTypes].sort() };
+  }, [buckets]);
 
   if (isLoading) {
     return (
@@ -85,7 +92,7 @@ export function RiskHeatmap({
                   {jobType}
                 </td>
                 {DAY_LABELS.map((_, dayIndex) => {
-                  const cell = map.get(key(jobType, dayIndex));
+                  const cell = map.get(heatmapKey(jobType, dayIndex));
                   const avg = cell?.avg_risk ?? null;
                   const count = cell?.count ?? 0;
                   return (
