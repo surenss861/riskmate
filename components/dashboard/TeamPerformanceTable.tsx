@@ -21,6 +21,35 @@ type TeamPerformanceTableProps = {
 
 type SortKey = 'name' | 'jobs_assigned' | 'jobs_completed' | 'completion_rate' | 'avg_days' | 'overdue_count';
 
+function Th({
+  label,
+  keyName,
+  sortKey,
+  sortAsc,
+  onSort,
+  className,
+}: {
+  label: string;
+  keyName: SortKey;
+  sortKey: SortKey;
+  sortAsc: boolean;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(keyName)}
+        className="inline-flex items-center gap-1 text-left text-xs uppercase tracking-wider text-white/60 hover:text-white/80 transition-colors"
+      >
+        {label}
+        {sortKey === keyName && (sortAsc ? ' ↑' : ' ↓')}
+      </button>
+    </th>
+  );
+}
+
 function getInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -87,27 +116,6 @@ export function TeamPerformanceTable({
     );
   }
 
-  const Th = ({
-    label,
-    keyName,
-    className,
-  }: {
-    label: string;
-    keyName: SortKey;
-    className?: string;
-  }) => (
-    <th className={className}>
-      <button
-        type="button"
-        onClick={() => handleSort(keyName)}
-        className="inline-flex items-center gap-1 text-left text-xs uppercase tracking-wider text-white/60 hover:text-white/80 transition-colors"
-      >
-        {label}
-        {sortKey === keyName && (sortAsc ? ' ↑' : ' ↓')}
-      </button>
-    </th>
-  );
-
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 overflow-hidden">
       <h3 className="text-lg font-semibold text-white mb-2">Team performance</h3>
@@ -116,12 +124,12 @@ export function TeamPerformanceTable({
         <table className="w-full min-w-[520px]">
           <thead>
             <tr className="border-b border-white/10">
-              <Th label="Name" keyName="name" className="pb-3 pr-4" />
-              <Th label="Assigned" keyName="jobs_assigned" className="pb-3 pr-4 text-right" />
-              <Th label="Completed" keyName="jobs_completed" className="pb-3 pr-4 text-right" />
-              <Th label="Completion" keyName="completion_rate" className="pb-3 pr-4 text-right" />
-              <Th label="Avg days" keyName="avg_days" className="pb-3 pr-4 text-right" />
-              <Th label="Overdue" keyName="overdue_count" className="pb-3 text-right" />
+              <Th label="Name" keyName="name" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 pr-4" />
+              <Th label="Assigned" keyName="jobs_assigned" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 pr-4 text-right" />
+              <Th label="Completed" keyName="jobs_completed" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 pr-4 text-right" />
+              <Th label="Completion" keyName="completion_rate" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 pr-4 text-right" />
+              <Th label="Avg days" keyName="avg_days" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 pr-4 text-right" />
+              <Th label="Overdue" keyName="overdue_count" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="pb-3 text-right" />
             </tr>
           </thead>
           <tbody>

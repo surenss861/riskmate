@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analyticsApi } from '@/lib/api';
 import { dateOnlyToApiBounds, type CustomRange } from '@/lib/utils/dateRange';
 
@@ -176,6 +176,7 @@ export function useAnalyticsDashboard(
   const [isLocked, setLocked] = useState(false);
   const [error, setError] = useState(false);
   const [sectionErrors, setSectionErrors] = useState<AnalyticsSectionErrors>(noSectionErrors);
+  const fetchGenRef = useRef(0);
 
   const refetch = useCallback(async () => {
     if (!enabled) return;
@@ -188,6 +189,7 @@ export function useAnalyticsDashboard(
     setLoading(true);
     setError(false);
     setSectionErrors(noSectionErrors);
+    const gen = ++fetchGenRef.current;
 
     const useCustom = period === 'custom' && customRange?.start && customRange?.end;
     const useCalendarYear = period === '1y';
@@ -250,6 +252,8 @@ export function useAnalyticsDashboard(
 
     try {
       const results = await Promise.allSettled(promises);
+
+      if (gen !== fetchGenRef.current) return;
 
       const get = <T>(i: number): T | null =>
         results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<T>).value : null;
@@ -327,10 +331,12 @@ export function useAnalyticsDashboard(
         priorTrendsCompliance: prior != null ? (priorTrendsComplianceRes ?? prev.priorTrendsCompliance) : null,
       }));
     } catch (e) {
-      console.error('Analytics dashboard fetch failed', e);
-      setError(true);
+      if (gen === fetchGenRef.current) {
+        console.error('Analytics dashboard fetch failed', e);
+        setError(true);
+      }
     } finally {
-      setLoading(false);
+      if (gen === fetchGenRef.current) setLoading(false);
     }
   }, [period, enabled, customRange?.start, customRange?.end]);
 

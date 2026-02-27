@@ -1094,6 +1094,7 @@ analyticsRouter.get(
           jobs_without_evidence: 0,
         },
         team_activity: [],
+        avg_risk: null,
         locked: true,
         message:
           status === "none"
@@ -1129,6 +1130,7 @@ analyticsRouter.get(
           risk_level_distribution: {},
           evidence_statistics: { total_items: 0, jobs_with_evidence: 0, jobs_without_evidence: 0 },
           team_activity: [],
+          avg_risk: null,
         });
       }
 
@@ -1143,6 +1145,7 @@ analyticsRouter.get(
         user_id: string;
         completions_count: number;
       }[];
+      const avg_risk = r.avg_risk != null ? Number(r.avg_risk) : null;
 
       res.json({
         org_id: orgId,
@@ -1151,6 +1154,7 @@ analyticsRouter.get(
         risk_level_distribution,
         evidence_statistics,
         team_activity,
+        avg_risk,
       });
     } catch (error: any) {
       console.error("Analytics summary error:", error);

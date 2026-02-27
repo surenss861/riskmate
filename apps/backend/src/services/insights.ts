@@ -68,7 +68,9 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   /** Reference date for drill-down links so list matches insight cohort (period end). Defined before first use. */
   const ref = untilDate;
   const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
-  const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  /** Deterministic ID from type + orgId + period so same insight gets same ID across fetches; dismiss state can persist. */
+  const stableId = (type: InsightType, keyData: string) =>
+    `insight-${type}-${orgId}-${keyData}`;
 
   /** Use /operations routes so insight action links open valid filtered views (no /dashboard/* routes). */
   const basePath = "/operations";
@@ -101,7 +103,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     // --- 1. Deadline risk: open jobs <50% complete with <2 days to due (full count from RPC) ---
     if (deadlineRiskCount > 0) {
       insights.push({
-        id: id(),
+        id: stableId("deadline_risk", `count-${deadlineRiskCount}`),
         type: "deadline_risk",
         title: "Deadline risk",
         description: `${deadlineRiskCount} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
@@ -148,7 +150,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
       const [jobType, dayNum] = top[0].split("|");
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       insights.push({
-        id: id(),
+        id: stableId("risk_pattern", `${top[0]}-${top[1]}`),
         type: "risk_pattern",
         title: "Recurring high-risk pattern",
         description: `High-risk jobs concentrate on ${dayNames[parseInt(dayNum, 10)]} for job type "${jobType}" (${top[1]} in period).`,
@@ -167,7 +169,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const pendingSignaturesJobIds = (dueCounts.pending_signatures_job_ids ?? []) as string[];
     if (pendingSignaturesCount > 0) {
       insights.push({
-        id: id(),
+        id: stableId("pending_signatures", `count-${pendingSignaturesCount}`),
         type: "pending_signatures",
         title: "Pending signatures near deadline",
         description: `${pendingSignaturesCount} job(s) have no signature and are within 7 days of compliance deadline.`,
@@ -207,7 +209,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const previousCompletions = (previousMit.data || []).length;
     const change = previousCompletions === 0 ? (currentCompletions > 0 ? 100 : 0) : ((currentCompletions - previousCompletions) / previousCompletions) * 100;
     insights.push({
-      id: id(),
+      id: stableId("team_productivity", `change-${Math.round(change * 100)}`),
       type: "team_productivity",
       title: "Team productivity vs previous period",
       description:
@@ -228,7 +230,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const overdueJobIds = (dueCounts.overdue_job_ids ?? []) as string[];
     if (overdueCount > 0) {
       insights.push({
-        id: id(),
+        id: stableId("overdue_tasks", `count-${overdueCount}`),
         type: "overdue_tasks",
         title: "Overdue tasks",
         description: `${overdueCount} job(s) are past due and not yet completed.`,

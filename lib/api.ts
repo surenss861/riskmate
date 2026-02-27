@@ -1185,6 +1185,8 @@ export type AnalyticsSummaryResponse = {
     jobs_with_evidence: number;
     jobs_without_evidence: number;
   };
+  /** Weighted average risk_score across all jobs in the period (from get_analytics_summary). */
+  avg_risk?: number | null;
   team_activity: Array<{ user_id: string; completions_count: number }>;
   locked?: boolean;
   message?: string;

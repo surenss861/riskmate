@@ -10,11 +10,11 @@ export type JobsTimeRange = 'all' | '7d' | '30d' | '90d' | '1y'
 const ALLOWED_TIME_RANGES: JobsTimeRange[] = ['all', '7d', '30d', '90d', '1y']
 const ALLOWED_TIME_RANGE_SET = new Set<string>(ALLOWED_TIME_RANGES)
 
-/** Current calendar year start (YYYY-MM-DD) and end of today (YYYY-MM-DD) for "This Year" scope. */
+/** Current calendar year start (YYYY-MM-DD) and end of today (YYYY-MM-DD) in UTC for "This Year" scope; aligns with analytics dashboard UTC year boundary. */
 function getYearBounds(): { start: string; end: string } {
   const now = new Date()
-  const year = now.getFullYear()
-  const start = `${year}-01-01`
+  const year = now.getUTCFullYear()
+  const start = new Date(Date.UTC(year, 0, 1)).toISOString().slice(0, 10)
   const end = now.toISOString().slice(0, 10)
   return { start, end }
 }

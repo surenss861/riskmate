@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -99,53 +100,57 @@ export function AnalyticsTrendCharts({
   onPeriodClick,
   onStatusClick,
 }: AnalyticsTrendChartsProps) {
-  const jobsByPeriod = new Map<string, { created?: number; completed?: number }>();
-  (trendsJobs?.data ?? []).forEach((p: TrendPoint) =>
-    jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value })
+  const jobsChartData = useMemo((): JobsTrendData[] => {
+    const jobsByPeriod = new Map<string, { created?: number; completed?: number }>();
+    (trendsJobs?.data ?? []).forEach((p: TrendPoint) =>
+      jobsByPeriod.set(p.period, { ...jobsByPeriod.get(p.period), created: p.value })
+    );
+    if (trendsCompletedCounts?.data?.length) {
+      (trendsCompletedCounts.data as TrendPoint[]).forEach((p: TrendPoint) => {
+        const cur = jobsByPeriod.get(p.period) ?? {};
+        jobsByPeriod.set(p.period, { ...cur, completed: Math.round(Number(p.value ?? 0)) });
+      });
+    } else {
+      (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
+        const cur = jobsByPeriod.get(p.period) ?? {};
+        const created = cur.created ?? 0;
+        const rate = Math.max(0, Math.min(100, p.value)) / 100;
+        jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
+      });
+    }
+    return Array.from(jobsByPeriod.entries())
+      .map(([period, v]) => ({ period, ...v }))
+      .sort((a, b) => a.period.localeCompare(b.period));
+  }, [trendsJobs, trendsCompletion, trendsCompletedCounts]);
+
+  const riskChartData = useMemo(
+    (): RiskTrendData[] =>
+      (trendsRisk?.data ?? []).map((p: TrendPoint) => ({ period: p.period, value: p.value })),
+    [trendsRisk]
   );
-  if (trendsCompletedCounts?.data?.length) {
-    (trendsCompletedCounts.data as TrendPoint[]).forEach((p: TrendPoint) => {
-      const cur = jobsByPeriod.get(p.period) ?? {};
-      jobsByPeriod.set(p.period, { ...cur, completed: Math.round(Number(p.value ?? 0)) });
-    });
-  } else {
-    (trendsCompletion?.data ?? []).forEach((p: TrendPoint) => {
-      const cur = jobsByPeriod.get(p.period) ?? {};
-      const created = cur.created ?? 0;
-      const rate = Math.max(0, Math.min(100, p.value)) / 100;
-      jobsByPeriod.set(p.period, { ...cur, completed: Math.round(created * rate) });
-    });
-  }
-  const jobsChartData: JobsTrendData[] = Array.from(jobsByPeriod.entries())
-    .map(([period, v]) => ({ period, ...v }))
-    .sort((a, b) => a.period.localeCompare(b.period));
 
-  const riskChartData: RiskTrendData[] = (trendsRisk?.data ?? []).map((p: TrendPoint) => ({
-    period: p.period,
-    value: p.value,
-  }));
-
-  // Use statusByPeriod when available; otherwise build a single-row dataset from jobCountsByStatus so the Jobs-by-status chart still renders.
   const hasStatusByPeriod = statusByPeriod && statusByPeriod.length > 0;
-  const statusChartData: StatusByPeriodRow[] = hasStatusByPeriod
-    ? statusByPeriod
-    : (() => {
-        const counts = jobCountsByStatus ?? {};
-        const keys = Object.keys(counts).filter(
-          (k) => typeof counts[k] === 'number' && (counts[k] as number) > 0
-        );
-        if (keys.length === 0) return [];
-        const row: StatusByPeriodRow = { period: periodLabel || 'Total' };
-        keys.forEach((k) => (row[k] = counts[k] as number));
-        return [row];
-      })();
+  const statusChartData = useMemo((): StatusByPeriodRow[] => {
+    if (hasStatusByPeriod) return statusByPeriod;
+    const counts = jobCountsByStatus ?? {};
+    const keys = Object.keys(counts).filter(
+      (k) => typeof counts[k] === 'number' && (counts[k] as number) > 0
+    );
+    if (keys.length === 0) return [];
+    const row: StatusByPeriodRow = { period: periodLabel || 'Total' };
+    keys.forEach((k) => (row[k] = counts[k] as number));
+    return [row];
+  }, [statusByPeriod, jobCountsByStatus, periodLabel, hasStatusByPeriod]);
 
-  const statusKeys =
-    statusChartData.length > 0
-      ? Array.from(
-          new Set(statusChartData.flatMap((row) => Object.keys(row).filter((k) => k !== 'period')))
-        )
-      : [];
+  const statusKeys = useMemo(
+    () =>
+      statusChartData.length > 0
+        ? Array.from(
+            new Set(statusChartData.flatMap((row) => Object.keys(row).filter((k) => k !== 'period')))
+          )
+        : [],
+    [statusChartData]
+  );
 
   if (isLoading) {
     return (
@@ -243,7 +248,7 @@ export function AnalyticsTrendCharts({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={riskChartData} {...chartCommon}>
                 <defs>
-                  <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="analyticsRiskGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#f97316" stopOpacity={0.4} />
                     <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
                   </linearGradient>
@@ -264,7 +269,7 @@ export function AnalyticsTrendCharts({
                   type="monotone"
                   dataKey="value"
                   stroke="#f97316"
-                  fill="url(#riskGradient)"
+                  fill="url(#analyticsRiskGradient)"
                   strokeWidth={2}
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };

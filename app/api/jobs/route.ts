@@ -210,8 +210,15 @@ export async function GET(request: NextRequest) {
     if (createdBefore && /^\d{4}-\d{2}-\d{2}$/.test(createdBefore)) {
       createdBefore = new Date(createdBefore + 'T23:59:59.999Z').toISOString()
     }
-    const completedAfter = searchParams.get('completed_after')?.trim() ?? ''
-    const completedBefore = searchParams.get('completed_before')?.trim() ?? ''
+    let completedAfter = searchParams.get('completed_after')?.trim() ?? ''
+    let completedBefore = searchParams.get('completed_before')?.trim() ?? ''
+    // Normalize date-only bounds to full-day timestamps so the end date is inclusive (same as created_after/created_before)
+    if (completedAfter && /^\d{4}-\d{2}-\d{2}$/.test(completedAfter)) {
+      completedAfter = new Date(completedAfter + 'T00:00:00.000Z').toISOString()
+    }
+    if (completedBefore && /^\d{4}-\d{2}-\d{2}$/.test(completedBefore)) {
+      completedBefore = new Date(completedBefore + 'T23:59:59.999Z').toISOString()
+    }
     const hazardCategory = searchParams.get('hazard')?.trim() ?? ''
 
     if (filterConfigRaw && !filterConfig) {

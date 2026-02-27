@@ -380,19 +380,6 @@ function DashboardPageInner() {
     router.push('/login')
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-400'
-      case 'in_progress':
-        return 'text-blue-400'
-      case 'cancelled':
-        return 'text-red-400'
-      default:
-        return 'text-[#A1A1A1]'
-    }
-  }
-
   // Default analytics object to prevent null errors
   const defaultAnalytics = {
     jobs_with_evidence: 0,
@@ -599,13 +586,6 @@ function DashboardPageInner() {
     }
   }, [searchParams, pathname, router, refetchAnalytics, refetchDashboard])
 
-  const handleRangeChange = (nextRange: number) => {
-    // Convert number to TimeRange
-    const rangeMap: Record<number, TimeRange> = { 7: '7d', 30: '30d', 90: '90d', 365: 'all' }
-    const newTimeRange = rangeMap[nextRange] || '30d'
-    handleTimeRangeChange(newTimeRange)
-  }
-
   const periodLabels: Record<DashboardPeriod, string> = {
     '7d': 'Last 7 Days',
     '30d': 'Last 30 Days',
@@ -627,9 +607,11 @@ function DashboardPageInner() {
     const totalJobs = jc?.total ?? 0
     const completionRate = jc?.completion_rate ?? 0
     const riskData = dashboardData.trendsRisk?.data ?? []
+    const avgRiskFromSummary = summary?.avg_risk != null ? Number(summary.avg_risk) : null
     const avgRiskFromTrend = riskData.length
       ? riskData.reduce((a, p) => a + p.value, 0) / riskData.length
       : 0
+    const avgRiskKpi = avgRiskFromSummary ?? avgRiskFromTrend
     const complianceOverall = cr?.overall ?? 0
 
     // Only use prior values when prior datasets were actually fetched (e.g. not for custom range).
@@ -646,6 +628,7 @@ function DashboardPageInner() {
       if (previous === 0) return current > 0 ? 100 : undefined
       return Math.round(((current - previous) / previous) * 1000) / 10
     }
+    /** Direction for metrics where higher is better (e.g. Total Jobs, Completion Rate). Do not use for lower-is-better (e.g. Avg Risk). */
     const trendFromDelta = (delta: number | undefined): 'up' | 'down' | 'flat' => {
       if (delta == null) return 'flat'
       if (delta > 0) return 'up'
@@ -661,9 +644,8 @@ function DashboardPageInner() {
 
     const totalJobsTrendPct = priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined
     const completionTrendPct = priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined
-    const complianceTrendPct = priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined
-    const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
-    const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskFromTrend, priorAvgRisk, false) : 'flat'
+    const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined
+    const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskKpi, priorAvgRisk, false) : 'flat'
     const se = dashboardSectionErrors
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
@@ -691,7 +673,7 @@ function DashboardPageInner() {
       {
         id: 'avg-risk',
         title: 'Avg Risk Score',
-        value: Math.round(avgRiskFromTrend * 10) / 10,
+        value: Math.round(avgRiskKpi * 10) / 10,
         unavailable: se.trendsRisk,
         trend: avgRiskTrend,
         trendPercent: avgRiskTrendPct,
@@ -705,7 +687,7 @@ function DashboardPageInner() {
         suffix: '%',
         unavailable: se.complianceRate,
         trend: priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat',
-        trendPercent: complianceTrendPct,
+        trendPercent: priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined,
         previousValue: priorCompliance !== undefined ? Math.round(priorCompliance) : undefined,
         sparklineData: dashboardData.trendsCompliance?.data?.slice(-7).map((d) => d.value) ?? [],
       },
@@ -750,7 +732,7 @@ function DashboardPageInner() {
         metric_value: i.metric_value,
         metric_label: i.metric_label,
       })),
-      insightsLoading: dashboardLoading,
+      insightsLoading: dashboardLoading && dashboardData.insights === null,
       trendsJobs: dashboardData.trendsJobs,
       trendsRisk: dashboardData.trendsRisk,
       trendsCompletion: dashboardData.trendsCompletion,

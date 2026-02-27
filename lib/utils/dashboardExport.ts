@@ -136,7 +136,13 @@ export async function buildDashboardPdf(options: {
   y -= 12;
 
   draw('Summary KPIs', 14, true);
-  options.kpis.forEach((k) => draw(`${k.title}: ${k.value}`, 10));
+  options.kpis.forEach((k) => {
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
+    draw(`${k.title}: ${k.value}`, 10);
+  });
   y -= 12;
 
   if (options.trendSummaries && options.trendSummaries.length > 0) {
@@ -168,7 +174,10 @@ export async function buildDashboardPdf(options: {
       y = currentPage.getHeight() - margin;
     }
     draw('Top hazards', 14, true);
-    options.hazards.slice(0, 10).forEach((h) => draw(`${h.category}: ${h.count} (avg risk ${h.avgRisk})`, 9));
+    options.hazards.slice(0, 10).forEach((h) => {
+      const categoryTrunc = h.category.length > 80 ? h.category.slice(0, 80) + '…' : h.category;
+      draw(`${categoryTrunc}: ${h.count} (avg risk ${h.avgRisk})`, 9);
+    });
     y -= 12;
   }
 
@@ -179,7 +188,12 @@ export async function buildDashboardPdf(options: {
     }
     draw('Team performance', 14, true);
     options.team.slice(0, 15).forEach((t) => {
-      draw(`${t.name}: ${t.completed}/${t.assigned} (${t.rate}%), avg ${t.avgDays}d, overdue ${t.overdue}`, 9);
+      if (y < minY) {
+        currentPage = doc.addPage([595, 842]);
+        y = currentPage.getHeight() - margin;
+      }
+      const nameTrunc = t.name.length > 80 ? t.name.slice(0, 80) + '…' : t.name;
+      draw(`${nameTrunc}: ${t.completed}/${t.assigned} (${t.rate}%), avg ${t.avgDays}d, overdue ${t.overdue}`, 9);
     });
   }
 

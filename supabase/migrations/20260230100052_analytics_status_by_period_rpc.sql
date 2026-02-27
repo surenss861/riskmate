@@ -1,5 +1,11 @@
 -- Analytics status-by-period: one row per (period_key, status) for jobs created in range.
 -- Used by dashboard Jobs-by-status chart to show weekly (or daily) counts per status with valid ISO period for drill-down.
+-- Include date_trunc_week_monday so this migration is self-contained if 20260230100033 was not applied.
+
+CREATE OR REPLACE FUNCTION date_trunc_week_monday(ts TIMESTAMPTZ)
+RETURNS DATE AS $$
+  SELECT (DATE_TRUNC('week', ts AT TIME ZONE 'UTC'))::DATE;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION get_analytics_status_by_period(
   p_org_id UUID,

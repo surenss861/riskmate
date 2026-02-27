@@ -1,10 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import clsx from 'clsx';
 import { AlertTriangle, TrendingDown, FileSignature } from 'lucide-react';
 import { SkeletonLoader } from './SkeletonLoader';
+
+const DISMISSED_STORAGE_KEY = 'riskmate-insights-dismissed';
+const MAX_DISMISSED_IDS = 200;
+
+function loadDismissedIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DISMISSED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr.slice(-MAX_DISMISSED_IDS) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissedIds(ids: Set<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const arr = Array.from(ids).slice(-MAX_DISMISSED_IDS);
+    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // ignore
+  }
+}
 
 export type InsightItem = {
   id: string;
@@ -35,10 +60,19 @@ function getSeverityStyle(severity: string) {
 
 export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?time_range=30d' }: InsightsPanelProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setDismissedIds(loadDismissedIds());
+  }, []);
+
   const visible = insights.filter((i) => !dismissedIds.has(i.id));
 
   const handleDismiss = (id: string) => {
-    setDismissedIds((prev) => new Set(prev).add(id));
+    setDismissedIds((prev) => {
+      const next = new Set(prev).add(id);
+      saveDismissedIds(next);
+      return next;
+    });
   };
 
   if (isLoading) {

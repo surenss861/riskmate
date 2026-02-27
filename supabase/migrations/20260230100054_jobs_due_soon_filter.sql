@@ -3,8 +3,8 @@
 -- Uses due_date to align with insights and team analytics; end_date used only when due_date is null.
 -- Insight-specific drill-down: p_insight_deadline_risk, p_insight_pending_signatures_near_deadline,
 -- p_insight_overdue use due_date and p_reference_date so list matches insight cohort (period-scoped).
-
-DROP FUNCTION IF EXISTS get_jobs_list(uuid, integer, integer, boolean, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer, boolean, boolean, boolean, text, uuid);
+-- Use CREATE OR REPLACE to avoid breaking existing callers during rolling deployment; if the old signature
+-- exists, drop it explicitly in a separate migration so CREATE OR REPLACE can add the new overload.
 
 CREATE OR REPLACE FUNCTION get_jobs_list(
   p_org_id UUID,
