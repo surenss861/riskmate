@@ -76,7 +76,7 @@ function InsightsPageInner() {
     const fetchInsights = async () => {
       setLoading(true);
       try {
-        const res = await analyticsApi.insights({ since, until });
+        const res = await analyticsApi.insights({ since, until, limit: 100 });
         if (!cancelled) {
           setInsights(res.insights ?? []);
           setLocked(!!res.locked);

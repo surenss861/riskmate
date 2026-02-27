@@ -1378,11 +1378,12 @@ export const analyticsApi = {
     }>(`/api/analytics/trends${qs ? `?${qs}` : ''}`, {}, signal);
   },
 
-  /** Top predictive insights (cached). Maps to GET /api/analytics/insights. Pass since/until to scope to period. */
-  insights: async (params?: { since?: string; until?: string }, signal?: AbortSignal) => {
+  /** Top predictive insights (cached). Maps to GET /api/analytics/insights. Pass since/until to scope to period; limit for max items (default 5). */
+  insights: async (params?: { since?: string; until?: string; limit?: number }, signal?: AbortSignal) => {
     const qs = new URLSearchParams();
     if (params?.since) qs.set('since', params.since);
     if (params?.until) qs.set('until', params.until);
+    if (params?.limit != null) qs.set('limit', String(params.limit));
     const query = qs.toString();
     return apiRequest<{
       insights: Array<{

@@ -250,7 +250,7 @@ export function useAnalyticsDashboard(
       analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }, signal),
       (() => {
         const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
-        return analyticsApi.insights(insightsRange, signal);
+        return analyticsApi.insights({ ...insightsRange, limit: 5 }, signal);
       })(),
       analyticsApi.statusByPeriod(statusByPeriodParams, signal),
       prior ? analyticsApi.summary({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),

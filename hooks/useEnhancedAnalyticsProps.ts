@@ -6,7 +6,7 @@ import type { AnalyticsDashboardData, AnalyticsSectionErrors } from '@/hooks/use
 import type { DashboardPeriod } from '@/lib/types/analytics';
 import type { EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview';
 import type { CustomRange } from '@/lib/utils/dateRange';
-import { dateOnlyToApiBounds, presetPeriodToApiBounds, type PresetPeriod } from '@/lib/utils/dateRange';
+import { dateOnlyToApiBounds, presetPeriodToApiBounds, toDateOnly, type PresetPeriod } from '@/lib/utils/dateRange';
 
 /** Compute start/end ISO bounds for drill-down from chart bucket. */
 function periodRangeFromGranularity(
@@ -187,21 +187,11 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     ];
 
     const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end;
-    const periodRangeStart = useCustom
-      ? customRange!.start
-      : analyticsPeriod === '1y'
-        ? new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1, 0, 0, 0, 0)).toISOString().slice(0, 10)
-        : (() => {
-            const days = analyticsPeriod === '7d' ? 7 : analyticsPeriod === '90d' ? 90 : 30;
-            const d = new Date();
-            d.setDate(d.getDate() - (days - 1));
-            return d.toISOString().slice(0, 10);
-          })();
-    const periodRangeEnd = useCustom
-      ? customRange!.end
-      : analyticsPeriod === '1y'
-        ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 0, 0, 0, 0)).toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+    const preset: PresetPeriod =
+      analyticsPeriod === '1y' ? '1y' : analyticsPeriod === '7d' ? '7d' : analyticsPeriod === '90d' ? '90d' : '30d';
+    const presetBounds = presetPeriodToApiBounds(preset);
+    const periodRangeStart = useCustom ? customRange!.start : toDateOnly(presetBounds.since);
+    const periodRangeEnd = useCustom ? customRange!.end : toDateOnly(presetBounds.until);
 
     return {
       period: analyticsPeriod,
