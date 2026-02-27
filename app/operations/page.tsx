@@ -681,7 +681,7 @@ function DashboardPageInner() {
         id: 'avg-risk',
         title: 'Avg Risk Score',
         value: Math.round(avgRiskKpi * 10) / 10,
-        unavailable: se.trendsRisk,
+        unavailable: se.summary,
         trend: avgRiskTrend,
         trendDirection: avgRiskTrendDirection,
         trendPercent: avgRiskTrendPct,

@@ -200,7 +200,8 @@ export async function GET(request: NextRequest) {
       createdBefore = rangeEndParam
     } else if (timeRangeParam === '1y' && !createdAfter && !createdBefore) {
       const now = new Date()
-      createdAfter = `${now.getFullYear()}-01-01`
+      const y = now.getUTCFullYear()
+      createdAfter = `${y}-01-01`
       createdBefore = now.toISOString().slice(0, 10)
     }
     // Normalize date-only bounds to full-day timestamps so the end date is inclusive (jobs on end date included)
