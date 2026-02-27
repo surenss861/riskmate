@@ -892,12 +892,16 @@ analyticsRouter.get(
   }
 );
 
-// GET /api/analytics/insights — top 5 predictive insights (cached 1h). Optional since/until to scope to period.
+// GET /api/analytics/insights — top 5 predictive insights (cached 1h). Owner/admin only; members get 403.
 analyticsRouter.get(
   "/insights",
   authenticate as unknown as express.RequestHandler,
   async (req: express.Request, res: express.Response) => {
     const authReq = req as AuthenticatedRequest;
+    const role = authReq.user.role ?? "member";
+    if (role === "member") {
+      return res.status(403).json({ insights: [], locked: true, message: "Insights are available to owners and admins only." });
+    }
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);

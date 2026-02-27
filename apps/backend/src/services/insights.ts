@@ -65,6 +65,8 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
       : dateRange(PERIOD_DAYS);
   const sinceDate = new Date(since);
   const untilDate = new Date(until);
+  /** Reference date for drill-down links so list matches insight cohort (period end). Defined before first use. */
+  const ref = untilDate;
   const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
   const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -72,14 +74,11 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   const basePath = "/operations";
   const jobsPath = `${basePath}/jobs`;
   const analyticsPath = basePath;
-  /** Reference date for drill-down links so list matches insight cohort (period end). */
   const referenceDateIso = ref.toISOString();
   const insightQuery = (insight: string) =>
     `insight=${encodeURIComponent(insight)}&reference_date=${encodeURIComponent(referenceDateIso)}`;
 
   try {
-    // When since/until are provided, use end of period as reference so overdue/due-soon/pending are computed for the selected window.
-    const ref = untilDate;
     const refMs = ref.getTime();
     const nowIso = ref.toISOString();
     const twoDaysLater = new Date(refMs + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);

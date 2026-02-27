@@ -80,6 +80,10 @@ function InsightsPageInner() {
   }, []);
 
   useEffect(() => {
+    if (userRole === null || userRole === 'member') {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const fetchInsights = async () => {
       setLoading(true);
@@ -97,7 +101,7 @@ function InsightsPageInner() {
     };
     fetchInsights();
     return () => { cancelled = true; };
-  }, [since, until]);
+  }, [since, until, userRole]);
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowserClient();
