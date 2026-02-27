@@ -86,11 +86,56 @@ export type AnalyticsDashboardData = {
   priorTrendsCompliance: Trends | null;
 };
 
+/** Per-section error flags: true when that endpoint failed on last refresh; valid data may still be from previous load. */
+export type AnalyticsSectionErrors = {
+  summary: boolean;
+  jobCompletion: boolean;
+  complianceRate: boolean;
+  teamPerformance: boolean;
+  hazardFrequency: boolean;
+  riskHeatmap: boolean;
+  trendsJobs: boolean;
+  trendsRisk: boolean;
+  trendsCompletion: boolean;
+  trendsCompliance: boolean;
+  trendsCompletedCounts: boolean;
+  insights: boolean;
+  statusByPeriod: boolean;
+  priorSummary: boolean;
+  priorJobCompletion: boolean;
+  priorComplianceRate: boolean;
+  priorTrendsRisk: boolean;
+  priorTrendsCompliance: boolean;
+};
+
+const noSectionErrors: AnalyticsSectionErrors = {
+  summary: false,
+  jobCompletion: false,
+  complianceRate: false,
+  teamPerformance: false,
+  hazardFrequency: false,
+  riskHeatmap: false,
+  trendsJobs: false,
+  trendsRisk: false,
+  trendsCompletion: false,
+  trendsCompliance: false,
+  trendsCompletedCounts: false,
+  insights: false,
+  statusByPeriod: false,
+  priorSummary: false,
+  priorJobCompletion: false,
+  priorComplianceRate: false,
+  priorTrendsRisk: false,
+  priorTrendsCompliance: false,
+};
+
 export type AnalyticsDashboardState = {
   data: AnalyticsDashboardData;
   isLoading: boolean;
   isLocked: boolean;
   error: boolean;
+  /** Per-section error flags; when true, that section's endpoint failed on last refresh (UI should show unavailable/error, not zero). */
+  sectionErrors: AnalyticsSectionErrors;
   refetch: () => Promise<void>;
   /** groupBy used for trends and statusByPeriod (day/week/month); use in drill-down for aligned ranges */
   effectiveGroupBy: 'day' | 'week' | 'month';
@@ -128,6 +173,7 @@ export function useAnalyticsDashboard(
   const [isLoading, setLoading] = useState(false);
   const [isLocked, setLocked] = useState(false);
   const [error, setError] = useState(false);
+  const [sectionErrors, setSectionErrors] = useState<AnalyticsSectionErrors>(noSectionErrors);
 
   const refetch = useCallback(async () => {
     if (!enabled) return;
@@ -139,6 +185,7 @@ export function useAnalyticsDashboard(
 
     setLoading(true);
     setError(false);
+    setSectionErrors(noSectionErrors);
 
     const useCustom = period === 'custom' && customRange?.start && customRange?.end;
     const useCalendarYear = period === '1y';
@@ -175,84 +222,111 @@ export function useAnalyticsDashboard(
       ? { since: since!, until: until!, groupBy: statusByPeriodGroupBy }
       : { period, groupBy: statusByPeriodGroupBy };
 
+    const promises = [
+      useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
+      useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
+      useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
+      useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
+      useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
+      useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }) : analyticsApi.riskHeatmap({ period }),
+      analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }),
+      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }),
+      (() => {
+        const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
+        return analyticsApi.insights(insightsRange);
+      })(),
+      analyticsApi.statusByPeriod(statusByPeriodParams),
+      prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
+      prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
+      prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
+      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }) : Promise.resolve(null),
+      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }) : Promise.resolve(null),
+    ];
+
     try {
-      const [
-        summaryRes,
-        jobCompletionRes,
-        complianceRes,
-        teamRes,
-        hazardRes,
-        riskHeatmapRes,
-        trendsJobsRes,
-        trendsRiskRes,
-        trendsCompletionRes,
-        trendsComplianceRes,
-        trendsCompletedCountsRes,
-        insightsRes,
-        statusByPeriodRes,
-        priorSummaryRes,
-        priorJobCompletionRes,
-        priorComplianceRes,
-        priorTrendsRiskRes,
-        priorTrendsComplianceRes,
-      ] = await Promise.all([
-        useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
-        useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
-        useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
-        useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
-        useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
-        useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }) : analyticsApi.riskHeatmap({ period }),
-        analyticsApi.trends({ ...trendsParams, metric: 'jobs' }),
-        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }),
-        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }),
-        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }),
-        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }),
-        (() => {
-          const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
-          return analyticsApi.insights(insightsRange);
-        })(),
-        analyticsApi.statusByPeriod(statusByPeriodParams),
-        prior ? analyticsApi.summary({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-        prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-        prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }) : Promise.resolve(null),
-        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }) : Promise.resolve(null),
-        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }) : Promise.resolve(null),
-      ]);
+      const results = await Promise.allSettled(promises);
+
+      const get = <T>(i: number): T | null =>
+        results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<T>).value : null;
+
+      const summaryRes = get<Summary>(0);
+      const jobCompletionRes = get<JobCompletion>(1);
+      const complianceRes = get<ComplianceRate>(2);
+      const teamRes = get<TeamPerformance>(3);
+      const hazardRes = get<HazardFrequency>(4);
+      const riskHeatmapRes = get<RiskHeatmap>(5);
+      const trendsJobsRes = get<Trends>(6);
+      const trendsRiskRes = get<Trends>(7);
+      const trendsCompletionRes = get<Trends>(8);
+      const trendsComplianceRes = get<Trends>(9);
+      const trendsCompletedCountsRes = get<Trends>(10);
+      const insightsRes = get<Insights | null>(11);
+      const statusByPeriodRes = get<{ data?: StatusByPeriodRow[] } | null>(12);
+      const priorSummaryRes = get<Summary | null>(13);
+      const priorJobCompletionRes = get<JobCompletion | null>(14);
+      const priorComplianceRes = get<ComplianceRate | null>(15);
+      const priorTrendsRiskRes = get<Trends | null>(16);
+      const priorTrendsComplianceRes = get<Trends | null>(17);
+
+      const err = (i: number) => results[i].status === 'rejected';
+      setSectionErrors({
+        summary: err(0),
+        jobCompletion: err(1),
+        complianceRate: err(2),
+        teamPerformance: err(3),
+        hazardFrequency: err(4),
+        riskHeatmap: err(5),
+        trendsJobs: err(6),
+        trendsRisk: err(7),
+        trendsCompletion: err(8),
+        trendsCompliance: err(9),
+        trendsCompletedCounts: err(10),
+        insights: err(11),
+        statusByPeriod: err(12),
+        priorSummary: err(13),
+        priorJobCompletion: err(14),
+        priorComplianceRate: err(15),
+        priorTrendsRisk: err(16),
+        priorTrendsCompliance: err(17),
+      });
 
       const locked =
-        summaryRes.locked ||
-        jobCompletionRes.locked ||
-        complianceRes.locked ||
-        teamRes.locked ||
-        hazardRes.locked ||
-        insightsRes?.locked;
-
+        (summaryRes?.locked ?? false) ||
+        (jobCompletionRes?.locked ?? false) ||
+        (complianceRes?.locked ?? false) ||
+        (teamRes?.locked ?? false) ||
+        (hazardRes?.locked ?? false) ||
+        (insightsRes?.locked ?? false);
       setLocked(!!locked);
+
       const statusByPeriod = statusByPeriodRes?.data ?? null;
-      setData({
-        summary: summaryRes,
-        jobCompletion: jobCompletionRes,
-        complianceRate: complianceRes,
-        teamPerformance: teamRes,
-        hazardFrequency: hazardRes,
-        riskHeatmap: riskHeatmapRes,
-        trendsJobs: trendsJobsRes,
-        trendsRisk: trendsRiskRes,
-        trendsCompletion: trendsCompletionRes,
-        trendsCompliance: trendsComplianceRes,
-        trendsCompletedCounts: trendsCompletedCountsRes,
-        insights: insightsRes,
-        statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : null,
-        priorSummary: priorSummaryRes,
-        priorJobCompletion: priorJobCompletionRes,
-        priorComplianceRate: priorComplianceRes,
-        priorTrendsRisk: priorTrendsRiskRes,
-        priorTrendsCompliance: priorTrendsComplianceRes,
-      });
+
+      setData((prev) => ({
+        summary: summaryRes ?? prev.summary,
+        jobCompletion: jobCompletionRes ?? prev.jobCompletion,
+        complianceRate: complianceRes ?? prev.complianceRate,
+        teamPerformance: teamRes ?? prev.teamPerformance,
+        hazardFrequency: hazardRes ?? prev.hazardFrequency,
+        riskHeatmap: riskHeatmapRes ?? prev.riskHeatmap,
+        trendsJobs: trendsJobsRes ?? prev.trendsJobs,
+        trendsRisk: trendsRiskRes ?? prev.trendsRisk,
+        trendsCompletion: trendsCompletionRes ?? prev.trendsCompletion,
+        trendsCompliance: trendsComplianceRes ?? prev.trendsCompliance,
+        trendsCompletedCounts: trendsCompletedCountsRes ?? prev.trendsCompletedCounts,
+        insights: insightsRes ?? prev.insights,
+        statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : (prev.statusByPeriod ?? null),
+        priorSummary: priorSummaryRes ?? prev.priorSummary,
+        priorJobCompletion: priorJobCompletionRes ?? prev.priorJobCompletion,
+        priorComplianceRate: priorComplianceRes ?? prev.priorComplianceRate,
+        priorTrendsRisk: priorTrendsRiskRes ?? prev.priorTrendsRisk,
+        priorTrendsCompliance: priorTrendsComplianceRes ?? prev.priorTrendsCompliance,
+      }));
     } catch (e) {
       console.error('Analytics dashboard fetch failed', e);
       setError(true);
-      setData(emptyData);
     } finally {
       setLoading(false);
     }
@@ -271,5 +345,5 @@ export function useAnalyticsDashboard(
     return period === '7d' ? 'day' : period === '1y' ? 'month' : 'week';
   }, [period, customRange?.start, customRange?.end]);
 
-  return { data, isLoading, isLocked, error, refetch, effectiveGroupBy };
+  return { data, isLoading, isLocked, error, sectionErrors, refetch, effectiveGroupBy };
 }

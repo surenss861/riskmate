@@ -13,6 +13,8 @@ type KpiTileProps = {
   description?: string;
   highlightColor?: string;
   isLoading?: boolean;
+  /** When true, show "Unavailable" instead of value (endpoint failed). */
+  unavailable?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
   /** Percentage change vs previous period (e.g. 12 for "↑ 12%") */
@@ -78,6 +80,7 @@ export function KpiTile({
   description,
   highlightColor = '#F97316',
   isLoading = false,
+  unavailable = false,
   trend = 'flat',
   trendLabel,
   trendPercent,
@@ -94,17 +97,18 @@ export function KpiTile({
   });
 
   useEffect(() => {
-    spring.set(value);
-  }, [spring, value]);
+    if (!unavailable) spring.set(value);
+  }, [spring, value, unavailable]);
 
   useEffect(() => {
+    if (unavailable) return;
     const unsubscribe = spring.on('change', (latest) => {
       setDisplayValue(formatNumber(latest));
     });
     return () => {
       unsubscribe();
     };
-  }, [spring]);
+  }, [spring, unavailable]);
 
   const trendDisplay = useMemo(() => {
     const arrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
@@ -138,9 +142,12 @@ export function KpiTile({
           style={{ fontVariantNumeric: 'tabular-nums slashed-zero' }}
         >
           {prefix}
-          {isLoading ? '—' : displayValue}
+          {isLoading ? '—' : unavailable ? '—' : displayValue}
           {suffix}
         </span>
+        {unavailable && !isLoading && (
+          <span className="text-sm font-medium text-amber-400/90">Unavailable</span>
+        )}
       </div>
 
       {description && (

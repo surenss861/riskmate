@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
@@ -39,7 +39,10 @@ function InsightsPageInner() {
   const rangeEnd = searchParams.get('range_end')?.trim() ?? '';
 
   const [user, setUser] = useState<{ email?: string } | null>(null);
+  /** Resolved role from DB: only 'member' | 'owner' | 'admin' when explicitly returned; null while loading or on error. */
   const [userRole, setUserRole] = useState<string | null>(null);
+  /** True when role lookup failed (network/DB error); do not treat as member. */
+  const [roleFetchError, setRoleFetchError] = useState(false);
   const [insights, setInsights] = useState<Array<{
     id: string;
     type: string;
@@ -66,18 +69,32 @@ function InsightsPageInner() {
     return { since: bounds.since, until: bounds.until, periodLabel: PERIOD_LABELS[period] || timeRange };
   }, [timeRange, rangeStart, rangeEnd]);
 
-  useEffect(() => {
-    const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user ?? null);
-      if (user) {
-        const { data: userRow } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
-        setUserRole(userRow?.role ?? 'member');
-      }
-    };
-    loadUser();
+  const loadUserAndRole = useCallback(async () => {
+    setRoleFetchError(false);
+    const supabase = createSupabaseBrowserClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user ?? null);
+    if (!user) {
+      setUserRole(null);
+      return;
+    }
+    const { data: userRow, error } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+    if (error) {
+      setRoleFetchError(true);
+      setUserRole(null);
+      return;
+    }
+    if (userRow?.role === 'owner' || userRow?.role === 'admin' || userRow?.role === 'member') {
+      setUserRole(userRow.role);
+    } else {
+      setRoleFetchError(true);
+      setUserRole(null);
+    }
   }, []);
+
+  useEffect(() => {
+    loadUserAndRole();
+  }, [loadUserAndRole]);
 
   useEffect(() => {
     if (userRole === null || userRole === 'member') {
@@ -113,7 +130,46 @@ function InsightsPageInner() {
 
   const isMember = userRole === 'member';
 
-  if (userRole !== null && isMember) {
+  if (roleFetchError) {
+    return (
+      <ProtectedRoute>
+        <AppBackground>
+          <DashboardNavbar email={user?.email} onLogout={handleLogout} />
+          <AppShell>
+            <GlassCard className="p-8 text-center border-amber-500/30 bg-amber-500/5">
+              <p className="text-amber-200/90 mb-2">We couldn’t load your role. You may not have access to this page.</p>
+              <p className="text-sm text-white/60 mb-4">Please try again or contact your administrator.</p>
+              <button
+                type="button"
+                onClick={() => loadUserAndRole()}
+                className="rounded-lg bg-[#F97316] px-4 py-2 text-sm font-medium text-black hover:bg-[#FB923C] transition-colors"
+              >
+                Retry
+              </button>
+              <Link href="/operations" className="mt-4 inline-block text-sm text-[#F97316] hover:text-[#FB923C] ml-4">
+                ← Back to Operations
+              </Link>
+            </GlassCard>
+          </AppShell>
+        </AppBackground>
+      </ProtectedRoute>
+    );
+  }
+
+  if (userRole === null) {
+    return (
+      <ProtectedRoute>
+        <AppBackground>
+          <DashboardNavbar email={user?.email} onLogout={handleLogout} />
+          <AppShell>
+            <div className="p-8 text-white/60 flex items-center justify-center min-h-[200px]">Loading…</div>
+          </AppShell>
+        </AppBackground>
+      </ProtectedRoute>
+    );
+  }
+
+  if (isMember) {
     return (
       <ProtectedRoute>
         <AppBackground>

@@ -11,6 +11,8 @@ export type KpiGridItem = {
   description?: string;
   highlightColor?: string;
   isLoading?: boolean;
+  /** When true, show "Unavailable" instead of value (endpoint failed). */
+  unavailable?: boolean;
   trend?: 'up' | 'down' | 'flat';
   trendLabel?: string;
   trendPercent?: number;

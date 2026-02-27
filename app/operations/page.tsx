@@ -120,6 +120,7 @@ function DashboardPageInner() {
     isLocked: dashboardLocked,
     refetch: refetchDashboard,
     effectiveGroupBy,
+    sectionErrors: dashboardSectionErrors,
   } = useAnalyticsDashboard(
     analyticsPeriod,
     roleLoaded && !isMember && !analyticsLocked,
@@ -612,11 +613,13 @@ function DashboardPageInner() {
     const complianceTrendPct = priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined
     const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskFromTrend, priorAvgRisk) : undefined
     const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskFromTrend, priorAvgRisk, false) : 'flat'
+    const se = dashboardSectionErrors
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
         id: 'total-jobs',
         title: 'Total Jobs',
         value: totalJobs,
+        unavailable: se.summary || se.jobCompletion,
         trend: trendFromDelta(totalJobsTrendPct),
         trendPercent: totalJobsTrendPct,
         previousValue: priorTotal,
@@ -628,6 +631,7 @@ function DashboardPageInner() {
         title: 'Completion Rate',
         value: Math.round(completionRate),
         suffix: '%',
+        unavailable: se.jobCompletion,
         trend: priorCompletion !== undefined ? trendForMetric(completionRate, priorCompletion, true) : 'flat',
         trendPercent: completionTrendPct,
         previousValue: priorCompletion !== undefined ? Math.round(priorCompletion) : undefined,
@@ -637,6 +641,7 @@ function DashboardPageInner() {
         id: 'avg-risk',
         title: 'Avg Risk Score',
         value: Math.round(avgRiskFromTrend * 10) / 10,
+        unavailable: se.trendsRisk,
         trend: avgRiskTrend,
         trendPercent: avgRiskTrendPct,
         previousValue: priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined,
@@ -647,6 +652,7 @@ function DashboardPageInner() {
         title: 'Compliance Rate',
         value: Math.round(complianceOverall),
         suffix: '%',
+        unavailable: se.complianceRate,
         trend: priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat',
         trendPercent: complianceTrendPct,
         previousValue: priorCompliance !== undefined ? Math.round(priorCompliance) : undefined,
@@ -783,7 +789,7 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
     }
-  }, [dashboardData, dashboardLocked, dashboardLoading, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
+  }, [dashboardData, dashboardLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {
@@ -1098,6 +1104,16 @@ function DashboardPageInner() {
               )}
             </>
           ))}
+
+          {/* Partial analytics error banner - show when one or more endpoints failed */}
+          {!isMember && !analyticsLocked && Object.values(dashboardSectionErrors).some(Boolean) && (
+            <GlassCard className="p-4 mb-6 border-amber-500/30 bg-amber-500/5 flex flex-row items-center justify-between gap-4">
+              <p className="text-sm text-amber-200/90">Some metrics could not be loaded. Values shown may be from a previous load.</p>
+              <SharedButton variant="secondary" size="sm" onClick={() => refetchDashboard()}>
+                Retry
+              </SharedButton>
+            </GlassCard>
+          )}
 
           {/* Enhanced Dashboard Overview - Only for owners/admins */}
           {!isMember && (
