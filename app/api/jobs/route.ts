@@ -306,49 +306,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (createdAfter && createdBefore) {
-      const dateFilter: FilterGroup = {
-        operator: 'and',
-        conditions: [
-          { field: 'created_at', operator: 'between', value: [createdAfter, createdBefore] },
-        ],
-      }
-      const dateFilterIds = await getMatchingJobIdsFromFilterGroup(
-        supabase as unknown as SupabaseClientLike,
-        organization_id,
-        dateFilter,
-        include_archived
-      )
-      requiredJobIds = intersectIds(requiredJobIds, dateFilterIds)
-      if (requiredJobIds !== null && requiredJobIds.length === 0) {
-        return NextResponse.json({
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-        })
-      }
-    }
-
-    if (completedAfter && completedBefore) {
-      const completedFilter: FilterGroup = {
-        operator: 'and',
-        conditions: [
-          { field: 'completed_at', operator: 'between', value: [completedAfter, completedBefore] },
-        ],
-      }
-      const completedFilterIds = await getMatchingJobIdsFromFilterGroup(
-        supabase as unknown as SupabaseClientLike,
-        organization_id,
-        completedFilter,
-        include_archived
-      )
-      requiredJobIds = intersectIds(requiredJobIds, completedFilterIds)
-      if (requiredJobIds !== null && requiredJobIds.length === 0) {
-        return NextResponse.json({
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-        })
-      }
-    }
+    // created_at and completed_at ranges are passed to get_jobs_list / get_jobs_ranked as RPC params
+    // (p_created_after, p_created_before, p_completed_after, p_completed_before) to avoid in-memory ID collection.
 
     if (hazardCategory) {
       const { data: byCode } = await supabase
@@ -408,6 +367,10 @@ export async function GET(request: NextRequest) {
       p_insight_deadline_risk: insightDeadlineRisk ? true : null,
       p_insight_pending_signatures_near_deadline: insightPendingSignaturesNearDeadline ? true : null,
       p_insight_overdue: insightOverdue ? true : null,
+      p_created_after: createdAfter || null,
+      p_created_before: createdBefore || null,
+      p_completed_after: completedAfter || null,
+      p_completed_before: completedBefore || null,
     }
 
     let jobs: JobsListJob[] = []

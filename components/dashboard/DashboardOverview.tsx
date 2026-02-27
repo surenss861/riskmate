@@ -21,8 +21,9 @@ import {
   type ExportHazardRow,
   type ExportTrendSummary,
 } from '@/lib/utils/dashboardExport'
+import type { DashboardPeriod } from '@/lib/types/analytics'
 
-export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom'
+export type { DashboardPeriod }
 
 const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
   { value: '7d', label: 'Last 7 Days' },
@@ -70,7 +71,7 @@ function CustomDateRangePicker({
         value={start}
         onChange={(e) => setStart(e.target.value)}
         className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
-        aria-label="Start date"
+        aria-label="Start date (UTC)"
       />
       <span className="text-white/50 text-sm">to</span>
       <input
@@ -78,7 +79,7 @@ function CustomDateRangePicker({
         value={end}
         onChange={(e) => setEnd(e.target.value)}
         className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#F97316]"
-        aria-label="End date"
+        aria-label="End date (UTC)"
       />
       <button
         type="button"

@@ -174,7 +174,7 @@ export function KpiTile({
       </div>
 
       {showTooltip && previousValue != null && (
-        <div className="absolute bottom-full left-6 right-6 mb-2 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-xs text-white/80 z-10">
+        <div className="absolute bottom-full left-6 right-6 mb-2 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-xs text-white/80 z-50">
           Previous period: {prefix}{formatNumber(previousValue)}{suffix}
         </div>
       )}

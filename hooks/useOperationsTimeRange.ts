@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import type { DashboardPeriod } from '@/components/dashboard/DashboardOverview';
+import type { DashboardPeriod } from '@/lib/types/analytics';
 import type { CustomRange } from '@/lib/utils/dateRange';
 import { toLocalDateString, toDateOnly } from '@/lib/utils/dateRange';
 

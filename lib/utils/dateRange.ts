@@ -23,8 +23,10 @@ export function toDateOnly(value: string): string {
 
 /**
  * Derive API since/until boundaries from date-only values (YYYY-MM-DD).
- * Interprets start as local start-of-day and end as local end-of-day so
- * the selected calendar dates are stable across timezones and refresh/share.
+ * All date ranges are UTC-based: start is UTC midnight of startDateOnly,
+ * until is UTC end-of-day of endDateOnly. The UI date picker should be
+ * labeled accordingly (e.g. "Date range (UTC)") so users west of UTC
+ * do not experience off-by-one-day boundaries.
  */
 export function dateOnlyToApiBounds(startDateOnly: string, endDateOnly: string): { since: string; until: string } {
   const since = new Date(startDateOnly + 'T00:00:00.000Z');

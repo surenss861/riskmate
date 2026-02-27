@@ -68,9 +68,9 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   /** Reference date for drill-down links so list matches insight cohort (period end). Defined before first use. */
   const ref = untilDate;
   const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
-  /** Deterministic ID from type + orgId + period so same insight gets same ID across fetches; dismiss state can persist. */
+  /** Deterministic ID from type + orgId + period range so same insight gets same ID across fetches; dismissals are period-scoped. */
   const stableId = (type: InsightType, keyData: string) =>
-    `insight-${type}-${orgId}-${keyData}`;
+    `insight-${type}-${orgId}-${since.slice(0, 10)}-${until.slice(0, 10)}-${keyData}`;
 
   /** Use /operations routes so insight action links open valid filtered views (no /dashboard/* routes). */
   const basePath = "/operations";

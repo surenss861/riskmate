@@ -427,6 +427,25 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         .eq("organization_id", organization_id)
         .is("deleted_at", null);
 
+      if (dateCutoff) {
+        fallbackQuery = fallbackQuery.gte("created_at", dateCutoff.toISOString());
+      }
+      if (createdAfter) {
+        fallbackQuery = fallbackQuery.gte("created_at", createdAfter);
+      }
+      if (createdBefore) {
+        fallbackQuery = fallbackQuery.lte("created_at", createdBefore);
+      }
+      if (hasExplicitCompletedRange) {
+        fallbackQuery = fallbackQuery.not("completed_at", "is", null);
+        if (completedAfter) {
+          fallbackQuery = fallbackQuery.gte("completed_at", completedAfter);
+        }
+        if (completedBefore) {
+          fallbackQuery = fallbackQuery.lte("completed_at", completedBefore);
+        }
+      }
+
       if (q && typeof q === 'string' && q.trim()) {
         const searchTerm = q.trim();
         if (/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {

@@ -162,6 +162,10 @@ export async function buildDashboardPdf(options: {
       y = currentPage.getHeight() - margin;
     }
     draw(`${i.title} (${i.severity})`, 10);
+    if (y < minY) {
+      currentPage = doc.addPage([595, 842]);
+      y = currentPage.getHeight() - margin;
+    }
     const desc = i.description.slice(0, 80) + (i.description.length > 80 ? '…' : '');
     currentPage.drawText(desc, { x: margin + 10, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
     y -= 20;

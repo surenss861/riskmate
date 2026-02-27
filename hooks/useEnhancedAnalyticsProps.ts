@@ -3,7 +3,8 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AnalyticsDashboardData, AnalyticsSectionErrors } from '@/hooks/useAnalyticsDashboard';
-import type { DashboardPeriod, EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview';
+import type { DashboardPeriod } from '@/lib/types/analytics';
+import type { EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview';
 import type { CustomRange } from '@/lib/utils/dateRange';
 import { dateOnlyToApiBounds, presetPeriodToApiBounds, type PresetPeriod } from '@/lib/utils/dateRange';
 
@@ -86,10 +87,8 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     const jobCounts = summary?.job_counts_by_status ?? {};
     const totalJobs = jc?.total ?? 0;
     const completionRate = jc?.completion_rate ?? 0;
-    const riskData = dashboardData.trendsRisk?.data ?? [];
     const avgRiskFromSummary = summary?.avg_risk != null ? Number(summary.avg_risk) : null;
-    const avgRiskFromTrend = riskData.length ? riskData.reduce((a, p) => a + p.value, 0) / riskData.length : 0;
-    const avgRiskKpi = avgRiskFromSummary ?? avgRiskFromTrend;
+    const avgRiskUnavailable = se.summary || (avgRiskFromSummary == null && !se.summary);
     const complianceOverall = cr?.overall ?? 0;
 
     const priorTotal = priorJc != null ? priorJc.total : undefined;
@@ -97,6 +96,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     const priorCompliance = priorCr != null ? priorCr.overall : undefined;
     const priorRiskData = dashboardData.priorTrendsRisk?.data ?? [];
     const priorAvgRisk = priorRiskData.length > 0 ? priorRiskData.reduce((a, p) => a + p.value, 0) / priorRiskData.length : undefined;
+    const avgRiskKpi = avgRiskFromSummary ?? 0;
 
     const percentChange = (current: number, previous: number): number | undefined => {
       if (previous === 0) return current > 0 ? 100 : undefined;
@@ -116,7 +116,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     };
 
     const priorUnavailableForJobs = se.priorSummary || se.priorJobCompletion;
-    const priorUnavailableForRisk = se.priorTrendsRisk;
+    const priorUnavailableForRisk = se.priorTrendsRisk || avgRiskUnavailable;
     const priorUnavailableForCompliance = se.priorComplianceRate;
 
     const totalJobsTrendPct = priorUnavailableForJobs ? undefined : (priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined);
@@ -153,7 +153,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
         id: 'avg-risk',
         title: 'Avg Risk Score',
         value: Math.round(avgRiskKpi * 10) / 10,
-        unavailable: se.summary,
+        unavailable: avgRiskUnavailable,
         trend: avgRiskTrend,
         trendDirection: avgRiskTrendDirection,
         trendPercent: priorUnavailableForRisk ? undefined : avgRiskTrendPct,
@@ -200,7 +200,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
       trendsGranularity: effectiveGroupBy,
       statusChartGranularity: statusChartGroupBy,
       kpiItems,
-      insightsDismissalScope: `${userId ?? ''}-${organizationId ?? ''}`,
+      insightsDismissalScope: `${userId ?? ''}-${organizationId ?? ''}-${periodRangeStart}-${periodRangeEnd}`,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
         type: i.type,

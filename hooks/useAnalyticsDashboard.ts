@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analyticsApi } from '@/lib/api';
 import { dateOnlyToApiBounds, type CustomRange } from '@/lib/utils/dateRange';
-
-export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom';
+import type { DashboardPeriod } from '@/lib/types/analytics';
 
 type Summary = Awaited<ReturnType<typeof analyticsApi.summary>>;
 type JobCompletion = Awaited<ReturnType<typeof analyticsApi.jobCompletion>>;
@@ -177,6 +176,8 @@ export function useAnalyticsDashboard(
   const [error, setError] = useState(false);
   const [sectionErrors, setSectionErrors] = useState<AnalyticsSectionErrors>(noSectionErrors);
   const fetchGenRef = useRef(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const refetch = useCallback(async () => {
     if (!enabled) return;
@@ -349,9 +350,23 @@ export function useAnalyticsDashboard(
     }
   }, [period, enabled, customRange?.start, customRange?.end]);
 
-  useEffect(() => {
-    refetch();
+  // Debounce refetch (300ms) when period/range changes so rapid changes don't fire 18 parallel requests repeatedly.
+  const debouncedRefetch = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      abortControllerRef.current = new AbortController();
+      refetch();
+    }, 300);
   }, [refetch]);
+
+  useEffect(() => {
+    debouncedRefetch();
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [period, enabled, customRange?.start, customRange?.end, debouncedRefetch]);
 
   const effectiveGroupBy: 'day' | 'week' | 'month' = useMemo(() => {
     if (period === 'custom' && customRange?.start && customRange?.end) {

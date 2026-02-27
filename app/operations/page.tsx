@@ -39,6 +39,10 @@ interface Job {
   risk_score: number | null
   risk_level: string | null
   created_at: string
+  blockers_count?: number
+  mitigations_total?: number
+  mitigations_complete?: number
+  readiness_score?: number | null
 }
 
 export default function DashboardPage() {
@@ -248,23 +252,8 @@ function DashboardPageInner() {
   // Update URL params when filters change (preserve time_range and custom range)
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
-    
-    // Preserve time_range and custom range (range_start, range_end). "This Year" serializes as 1y so it never degrades to unbounded.
-    if (timeRange && timeRange !== '30d') {
-      params.set('time_range', timeRange === 'all' ? '1y' : timeRange)
-      if (timeRange === 'custom' && customRange) {
-        params.set('range_start', customRange.start)
-        params.set('range_end', customRange.end)
-      } else {
-        params.delete('range_start')
-        params.delete('range_end')
-      }
-    } else {
-      params.delete('time_range')
-      params.delete('range_start')
-      params.delete('range_end')
-    }
-    
+    // Time range (time_range, range_start, range_end) is owned exclusively by useOperationsTimeRange; do not set it here.
+
     // Update search
     if (debouncedSearchQuery) {
       params.set('q', debouncedSearchQuery)
@@ -308,10 +297,9 @@ function DashboardPageInner() {
       params.delete('hazard')
     }
     
-    // Update URL without triggering navigation
-    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
-    window.history.replaceState({}, '', newUrl)
-  }, [debouncedSearchQuery, sortBy, currentPage, pageSize, timeRange, customRange, filterStatus, filterRiskLevel, filterHazard, searchParams])
+    const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`
+    router.replace(newUrl, { scroll: false })
+  }, [router, pathname, debouncedSearchQuery, sortBy, currentPage, pageSize, filterStatus, filterRiskLevel, filterHazard, searchParams])
   
   // Initialize filters from URL on mount (for shareable links)
   useEffect(() => {
@@ -526,7 +514,7 @@ function DashboardPageInner() {
 
   const incompleteMitigations = useMemo(() => {
     return jobs
-      .filter((j: Job & { blockers_count?: number; mitigations_total?: number; mitigations_complete?: number }) =>
+      .filter((j: Job) =>
         (j.blockers_count ?? 0) > 0 || ((j.mitigations_total ?? 0) - (j.mitigations_complete ?? 0)) > 0
       )
       .map((j: Job) => ({
@@ -748,7 +736,9 @@ function DashboardPageInner() {
                 <div className="text-3xl font-bold font-display text-white mb-2">
                   {kpiMetricsWithAudit.auditEvents30d !== null ? kpiMetricsWithAudit.auditEvents30d : '—'}
                 </div>
-                <div className="text-sm text-white/60">Last 30 days</div>
+                <div className="text-sm text-white/60">
+                  {timeRange === 'all' ? 'This Year' : timeRange === 'custom' && customRange ? `${customRange.start} – ${customRange.end}` : (periodLabels[dashboardPeriod] ?? timeRange)}
+                </div>
               </GlassCard>
             </div>
           </div>

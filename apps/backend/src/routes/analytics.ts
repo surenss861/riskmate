@@ -565,7 +565,13 @@ analyticsRouter.get(
         p_until: until,
         p_group_by: groupBy,
       });
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === '42883') {
+          console.warn('get_analytics_status_by_period RPC not found (migration 20260230100052 may not be applied):', error.message);
+          return res.json({ data: [], locked: false });
+        }
+        throw error;
+      }
 
       const raw = (Array.isArray(rows) ? rows : []) as { period_key: string; status: string; cnt: number }[];
       const byPeriod = new Map<string, Record<string, number>>();

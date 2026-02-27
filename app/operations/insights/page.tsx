@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
@@ -12,6 +12,7 @@ import { analyticsApi } from '@/lib/api';
 import { dateOnlyToApiBounds, presetPeriodToApiBounds, toDateOnly } from '@/lib/utils/dateRange';
 import { AppBackground, AppShell, PageHeader, GlassCard } from '@/components/shared';
 import { SkeletonLoader } from '@/components/dashboard/SkeletonLoader';
+import { useUserRole } from '@/hooks/useUserRole';
 
 type SeverityIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 const severityConfig: Record<string, { bg: string; border: string; icon: SeverityIcon }> = {
@@ -38,11 +39,7 @@ function InsightsPageInner() {
   const rangeStart = searchParams.get('range_start')?.trim() ?? '';
   const rangeEnd = searchParams.get('range_end')?.trim() ?? '';
 
-  const [user, setUser] = useState<{ email?: string } | null>(null);
-  /** Resolved role from DB (e.g. owner, admin, member, safety_lead, executive); null while loading or on genuine lookup failure. */
-  const [userRole, setUserRole] = useState<string | null>(null);
-  /** True only when role lookup genuinely failed (query error or unknown user); not for valid non-member roles. */
-  const [roleFetchError, setRoleFetchError] = useState(false);
+  const { user, userRole, roleFetchError, refetchRole } = useUserRole();
   const [insights, setInsights] = useState<Array<{
     id: string;
     type: string;
@@ -69,32 +66,6 @@ function InsightsPageInner() {
     return { since: bounds.since, until: bounds.until, periodLabel: PERIOD_LABELS[period] || timeRange };
   }, [timeRange, rangeStart, rangeEnd]);
 
-  const loadUserAndRole = useCallback(async () => {
-    setRoleFetchError(false);
-    const supabase = createSupabaseBrowserClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user ?? null);
-    if (!user) {
-      setUserRole(null);
-      return;
-    }
-    const { data: userRow, error } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
-    if (error) {
-      setRoleFetchError(true);
-      setUserRole(null);
-      return;
-    }
-    if (userRow == null || userRow.role == null || userRow.role === '') {
-      setRoleFetchError(true);
-      setUserRole(null);
-      return;
-    }
-    setUserRole(userRow.role);
-  }, []);
-
-  useEffect(() => {
-    loadUserAndRole();
-  }, [loadUserAndRole]);
 
   useEffect(() => {
     if (userRole === null || userRole === 'member') {
@@ -141,7 +112,7 @@ function InsightsPageInner() {
               <p className="text-sm text-white/60 mb-4">Please try again or contact your administrator.</p>
               <button
                 type="button"
-                onClick={() => loadUserAndRole()}
+                onClick={() => refetchRole()}
                 className="rounded-lg bg-[#F97316] px-4 py-2 text-sm font-medium text-black hover:bg-[#FB923C] transition-colors"
               >
                 Retry
