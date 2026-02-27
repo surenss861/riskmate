@@ -21,7 +21,7 @@ import { AdvancedFilterBuilder } from '@/components/shared/AdvancedFilterBuilder
 import { SavedFiltersDropdown } from '@/components/shared/SavedFiltersDropdown'
 import type { FilterGroup } from '@/lib/jobs/filterConfig'
 
-export type JobsTimeRange = 'all' | '7d' | '30d' | '90d'
+export type JobsTimeRange = 'all' | '7d' | '30d' | '90d' | '1y'
 
 export interface QuickFiltersProps {
   myJobs: boolean
