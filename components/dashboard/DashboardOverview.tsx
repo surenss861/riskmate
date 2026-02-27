@@ -182,7 +182,15 @@ export function DashboardOverview({
   enhancedAnalytics,
 }: DashboardOverviewProps) {
   const router = useRouter()
-  const timeRangeParam = timeRange ? `time_range=${timeRange}` : ''
+  // Period-aware query string for "What Needs Your Attention" deep links: custom includes range_start/range_end so drill-down is scoped.
+  const attentionTimeQuery = useMemo(() => {
+    if (enhancedAnalytics?.period === 'custom' && enhancedAnalytics?.customRange?.start && enhancedAnalytics?.customRange?.end) {
+      return `time_range=custom&range_start=${enhancedAnalytics.customRange.start}&range_end=${enhancedAnalytics.customRange.end}`
+    }
+    if (timeRange === 'all') return 'time_range=1y'
+    if (timeRange) return `time_range=${timeRange}`
+    return ''
+  }, [timeRange, enhancedAnalytics?.period, enhancedAnalytics?.customRange?.start, enhancedAnalytics?.customRange?.end])
   // Show custom date picker when user selects "Custom" from dropdown without calling parent until they apply a range.
   const [customPickerOpen, setCustomPickerOpen] = useState(false)
 
@@ -471,7 +479,7 @@ export function DashboardOverview({
               <>
                 <p className="text-sm text-white/50 mb-3">All clear — no high-risk jobs</p>
                 <Link
-                  href={`/operations/jobs?${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/jobs?${attentionTimeQuery}` : '/operations/jobs'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
                   View all jobs →
@@ -493,7 +501,7 @@ export function DashboardOverview({
                 ))}
                 {jobsAtRisk.length > 3 && (
                   <Link
-                    href={`/operations/jobs?risk_level=high&${timeRangeParam}`}
+                    href={attentionTimeQuery ? `/operations/jobs?risk_level=high&${attentionTimeQuery}` : '/operations/jobs?risk_level=high'}
                     className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
                   >
                     View all {jobsAtRisk.length} high-risk jobs →
@@ -525,7 +533,7 @@ export function DashboardOverview({
               <>
                 <p className="text-sm text-white/50 mb-3">No evidence uploaded recently</p>
                 <Link
-                  href={`/operations/jobs?missing_evidence=true&${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/jobs?missing_evidence=true&${attentionTimeQuery}` : '/operations/jobs?missing_evidence=true'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
                   Upload evidence →
@@ -546,7 +554,7 @@ export function DashboardOverview({
                   </Link>
                 ))}
                 <Link
-                  href={`/operations/jobs?missing_evidence=true&${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/jobs?missing_evidence=true&${attentionTimeQuery}` : '/operations/jobs?missing_evidence=true'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
                 >
                   Upload more evidence →
@@ -577,7 +585,7 @@ export function DashboardOverview({
               <>
                 <p className="text-sm text-white/50 mb-3">All mitigations complete</p>
                 <Link
-                  href={`/operations/jobs?${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/jobs?${attentionTimeQuery}` : '/operations/jobs'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
                   View all jobs →
@@ -599,7 +607,7 @@ export function DashboardOverview({
                 ))}
                 {incompleteMitigations.length > 3 && (
                   <Link
-                    href={`/operations/audit/readiness?status=open&${timeRangeParam}`}
+                    href={attentionTimeQuery ? `/operations/audit/readiness?status=open&${attentionTimeQuery}` : '/operations/audit/readiness?status=open'}
                     className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
                   >
                     View all {incompleteMitigations.length} incomplete →
@@ -672,7 +680,7 @@ export function DashboardOverview({
               <>
                 <p className="text-sm text-white/50 mb-3">No activity data</p>
                 <Link
-                  href={`/operations/team?${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/team?${attentionTimeQuery}` : '/operations/team'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block"
                 >
                   Invite team →
@@ -696,7 +704,7 @@ export function DashboardOverview({
                   </div>
                 ))}
                 <Link
-                  href={`/operations/audit?tab=operations&${timeRangeParam}`}
+                  href={attentionTimeQuery ? `/operations/audit?tab=operations&${attentionTimeQuery}` : '/operations/audit?tab=operations'}
                   className="text-xs text-[#F97316] hover:text-[#FB923C] transition-colors inline-block mt-2"
                 >
                   View workforce activity →

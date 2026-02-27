@@ -17,7 +17,7 @@ import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview'
-import { CustomRange, dateOnlyToApiBounds, toLocalDateString, toDateOnly } from '@/lib/utils/dateRange'
+import { CustomRange, dateOnlyToApiBounds, presetPeriodToApiBounds, toLocalDateString, toDateOnly } from '@/lib/utils/dateRange'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { useAnalyticsDashboard } from '@/hooks/useAnalyticsDashboard'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
@@ -175,12 +175,17 @@ function DashboardPageInner() {
       // Load jobs from database for Job Roster
       try {
         const isCustomRange = timeRange === 'custom' && customRange
-        const bounds = isCustomRange ? dateOnlyToApiBounds(customRange.start, customRange.end) : null
+        const isThisYear = timeRange === 'all'
+        const bounds = isCustomRange
+          ? dateOnlyToApiBounds(customRange.start, customRange.end)
+          : isThisYear
+            ? presetPeriodToApiBounds('1y')
+            : null
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
           hazard: filterHazard || undefined,
-          ...(isCustomRange && bounds
+          ...(bounds
             ? { created_after: bounds.since, created_before: bounds.until }
             : { time_range: timeRange }),
           q: debouncedSearchQuery || undefined, // Search query
@@ -236,9 +241,9 @@ function DashboardPageInner() {
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     
-    // Preserve time_range and custom range (range_start, range_end)
+    // Preserve time_range and custom range (range_start, range_end). "This Year" serializes as 1y so it never degrades to unbounded.
     if (timeRange && timeRange !== '30d') {
-      params.set('time_range', timeRange)
+      params.set('time_range', timeRange === 'all' ? '1y' : timeRange)
       if (timeRange === 'custom' && customRange) {
         params.set('range_start', customRange.start)
         params.set('range_end', customRange.end)
@@ -395,7 +400,7 @@ function DashboardPageInner() {
         ) as 'up' | 'down' | 'flat',
         trendLabel: analyticsError ? 'Using cached data' : 'Live field data',
         isLoading: analyticsLoading,
-        href: `/operations/audit/readiness?status=open&time_range=${timeRange}`,
+        href: `/operations/audit/readiness?status=open&${timeRange === 'all' ? 'time_range=1y' : timeRange === 'custom' && customRange ? `time_range=custom&range_start=${customRange.start}&range_end=${customRange.end}` : `time_range=${timeRange}`}`,
       },
       {
         id: 'close-time',
@@ -410,7 +415,7 @@ function DashboardPageInner() {
             ? 'Under 24h target'
             : 'Investigate slow mitigations',
         isLoading: analyticsLoading,
-        href: `/operations/audit?tab=operations&event_name=mitigation.resolved&time_range=${timeRange}`,
+        href: `/operations/audit?tab=operations&event_name=mitigation.resolved&${timeRange === 'all' ? 'time_range=1y' : timeRange === 'custom' && customRange ? `time_range=custom&range_start=${customRange.start}&range_end=${customRange.end}` : `time_range=${timeRange}`}`,
       },
       {
         id: 'high-risk',
@@ -424,7 +429,7 @@ function DashboardPageInner() {
             ? 'All jobs in safe zone'
             : 'Needs immediate mitigation',
         isLoading: analyticsLoading,
-        href: `/operations/jobs?risk_level=high&time_range=${timeRange}`,
+        href: `/operations/jobs?risk_level=high&${timeRange === 'all' ? 'time_range=1y' : timeRange === 'custom' && customRange ? `time_range=custom&range_start=${customRange.start}&range_end=${customRange.end}` : `time_range=${timeRange}`}`,
       },
       {
         id: 'evidence-files',
@@ -438,7 +443,7 @@ function DashboardPageInner() {
             ? 'Evidence trail building'
             : 'Add site photos',
         isLoading: analyticsLoading,
-        href: `/operations/jobs?missing_evidence=true&time_range=${timeRange}`,
+        href: `/operations/jobs?missing_evidence=true&${timeRange === 'all' ? 'time_range=1y' : timeRange === 'custom' && customRange ? `time_range=custom&range_start=${customRange.start}&range_end=${customRange.end}` : `time_range=${timeRange}`}`,
       },
     ],
     [
@@ -449,6 +454,7 @@ function DashboardPageInner() {
       analyticsError,
       analyticsLoading,
       timeRange,
+      customRange,
     ]
   )
 
@@ -508,7 +514,7 @@ function DashboardPageInner() {
     setCustomRange(null)
     setDashboardPeriod(newRange === 'all' ? '1y' : (newRange as DashboardPeriod))
     const params = new URLSearchParams(searchParams.toString())
-    params.set('time_range', newRange)
+    params.set('time_range', newRange === 'all' ? '1y' : newRange)
     params.delete('range_start')
     params.delete('range_end')
     router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
@@ -539,7 +545,7 @@ function DashboardPageInner() {
       const newRange: TimeRange = period === '1y' ? 'all' : (period as TimeRange)
       setTimeRange(newRange)
       const params = new URLSearchParams(searchParams.toString())
-      params.set('time_range', newRange)
+      params.set('time_range', period === '1y' ? '1y' : newRange)
       params.delete('range_start')
       params.delete('range_end')
       router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
@@ -782,9 +788,12 @@ function DashboardPageInner() {
           const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
           params.set('created_after', bounds.since)
           params.set('created_before', bounds.until)
+        } else if (analyticsPeriod === '1y') {
+          const bounds = presetPeriodToApiBounds('1y')
+          params.set('created_after', bounds.since)
+          params.set('created_before', bounds.until)
         } else {
-          const timeRangeForJobs = analyticsPeriod === '1y' ? 'all' : analyticsPeriod
-          params.set('time_range', timeRangeForJobs)
+          params.set('time_range', analyticsPeriod)
         }
         router.push(`/operations/jobs?${params.toString()}`)
       },
@@ -845,12 +854,16 @@ function DashboardPageInner() {
 
   // Calculate KPI metrics for hero card (scoped to time range)
   const kpiMetrics = useMemo(() => {
-    // Calculate date cutoff based on time range (including custom)
+    // Calculate date cutoff based on time range (including custom and This Year)
     const now = new Date()
     let dateCutoff: Date | null = null
     let dateCutoffEnd: Date | null = null
     if (timeRange === 'custom' && customRange) {
       const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
+      dateCutoff = new Date(bounds.since)
+      dateCutoffEnd = new Date(bounds.until)
+    } else if (timeRange === 'all') {
+      const bounds = presetPeriodToApiBounds('1y')
       dateCutoff = new Date(bounds.since)
       dateCutoffEnd = new Date(bounds.until)
     } else if (timeRange === '7d') {
@@ -860,7 +873,6 @@ function DashboardPageInner() {
     } else if (timeRange === '90d') {
       dateCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
     }
-    // 'all' means no cutoff
 
     // Filter jobs by time range
     const jobsInRange = dateCutoff
@@ -901,12 +913,16 @@ function DashboardPageInner() {
         
         if (!userRow?.organization_id) return
         
-        // Calculate date cutoff (including custom range)
+        // Calculate date cutoff (including custom range and This Year)
         const now = new Date()
         let dateCutoff: Date | null = null
         let dateCutoffEnd: Date | null = null
         if (timeRange === 'custom' && customRange) {
           const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
+          dateCutoff = new Date(bounds.since)
+          dateCutoffEnd = new Date(bounds.until)
+        } else if (timeRange === 'all') {
+          const bounds = presetPeriodToApiBounds('1y')
           dateCutoff = new Date(bounds.since)
           dateCutoffEnd = new Date(bounds.until)
         } else if (timeRange === '7d') {
