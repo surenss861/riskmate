@@ -108,9 +108,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const validEvents = events.filter((e: unknown) =>
-      typeof e === 'string' && EVENT_TYPES.includes(e)
+    const invalidEvents = events.filter(
+      (e: unknown) => typeof e !== 'string' || !EVENT_TYPES.includes(e)
     )
+    if (invalidEvents.length > 0) {
+      const { response, errorId } = createErrorResponse(
+        `Unknown or invalid event type(s): ${invalidEvents.join(', ')}`,
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const validEvents = [...new Set(events as string[])]
     if (validEvents.length === 0) {
       const { response, errorId } = createErrorResponse(
         'At least one event type is required',

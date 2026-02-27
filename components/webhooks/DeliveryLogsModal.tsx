@@ -42,6 +42,7 @@ export function DeliveryLogsModal({
   const [loading, setLoading] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
+  const [retryErrors, setRetryErrors] = useState<Array<{ id: string; message: string }>>([])
 
   useEffect(() => {
     if (!open || !endpointId) return
@@ -61,22 +62,39 @@ export function DeliveryLogsModal({
     return d.toLocaleString()
   }
 
-  const failed = deliveries.filter((d) => !d.delivered_at && d.attempt_count >= 1)
+  const retryEligible = deliveries.filter(
+    (d) => !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
+  )
+
+  const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
+    if (d.delivered_at) return 'success'
+    if (d.next_retry_at) return 'pending'
+    return (d.attempt_count ?? 0) >= 1 ? 'failed' : 'pending'
+  }
 
   const handleRetryFailed = async () => {
-    for (const d of failed) {
+    setRetryErrors([])
+    const errors: Array<{ id: string; message: string }> = []
+    for (const d of retryEligible) {
       setRetrying(d.id)
       try {
-        await fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
+        const res = await fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
           method: 'POST',
           credentials: 'include',
         })
-      } catch {
-        // ignore per-item errors
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
+          errors.push({ id: d.id, message: msg })
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Request failed'
+        errors.push({ id: d.id, message: msg })
       } finally {
         setRetrying(null)
       }
     }
+    setRetryErrors(errors)
     if (endpointId) {
       const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
       const json = await res.json()
@@ -95,14 +113,14 @@ export function DeliveryLogsModal({
             <p className="text-sm text-white/60 truncate max-w-md mt-0.5">{endpointUrl}</p>
           </div>
           <div className="flex items-center gap-2">
-            {failed.length > 0 && (
+            {retryEligible.length > 0 && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={handleRetryFailed}
                 disabled={!!retrying}
               >
-                Retry failed ({failed.length})
+                Retry failed ({retryEligible.length})
               </Button>
             )}
             <button
@@ -115,6 +133,18 @@ export function DeliveryLogsModal({
             </button>
           </div>
         </div>
+        {retryErrors.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-500/20 border border-amber-500/40 text-sm text-amber-200">
+            <p className="font-medium mb-1">Retry had errors:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {retryErrors.map(({ id, message }) => (
+                <li key={id}>
+                  <span className="font-mono text-xs">{id.slice(0, 8)}…</span>: {message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex-1 overflow-auto border border-white/10 rounded-lg">
           {loading ? (
             <div className="p-8 text-center text-white/60">Loading…</div>
@@ -134,22 +164,21 @@ export function DeliveryLogsModal({
               </thead>
               <tbody className="text-white/90">
                 {deliveries.map((d) => {
-                  const success = !!d.delivered_at
+                  const status = deliveryStatus(d)
                   const isExpanded = expandedId === d.id
+                  const statusLabel = status === 'success' ? 'Success' : status === 'pending' ? 'Pending' : 'Failed'
+                  const statusClass =
+                    status === 'success'
+                      ? 'text-emerald-400'
+                      : status === 'pending'
+                        ? 'text-sky-400'
+                        : 'text-amber-400'
                   return (
                     <tr key={d.id} className="border-b border-white/5 hover:bg-white/5">
                       <td className="p-3 whitespace-nowrap">{formatTime(d.created_at)}</td>
                       <td className="p-3 font-mono text-xs">{d.event_type}</td>
                       <td className="p-3">
-                        <span
-                          className={
-                            success
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
-                          }
-                        >
-                          {success ? 'Success' : 'Failed'}
-                        </span>
+                        <span className={statusClass}>{statusLabel}</span>
                       </td>
                       <td className="p-3">{d.response_status ?? '—'}</td>
                       <td className="p-3">{d.duration_ms != null ? `${d.duration_ms}ms` : '—'}</td>

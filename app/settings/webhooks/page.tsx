@@ -11,6 +11,7 @@ import { DeliveryLogsModal } from '@/components/webhooks/DeliveryLogsModal'
 
 interface DeliveryStats {
   delivered: number
+  pending: number
   failed: number
   lastDelivery: string | null
 }
@@ -53,11 +54,18 @@ export default function WebhooksPage() {
           const json = await res.json()
           const list = Array.isArray(json.data) ? json.data : []
           const delivered = list.filter((d: { delivered_at: string | null }) => d.delivered_at).length
-          const failed = list.filter((d: { delivered_at: string | null }) => !d.delivered_at).length
+          const pending = list.filter(
+            (d: { delivered_at: string | null; next_retry_at: string | null }) =>
+              !d.delivered_at && !!d.next_retry_at
+          ).length
+          const failed = list.filter(
+            (d: { delivered_at: string | null; next_retry_at: string | null; attempt_count: number }) =>
+              !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
+          ).length
           const last = list[0]?.created_at ?? null
-          next[ep.id] = { delivered, failed, lastDelivery: last }
+          next[ep.id] = { delivered, pending, failed, lastDelivery: last }
         } catch {
-          next[ep.id] = { delivered: 0, failed: 0, lastDelivery: null }
+          next[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
         }
       }
       setStats(next)
@@ -164,6 +172,7 @@ export default function WebhooksPage() {
                         </div>
                         <div className="flex gap-4 mt-3 text-xs text-white/60">
                           <span>✓ {stats[ep.id]?.delivered ?? 0} delivered</span>
+                          <span>⋯ {stats[ep.id]?.pending ?? 0} pending</span>
                           <span>✗ {stats[ep.id]?.failed ?? 0} failed</span>
                           <span>Last: {formatLast(stats[ep.id]?.lastDelivery ?? null)}</span>
                         </div>

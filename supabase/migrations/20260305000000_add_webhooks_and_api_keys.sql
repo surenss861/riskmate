@@ -77,3 +77,34 @@ CREATE POLICY webhook_deliveries_service ON webhook_deliveries
   TO service_role
   USING (true)
   WITH CHECK (true);
+
+-- API keys for Public API (org-scoped; key stored as hash, prefix for display)
+CREATE TABLE IF NOT EXISTS api_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  last_used_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys(organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY api_keys_org ON api_keys
+  FOR ALL
+  USING (organization_id IN (
+    SELECT organization_id FROM users WHERE id = auth.uid()
+  ))
+  WITH CHECK (organization_id IN (
+    SELECT organization_id FROM users WHERE id = auth.uid()
+  ));
+
+CREATE POLICY api_keys_service ON api_keys
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
