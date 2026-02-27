@@ -566,7 +566,7 @@ function DashboardPageInner() {
   }
 
   const enhancedAnalytics: EnhancedAnalyticsProps | undefined = useMemo(() => {
-    if (!dashboardData || dashboardLocked) return undefined
+    if (!dashboardData || dashboardLocked || analyticsLocked) return undefined
     const jc = dashboardData.jobCompletion
     const cr = dashboardData.complianceRate
     const summary = dashboardData.summary
@@ -789,7 +789,7 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
     }
-  }, [dashboardData, dashboardLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
+  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {
