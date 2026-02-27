@@ -203,6 +203,13 @@ export async function GET(request: NextRequest) {
       createdAfter = `${now.getFullYear()}-01-01`
       createdBefore = now.toISOString().slice(0, 10)
     }
+    // Normalize date-only bounds to full-day timestamps so the end date is inclusive (jobs on end date included)
+    if (createdAfter && /^\d{4}-\d{2}-\d{2}$/.test(createdAfter)) {
+      createdAfter = new Date(createdAfter + 'T00:00:00.000Z').toISOString()
+    }
+    if (createdBefore && /^\d{4}-\d{2}-\d{2}$/.test(createdBefore)) {
+      createdBefore = new Date(createdBefore + 'T23:59:59.999Z').toISOString()
+    }
     const completedAfter = searchParams.get('completed_after')?.trim() ?? ''
     const completedBefore = searchParams.get('completed_before')?.trim() ?? ''
     const hazardCategory = searchParams.get('hazard')?.trim() ?? ''

@@ -320,11 +320,11 @@ export function useAnalyticsDashboard(
         trendsCompletedCounts: trendsCompletedCountsRes ?? prev.trendsCompletedCounts,
         insights: insightsRes ?? prev.insights,
         statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : (prev.statusByPeriod ?? null),
-        priorSummary: priorSummaryRes ?? prev.priorSummary,
-        priorJobCompletion: priorJobCompletionRes ?? prev.priorJobCompletion,
-        priorComplianceRate: priorComplianceRes ?? prev.priorComplianceRate,
-        priorTrendsRisk: priorTrendsRiskRes ?? prev.priorTrendsRisk,
-        priorTrendsCompliance: priorTrendsComplianceRes ?? prev.priorTrendsCompliance,
+        priorSummary: prior != null ? (priorSummaryRes ?? prev.priorSummary) : null,
+        priorJobCompletion: prior != null ? (priorJobCompletionRes ?? prev.priorJobCompletion) : null,
+        priorComplianceRate: prior != null ? (priorComplianceRes ?? prev.priorComplianceRate) : null,
+        priorTrendsRisk: prior != null ? (priorTrendsRiskRes ?? prev.priorTrendsRisk) : null,
+        priorTrendsCompliance: prior != null ? (priorTrendsComplianceRes ?? prev.priorTrendsCompliance) : null,
       }));
     } catch (e) {
       console.error('Analytics dashboard fetch failed', e);
