@@ -100,6 +100,8 @@ export type EnhancedAnalyticsProps = {
   kpiItems: KpiGridItem[]
   insights: InsightItem[]
   insightsLoading: boolean
+  /** Scope for insight dismissal storage (e.g. userId-orgId). Isolates dismissals per user/org. */
+  insightsDismissalScope?: string
   trendsJobs: { data: Array<{ period: string; value: number; label?: string }> } | null
   trendsRisk: { data: Array<{ period: string; value: number; label?: string }> } | null
   trendsCompletion: { data: Array<{ period: string; value: number; label?: string }> } | null
@@ -361,6 +363,7 @@ export function DashboardOverview({
           <InsightsPanel
             insights={enhancedAnalytics.insights}
             isLoading={enhancedAnalytics.insightsLoading}
+            storageScope={enhancedAnalytics.insightsDismissalScope}
             viewAllHref={
               enhancedAnalytics.period === 'custom' && enhancedAnalytics.customRange
                 ? `/operations/insights?time_range=custom&range_start=${enhancedAnalytics.customRange.start}&range_end=${enhancedAnalytics.customRange.end}`

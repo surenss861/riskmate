@@ -89,6 +89,7 @@ function DashboardPageInner() {
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [jobs, setJobs] = useState<Job[]>([])
   const [subscription, setSubscription] = useState<any>(null)
@@ -207,7 +208,7 @@ function DashboardPageInner() {
         }
       }
       
-      // Get organization_id for jobs query
+      // Get organization_id for jobs query and insight dismissal scope
       if (user) {
         const { data: userRow } = await supabase
           .from('users')
@@ -215,6 +216,7 @@ function DashboardPageInner() {
           .eq('id', user.id)
           .maybeSingle()
         organizationId = userRow?.organization_id || null
+        setOrganizationId(organizationId)
       }
 
       // Load jobs from database for Job Roster
@@ -642,10 +644,16 @@ function DashboardPageInner() {
       return pct < 0 ? 'up' : 'down'
     }
 
-    const totalJobsTrendPct = priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined
-    const completionTrendPct = priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined
-    const avgRiskTrendPct = priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined
-    const avgRiskTrend = priorAvgRisk !== undefined ? trendForMetric(avgRiskKpi, priorAvgRisk, false) : 'flat'
+    const se = dashboardSectionErrors
+    // Suppress prior-period comparison when prior endpoints failed so arrows/percentages are flat/unavailable
+    const priorUnavailableForJobs = se.priorSummary || se.priorJobCompletion
+    const priorUnavailableForRisk = se.priorTrendsRisk
+    const priorUnavailableForCompliance = se.priorComplianceRate
+
+    const totalJobsTrendPct = priorUnavailableForJobs ? undefined : (priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined)
+    const completionTrendPct = priorUnavailableForJobs ? undefined : (priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined)
+    const avgRiskTrendPct = priorUnavailableForRisk ? undefined : (priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined)
+    const avgRiskTrend = priorUnavailableForRisk ? 'flat' as const : (priorAvgRisk !== undefined ? trendForMetric(avgRiskKpi, priorAvgRisk, false) : 'flat')
     /** Arrow by numerical change (decrease = down, increase = up); color still from avgRiskTrend (good/bad). */
     const avgRiskTrendDirection =
       avgRiskTrendPct == null || avgRiskTrendPct === 0
@@ -653,16 +661,15 @@ function DashboardPageInner() {
         : avgRiskTrendPct > 0
           ? 'up'
           : 'down'
-    const se = dashboardSectionErrors
     const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
       {
         id: 'total-jobs',
         title: 'Total Jobs',
         value: totalJobs,
         unavailable: se.summary || se.jobCompletion,
-        trend: trendFromDelta(totalJobsTrendPct),
-        trendPercent: totalJobsTrendPct,
-        previousValue: priorTotal,
+        trend: priorUnavailableForJobs ? 'flat' : trendFromDelta(totalJobsTrendPct),
+        trendPercent: priorUnavailableForJobs ? undefined : totalJobsTrendPct,
+        previousValue: priorUnavailableForJobs ? undefined : priorTotal,
         trendLabel: periodLabels[analyticsPeriod],
         sparklineData: dashboardData.trendsJobs?.data?.slice(-7).map((d) => d.value) ?? [],
       },
@@ -672,9 +679,9 @@ function DashboardPageInner() {
         value: Math.round(completionRate),
         suffix: '%',
         unavailable: se.jobCompletion,
-        trend: priorCompletion !== undefined ? trendForMetric(completionRate, priorCompletion, true) : 'flat',
-        trendPercent: completionTrendPct,
-        previousValue: priorCompletion !== undefined ? Math.round(priorCompletion) : undefined,
+        trend: priorUnavailableForJobs ? 'flat' : (priorCompletion !== undefined ? trendForMetric(completionRate, priorCompletion, true) : 'flat'),
+        trendPercent: priorUnavailableForJobs ? undefined : completionTrendPct,
+        previousValue: priorUnavailableForJobs ? undefined : (priorCompletion !== undefined ? Math.round(priorCompletion) : undefined),
         sparklineData: dashboardData.trendsCompletion?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
@@ -684,8 +691,8 @@ function DashboardPageInner() {
         unavailable: se.summary,
         trend: avgRiskTrend,
         trendDirection: avgRiskTrendDirection,
-        trendPercent: avgRiskTrendPct,
-        previousValue: priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined,
+        trendPercent: priorUnavailableForRisk ? undefined : avgRiskTrendPct,
+        previousValue: priorUnavailableForRisk ? undefined : (priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined),
         sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
       },
       {
@@ -694,9 +701,9 @@ function DashboardPageInner() {
         value: Math.round(complianceOverall),
         suffix: '%',
         unavailable: se.complianceRate,
-        trend: priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat',
-        trendPercent: priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined,
-        previousValue: priorCompliance !== undefined ? Math.round(priorCompliance) : undefined,
+        trend: priorUnavailableForCompliance ? 'flat' : (priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat'),
+        trendPercent: priorUnavailableForCompliance ? undefined : (priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined),
+        previousValue: priorUnavailableForCompliance ? undefined : (priorCompliance !== undefined ? Math.round(priorCompliance) : undefined),
         sparklineData: dashboardData.trendsCompliance?.data?.slice(-7).map((d) => d.value) ?? [],
       },
     ]
@@ -730,6 +737,7 @@ function DashboardPageInner() {
       trendsGranularity: effectiveGroupBy,
       statusChartGranularity: statusChartGroupBy,
       kpiItems,
+      insightsDismissalScope: `${user?.id ?? ''}-${organizationId ?? ''}`,
       insights: (dashboardData.insights?.insights ?? []).map((i) => ({
         id: i.id,
         type: i.type,
@@ -794,7 +802,7 @@ function DashboardPageInner() {
         router.push(`/operations/jobs?${params.toString()}`)
       },
     }
-  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy, statusChartGroupBy])
+  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy, statusChartGroupBy, user?.id, organizationId])
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {

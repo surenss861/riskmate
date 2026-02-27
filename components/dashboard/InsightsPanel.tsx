@@ -6,13 +6,17 @@ import clsx from 'clsx';
 import { AlertTriangle, TrendingDown, FileSignature } from 'lucide-react';
 import { SkeletonLoader } from './SkeletonLoader';
 
-const DISMISSED_STORAGE_KEY = 'riskmate-insights-dismissed';
+const DISMISSED_STORAGE_KEY_PREFIX = 'riskmate-insights-dismissed';
 const MAX_DISMISSED_IDS = 200;
 
-function loadDismissedIds(): Set<string> {
+function storageKey(scope: string | undefined): string {
+  return scope != null && scope !== '' ? `${DISMISSED_STORAGE_KEY_PREFIX}-${scope}` : `${DISMISSED_STORAGE_KEY_PREFIX}`;
+}
+
+function loadDismissedIds(key: string): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = localStorage.getItem(DISMISSED_STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return new Set();
     const arr = JSON.parse(raw) as string[];
     return new Set(Array.isArray(arr) ? arr.slice(-MAX_DISMISSED_IDS) : []);
@@ -21,11 +25,11 @@ function loadDismissedIds(): Set<string> {
   }
 }
 
-function saveDismissedIds(ids: Set<string>): void {
+function saveDismissedIds(key: string, ids: Set<string>): void {
   if (typeof window === 'undefined') return;
   try {
     const arr = Array.from(ids).slice(-MAX_DISMISSED_IDS);
-    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(arr));
+    localStorage.setItem(key, JSON.stringify(arr));
   } catch {
     // ignore
   }
@@ -46,6 +50,8 @@ type InsightsPanelProps = {
   insights: InsightItem[];
   isLoading: boolean;
   viewAllHref?: string;
+  /** Scope for dismissal storage (e.g. user ID + org ID). Dismissals are isolated per scope. */
+  storageScope?: string;
 };
 
 const severityConfig: Record<string, { bg: string; border: string; icon: React.ElementType }> = {
@@ -58,19 +64,20 @@ function getSeverityStyle(severity: string) {
   return severityConfig[severity.toLowerCase()] ?? severityConfig.info;
 }
 
-export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?time_range=30d' }: InsightsPanelProps) {
+export function InsightsPanel({ insights, isLoading, viewAllHref = '/operations?time_range=30d', storageScope }: InsightsPanelProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const key = storageKey(storageScope);
 
   useEffect(() => {
-    setDismissedIds(loadDismissedIds());
-  }, []);
+    setDismissedIds(loadDismissedIds(key));
+  }, [key]);
 
   const visible = insights.filter((i) => !dismissedIds.has(i.id));
 
   const handleDismiss = (id: string) => {
     setDismissedIds((prev) => {
       const next = new Set(prev).add(id);
-      saveDismissedIds(next);
+      saveDismissedIds(key, next);
       return next;
     });
   };

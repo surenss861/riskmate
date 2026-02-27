@@ -324,11 +324,12 @@ export function useAnalyticsDashboard(
         trendsCompletedCounts: trendsCompletedCountsRes ?? prev.trendsCompletedCounts,
         insights: insightsRes ?? prev.insights,
         statusByPeriod: Array.isArray(statusByPeriod) ? statusByPeriod : (prev.statusByPeriod ?? null),
-        priorSummary: prior != null ? (priorSummaryRes ?? prev.priorSummary) : null,
-        priorJobCompletion: prior != null ? (priorJobCompletionRes ?? prev.priorJobCompletion) : null,
-        priorComplianceRate: prior != null ? (priorComplianceRes ?? prev.priorComplianceRate) : null,
-        priorTrendsRisk: prior != null ? (priorTrendsRiskRes ?? prev.priorTrendsRisk) : null,
-        priorTrendsCompliance: prior != null ? (priorTrendsComplianceRes ?? prev.priorTrendsCompliance) : null,
+        // Do not reuse old prior data when request failed or period context changed (prior null)
+        priorSummary: prior == null ? null : (err(13) ? null : (priorSummaryRes ?? prev.priorSummary)),
+        priorJobCompletion: prior == null ? null : (err(14) ? null : (priorJobCompletionRes ?? prev.priorJobCompletion)),
+        priorComplianceRate: prior == null ? null : (err(15) ? null : (priorComplianceRes ?? prev.priorComplianceRate)),
+        priorTrendsRisk: prior == null ? null : (err(16) ? null : (priorTrendsRiskRes ?? prev.priorTrendsRisk)),
+        priorTrendsCompliance: prior == null ? null : (err(17) ? null : (priorTrendsComplianceRes ?? prev.priorTrendsCompliance)),
       }));
     } catch (e) {
       if (gen === fetchGenRef.current) {
