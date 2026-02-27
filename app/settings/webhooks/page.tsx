@@ -114,7 +114,7 @@ export default function WebhooksPage() {
 
   const isFailing = (epId: string) => {
     const s = stats[epId]
-    return s && s.failed >= 3 && (s.delivered ?? 0) < s.failed
+    return !!(s && s.failed > 0)
   }
 
   return (

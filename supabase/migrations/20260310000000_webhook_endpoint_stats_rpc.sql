@@ -20,7 +20,17 @@ AS $$
     count(*) FILTER (WHERE wd.delivered_at IS NOT NULL)::bigint AS delivered,
     count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NOT NULL)::bigint AS pending,
     count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 1)::bigint AS failed,
-    max(wd.created_at) AS last_delivery
+    NULLIF(GREATEST(
+      COALESCE(
+        (SELECT max(wda.created_at)
+         FROM webhook_delivery_attempts wda
+         JOIN webhook_deliveries wd2 ON wd2.id = wda.delivery_id
+         WHERE wd2.endpoint_id = wd.endpoint_id),
+        '1970-01-01'::timestamptz
+      ),
+      COALESCE(max(wd.delivered_at), '1970-01-01'::timestamptz),
+      COALESCE(max(wd.created_at), '1970-01-01'::timestamptz)
+    ), '1970-01-01'::timestamptz) AS last_delivery
   FROM webhook_deliveries wd
   JOIN webhook_endpoints we ON we.id = wd.endpoint_id
   WHERE we.organization_id = p_org_id

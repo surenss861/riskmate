@@ -99,7 +99,9 @@ ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT NOT NULL DEFAULT '';
 ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys(organization_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+-- Non-unique index for lookup; key_hash is the unique credential (see 20260309000000_api_keys_epic_schema.sql).
+DROP INDEX IF EXISTS idx_api_keys_prefix;
+CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 
