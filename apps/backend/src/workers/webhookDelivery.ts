@@ -60,6 +60,7 @@ interface WebhookDeliveryRow {
   attempt_count: number
   delivered_at: string | null
   next_retry_at: string | null
+  processing_since: string | null
   created_at: string
 }
 
@@ -161,6 +162,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
         response_body: 'Endpoint not found (missing or deleted)',
         duration_ms: 0,
         next_retry_at: null,
+        processing_since: null,
       })
       .eq('id', delivery.id)
     return
@@ -201,6 +203,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
             response_status: responseStatus,
             response_body: responseBody,
             duration_ms: durationMs,
+            processing_since: null,
           })
           .eq('id', delivery.id)
       } else {
@@ -212,8 +215,10 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
             response_status: responseStatus,
             response_body: responseBody,
             duration_ms: durationMs,
+            processing_since: null,
           })
           .eq('id', delivery.id)
+        await maybeAlertAdmin(delivery.endpoint_id)
       }
     }
   } catch (err: unknown) {
@@ -233,6 +238,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
           next_retry_at: nextRetry,
           response_body: responseBody,
           duration_ms: durationMs,
+          processing_since: null,
         })
         .eq('id', delivery.id)
     } else {
@@ -243,8 +249,10 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
           next_retry_at: null,
           response_body: responseBody,
           duration_ms: durationMs,
+          processing_since: null,
         })
         .eq('id', delivery.id)
+      await maybeAlertAdmin(delivery.endpoint_id)
     }
     console.error('[WebhookDelivery] Send failed:', delivery.id, msg)
   }
@@ -257,34 +265,22 @@ async function updateDeliveryResult(
   durationMs: number,
   success: boolean
 ): Promise<void> {
-  await supabase
-    .from('webhook_deliveries')
-    .update({
-      response_status: responseStatus,
-      response_body: responseBody,
-      duration_ms: durationMs,
-      delivered_at: success ? new Date().toISOString() : null,
-      next_retry_at: success ? null : undefined,
-    })
-    .eq('id', deliveryId)
+  const update: Record<string, unknown> = {
+    response_status: responseStatus,
+    response_body: responseBody,
+    duration_ms: durationMs,
+    delivered_at: success ? new Date().toISOString() : null,
+    processing_since: null,
+  }
+  if (success) update.next_retry_at = null
+  await supabase.from('webhook_deliveries').update(update).eq('id', deliveryId)
 }
 
 /**
- * Check consecutive failures for an endpoint and alert if >= CONSECUTIVE_FAILURES_BEFORE_ALERT.
- * Sends email to org owners/admins and persists alert state to avoid spamming.
+ * Alert org admins when a delivery has reached terminal failure (exhausted all retries).
+ * Called only when a delivery has just failed its fifth attempt. Cooldown prevents spamming.
  */
 async function maybeAlertAdmin(endpointId: string): Promise<void> {
-  const { data: recent } = await supabase
-    .from('webhook_deliveries')
-    .select('id, delivered_at')
-    .eq('endpoint_id', endpointId)
-    .order('created_at', { ascending: false })
-    .limit(CONSECUTIVE_FAILURES_BEFORE_ALERT)
-
-  if (!recent || recent.length < CONSECUTIVE_FAILURES_BEFORE_ALERT) return
-  const allFailed = recent.every((r: { delivered_at: string | null }) => !r.delivered_at)
-  if (!allFailed) return
-
   const { data: endpoint, error: epError } = await supabase
     .from('webhook_endpoints')
     .select('id, organization_id, url')
@@ -342,32 +338,59 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 }
 
 /**
+ * Atomically claim a pending delivery row so only one worker tick processes it.
+ * Returns the updated row if claimed, null if already claimed or delivered.
+ */
+async function claimDelivery(id: string): Promise<WebhookDeliveryRow | null> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('webhook_deliveries')
+    .update({ processing_since: now })
+    .eq('id', id)
+    .is('delivered_at', null)
+    .is('processing_since', null)
+    .select('*')
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as unknown as WebhookDeliveryRow
+}
+
+/**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
  * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
+ * Only processes rows that are successfully claimed (processing_since was null) to avoid duplicate sends and retry races.
  */
+let processPendingDeliveriesRunning = false
+
 async function processPendingDeliveries(): Promise<void> {
-  const now = new Date().toISOString()
-  const { data: pending, error } = await supabase
-    .from('webhook_deliveries')
-    .select('*')
-    .is('delivered_at', null)
-    .not('next_retry_at', 'is', null)
-    .lte('next_retry_at', now)
-    .lte('attempt_count', MAX_ATTEMPTS)
-    .order('created_at', { ascending: true })
-    .limit(50)
+  if (processPendingDeliveriesRunning) return
+  processPendingDeliveriesRunning = true
+  try {
+    const now = new Date().toISOString()
+    const { data: pending, error } = await supabase
+      .from('webhook_deliveries')
+      .select('id')
+      .is('delivered_at', null)
+      .is('processing_since', null)
+      .not('next_retry_at', 'is', null)
+      .lte('next_retry_at', now)
+      .lte('attempt_count', MAX_ATTEMPTS)
+      .order('created_at', { ascending: true })
+      .limit(50)
 
-  if (error) {
-    console.error('[WebhookDelivery] Fetch pending failed:', error)
-    return
-  }
-
-  for (const row of pending || []) {
-    const d = row as unknown as WebhookDeliveryRow
-    await sendDelivery(d)
-    if (d.attempt_count === MAX_ATTEMPTS) {
-      await maybeAlertAdmin(d.endpoint_id)
+    if (error) {
+      console.error('[WebhookDelivery] Fetch pending failed:', error)
+      return
     }
+
+    for (const row of pending || []) {
+      const claimed = await claimDelivery(row.id)
+      if (!claimed) continue
+      await sendDelivery(claimed)
+    }
+  } finally {
+    processPendingDeliveriesRunning = false
   }
 }
 

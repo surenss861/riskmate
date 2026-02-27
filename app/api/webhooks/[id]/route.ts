@@ -82,10 +82,33 @@ export async function PATCH(
       updates.url = url
     }
     if (Array.isArray(body.events)) {
-      const valid = body.events.filter((e: unknown) =>
-        typeof e === 'string' && EVENT_TYPES.includes(e)
+      const invalid = body.events.filter(
+        (e: unknown) => typeof e !== 'string' || !EVENT_TYPES.includes(e)
       )
-      if (valid.length > 0) updates.events = valid
+      if (invalid.length > 0) {
+        const { response, errorId } = createErrorResponse(
+          `Unknown or invalid event type(s): ${invalid.join(', ')}`,
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      const valid = [...new Set(body.events as string[])]
+      if (valid.length === 0) {
+        const { response, errorId } = createErrorResponse(
+          'At least one valid event type is required',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      updates.events = valid
     }
     if (typeof body.is_active === 'boolean') updates.is_active = body.is_active
     if (typeof body.description === 'string') updates.description = body.description.trim() || null

@@ -110,6 +110,14 @@ export async function PATCH(
 
     const supabase = await createSupabaseServerClient()
 
+    // Capture pre-update status so we only emit job.completed on transition to completed
+    const { data: existingJob } = await supabase
+      .from('jobs')
+      .select('status')
+      .eq('id', jobId)
+      .single()
+    const previousStatus = existingJob?.status
+
     // Extract fields that can be updated
     const {
       client_name,
@@ -182,11 +190,13 @@ export async function PATCH(
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
 
-    // Webhooks: job.updated and optionally job.completed
+    // Webhooks: job.updated and job.completed only on transition to completed
     triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
       console.warn('[Webhook] job.updated trigger failed:', e)
     )
-    if (updatedJob?.status === 'completed') {
+    const transitionedToCompleted =
+      updatedJob?.status === 'completed' && previousStatus !== 'completed'
+    if (transitionedToCompleted) {
       triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
         console.warn('[Webhook] job.completed trigger failed:', e)
       )
