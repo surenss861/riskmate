@@ -942,13 +942,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 )}
                 {(props.createdAfter ?? '') !== '' && (props.createdBefore ?? '') !== '' && props.onClearCreatedRange && (
                   <FilterPill
-                    label={`Created: ${props.createdAfter} → ${props.createdBefore}`}
+                    label={`Created: ${new Date(props.createdAfter!).toLocaleDateString()} → ${new Date(props.createdBefore!).toLocaleDateString()}`}
                     onRemove={props.onClearCreatedRange}
                   />
                 )}
                 {(props.completedAfter ?? '') !== '' && (props.completedBefore ?? '') !== '' && props.onClearCompletedRange && (
                   <FilterPill
-                    label={`Completed: ${props.completedAfter} → ${props.completedBefore}`}
+                    label={`Completed: ${new Date(props.completedAfter!).toLocaleDateString()} → ${new Date(props.completedBefore!).toLocaleDateString()}`}
                     onRemove={props.onClearCompletedRange}
                   />
                 )}

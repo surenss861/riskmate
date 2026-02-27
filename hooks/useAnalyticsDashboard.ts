@@ -226,10 +226,14 @@ export function useAnalyticsDashboard(
       ? { since: since!, until: until!, groupBy: statusByPeriodGroupBy }
       : { period, groupBy: statusByPeriodGroupBy };
 
-    const promises = [
+    // Wave 1: KPI-critical endpoints (summary, jobCompletion, complianceRate) for fast above-the-fold metrics
+    const wave1Promises = [
       useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }) : analyticsApi.summary({ range: rangeForSummary! }),
       useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }) : analyticsApi.jobCompletion({ period }),
       useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }) : analyticsApi.complianceRate({ period }),
+    ];
+    // Wave 2: Team, hazards, heatmap, trends, insights, statusByPeriod, prior-period
+    const wave2Promises = [
       useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }) : analyticsApi.teamPerformance({ period }),
       useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }),
       useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }) : analyticsApi.riskHeatmap({ period }),
@@ -251,7 +255,11 @@ export function useAnalyticsDashboard(
     ];
 
     try {
-      const results = await Promise.allSettled(promises);
+      const [wave1Results, wave2Results] = await Promise.all([
+        Promise.allSettled(wave1Promises),
+        Promise.allSettled(wave2Promises),
+      ]);
+      const results = [...wave1Results, ...wave2Results];
 
       if (gen !== fetchGenRef.current) return;
 

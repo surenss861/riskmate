@@ -103,7 +103,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     // --- 1. Deadline risk: open jobs <50% complete with <2 days to due (full count from RPC) ---
     if (deadlineRiskCount > 0) {
       insights.push({
-        id: stableId("deadline_risk", `count-${deadlineRiskCount}`),
+        id: stableId("deadline_risk", "default"),
         type: "deadline_risk",
         title: "Deadline risk",
         description: `${deadlineRiskCount} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
@@ -169,7 +169,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const pendingSignaturesJobIds = (dueCounts.pending_signatures_job_ids ?? []) as string[];
     if (pendingSignaturesCount > 0) {
       insights.push({
-        id: stableId("pending_signatures", `count-${pendingSignaturesCount}`),
+        id: stableId("pending_signatures", "default"),
         type: "pending_signatures",
         title: "Pending signatures near deadline",
         description: `${pendingSignaturesCount} job(s) have no signature and are within 7 days of compliance deadline.`,
@@ -209,7 +209,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const previousCompletions = (previousMit.data || []).length;
     const change = previousCompletions === 0 ? (currentCompletions > 0 ? 100 : 0) : ((currentCompletions - previousCompletions) / previousCompletions) * 100;
     insights.push({
-      id: stableId("team_productivity", `change-${Math.round(change * 100)}`),
+      id: stableId("team_productivity", "default"),
       type: "team_productivity",
       title: "Team productivity vs previous period",
       description:
@@ -230,7 +230,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
     const overdueJobIds = (dueCounts.overdue_job_ids ?? []) as string[];
     if (overdueCount > 0) {
       insights.push({
-        id: stableId("overdue_tasks", `count-${overdueCount}`),
+        id: stableId("overdue_tasks", "default"),
         type: "overdue_tasks",
         title: "Overdue tasks",
         description: `${overdueCount} job(s) are past due and not yet completed.`,

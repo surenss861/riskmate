@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -15,15 +15,15 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { formatPeriodLabel, getStatusColor, type TrendPoint, type StatusByPeriodRow } from './chartUtils';
 
-export type TrendPoint = { period: string; value: number; label?: string };
+export type { TrendPoint };
+export type { StatusByPeriodRow };
 
 type TrendsResponse = { data: TrendPoint[] } | null;
 
 type JobsTrendData = { period: string; created?: number; completed?: number };
 type RiskTrendData = { period: string; value: number };
-/** One row per period (e.g. week); keys are status names, values are counts. */
-type StatusByPeriodRow = { period: string; [status: string]: string | number };
 
 type AnalyticsTrendChartsProps = {
   trendsJobs: TrendsResponse;
@@ -46,12 +46,6 @@ type AnalyticsTrendChartsProps = {
   onPeriodClick?: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string; granularity?: 'day' | 'week' | 'month' }) => void;
   onStatusClick?: (status: string, period?: string, opts?: { rangeEnd?: string; granularity?: 'day' | 'week' }) => void;
 };
-
-function formatPeriodLabel(period: string): string {
-  const d = new Date(period);
-  if (isNaN(d.getTime())) return period;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: period.length > 10 ? 'numeric' : undefined });
-}
 
 /** True when period is a valid ISO date (YYYY-MM-DD), YYYY-MM (month bucket for 1y), or week start for drill-down. */
 function isValidPeriod(period: string): boolean {
@@ -80,19 +74,6 @@ function getClickedRow(event: unknown): { period?: string; [k: string]: unknown 
       ? (obj.payload as { period?: string; [k: string]: unknown })
       : (obj as { period?: string; [k: string]: unknown });
   return row;
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: '#22c55e',
-  in_progress: '#F97316',
-  pending: '#94a3b8',
-  open: '#94a3b8',
-  unknown: '#64748b',
-};
-
-function getStatusColor(status: string): string {
-  const key = status.toLowerCase().replace(/\s+/g, '_');
-  return STATUS_COLORS[key] ?? '#F97316';
 }
 
 export function AnalyticsTrendCharts({
@@ -152,6 +133,8 @@ export function AnalyticsTrendCharts({
     keys.forEach((k) => (row[k] = counts[k] as number));
     return [row];
   }, [statusByPeriod, jobCountsByStatus, periodLabel, hasStatusByPeriod]);
+
+  const gradientId = typeof React.useId === 'function' ? React.useId() : 'analyticsRiskGradient';
 
   const statusKeys = useMemo(
     () =>
@@ -259,7 +242,7 @@ export function AnalyticsTrendCharts({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={riskChartData} {...chartCommon}>
                 <defs>
-                  <linearGradient id="analyticsRiskGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#f97316" stopOpacity={0.4} />
                     <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
                   </linearGradient>
@@ -280,7 +263,7 @@ export function AnalyticsTrendCharts({
                   type="monotone"
                   dataKey="value"
                   stroke="#f97316"
-                  fill="url(#analyticsRiskGradient)"
+                  fill={`url(#${gradientId})`}
                   strokeWidth={2}
                   onClick={(props: unknown) => {
                     const row = getClickedRow(props);

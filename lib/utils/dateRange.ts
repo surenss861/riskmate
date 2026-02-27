@@ -27,8 +27,8 @@ export function toDateOnly(value: string): string {
  * the selected calendar dates are stable across timezones and refresh/share.
  */
 export function dateOnlyToApiBounds(startDateOnly: string, endDateOnly: string): { since: string; until: string } {
-  const since = new Date(startDateOnly + 'T00:00:00');
-  const until = new Date(endDateOnly + 'T23:59:59.999');
+  const since = new Date(startDateOnly + 'T00:00:00.000Z');
+  const until = new Date(endDateOnly + 'T23:59:59.999Z');
   return { since: since.toISOString(), until: until.toISOString() };
 }
 

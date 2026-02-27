@@ -3,7 +3,7 @@
 // for enterprise language consistency (Operations Control Center)
 
 
-import { useEffect, useMemo, useState, useCallback, Suspense } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -17,9 +17,11 @@ import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
 import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview'
-import { CustomRange, dateOnlyToApiBounds, presetPeriodToApiBounds, toLocalDateString, toDateOnly } from '@/lib/utils/dateRange'
+import { CustomRange, dateOnlyToApiBounds, presetPeriodToApiBounds, toDateOnly } from '@/lib/utils/dateRange'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { useAnalyticsDashboard } from '@/hooks/useAnalyticsDashboard'
+import { useEnhancedAnalyticsProps } from '@/hooks/useEnhancedAnalyticsProps'
+import { useOperationsTimeRange } from '@/hooks/useOperationsTimeRange'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
@@ -27,42 +29,6 @@ import { AppBackground, AppShell, PageHeader, Button as SharedButton, GlassCard 
 import clsx from 'clsx'
 
 type TimeRange = '7d' | '30d' | '90d' | 'all' | 'custom'
-
-/** Compute start/end ISO bounds for drill-down from chart bucket. Branches strictly by granularity (not period string length). */
-function periodRangeFromGranularity(
-  period: string,
-  granularity: 'day' | 'week' | 'month',
-  rangeEnd?: string
-): { start: string; end: string } {
-  if (rangeEnd != null && rangeEnd.length >= 10) {
-    const startDay = period.slice(0, 10)
-    const endDay = rangeEnd.slice(0, 10)
-    return {
-      start: `${startDay}T00:00:00.000Z`,
-      end: `${endDay}T23:59:59.999Z`,
-    }
-  }
-  if (granularity === 'day') {
-    const dayStr = period.slice(0, 10)
-    return {
-      start: `${dayStr}T00:00:00.000Z`,
-      end: `${dayStr}T23:59:59.999Z`,
-    }
-  }
-  if (granularity === 'month') {
-    const y = parseInt(period.slice(0, 4), 10)
-    const m = parseInt(period.slice(5, 7), 10) - 1
-    const start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString()
-    const end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).toISOString()
-    return { start, end }
-  }
-  // week: period is week start (YYYY-MM-DD)
-  const weekStart = new Date(`${period.slice(0, 10)}T00:00:00Z`)
-  const start = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0)).toISOString()
-  const weekEndDate = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-  weekEndDate.setUTCHours(23, 59, 59, 999)
-  return { start, end: weekEndDate.toISOString() }
-}
 
 interface Job {
   id: string
@@ -99,21 +65,19 @@ function DashboardPageInner() {
   const [filterHazard, setFilterHazard] = useState<string>(() => searchParams.get('hazard') || '')
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  
-  // Time range from query params, default to 30d; custom restored from range_start/range_end
-  const timeRangeParam = searchParams.get('time_range') as string | null
-  const rangeStartParam = searchParams.get('range_start')?.trim() ?? ''
-  const rangeEndParam = searchParams.get('range_end')?.trim() ?? ''
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
-    if (timeRangeParam === 'custom' && rangeStartParam && rangeEndParam) return 'custom'
-    return timeRangeParam === '1y' ? 'all' : (timeRangeParam as TimeRange) || '30d'
-  })
-  const [customRange, setCustomRange] = useState<CustomRange | null>(() => {
-    if (timeRangeParam === 'custom' && rangeStartParam && rangeEndParam) {
-      return { start: toDateOnly(rangeStartParam), end: toDateOnly(rangeEndParam) }
-    }
-    return null
-  })
+
+  const refetchRef = useRef<(() => Promise<void>) | null>(null)
+  const {
+    timeRange,
+    setTimeRange,
+    customRange,
+    setCustomRange,
+    dashboardPeriod,
+    setDashboardPeriod,
+    handleTimeRangeChange,
+    handleAnalyticsPeriodChange,
+  } = useOperationsTimeRange({ refetchRef })
+
   // Mitigations/KPI period: "This Year" uses calendar-year bounds (via since/until); other presets use range days.
   const mitigationsSinceUntil = useMemo(() => {
     if (timeRange === 'all') return presetPeriodToApiBounds('1y')
@@ -492,317 +456,44 @@ function DashboardPageInner() {
     ]
   )
 
-  // Sync time range and custom range from URL query params (e.g. refresh or navigation)
   useEffect(() => {
-    const param = searchParams.get('time_range') as string | null
-    const start = searchParams.get('range_start')?.trim() ?? ''
-    const end = searchParams.get('range_end')?.trim() ?? ''
-    if (param === 'custom' && start && end) {
-      setTimeRange('custom')
-      setCustomRange({ start: toDateOnly(start), end: toDateOnly(end) })
-      setDashboardPeriod('custom')
-    } else if (param === '1y') {
-      setTimeRange('all')
-      setCustomRange(null)
-      setDashboardPeriod('1y')
-    } else if (param && ['7d', '30d', '90d', 'all'].includes(param)) {
-      setTimeRange(param as TimeRange)
-      setCustomRange(null)
-      setDashboardPeriod(param === 'all' ? '1y' : (param as DashboardPeriod))
+    refetchRef.current = async () => {
+      await refetchAnalytics()
+      await refetchDashboard()
     }
-  }, [searchParams])
-
-  // Sync dashboard period from main time range when it changes (e.g. header selector)
-  useEffect(() => {
-    const derived: DashboardPeriod = timeRange === 'all' ? '1y' : timeRange
-    setDashboardPeriod((p) => (p !== 'custom' ? derived : p))
-  }, [timeRange])
-
-  const handleTimeRangeChange = (newRange: TimeRange) => {
-    if (newRange === 'custom') {
-      if (timeRange === 'custom' && customRange) {
-        refetchAnalytics()
-        refetchDashboard()
-        return
-      }
-      const endDate = new Date()
-      const startDate = new Date(endDate.getTime())
-      startDate.setDate(startDate.getDate() - 29)
-      const defaultRange: CustomRange = {
-        start: toLocalDateString(startDate),
-        end: toLocalDateString(endDate),
-      }
-      setCustomRange(defaultRange)
-      setTimeRange('custom')
-      setDashboardPeriod('custom')
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('time_range', 'custom')
-      params.set('range_start', defaultRange.start)
-      params.set('range_end', defaultRange.end)
-      router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
-      refetchAnalytics()
-      refetchDashboard()
-      return
+    return () => {
+      refetchRef.current = null
     }
-    setTimeRange(newRange)
-    setCustomRange(null)
-    setDashboardPeriod(newRange === 'all' ? '1y' : (newRange as DashboardPeriod))
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('time_range', newRange === 'all' ? '1y' : newRange)
-    params.delete('range_start')
-    params.delete('range_end')
-    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
-    refetchAnalytics()
-    refetchDashboard()
-  }
+  }, [refetchAnalytics, refetchDashboard])
 
-  const handleAnalyticsPeriodChange = useCallback((period: DashboardPeriod, range?: CustomRange) => {
-    // When user selects "Custom" but has not yet applied a range, do not set dashboard period
-    // or trigger refetches; wait until CustomDateRangePicker passes a valid range.
-    if (period === 'custom' && !range) {
-      return
-    }
-    setDashboardPeriod(period)
-    if (period === 'custom' && range) {
-      const normalized: CustomRange = { start: toDateOnly(range.start), end: toDateOnly(range.end) }
-      setCustomRange(normalized)
-      setTimeRange('custom')
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('time_range', 'custom')
-      params.set('range_start', normalized.start)
-      params.set('range_end', normalized.end)
-      router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
-      refetchAnalytics()
-      refetchDashboard()
-    } else {
-      setCustomRange(null)
-      const newRange: TimeRange = period === '1y' ? 'all' : (period as TimeRange)
-      setTimeRange(newRange)
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('time_range', period === '1y' ? '1y' : newRange)
-      params.delete('range_start')
-      params.delete('range_end')
-      router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
-      refetchAnalytics()
-      refetchDashboard()
-    }
-  }, [searchParams, pathname, router, refetchAnalytics, refetchDashboard])
+  const periodLabels = useMemo<Record<DashboardPeriod, string>>(
+    () => ({
+      '7d': 'Last 7 Days',
+      '30d': 'Last 30 Days',
+      '90d': 'Last 90 Days',
+      '1y': 'This Year',
+      custom: customRange
+        ? `${new Date(customRange.start + 'T12:00:00').toLocaleDateString()} – ${new Date(customRange.end + 'T12:00:00').toLocaleDateString()}`
+        : 'Custom',
+    }),
+    [customRange?.start, customRange?.end]
+  )
 
-  const periodLabels: Record<DashboardPeriod, string> = {
-    '7d': 'Last 7 Days',
-    '30d': 'Last 30 Days',
-    '90d': 'Last 90 Days',
-    '1y': 'This Year',
-    custom: customRange
-      ? `${new Date(customRange.start + 'T12:00:00').toLocaleDateString()} – ${new Date(customRange.end + 'T12:00:00').toLocaleDateString()}`
-      : 'Custom',
-  }
-
-  const enhancedAnalytics: EnhancedAnalyticsProps | undefined = useMemo(() => {
-    if (!dashboardData || dashboardLocked || analyticsLocked) return undefined
-    const jc = dashboardData.jobCompletion
-    const cr = dashboardData.complianceRate
-    const summary = dashboardData.summary
-    const priorJc = dashboardData.priorJobCompletion
-    const priorCr = dashboardData.priorComplianceRate
-    const jobCounts = summary?.job_counts_by_status ?? {}
-    const totalJobs = jc?.total ?? 0
-    const completionRate = jc?.completion_rate ?? 0
-    const riskData = dashboardData.trendsRisk?.data ?? []
-    const avgRiskFromSummary = summary?.avg_risk != null ? Number(summary.avg_risk) : null
-    const avgRiskFromTrend = riskData.length
-      ? riskData.reduce((a, p) => a + p.value, 0) / riskData.length
-      : 0
-    const avgRiskKpi = avgRiskFromSummary ?? avgRiskFromTrend
-    const complianceOverall = cr?.overall ?? 0
-
-    // Only use prior values when prior datasets were actually fetched (e.g. not for custom range).
-    // When prior is unavailable, keep trend neutral (undefined trendPercent/previousValue, trend 'flat').
-    const priorTotal = priorJc != null ? priorJc.total : undefined
-    const priorCompletion = priorJc != null ? priorJc.completion_rate : undefined
-    const priorCompliance = priorCr != null ? priorCr.overall : undefined
-    const priorRiskData = dashboardData.priorTrendsRisk?.data ?? []
-    const priorAvgRisk = priorRiskData.length > 0
-      ? priorRiskData.reduce((a, p) => a + p.value, 0) / priorRiskData.length
-      : undefined
-
-    const percentChange = (current: number, previous: number): number | undefined => {
-      if (previous === 0) return current > 0 ? 100 : undefined
-      return Math.round(((current - previous) / previous) * 1000) / 10
-    }
-    /** Direction for metrics where higher is better (e.g. Total Jobs, Completion Rate). Do not use for lower-is-better (e.g. Avg Risk). */
-    const trendFromDelta = (delta: number | undefined): 'up' | 'down' | 'flat' => {
-      if (delta == null) return 'flat'
-      if (delta > 0) return 'up'
-      if (delta < 0) return 'down'
-      return 'flat'
-    }
-    const trendForMetric = (current: number, prior: number, higherIsBetter: boolean): 'up' | 'down' | 'flat' => {
-      const pct = percentChange(current, prior)
-      if (pct == null || pct === 0) return 'flat'
-      if (higherIsBetter) return pct > 0 ? 'up' : 'down'
-      return pct < 0 ? 'up' : 'down'
-    }
-
-    const se = dashboardSectionErrors
-    // Suppress prior-period comparison when prior endpoints failed so arrows/percentages are flat/unavailable
-    const priorUnavailableForJobs = se.priorSummary || se.priorJobCompletion
-    const priorUnavailableForRisk = se.priorTrendsRisk
-    const priorUnavailableForCompliance = se.priorComplianceRate
-
-    const totalJobsTrendPct = priorUnavailableForJobs ? undefined : (priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined)
-    const completionTrendPct = priorUnavailableForJobs ? undefined : (priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined)
-    const avgRiskTrendPct = priorUnavailableForRisk ? undefined : (priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined)
-    const avgRiskTrend = priorUnavailableForRisk ? 'flat' as const : (priorAvgRisk !== undefined ? trendForMetric(avgRiskKpi, priorAvgRisk, false) : 'flat')
-    /** Arrow by numerical change (decrease = down, increase = up); color still from avgRiskTrend (good/bad). */
-    const avgRiskTrendDirection =
-      avgRiskTrendPct == null || avgRiskTrendPct === 0
-        ? 'flat'
-        : avgRiskTrendPct > 0
-          ? 'up'
-          : 'down'
-    const kpiItems: EnhancedAnalyticsProps['kpiItems'] = [
-      {
-        id: 'total-jobs',
-        title: 'Total Jobs',
-        value: totalJobs,
-        unavailable: se.summary || se.jobCompletion,
-        trend: priorUnavailableForJobs ? 'flat' : trendFromDelta(totalJobsTrendPct),
-        trendPercent: priorUnavailableForJobs ? undefined : totalJobsTrendPct,
-        previousValue: priorUnavailableForJobs ? undefined : priorTotal,
-        trendLabel: periodLabels[analyticsPeriod],
-        sparklineData: dashboardData.trendsJobs?.data?.slice(-7).map((d) => d.value) ?? [],
-      },
-      {
-        id: 'completion-rate',
-        title: 'Completion Rate',
-        value: Math.round(completionRate),
-        suffix: '%',
-        unavailable: se.jobCompletion,
-        trend: priorUnavailableForJobs ? 'flat' : (priorCompletion !== undefined ? trendForMetric(completionRate, priorCompletion, true) : 'flat'),
-        trendPercent: priorUnavailableForJobs ? undefined : completionTrendPct,
-        previousValue: priorUnavailableForJobs ? undefined : (priorCompletion !== undefined ? Math.round(priorCompletion) : undefined),
-        sparklineData: dashboardData.trendsCompletion?.data?.slice(-7).map((d) => d.value) ?? [],
-      },
-      {
-        id: 'avg-risk',
-        title: 'Avg Risk Score',
-        value: Math.round(avgRiskKpi * 10) / 10,
-        unavailable: se.summary,
-        trend: avgRiskTrend,
-        trendDirection: avgRiskTrendDirection,
-        trendPercent: priorUnavailableForRisk ? undefined : avgRiskTrendPct,
-        previousValue: priorUnavailableForRisk ? undefined : (priorAvgRisk !== undefined ? Math.round(priorAvgRisk * 10) / 10 : undefined),
-        sparklineData: dashboardData.trendsRisk?.data?.slice(-7).map((d) => d.value) ?? [],
-      },
-      {
-        id: 'compliance-rate',
-        title: 'Compliance Rate',
-        value: Math.round(complianceOverall),
-        suffix: '%',
-        unavailable: se.complianceRate,
-        trend: priorUnavailableForCompliance ? 'flat' : (priorCompliance !== undefined ? trendForMetric(complianceOverall, priorCompliance, true) : 'flat'),
-        trendPercent: priorUnavailableForCompliance ? undefined : (priorCompliance !== undefined ? percentChange(complianceOverall, priorCompliance) : undefined),
-        previousValue: priorUnavailableForCompliance ? undefined : (priorCompliance !== undefined ? Math.round(priorCompliance) : undefined),
-        sparklineData: dashboardData.trendsCompliance?.data?.slice(-7).map((d) => d.value) ?? [],
-      },
-    ]
-    const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end
-    // Build calendar-year start/end in UTC so "This Year" does not shift a day in UTC- timezones
-    const periodRangeStart = useCustom ? customRange!.start : analyticsPeriod === '1y'
-      ? (() => {
-          const y = new Date().getUTCFullYear()
-          return new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0)).toISOString().slice(0, 10)
-        })()
-      : (() => {
-          const days = analyticsPeriod === '7d' ? 7 : analyticsPeriod === '90d' ? 90 : 30
-          const d = new Date()
-          d.setDate(d.getDate() - (days - 1))
-          return d.toISOString().slice(0, 10)
-        })()
-    const periodRangeEnd = useCustom ? customRange!.end : analyticsPeriod === '1y'
-      ? (() => {
-          const n = new Date()
-          return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), 0, 0, 0, 0)).toISOString().slice(0, 10)
-        })()
-      : new Date().toISOString().slice(0, 10)
-
-    return {
-      period: analyticsPeriod,
-      onPeriodChange: handleAnalyticsPeriodChange,
-      periodLabel: periodLabels[analyticsPeriod],
-      customRange: analyticsPeriod === 'custom' ? customRange : null,
-      periodRangeStart,
-      periodRangeEnd,
-      trendsGranularity: effectiveGroupBy,
-      statusChartGranularity: statusChartGroupBy,
-      kpiItems,
-      insightsDismissalScope: `${user?.id ?? ''}-${organizationId ?? ''}`,
-      insights: (dashboardData.insights?.insights ?? []).map((i) => ({
-        id: i.id,
-        type: i.type,
-        title: i.title,
-        description: i.description,
-        severity: i.severity,
-        action_url: i.action_url,
-        metric_value: i.metric_value,
-        metric_label: i.metric_label,
-      })),
-      insightsLoading: dashboardLoading && dashboardData.insights === null,
-      trendsJobs: dashboardData.trendsJobs,
-      trendsRisk: dashboardData.trendsRisk,
-      trendsCompletion: dashboardData.trendsCompletion,
-      trendsCompletedCounts: dashboardData.trendsCompletedCounts ?? null,
-      jobCountsByStatus: jobCounts,
-      statusByPeriod: dashboardData.statusByPeriod ?? undefined,
-      hazardItems: dashboardData.hazardFrequency?.items ?? [],
-      riskHeatmap: dashboardData.riskHeatmap ?? null,
-      teamMembers: dashboardData.teamPerformance?.members ?? [],
-      isLoading: dashboardLoading,
-      onPeriodClick: (period: string, opts?: { useCompletionDate?: boolean; rangeEnd?: string; granularity?: 'day' | 'week' | 'month' }) => {
-        const granularity = opts?.granularity ?? effectiveGroupBy
-        const { start, end } = periodRangeFromGranularity(period, granularity, opts?.rangeEnd)
-        const params = new URLSearchParams()
-        if (opts?.useCompletionDate) {
-          params.set('completed_after', start)
-          params.set('completed_before', end)
-        } else {
-          params.set('created_after', start)
-          params.set('created_before', end)
-        }
-        router.push(`/operations/jobs?${params.toString()}`)
-      },
-      onStatusClick: (status: string, period?: string, opts?: { rangeEnd?: string; granularity?: 'day' | 'week' }) => {
-        const params = new URLSearchParams()
-        const statusKey = status.replace(/\s+/g, '_').toLowerCase()
-        params.set('status', statusKey)
-        // Use same grouping that produced statusByPeriod (not effectiveGroupBy) so weekly status bars map to full-week filters.
-        if (period) {
-          const granularity = opts?.granularity ?? statusChartGroupBy
-          const { start, end } = periodRangeFromGranularity(period, granularity, opts?.rangeEnd)
-          params.set('created_after', start)
-          params.set('created_before', end)
-        }
-        router.push(`/operations/jobs?${params.toString()}`)
-      },
-      onHazardCategoryClick: (category: string) => {
-        const params = new URLSearchParams()
-        params.set('hazard', category)
-        if (analyticsPeriod === 'custom' && customRange) {
-          const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
-          params.set('created_after', bounds.since)
-          params.set('created_before', bounds.until)
-        } else if (analyticsPeriod === '1y') {
-          const bounds = presetPeriodToApiBounds('1y')
-          params.set('created_after', bounds.since)
-          params.set('created_before', bounds.until)
-        } else {
-          params.set('time_range', analyticsPeriod)
-        }
-        router.push(`/operations/jobs?${params.toString()}`)
-      },
-    }
-  }, [dashboardData, dashboardLocked, analyticsLocked, dashboardLoading, dashboardSectionErrors, analyticsPeriod, customRange, router, handleAnalyticsPeriodChange, effectiveGroupBy, statusChartGroupBy, user?.id, organizationId])
+  const enhancedAnalytics = useEnhancedAnalyticsProps({
+    dashboardData,
+    dashboardLocked,
+    analyticsLocked,
+    dashboardLoading,
+    dashboardSectionErrors,
+    analyticsPeriod,
+    customRange,
+    effectiveGroupBy,
+    statusChartGroupBy,
+    periodLabels,
+    userId: user?.id,
+    organizationId,
+    onAnalyticsPeriodChange: handleAnalyticsPeriodChange,
+  })
 
   // Compute DashboardOverview data
   const todaysJobs = useMemo(() => {
@@ -832,19 +523,33 @@ function DashboardPageInner() {
   }, [jobs])
 
   const recentEvidence = useMemo(() => {
-    // Placeholder - would need to fetch from documents/photos API
+    // Could be populated from a dedicated recent evidence endpoint or /api/jobs/{id}/documents for recent jobs
     return []
   }, [])
 
   const incompleteMitigations = useMemo(() => {
-    // Placeholder - would need to fetch from mitigation_items API
-    return []
-  }, [])
+    return jobs
+      .filter((j: Job & { blockers_count?: number; mitigations_total?: number; mitigations_complete?: number }) =>
+        (j.blockers_count ?? 0) > 0 || ((j.mitigations_total ?? 0) - (j.mitigations_complete ?? 0)) > 0
+      )
+      .map((j: Job) => ({
+        id: `${j.id}-incomplete`,
+        job_id: j.id,
+        job_name: j.client_name,
+        title: 'Outstanding actions',
+        created_at: j.created_at ?? new Date().toISOString(),
+      }))
+  }, [jobs])
 
   const workforceActivity = useMemo(() => {
-    // Placeholder - would need to fetch from users/team API
-    return []
-  }, [])
+    const members = dashboardData?.teamPerformance?.members ?? []
+    return members.map((m) => ({
+      user_id: m.user_id,
+      name: m.name,
+      last_login: '', // team performance API does not return last_login
+      jobs_assigned: m.jobs_assigned,
+    }))
+  }, [dashboardData?.teamPerformance?.members])
 
   const complianceTrend = useMemo(() => {
     const trend = (analyticsData.trend || []).map((item: any) => ({

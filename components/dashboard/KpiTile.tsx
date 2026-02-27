@@ -130,7 +130,7 @@ export function KpiTile({
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.35 }}
       className={clsx(
-        "group relative overflow-hidden rounded-3xl border border-white/10",
+        "group relative rounded-3xl border border-white/10",
         "bg-white/[0.03] backdrop-blur-xl",
         "shadow-[0_4px_24px_rgba(0,0,0,0.15)] p-6 transition-transform duration-300",
         (href || onClick) && "cursor-pointer"
@@ -174,7 +174,7 @@ export function KpiTile({
       </div>
 
       {showTooltip && previousValue != null && (
-        <div className="absolute bottom-4 left-6 right-6 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-xs text-white/80">
+        <div className="absolute bottom-full left-6 right-6 mb-2 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-xs text-white/80 z-10">
           Previous period: {prefix}{formatNumber(previousValue)}{suffix}
         </div>
       )}

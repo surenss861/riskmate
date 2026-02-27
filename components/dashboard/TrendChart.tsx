@@ -15,15 +15,14 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { formatPeriodLabel, getStatusColor, type TrendPoint, type StatusByPeriodRow } from './chartUtils';
 
-export type TrendPoint = { period: string; value: number; label?: string };
+export type { TrendPoint };
 
 type TrendsResponse = { data: TrendPoint[] } | null;
 
 type JobsTrendData = { period: string; created?: number; completed?: number };
 type RiskTrendData = { period: string; value: number };
-/** One row per period (e.g. week); keys are status names, values are counts. */
-type StatusByPeriodRow = { period: string; [status: string]: string | number };
 
 type TrendChartProps = {
   trendsJobs: TrendsResponse;
@@ -38,29 +37,6 @@ type TrendChartProps = {
   onPeriodClick?: (period: string) => void;
   onStatusClick?: (status: string, period?: string) => void;
 };
-
-function formatPeriodLabel(period: string): string {
-  const d = new Date(period);
-  if (isNaN(d.getTime())) return period;
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: period.length > 10 ? 'numeric' : undefined,
-  });
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: '#22c55e',
-  in_progress: '#F97316',
-  pending: '#94a3b8',
-  open: '#94a3b8',
-  unknown: '#64748b',
-};
-
-function getStatusColor(status: string): string {
-  const key = status.toLowerCase().replace(/\s+/g, '_');
-  return STATUS_COLORS[key] ?? '#F97316';
-}
 
 export function TrendChart({
   trendsJobs,
@@ -108,6 +84,8 @@ export function TrendChart({
     });
     return [row];
   }, [statusByPeriod, jobCountsByStatus, periodLabel]);
+
+  const gradientId = typeof React.useId === 'function' ? React.useId() : 'trendRiskGradient';
 
   const statusKeys = useMemo(() => {
     if (statusByPeriod && statusByPeriod.length > 0) {
@@ -227,7 +205,7 @@ export function TrendChart({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={riskChartData} {...chartCommon}>
                 <defs>
-                  <linearGradient id="trendRiskGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#f97316" stopOpacity={0.4} />
                     <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
                   </linearGradient>
@@ -255,7 +233,7 @@ export function TrendChart({
                   type="monotone"
                   dataKey="value"
                   stroke="#f97316"
-                  fill="url(#trendRiskGradient)"
+                  fill={`url(#${gradientId})`}
                   strokeWidth={2}
                   onClick={(props: unknown) => {
                     const d = props as { period?: string };
