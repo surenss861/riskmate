@@ -21,6 +21,14 @@ import { AdvancedFilterBuilder } from '@/components/shared/AdvancedFilterBuilder
 import { SavedFiltersDropdown } from '@/components/shared/SavedFiltersDropdown'
 import type { FilterGroup } from '@/lib/jobs/filterConfig'
 
+/** Format an ISO date/datetime string for filter pills in a timezone-stable way (date-only, local calendar day). */
+function formatDateOnlyForPill(isoDateString: string): string {
+  const dateOnly = isoDateString.slice(0, 10)
+  const [y, m, d] = dateOnly.split('-').map(Number)
+  const localDate = new Date(y, m - 1, d)
+  return localDate.toLocaleDateString()
+}
+
 export type JobsTimeRange = 'all' | '7d' | '30d' | '90d' | '1y'
 
 export interface QuickFiltersProps {
@@ -942,13 +950,13 @@ export function JobsPageContentView(props: JobsPageContentProps) {
                 )}
                 {(props.createdAfter ?? '') !== '' && (props.createdBefore ?? '') !== '' && props.onClearCreatedRange && (
                   <FilterPill
-                    label={`Created: ${new Date(props.createdAfter!).toLocaleDateString()} → ${new Date(props.createdBefore!).toLocaleDateString()}`}
+                    label={`Created: ${formatDateOnlyForPill(props.createdAfter!)} → ${formatDateOnlyForPill(props.createdBefore!)}`}
                     onRemove={props.onClearCreatedRange}
                   />
                 )}
                 {(props.completedAfter ?? '') !== '' && (props.completedBefore ?? '') !== '' && props.onClearCompletedRange && (
                   <FilterPill
-                    label={`Completed: ${new Date(props.completedAfter!).toLocaleDateString()} → ${new Date(props.completedBefore!).toLocaleDateString()}`}
+                    label={`Completed: ${formatDateOnlyForPill(props.completedAfter!)} → ${formatDateOnlyForPill(props.completedBefore!)}`}
                     onRemove={props.onClearCompletedRange}
                   />
                 )}

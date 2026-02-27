@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AnalyticsDashboardData, AnalyticsSectionErrors } from '@/hooks/useAnalyticsDashboard';
 import type { DashboardPeriod, EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview';
 import type { CustomRange } from '@/lib/utils/dateRange';
-import { dateOnlyToApiBounds, presetPeriodToApiBounds } from '@/lib/utils/dateRange';
+import { dateOnlyToApiBounds, presetPeriodToApiBounds, type PresetPeriod } from '@/lib/utils/dateRange';
 
 /** Compute start/end ISO bounds for drill-down from chart bucket. */
 function periodRangeFromGranularity(
@@ -249,15 +249,17 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
       onHazardCategoryClick: (category: string) => {
         const params = new URLSearchParams();
         params.set('hazard', category);
-        if (analyticsPeriod === 'custom' && customRange) {
-          const bounds = dateOnlyToApiBounds(customRange.start, customRange.end);
-          params.set('created_after', bounds.since);
-          params.set('created_before', bounds.until);
-        } else if (analyticsPeriod === '1y') {
-          const bounds = presetPeriodToApiBounds('1y');
-          params.set('created_after', bounds.since);
-          params.set('created_before', bounds.until);
+        let bounds: { since: string; until: string };
+        if (analyticsPeriod === 'custom' && customRange?.start && customRange?.end) {
+          bounds = dateOnlyToApiBounds(customRange.start, customRange.end);
         } else {
+          const preset: PresetPeriod =
+            analyticsPeriod === '1y' ? '1y' : analyticsPeriod === '7d' ? '7d' : analyticsPeriod === '90d' ? '90d' : '30d';
+          bounds = presetPeriodToApiBounds(preset);
+        }
+        params.set('created_after', bounds.since);
+        params.set('created_before', bounds.until);
+        if (analyticsPeriod !== 'custom') {
           params.set('time_range', analyticsPeriod);
         }
         router.push(`/operations/jobs?${params.toString()}`);
