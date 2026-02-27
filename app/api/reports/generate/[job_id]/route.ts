@@ -243,6 +243,15 @@ export async function POST(
 
       reportRun = newRun
       console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
+      const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
+      triggerWebhookEvent(organization_id, 'report.generated', {
+        report_run_id: reportRun.id,
+        job_id: jobId,
+        packet_type: packetType,
+        status: reportRun.status,
+        data_hash: reportRun.data_hash,
+        generated_at: reportRun.generated_at,
+      }).catch((e) => console.warn('[Webhook] report.generated trigger failed:', e))
     }
 
     // When skipPdfGeneration is true, return run id and hash only (no PDF) for signature workflow

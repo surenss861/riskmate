@@ -1,0 +1,283 @@
+/**
+ * Webhook delivery: enqueue deliveries for events, send with HMAC signature, retry with backoff.
+ * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin after 5 consecutive failures.
+ */
+
+import crypto from 'crypto'
+import { supabase } from '../lib/supabaseClient'
+import { buildSignatureHeaders } from '../utils/webhookSigning'
+
+const RETRY_DELAYS_MS = [
+  0,           // attempt 1: immediate
+  5 * 60 * 1000,   // 5 min
+  30 * 60 * 1000,  // 30 min
+  2 * 60 * 60 * 1000,  // 2 hr
+  24 * 60 * 60 * 1000, // 24 hr
+]
+
+const MAX_ATTEMPTS = 5
+const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
+
+export type WebhookEventType =
+  | 'job.created'
+  | 'job.updated'
+  | 'job.completed'
+  | 'job.deleted'
+  | 'hazard.created'
+  | 'hazard.updated'
+  | 'signature.added'
+  | 'report.generated'
+  | 'evidence.uploaded'
+  | 'team.member_added'
+
+export interface WebhookEventPayload {
+  id: string
+  type: string
+  created: string
+  organization_id: string
+  data: Record<string, unknown>
+}
+
+interface WebhookEndpointRow {
+  id: string
+  organization_id: string
+  url: string
+  secret: string
+  events: string[]
+  is_active: boolean
+}
+
+interface WebhookDeliveryRow {
+  id: string
+  endpoint_id: string
+  event_type: string
+  payload: Record<string, unknown>
+  response_status: number | null
+  response_body: string | null
+  duration_ms: number | null
+  attempt_count: number
+  delivered_at: string | null
+  next_retry_at: string | null
+  created_at: string
+}
+
+/**
+ * Build the standard event payload envelope.
+ */
+export function buildWebhookPayload(
+  eventType: string,
+  organizationId: string,
+  data: Record<string, unknown>
+): WebhookEventPayload {
+  return {
+    id: `evt_${crypto.randomUUID()}`,
+    type: eventType,
+    created: new Date().toISOString(),
+    organization_id: organizationId,
+    data: { object: data },
+  }
+}
+
+/**
+ * Find active endpoints for org that subscribe to this event type; create one delivery row per endpoint.
+ */
+export async function deliverEvent(
+  orgId: string,
+  eventType: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const payload = buildWebhookPayload(eventType, orgId, data)
+  const payloadJson = JSON.stringify(payload)
+
+  const { data: endpoints, error: fetchError } = await supabase
+    .from('webhook_endpoints')
+    .select('id, organization_id, url, secret, events, is_active')
+    .eq('organization_id', orgId)
+    .eq('is_active', true)
+
+  if (fetchError) {
+    console.error('[WebhookDelivery] Fetch endpoints failed:', fetchError)
+    throw new Error(`Webhook endpoints fetch failed: ${fetchError.message}`)
+  }
+
+  const filtered = (endpoints || []).filter(
+    (e: WebhookEndpointRow) => e.events && e.events.includes(eventType)
+  )
+
+  for (const ep of filtered) {
+    const { error: insertError } = await supabase.from('webhook_deliveries').insert({
+      endpoint_id: ep.id,
+      event_type: eventType,
+      payload: payload as unknown as Record<string, unknown>,
+      attempt_count: 1,
+      next_retry_at: new Date().toISOString(),
+    })
+    if (insertError) {
+      console.error('[WebhookDelivery] Insert delivery failed:', insertError)
+    }
+  }
+}
+
+/**
+ * Send one delivery: POST to endpoint URL with signed payload, update row.
+ */
+export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> {
+  const { data: endpoint, error: epError } = await supabase
+    .from('webhook_endpoints')
+    .select('url, secret')
+    .eq('id', delivery.endpoint_id)
+    .single()
+
+  if (epError || !endpoint) {
+    console.error('[WebhookDelivery] Endpoint not found:', delivery.endpoint_id)
+    await updateDeliveryResult(delivery.id, null, null, 0, false)
+    return
+  }
+
+  const payloadStr = JSON.stringify(delivery.payload)
+  const headers = buildSignatureHeaders(payloadStr, endpoint.secret)
+
+  const start = Date.now()
+  let responseStatus: number | null = null
+  let responseBody: string | null = null
+
+  try {
+    const res = await fetch(endpoint.url, {
+      method: 'POST',
+      headers,
+      body: payloadStr,
+      signal: AbortSignal.timeout(30000),
+    })
+    responseStatus = res.status
+    responseBody = await res.text().catch(() => null)
+    const durationMs = Date.now() - start
+
+    const success = res.ok
+    await updateDeliveryResult(delivery.id, responseStatus, responseBody, durationMs, success)
+
+    if (!success) {
+      const nextAttempt = delivery.attempt_count + 1
+      if (nextAttempt <= MAX_ATTEMPTS) {
+        const delayMs = RETRY_DELAYS_MS[nextAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+        const nextRetry = new Date(Date.now() + delayMs).toISOString()
+        await supabase
+          .from('webhook_deliveries')
+          .update({
+            attempt_count: nextAttempt,
+            next_retry_at: nextRetry,
+            response_status: responseStatus,
+            response_body: responseBody,
+            duration_ms: durationMs,
+          })
+          .eq('id', delivery.id)
+      }
+    }
+  } catch (err: unknown) {
+    const durationMs = Date.now() - start
+    const msg = err instanceof Error ? err.message : String(err)
+    responseBody = msg
+    await updateDeliveryResult(delivery.id, null, responseBody, durationMs, false)
+    const nextAttempt = delivery.attempt_count + 1
+    if (nextAttempt <= MAX_ATTEMPTS) {
+      const delayMs = RETRY_DELAYS_MS[nextAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+      const nextRetry = new Date(Date.now() + delayMs).toISOString()
+      await supabase
+        .from('webhook_deliveries')
+        .update({
+          attempt_count: nextAttempt,
+          next_retry_at: nextRetry,
+          response_body: responseBody,
+          duration_ms: durationMs,
+        })
+        .eq('id', delivery.id)
+    }
+    console.error('[WebhookDelivery] Send failed:', delivery.id, msg)
+  }
+}
+
+async function updateDeliveryResult(
+  deliveryId: string,
+  responseStatus: number | null,
+  responseBody: string | null,
+  durationMs: number,
+  success: boolean
+): Promise<void> {
+  await supabase
+    .from('webhook_deliveries')
+    .update({
+      response_status: responseStatus,
+      response_body: responseBody,
+      duration_ms: durationMs,
+      delivered_at: success ? new Date().toISOString() : null,
+      next_retry_at: success ? null : undefined,
+    })
+    .eq('id', deliveryId)
+}
+
+/**
+ * Check consecutive failures for an endpoint and alert if >= CONSECUTIVE_FAILURES_BEFORE_ALERT.
+ */
+async function maybeAlertAdmin(endpointId: string): Promise<void> {
+  const { data: recent } = await supabase
+    .from('webhook_deliveries')
+    .select('id, delivered_at')
+    .eq('endpoint_id', endpointId)
+    .order('created_at', { ascending: false })
+    .limit(CONSECUTIVE_FAILURES_BEFORE_ALERT)
+
+  if (!recent || recent.length < CONSECUTIVE_FAILURES_BEFORE_ALERT) return
+  const allFailed = recent.every((r: { delivered_at: string | null }) => !r.delivered_at)
+  if (!allFailed) return
+
+  // TODO: send email to org admin (e.g. use existing email queue or a simple notification)
+  console.warn(
+    '[WebhookDelivery] Endpoint has 5+ consecutive failures; org admin should be notified. endpoint_id=%s',
+    endpointId
+  )
+}
+
+/**
+ * Process pending deliveries: those with delivered_at IS NULL and next_retry_at <= now.
+ */
+async function processPendingDeliveries(): Promise<void> {
+  const now = new Date().toISOString()
+  const { data: pending, error } = await supabase
+    .from('webhook_deliveries')
+    .select('*')
+    .is('delivered_at', null)
+    .lte('next_retry_at', now)
+    .order('created_at', { ascending: true })
+    .limit(50)
+
+  if (error) {
+    console.error('[WebhookDelivery] Fetch pending failed:', error)
+    return
+  }
+
+  for (const row of pending || []) {
+    const d = row as unknown as WebhookDeliveryRow
+    await sendDelivery(d)
+    if (d.attempt_count >= MAX_ATTEMPTS && !d.delivered_at) {
+      await maybeAlertAdmin(d.endpoint_id)
+    }
+  }
+}
+
+let workerInterval: NodeJS.Timeout | null = null
+
+export function startWebhookDeliveryWorker(): void {
+  if (workerInterval) return
+  const intervalMs = Math.max(5000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '10000', 10))
+  workerInterval = setInterval(() => {
+    processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e))
+  }, intervalMs)
+  processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker initial run:', e))
+  console.log('[WebhookDelivery] Worker started, interval=%dms', intervalMs)
+}
+
+export function stopWebhookDeliveryWorker(): void {
+  if (workerInterval) {
+    clearInterval(workerInterval)
+    workerInterval = null
+  }
+}

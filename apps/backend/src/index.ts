@@ -36,6 +36,7 @@ import { dashboardRouter } from "./routes/dashboard";
 import { commentsRouter } from "./routes/comments";
 import { tasksRouter, taskTemplatesRouter } from "./routes/tasks";
 import { resendWebhookRouter } from "./routes/resendWebhook";
+import { webhooksRouter } from "./routes/webhooks";
 import { startExportWorker } from "./services/exportWorker";
 import { startRetentionWorker } from "./services/retentionWorker";
 import { startLedgerRootWorker } from "./services/ledgerRootWorker";
@@ -43,6 +44,7 @@ import { startEmailQueueWorker } from "./workers/emailQueue";
 import { startWeeklyDigestWorker } from "./workers/weeklyDigest";
 import { startDeadlineReminderWorker } from "./workers/deadlineReminders";
 import { startTaskReminderWorker, stopTaskReminderWorker } from "./workers/taskReminders";
+import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from "./workers/webhookDelivery";
 import { requestIdMiddleware, RequestWithId } from "./middleware/requestId";
 import { createErrorResponse, logErrorForSupport } from "./utils/errorResponse";
 import { authenticate } from "./middleware/auth";
@@ -368,6 +370,7 @@ app.use("/api/comments", commentsRouter);
 app.use("/api/tasks", tasksRouter);
 app.use("/api/task-templates", taskTemplatesRouter);
 app.use("/api/webhooks/resend", resendWebhookRouter);
+app.use("/api/webhooks", webhooksRouter);
 
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", riskRouter);
@@ -393,6 +396,7 @@ v1Router.use("/comments", commentsRouter);
 v1Router.use("/tasks", tasksRouter);
 v1Router.use("/task-templates", taskTemplatesRouter);
 v1Router.use("/webhooks/resend", resendWebhookRouter);
+v1Router.use("/webhooks", webhooksRouter);
 
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
@@ -479,12 +483,14 @@ if (process.env.NODE_ENV !== "test") {
         startDeadlineReminderWorker();
       }
       startTaskReminderWorker();
+      startWebhookDeliveryWorker();
     }
   });
 
   function shutdown(signal: string) {
     console.log(`[BOOT] ${signal} received, shutting down...`);
     stopTaskReminderWorker();
+    stopWebhookDeliveryWorker();
     server.close(() => {
       console.log("[BOOT] Server closed");
       process.exit(0);

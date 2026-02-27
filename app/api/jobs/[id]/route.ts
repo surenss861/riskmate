@@ -4,6 +4,7 @@ import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organiza
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -122,6 +123,7 @@ export async function PATCH(
       subcontractor_count,
       insurance_status,
       risk_factor_codes,
+      status,
     } = body
 
     // Update job fields (excluding risk_factor_codes which needs special handling)
@@ -136,6 +138,7 @@ export async function PATCH(
     if (has_subcontractors !== undefined) updateData.has_subcontractors = has_subcontractors
     if (subcontractor_count !== undefined) updateData.subcontractor_count = subcontractor_count
     if (insurance_status !== undefined) updateData.insurance_status = insurance_status
+    if (status !== undefined) updateData.status = status
 
     // Update job if there are fields to update
     if (Object.keys(updateData).length > 0) {
@@ -178,6 +181,16 @@ export async function PATCH(
       .select('id, title, description, done, is_completed, completed_at, created_at')
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
+
+    // Webhooks: job.updated and optionally job.completed
+    triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
+      console.warn('[Webhook] job.updated trigger failed:', e)
+    )
+    if (updatedJob?.status === 'completed') {
+      triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
+        console.warn('[Webhook] job.completed trigger failed:', e)
+      )
+    }
 
     return NextResponse.json({
       data: {

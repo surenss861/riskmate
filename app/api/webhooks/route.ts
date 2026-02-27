@@ -1,0 +1,184 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
+import { getRequestId } from '@/lib/utils/requestId'
+import { generateSecret } from '@/lib/utils/webhookSigning'
+
+export const runtime = 'nodejs'
+
+const ROUTE = '/api/webhooks'
+
+const EVENT_TYPES = [
+  'job.created',
+  'job.updated',
+  'job.completed',
+  'job.deleted',
+  'hazard.created',
+  'hazard.updated',
+  'signature.added',
+  'report.generated',
+  'evidence.uploaded',
+  'team.member_added',
+]
+
+function isValidUrl(s: string): boolean {
+  try {
+    const u = new URL(s)
+    return u.protocol === 'https:' || u.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/** GET - List org webhook endpoints */
+export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request)
+  try {
+    const { organization_id } = await getOrganizationContext(request)
+    const supabase = await createSupabaseServerClient()
+
+    const { data: endpoints, error } = await supabase
+      .from('webhook_endpoints')
+      .select('id, url, events, is_active, description, created_at')
+      .eq('organization_id', organization_id)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      const { response, errorId } = createErrorResponse(
+        error.message,
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    return NextResponse.json({ data: endpoints ?? [] })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const { response, errorId } = createErrorResponse(
+      msg,
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
+}
+
+/** POST - Create endpoint (generate secret, validate URL) */
+export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+  try {
+    const { organization_id, user_id } = await getOrganizationContext(request)
+    const body = await request.json().catch(() => ({}))
+    const url = typeof body.url === 'string' ? body.url.trim() : ''
+    const events = Array.isArray(body.events) ? body.events : []
+    const description = typeof body.description === 'string' ? body.description.trim() : null
+
+    if (!url || !isValidUrl(url)) {
+      const { response, errorId } = createErrorResponse(
+        'Valid URL is required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const validEvents = events.filter((e: unknown) =>
+      typeof e === 'string' && EVENT_TYPES.includes(e)
+    )
+    if (validEvents.length === 0) {
+      const { response, errorId } = createErrorResponse(
+        'At least one event type is required',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    const secret = generateSecret()
+    const supabase = await createSupabaseServerClient()
+
+    const { data: endpoint, error } = await supabase
+      .from('webhook_endpoints')
+      .insert({
+        organization_id,
+        url,
+        secret,
+        events: validEvents,
+        is_active: true,
+        description: description || null,
+        created_by: user_id,
+      })
+      .select('id, url, events, is_active, description, created_at')
+      .single()
+
+    if (error) {
+      const { response, errorId } = createErrorResponse(
+        error.message,
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    return NextResponse.json({
+      data: { ...endpoint, secret },
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const { response, errorId } = createErrorResponse(
+      msg,
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
+}

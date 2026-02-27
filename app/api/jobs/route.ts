@@ -16,6 +16,7 @@ import {
   normalizeFilterConfig as normalizeFilterConfigLib,
   getMatchingJobIdsFromFilterGroup,
 } from '@/lib/jobs/filterConfig'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/
 function isDateOnly(value: string): boolean {
@@ -890,6 +891,13 @@ export async function POST(request: NextRequest) {
 
     // At this point, TypeScript knows job.id exists
     const jobId = job.id
+
+    // Webhook: job.created
+    triggerWebhookEvent(organization_id, 'job.created', {
+      id: jobId,
+      ...filteredJobRow,
+      created_at: new Date().toISOString(),
+    }).catch((e) => console.warn('[Webhook] job.created trigger failed:', e))
 
     // Upsert client into clients table for search
     if (client_name?.trim()) {

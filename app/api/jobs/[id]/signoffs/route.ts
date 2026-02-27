@@ -165,6 +165,15 @@ export async function POST(
       throw signoffError
     }
 
+    const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
+    triggerWebhookEvent(organizationId, 'signature.added', {
+      signoff_id: signoff.id,
+      job_id: jobId,
+      signer_id: user.id,
+      signoff_type: signoff.signoff_type,
+      created_at: signoff.created_at,
+    }).catch((e) => console.warn('[Webhook] signature.added trigger failed:', e))
+
     return NextResponse.json({ data: signoff })
   } catch (error: any) {
     console.error('Failed to create signoff:', error)
