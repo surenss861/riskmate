@@ -6,6 +6,7 @@
 import crypto from 'crypto'
 import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
+import { validateWebhookUrl } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
 
 const RETRY_DELAYS_MS = [
@@ -170,6 +171,22 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
+  const urlCheck = validateWebhookUrl(endpoint.url)
+  if (!urlCheck.valid) {
+    console.error('[WebhookDelivery] Blocked unsafe URL:', delivery.endpoint_id, urlCheck.reason)
+    await recordAttempt(delivery.id, delivery.attempt_count, null, `Blocked: ${urlCheck.reason}`, 0)
+    await updateDeliveryFailure(
+      delivery.id,
+      delivery.endpoint_id,
+      null,
+      `Blocked: ${urlCheck.reason}`,
+      0,
+      delivery.attempt_count,
+      true, // terminal: URL will not become valid on retry
+    )
+    return
+  }
+
   const payloadStr = JSON.stringify(delivery.payload)
   const headers = buildSignatureHeaders(payloadStr, endpoint.secret)
 
@@ -190,92 +207,93 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
 
     await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
     const success = res.ok
-    await updateDeliveryResult(delivery.id, responseStatus, responseBody, durationMs, success)
-
-    if (!success) {
-      const nextAttempt = delivery.attempt_count + 1
-      if (nextAttempt <= MAX_ATTEMPTS) {
-        const delayMs = RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
-        const nextRetry = new Date(Date.now() + delayMs).toISOString()
-        await supabase
-          .from('webhook_deliveries')
-          .update({
-            attempt_count: nextAttempt,
-            next_retry_at: nextRetry,
-            response_status: responseStatus,
-            response_body: responseBody,
-            duration_ms: durationMs,
-            processing_since: null,
-          })
-          .eq('id', delivery.id)
-      } else {
-        // Final failure: mark terminally so processPendingDeliveries never picks this row again
-        await supabase
-          .from('webhook_deliveries')
-          .update({
-            next_retry_at: null,
-            response_status: responseStatus,
-            response_body: responseBody,
-            duration_ms: durationMs,
-            processing_since: null,
-          })
-          .eq('id', delivery.id)
-        await maybeAlertAdmin(delivery.endpoint_id)
-      }
+    if (success) {
+      await updateDeliveryResult(delivery.id, responseStatus, responseBody, durationMs)
+    } else {
+      await updateDeliveryFailure(
+        delivery.id,
+        delivery.endpoint_id,
+        responseStatus,
+        responseBody,
+        durationMs,
+        delivery.attempt_count,
+      )
     }
   } catch (err: unknown) {
     const durationMs = Date.now() - start
     const msg = err instanceof Error ? err.message : String(err)
     responseBody = msg
     await recordAttempt(delivery.id, delivery.attempt_count, null, responseBody, durationMs)
-    await updateDeliveryResult(delivery.id, null, responseBody, durationMs, false)
-    const nextAttempt = delivery.attempt_count + 1
-    if (nextAttempt <= MAX_ATTEMPTS) {
-      const delayMs = RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
-      const nextRetry = new Date(Date.now() + delayMs).toISOString()
-      await supabase
-        .from('webhook_deliveries')
-        .update({
-          attempt_count: nextAttempt,
-          next_retry_at: nextRetry,
-          response_body: responseBody,
-          duration_ms: durationMs,
-          processing_since: null,
-        })
-        .eq('id', delivery.id)
-    } else {
-      // Final failure: mark terminally
-      await supabase
-        .from('webhook_deliveries')
-        .update({
-          next_retry_at: null,
-          response_body: responseBody,
-          duration_ms: durationMs,
-          processing_since: null,
-        })
-        .eq('id', delivery.id)
-      await maybeAlertAdmin(delivery.endpoint_id)
-    }
+    await updateDeliveryFailure(
+      delivery.id,
+      delivery.endpoint_id,
+      null,
+      responseBody,
+      durationMs,
+      delivery.attempt_count,
+    )
     console.error('[WebhookDelivery] Send failed:', delivery.id, msg)
   }
 }
 
+/** Success: single atomic update — response fields, delivered_at, clear retry and claim. */
 async function updateDeliveryResult(
   deliveryId: string,
   responseStatus: number | null,
   responseBody: string | null,
   durationMs: number,
-  success: boolean
 ): Promise<void> {
-  const update: Record<string, unknown> = {
-    response_status: responseStatus,
-    response_body: responseBody,
-    duration_ms: durationMs,
-    delivered_at: success ? new Date().toISOString() : null,
-    processing_since: null,
+  await supabase
+    .from('webhook_deliveries')
+    .update({
+      response_status: responseStatus,
+      response_body: responseBody,
+      duration_ms: durationMs,
+      delivered_at: new Date().toISOString(),
+      next_retry_at: null,
+      processing_since: null,
+    })
+    .eq('id', deliveryId)
+}
+
+/**
+ * Failure: single atomic update — response fields, attempt_count, next_retry_at, and claim release.
+ * No intermediate write that clears processing_since alone, avoiding duplicate claims and resends.
+ * When forceTerminal is true (e.g. blocked URL), no retries are scheduled.
+ */
+async function updateDeliveryFailure(
+  deliveryId: string,
+  endpointId: string,
+  responseStatus: number | null,
+  responseBody: string | null,
+  durationMs: number,
+  currentAttemptCount: number,
+  forceTerminal = false,
+): Promise<void> {
+  const nextAttempt = currentAttemptCount + 1
+  const terminal = forceTerminal || nextAttempt > MAX_ATTEMPTS
+  const nextRetryAt = terminal
+    ? null
+    : new Date(
+        Date.now() + (RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]),
+      ).toISOString()
+
+  await supabase
+    .from('webhook_deliveries')
+    .update({
+      response_status: responseStatus,
+      response_body: responseBody,
+      duration_ms: durationMs,
+      delivered_at: null,
+      attempt_count: nextAttempt,
+      next_retry_at: nextRetryAt,
+      processing_since: null,
+    })
+    .eq('id', deliveryId)
+
+  if (terminal) {
+    await maybeAlertAdmin(endpointId)
   }
-  if (success) update.next_retry_at = null
-  await supabase.from('webhook_deliveries').update(update).eq('id', deliveryId)
 }
 
 /**

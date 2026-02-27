@@ -4,6 +4,7 @@ import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 
 export const runtime = 'nodejs'
 
@@ -15,14 +16,6 @@ const EVENT_TYPES = [
   'evidence.uploaded', 'team.member_added',
 ]
 
-function isValidUrl(s: string): boolean {
-  try {
-    const u = new URL(s)
-    return u.protocol === 'https:' || u.protocol === 'http:'
-  } catch {
-    return false
-  }
-}
 
 async function getEndpointAndCheckOrg(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -68,9 +61,10 @@ export async function PATCH(
 
     if (typeof body.url === 'string') {
       const url = body.url.trim()
-      if (!url || !isValidUrl(url)) {
+      const urlValidation = url ? validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required' }
+      if (!url || !urlValidation.valid) {
         const { response, errorId } = createErrorResponse(
-          'Valid URL is required',
+          urlValidation.valid ? 'Valid URL is required' : urlValidation.reason,
           'VALIDATION_ERROR',
           { requestId, statusCode: 400 }
         )

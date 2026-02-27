@@ -41,6 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_pending ON webhook_deliveries(
 ALTER TABLE webhook_endpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_deliveries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS webhook_endpoints_org ON webhook_endpoints;
 CREATE POLICY webhook_endpoints_org ON webhook_endpoints
   FOR ALL
   USING (organization_id IN (
@@ -50,6 +51,7 @@ CREATE POLICY webhook_endpoints_org ON webhook_endpoints
     SELECT organization_id FROM users WHERE id = auth.uid()
   ));
 
+DROP POLICY IF EXISTS webhook_deliveries_via_endpoint ON webhook_deliveries;
 CREATE POLICY webhook_deliveries_via_endpoint ON webhook_deliveries
   FOR ALL
   USING (
@@ -66,12 +68,14 @@ CREATE POLICY webhook_deliveries_via_endpoint ON webhook_deliveries
   );
 
 -- Service role can manage all (for backend worker)
+DROP POLICY IF EXISTS webhook_endpoints_service ON webhook_endpoints;
 CREATE POLICY webhook_endpoints_service ON webhook_endpoints
   FOR ALL
   TO service_role
   USING (true)
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS webhook_deliveries_service ON webhook_deliveries;
 CREATE POLICY webhook_deliveries_service ON webhook_deliveries
   FOR ALL
   TO service_role
@@ -89,11 +93,17 @@ CREATE TABLE IF NOT EXISTS api_keys (
   last_used_at TIMESTAMPTZ
 );
 
+-- Ensure columns exist if table was created by an earlier run with a different schema
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT NOT NULL DEFAULT '';
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT NOT NULL DEFAULT '';
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys(organization_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
 
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS api_keys_org ON api_keys;
 CREATE POLICY api_keys_org ON api_keys
   FOR ALL
   USING (organization_id IN (
@@ -103,6 +113,7 @@ CREATE POLICY api_keys_org ON api_keys
     SELECT organization_id FROM users WHERE id = auth.uid()
   ));
 
+DROP POLICY IF EXISTS api_keys_service ON api_keys;
 CREATE POLICY api_keys_service ON api_keys
   FOR ALL
   TO service_role

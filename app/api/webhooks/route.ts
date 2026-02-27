@@ -5,6 +5,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { generateSecret } from '@/lib/utils/webhookSigning'
+import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 
 export const runtime = 'nodejs'
 
@@ -23,14 +24,6 @@ const EVENT_TYPES = [
   'team.member_added',
 ]
 
-function isValidUrl(s: string): boolean {
-  try {
-    const u = new URL(s)
-    return u.protocol === 'https:' || u.protocol === 'http:'
-  } catch {
-    return false
-  }
-}
 
 /** GET - List org webhook endpoints */
 export async function GET(request: NextRequest) {
@@ -96,9 +89,10 @@ export async function POST(request: NextRequest) {
     const events = Array.isArray(body.events) ? body.events : []
     const description = typeof body.description === 'string' ? body.description.trim() : null
 
-    if (!url || !isValidUrl(url)) {
+    const urlValidation = url ? validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required' }
+    if (!url || !urlValidation.valid) {
       const { response, errorId } = createErrorResponse(
-        'Valid URL is required',
+        urlValidation.valid ? 'Valid URL is required' : urlValidation.reason,
         'VALIDATION_ERROR',
         { requestId, statusCode: 400 }
       )
