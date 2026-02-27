@@ -13,7 +13,8 @@ import { dateOnlyToApiBounds, presetPeriodToApiBounds, toDateOnly } from '@/lib/
 import { AppBackground, AppShell, PageHeader, GlassCard } from '@/components/shared';
 import { SkeletonLoader } from '@/components/dashboard/SkeletonLoader';
 
-const severityConfig: Record<string, { bg: string; border: string; icon: React.ElementType }> = {
+type SeverityIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const severityConfig: Record<string, { bg: string; border: string; icon: SeverityIcon }> = {
   critical: { bg: 'bg-red-500/10', border: 'border-red-400/30', icon: AlertTriangle },
   warning: { bg: 'bg-amber-500/10', border: 'border-amber-400/30', icon: TrendingDown },
   info: { bg: 'bg-blue-500/10', border: 'border-blue-400/30', icon: FileSignature },
