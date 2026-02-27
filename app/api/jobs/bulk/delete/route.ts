@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
     const job = jobMap.get(jobId)!
     triggerWebhookEvent(organization_id, 'job.deleted', {
       id: jobId,
-      deleted_at,
+      deleted_at: deletedAt,
       status: job.status,
       bulk: true,
     }).catch((e) => console.warn('[BulkDelete] Webhook job.deleted enqueue failed:', e))
