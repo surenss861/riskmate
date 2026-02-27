@@ -31,7 +31,7 @@ function trendFromValues(current, previous) {
     return { trend_direction, trend_percentage: Math.round(Math.abs(pct) * 100) / 100 };
 }
 // GET /api/dashboard/summary
-// Accepts period=7d|30d. Returns KPIs with trend_vs_previous (current vs preceding period). No job cap; query by date range. Includes on-time/overdue.
+// Accepts period=7d|30d. Returns KPIs via server-side RPCs (no full job/document scans). Trend vs previous period; includes on-time/overdue.
 exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     try {
@@ -44,96 +44,95 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         previousSince.setDate(previousSince.getDate() - (days - 1));
         previousSince.setHours(0, 0, 0, 0);
         const previousRange = { since: previousSince.toISOString(), until: previousEnd.toISOString() };
-        const selectFields = "id, status, risk_score, risk_level, created_at, due_date, updated_at, client_name, job_type, location";
-        const [currentRes, previousRes] = await Promise.all([
-            supabaseClient_1.supabase
-                .from("jobs")
-                .select(selectFields)
-                .eq("organization_id", organization_id)
-                .is("deleted_at", null)
-                .gte("created_at", currentSince)
-                .lte("created_at", currentUntil),
-            supabaseClient_1.supabase
-                .from("jobs")
-                .select(selectFields)
-                .eq("organization_id", organization_id)
-                .is("deleted_at", null)
-                .gte("created_at", previousRange.since)
-                .lte("created_at", previousRange.until),
+        const chartDays = 7;
+        const chartUntil = new Date();
+        chartUntil.setHours(23, 59, 59, 999);
+        const chartSince = new Date(chartUntil.getTime());
+        chartSince.setDate(chartSince.getDate() - (chartDays - 1));
+        chartSince.setHours(0, 0, 0, 0);
+        const [currentSummaryRes, previousSummaryRes, currentComplianceRes, previousComplianceRes, jobsAtRiskRes, missingEvidenceRes, chartDataRes,] = await Promise.all([
+            supabaseClient_1.supabase.rpc("get_dashboard_summary_kpis", {
+                p_org_id: organization_id,
+                p_since: currentSince,
+                p_until: currentUntil,
+            }),
+            supabaseClient_1.supabase.rpc("get_dashboard_summary_kpis", {
+                p_org_id: organization_id,
+                p_since: previousRange.since,
+                p_until: previousRange.until,
+            }),
+            supabaseClient_1.supabase.rpc("get_compliance_rate_kpis", {
+                p_org_id: organization_id,
+                p_since: currentSince,
+                p_until: currentUntil,
+            }),
+            supabaseClient_1.supabase.rpc("get_compliance_rate_kpis", {
+                p_org_id: organization_id,
+                p_since: previousRange.since,
+                p_until: previousRange.until,
+            }),
+            supabaseClient_1.supabase.rpc("get_dashboard_jobs_at_risk", {
+                p_org_id: organization_id,
+                p_since: currentSince,
+                p_until: currentUntil,
+                p_limit: 10,
+            }),
+            supabaseClient_1.supabase.rpc("get_dashboard_missing_evidence_jobs", {
+                p_org_id: organization_id,
+                p_since: currentSince,
+                p_until: currentUntil,
+                p_limit: 10,
+            }),
+            supabaseClient_1.supabase.rpc("get_dashboard_chart_data", {
+                p_org_id: organization_id,
+                p_since: chartSince.toISOString(),
+                p_until: chartUntil.toISOString(),
+            }),
         ]);
-        if (currentRes.error)
-            throw currentRes.error;
-        if (previousRes.error)
-            throw previousRes.error;
-        const currentJobs = (currentRes.data || []);
-        const previousJobs = (previousRes.data || []);
-        const jobs_total = currentJobs.length;
-        const jobs_completed = currentJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
-        // Scale to 0–100 percentage to match compliance_rate and other analytics
+        if (currentSummaryRes.error)
+            throw currentSummaryRes.error;
+        if (previousSummaryRes.error)
+            throw previousSummaryRes.error;
+        if (currentComplianceRes.error)
+            throw currentComplianceRes.error;
+        if (previousComplianceRes.error)
+            throw previousComplianceRes.error;
+        if (jobsAtRiskRes.error)
+            throw jobsAtRiskRes.error;
+        if (missingEvidenceRes.error)
+            throw missingEvidenceRes.error;
+        if (chartDataRes.error)
+            throw chartDataRes.error;
+        const currentRow = Array.isArray(currentSummaryRes.data) ? currentSummaryRes.data[0] : currentSummaryRes.data;
+        const previousRow = Array.isArray(previousSummaryRes.data) ? previousSummaryRes.data[0] : previousSummaryRes.data;
+        const jobs_total = Number(currentRow?.jobs_total ?? 0);
+        const jobs_completed = Number(currentRow?.jobs_completed ?? 0);
         const completion_rate = jobs_total === 0 ? 0 : Math.round((jobs_completed / jobs_total) * 10000) / 100;
-        const withRisk = currentJobs.filter((j) => j.risk_score != null);
-        const avg_risk = withRisk.length === 0 ? 0 : Math.round((withRisk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / withRisk.length) * 100) / 100;
-        const currentJobIds = currentJobs.map((j) => j.id);
-        const previousJobIds = previousJobs.map((j) => j.id);
-        async function computeComplianceRate(jobIds) {
-            if (jobIds.length === 0)
-                return 0;
-            const [sigRes, photoRes, checklistRes] = await Promise.all([
-                supabaseClient_1.supabase.from("signatures").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds),
-                supabaseClient_1.supabase.from("documents").select("job_id").eq("organization_id", organization_id).eq("type", "photo").in("job_id", jobIds),
-                supabaseClient_1.supabase.from("mitigation_items").select("job_id, completed_at").eq("organization_id", organization_id).in("job_id", jobIds),
-            ]);
-            const jobsWithSig = new Set((sigRes.data || []).map((r) => r.job_id)).size;
-            const jobsWithPhoto = new Set((photoRes.data || []).map((r) => r.job_id)).size;
-            const mitigationList = (checklistRes.data || []);
-            // Per-job tally: job is checklist-complete when it has zero items or all items have completed_at
-            const byJob = {};
-            for (const id of jobIds)
-                byJob[id] = { total: 0, completed: 0 };
-            for (const m of mitigationList) {
-                if (!byJob[m.job_id])
-                    continue;
-                byJob[m.job_id].total += 1;
-                if (m.completed_at)
-                    byJob[m.job_id].completed += 1;
-            }
-            const completedJobsWithChecklist = jobIds.filter((jid) => byJob[jid].total === 0 || byJob[jid].completed === byJob[jid].total).length;
-            const sigRate = jobsWithSig / jobIds.length;
-            const photoRate = jobsWithPhoto / jobIds.length;
-            const checklistRate = completedJobsWithChecklist / jobIds.length;
-            return (sigRate + photoRate + checklistRate) / 3;
-        }
-        const [compliance_rate_fraction, prev_compliance_rate_fraction] = await Promise.all([
-            computeComplianceRate(currentJobIds),
-            computeComplianceRate(previousJobIds),
-        ]);
-        // Expose as 0–100 percent to align with /api/analytics/compliance-rate
+        const avg_risk = Number(currentRow?.avg_risk ?? 0);
+        const on_time_count = Number(currentRow?.on_time_count ?? 0);
+        const overdue_count = Number(currentRow?.overdue_count ?? 0);
+        const currentKpis = Array.isArray(currentComplianceRes.data) ? currentComplianceRes.data[0] : currentComplianceRes.data;
+        const previousKpis = Array.isArray(previousComplianceRes.data) ? previousComplianceRes.data[0] : previousComplianceRes.data;
+        const totalCurrent = Number(currentKpis?.total_jobs ?? 0);
+        const totalPrevious = Number(previousKpis?.total_jobs ?? 0);
+        const compliance_rate_fraction = totalCurrent === 0
+            ? 0
+            : ((Number(currentKpis?.jobs_with_signature ?? 0) / totalCurrent) +
+                (Number(currentKpis?.jobs_with_photo ?? 0) / totalCurrent) +
+                (Number(currentKpis?.jobs_checklist_complete ?? 0) / totalCurrent)) /
+                3;
+        const prev_compliance_rate_fraction = totalPrevious === 0
+            ? 0
+            : ((Number(previousKpis?.jobs_with_signature ?? 0) / totalPrevious) +
+                (Number(previousKpis?.jobs_with_photo ?? 0) / totalPrevious) +
+                (Number(previousKpis?.jobs_checklist_complete ?? 0) / totalPrevious)) /
+                3;
         const compliance_rate = Math.round(compliance_rate_fraction * 10000) / 100;
         const prev_compliance_rate = Math.round(prev_compliance_rate_fraction * 10000) / 100;
-        const prev_total = previousJobs.length;
-        const prev_completed = previousJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
-        // Same unit (0–100 percent) for trend comparison
+        const prev_total = Number(previousRow?.jobs_total ?? 0);
+        const prev_completed = Number(previousRow?.jobs_completed ?? 0);
         const prev_completion_rate = prev_total === 0 ? 0 : Math.round((prev_completed / prev_total) * 10000) / 100;
-        const prev_with_risk = previousJobs.filter((j) => j.risk_score != null);
-        const prev_avg_risk = prev_with_risk.length === 0 ? 0 : prev_with_risk.reduce((a, j) => a + (j.risk_score ?? 0), 0) / prev_with_risk.length;
-        const now = new Date();
-        const on_time_count = currentJobs.filter((j) => {
-            if ((j.status?.toLowerCase() !== "completed") || !j.due_date)
-                return false;
-            const due = new Date(j.due_date).getTime();
-            const completedAt = j.updated_at ? new Date(j.updated_at).getTime() : now.getTime();
-            return completedAt <= due;
-        }).length;
-        const overdue_count = currentJobs.filter((j) => {
-            if (!j.due_date)
-                return false;
-            const due = new Date(j.due_date).getTime();
-            if ((j.status?.toLowerCase() === "completed")) {
-                const completedAt = j.updated_at ? new Date(j.updated_at).getTime() : now.getTime();
-                return completedAt > due;
-            }
-            return now.getTime() > due;
-        }).length;
+        const prev_avg_risk = Number(previousRow?.avg_risk ?? 0);
         const trend_vs_previous = {
             jobs_total: trendFromValues(jobs_total, prev_total),
             jobs_completed: trendFromValues(jobs_completed, prev_completed),
@@ -141,58 +140,42 @@ exports.dashboardRouter.get("/summary", auth_1.authenticate, async (req, res) =>
             avg_risk: trendFromValues(avg_risk, prev_avg_risk),
             compliance_rate: trendFromValues(compliance_rate, prev_compliance_rate),
         };
-        const allJobsForLists = currentJobs.slice(0, 500);
-        const jobsAtRisk = allJobsForLists
-            .filter((j) => (j.risk_score ?? 0) >= 70)
-            .sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0))
-            .slice(0, 10)
-            .map((job) => ({
+        const jobsAtRisk = (jobsAtRiskRes.data ?? []).map((job) => ({
             id: job.id,
-            client_name: job.client_name,
-            job_type: job.job_type,
-            location: job.location,
-            status: job.status,
-            risk_score: job.risk_score,
-            risk_level: job.risk_level,
+            client_name: job.client_name ?? undefined,
+            job_type: job.job_type ?? undefined,
+            location: job.location ?? undefined,
+            status: job.status ?? undefined,
+            risk_score: job.risk_score ?? undefined,
+            risk_level: job.risk_level ?? undefined,
             created_at: job.created_at,
         }));
-        const jobIds = allJobsForLists.map((j) => j.id);
-        const evidenceByJob = {};
-        if (jobIds.length > 0) {
-            const { data: docs } = await supabaseClient_1.supabase.from("documents").select("job_id").eq("organization_id", organization_id).in("job_id", jobIds);
-            (docs || []).forEach((d) => {
-                evidenceByJob[d.job_id] = (evidenceByJob[d.job_id] || 0) + 1;
-            });
+        const missingEvidenceJobs = (missingEvidenceRes.data ?? []).map((job) => ({
+            id: job.id,
+            client_name: job.client_name ?? undefined,
+            job_type: job.job_type ?? undefined,
+            location: job.location ?? undefined,
+            status: job.status ?? undefined,
+            risk_score: job.risk_score ?? undefined,
+            risk_level: job.risk_level ?? undefined,
+            created_at: job.created_at,
+        }));
+        const chartRows = (chartDataRes.data ?? []);
+        const chartByDate = new Map();
+        for (const r of chartRows) {
+            const dateStr = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : new Date(r.period_key).toISOString().slice(0, 10);
+            chartByDate.set(dateStr, { jobs_created: Number(r.jobs_created ?? 0), jobs_completed: Number(r.jobs_completed ?? 0) });
         }
-        const missingEvidenceJobs = allJobsForLists
-            .filter((job) => (evidenceByJob[job.id] || 0) < 3)
-            .slice(0, 10)
-            .map((job) => ({
-            id: job.id,
-            client_name: job.client_name,
-            job_type: job.job_type,
-            location: job.location,
-            status: job.status,
-            risk_score: job.risk_score,
-            risk_level: job.risk_level,
-            created_at: job.created_at,
-        }));
-        const chartDays = 7;
         const chartData = [];
         for (let i = chartDays - 1; i >= 0; i--) {
-            const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            const d = new Date(chartUntil.getTime() - i * 24 * 60 * 60 * 1000);
             d.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(d);
-            dayEnd.setHours(23, 59, 59, 999);
-            const dayJobs = currentJobs.filter((j) => {
-                const t = new Date(j.created_at).getTime();
-                return t >= d.getTime() && t <= dayEnd.getTime();
-            });
-            const completed = dayJobs.filter((j) => (j.status?.toLowerCase() === "completed")).length;
-            chartData.push({
-                date: d.toISOString().split("T")[0],
-                value: dayJobs.length === 0 ? 0 : Math.round((completed / dayJobs.length) * 100),
-            });
+            const dateStr = d.toISOString().split("T")[0];
+            const cur = chartByDate.get(dateStr) ?? { jobs_created: 0, jobs_completed: 0 };
+            // Same-cohort rate from RPC (jobs_completed ≤ jobs_created); clamp 0–100 for safety
+            const ratePct = cur.jobs_created === 0 ? 0 : (cur.jobs_completed / cur.jobs_created) * 100;
+            const value = Math.min(100, Math.max(0, Math.round(ratePct)));
+            chartData.push({ date: dateStr, value });
         }
         res.json({
             period: periodKey,

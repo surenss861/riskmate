@@ -10,20 +10,27 @@ const supabaseClient_1 = require("../lib/supabaseClient");
 const auth_1 = require("../middleware/auth");
 const insights_1 = require("../services/insights");
 exports.analyticsRouter = express_1.default.Router();
-// In-memory cache for insights: 1h TTL per org
+// In-memory cache for insights: 1h TTL per org+range
 const INSIGHTS_CACHE_TTL_MS = 60 * 60 * 1000;
 const insightsCache = new Map();
 let insightsCacheHits = 0;
 let insightsCacheMisses = 0;
-async function getCachedInsights(orgId) {
-    const entry = insightsCache.get(orgId);
+/** Range context for insights cache key and generation. Normalized date-only (YYYY-MM-DD) for stable cache keys. */
+function insightsCacheKey(orgId, range) {
+    const sinceKey = toDateKey(range.since);
+    const untilKey = toDateKey(range.until);
+    return `${orgId}:${sinceKey}:${untilKey}`;
+}
+async function getCachedInsights(orgId, range) {
+    const cacheKey = insightsCacheKey(orgId, range);
+    const entry = insightsCache.get(cacheKey);
     if (entry && Date.now() < entry.expires) {
         insightsCacheHits += 1;
         return entry.data;
     }
     insightsCacheMisses += 1;
-    const data = await (0, insights_1.generateInsights)(orgId);
-    insightsCache.set(orgId, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
+    const data = await (0, insights_1.generateInsights)(orgId, { since: range.since, until: range.until });
+    insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_CACHE_TTL_MS });
     return data;
 }
 /** Analytics observability: cache hit rates and entry count for metrics endpoint. */
@@ -39,7 +46,7 @@ function getAnalyticsObservability() {
         },
     };
 }
-const PAGE_SIZE = 2000;
+const PAGE_SIZE = 500;
 /** Fetch all rows by paginating; no cap. */
 async function fetchAllPages(fetchPage) {
     const out = [];
@@ -69,6 +76,8 @@ const parseRangeDays = (value) => {
     if (!value)
         return 30;
     const str = Array.isArray(value) ? value[0] : value;
+    if (str === "1y" || str === "365d")
+        return 365; // unclamped for calendar-year path
     const match = str.match(/(\d+)/);
     if (!match)
         return 30;
@@ -77,6 +86,14 @@ const parseRangeDays = (value) => {
         return 30;
     return Math.min(days, 180);
 };
+/** Calendar-year bounds (Jan 1 00:00 to today 23:59:59 UTC). */
+function calendarYearBounds() {
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+    return { since: since.toISOString(), until: until.toISOString() };
+}
 const toDateKey = (value) => value.slice(0, 10);
 // --- Period parsing for analytics (7d, 30d, 90d, 1y) ---
 const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 };
@@ -93,8 +110,35 @@ const dateRangeForDays = (days) => {
     since.setHours(0, 0, 0, 0);
     return { since: since.toISOString(), until: until.toISOString() };
 };
+/** Optional since/until (ISO) for prior-period requests. If both valid, use them; else return null. */
+function parseSinceUntil(query) {
+    const sinceRaw = query.since;
+    const untilRaw = query.until;
+    const since = sinceRaw ? (Array.isArray(sinceRaw) ? sinceRaw[0] : sinceRaw) : "";
+    const until = untilRaw ? (Array.isArray(untilRaw) ? untilRaw[0] : untilRaw) : "";
+    if (!since || !until)
+        return null;
+    const sinceDate = new Date(since);
+    const untilDate = new Date(until);
+    if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime()))
+        return null;
+    return { since: sinceDate.toISOString(), until: untilDate.toISOString() };
+}
 // MV covers last 2 years; use for week/month bucketed analytics when in range
 const MV_COVERAGE_DAYS = 730;
+// Fallback refresh when pg_cron is unavailable: refresh MV at most once per hour before serving week/month trends
+const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
+let lastAnalyticsMvRefreshAt = 0;
+async function ensureAnalyticsMvRefreshed() {
+    const now = Date.now();
+    if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS)
+        return;
+    lastAnalyticsMvRefreshAt = now;
+    const { error } = await supabaseClient_1.supabase.rpc("refresh_analytics_weekly_job_stats");
+    if (error) {
+        console.warn("Analytics MV refresh failed (pg_cron may be unavailable):", error);
+    }
+}
 // Helpers for trends: bucket keys and labels
 const weekStart = (d) => {
     const x = new Date(d);
@@ -110,7 +154,7 @@ const monthStart = (d) => {
     x.setHours(0, 0, 0, 0);
     return x.toISOString().slice(0, 10);
 };
-// GET /api/analytics/trends — metric (jobs|risk|compliance), period (7d|30d|90d|1y), groupBy (day|week|month)
+// GET /api/analytics/trends — metric (jobs|risk|compliance|completion), period (7d|30d|90d|1y), groupBy (day|week|month)
 // Response: { period, groupBy, metric, data: Array<{ period, value, label }> }
 exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => {
     const authReq = req;
@@ -124,21 +168,49 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days, key: periodKey } = parsePeriod(authReq.query.period);
         const groupByRaw = authReq.query.groupBy || "day";
         const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
         const metricRaw = authReq.query.metric || "jobs";
+        // Spec-aligned metric enum: jobs | risk | compliance | completion
         const metric = metricRaw === "risk"
             ? "risk"
             : metricRaw === "compliance"
                 ? "compliance"
                 : metricRaw === "completion" || metricRaw === "completion_rate"
                     ? "completion"
-                    : "jobs";
-        const { since, until } = dateRangeForDays(days);
+                    : metricRaw === "jobs_completed"
+                        ? "jobs_completed"
+                        : "jobs";
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const points = [];
         const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
-        // Compliance trend: SQL-side aggregation only (no full row fetch)
+        // Day grouping: SQL aggregation only — RPC returns { period_key, value } per bucket (no full job fetch)
+        if (groupBy === "day") {
+            const { data: dayRows, error: dayError } = await supabaseClient_1.supabase.rpc("get_trends_day_buckets", {
+                p_org_id: orgId,
+                p_since: since,
+                p_until: until,
+                p_metric: metric,
+            });
+            if (!dayError && dayRows && Array.isArray(dayRows)) {
+                const dayPoints = dayRows.map((r) => {
+                    const periodStr = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : new Date(r.period_key).toISOString().slice(0, 10);
+                    const raw = Number(r.value ?? 0);
+                    // Completion: RPC returns rate 0–100 for day; clamp for safety. jobs_completed and other metrics use raw.
+                    const value = metric === "completion" ? Math.min(100, Math.max(0, raw)) : raw;
+                    return { period: periodStr, value, label: periodStr };
+                });
+                return res.json({ period: periodLabel, groupBy, metric, data: dayPoints });
+            }
+            // RPC missing or failed: return empty set instead of 500
+            if (dayError) {
+                console.warn("Analytics trends day buckets RPC failed, returning empty data:", dayError);
+                return res.json({ period: periodLabel, groupBy, metric, data: [] });
+            }
+        }
+        // Compliance trend (week/month): SQL-side aggregation only
         if (metric === "compliance") {
             const { data: complianceRows, error: complianceError } = await supabaseClient_1.supabase.rpc("get_trends_compliance_buckets", {
                 p_org_id: orgId,
@@ -161,14 +233,137 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
             if (complianceError)
                 throw complianceError;
         }
+        // Week/month: use MV/RPC path for jobs, risk, and completion (analytics_weekly_completion_stats keyed by completion date); compliance uses its own RPC.
         const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
         if (useMv) {
+            await ensureAnalyticsMvRefreshed();
             const sinceWeek = weekStart(new Date(since));
             const untilWeek = weekStart(new Date(until));
+            // Completion trend (week/month): completion counts from analytics_weekly_completion_stats (keyed by completion week);
+            // jobs_created from analytics_weekly_job_stats (creation week) for rate denominator. Completion rates reflect completions in the charted period.
+            if (metric === "completion") {
+                const [completionRes, creationRes] = await Promise.all([
+                    fetchAllPages(async (offset, limit) => {
+                        const { data, error } = await supabaseClient_1.supabase
+                            .from("analytics_weekly_completion_stats")
+                            .select("week_start, jobs_completed")
+                            .eq("organization_id", orgId)
+                            .gte("week_start", sinceWeek)
+                            .lte("week_start", untilWeek)
+                            .order("week_start", { ascending: true })
+                            .range(offset, offset + limit - 1);
+                        return { data, error };
+                    }),
+                    fetchAllPages(async (offset, limit) => {
+                        const { data, error } = await supabaseClient_1.supabase
+                            .from("analytics_weekly_job_stats")
+                            .select("week_start, jobs_created")
+                            .eq("organization_id", orgId)
+                            .gte("week_start", sinceWeek)
+                            .lte("week_start", untilWeek)
+                            .order("week_start", { ascending: true })
+                            .range(offset, offset + limit - 1);
+                        return { data, error };
+                    }),
+                ]);
+                if (!completionRes.error && !creationRes.error) {
+                    const completionRows = (completionRes.data ?? []);
+                    const creationRows = (creationRes.data ?? []);
+                    const createdByWeek = new Map();
+                    const completedByWeek = new Map();
+                    for (const r of creationRows) {
+                        const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+                        createdByWeek.set(w, (createdByWeek.get(w) ?? 0) + Number(r.jobs_created ?? 0));
+                    }
+                    for (const r of completionRows) {
+                        const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+                        completedByWeek.set(w, (completedByWeek.get(w) ?? 0) + Number(r.jobs_completed ?? 0));
+                    }
+                    if (groupBy === "week") {
+                        const allWeeks = [...new Set([...createdByWeek.keys(), ...completedByWeek.keys()])].sort();
+                        for (const period of allWeeks) {
+                            const created = createdByWeek.get(period) ?? 0;
+                            const completed = completedByWeek.get(period) ?? 0;
+                            const ratePct = created === 0 ? 0 : (completed / created) * 100;
+                            const value = Math.min(100, Math.max(0, Math.round(ratePct * 100) / 100));
+                            points.push({ period, value, label: period });
+                        }
+                    }
+                    else {
+                        const byMonth = new Map();
+                        for (const r of completionRows) {
+                            const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+                            const cur = byMonth.get(period) ?? { created: 0, completed: 0 };
+                            cur.completed += Number(r.jobs_completed ?? 0);
+                            byMonth.set(period, cur);
+                        }
+                        for (const r of creationRows) {
+                            const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+                            const cur = byMonth.get(period) ?? { created: 0, completed: 0 };
+                            cur.created += Number(r.jobs_created ?? 0);
+                            byMonth.set(period, cur);
+                        }
+                        for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                            const { created, completed } = byMonth.get(period);
+                            const ratePct = created === 0 ? 0 : (completed / created) * 100;
+                            const value = Math.min(100, Math.max(0, Math.round(ratePct * 100) / 100));
+                            points.push({ period, value, label: period });
+                        }
+                    }
+                    if (points.length > 0)
+                        return res.json({ period: periodLabel, groupBy, metric, data: points });
+                }
+                if (completionRes.error)
+                    throw completionRes.error;
+                if (creationRes.error)
+                    throw creationRes.error;
+            }
+            // jobs_completed (week/month): real completed counts by completion week from analytics_weekly_completion_stats
+            if (metric === "jobs_completed") {
+                const completionRes = await fetchAllPages(async (offset, limit) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("analytics_weekly_completion_stats")
+                        .select("week_start, jobs_completed")
+                        .eq("organization_id", orgId)
+                        .gte("week_start", sinceWeek)
+                        .lte("week_start", untilWeek)
+                        .order("week_start", { ascending: true })
+                        .range(offset, offset + limit - 1);
+                    return { data, error };
+                });
+                if (!completionRes.error && completionRes.data) {
+                    const completionRows = completionRes.data;
+                    const completedByWeek = new Map();
+                    for (const r of completionRows) {
+                        const w = typeof r.week_start === "string" ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10);
+                        completedByWeek.set(w, (completedByWeek.get(w) ?? 0) + Number(r.jobs_completed ?? 0));
+                    }
+                    if (groupBy === "week") {
+                        const allWeeks = [...completedByWeek.keys()].sort();
+                        for (const period of allWeeks) {
+                            points.push({ period, value: completedByWeek.get(period) ?? 0, label: period });
+                        }
+                    }
+                    else {
+                        const byMonth = new Map();
+                        for (const r of completionRows) {
+                            const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
+                            byMonth.set(period, (byMonth.get(period) ?? 0) + Number(r.jobs_completed ?? 0));
+                        }
+                        for (const period of [...byMonth.keys()].sort((a, b) => a.localeCompare(b))) {
+                            points.push({ period, value: byMonth.get(period) ?? 0, label: period });
+                        }
+                    }
+                    if (points.length > 0)
+                        return res.json({ period: periodLabel, groupBy, metric, data: points });
+                }
+                if (completionRes.error)
+                    throw completionRes.error;
+            }
             const { data: mvRows, error: mvError } = await fetchAllPages(async (offset, limit) => {
                 const { data, error } = await supabaseClient_1.supabase
                     .from("analytics_weekly_job_stats")
-                    .select("week_start, jobs_created, jobs_completed, avg_risk")
+                    .select("week_start, jobs_created, avg_risk")
                     .eq("organization_id", orgId)
                     .gte("week_start", sinceWeek)
                     .lte("week_start", untilWeek)
@@ -186,8 +381,6 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
                             value = r.jobs_created ?? 0;
                         else if (metric === "risk")
                             value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0;
-                        else if (metric === "completion")
-                            value = (r.jobs_created ?? 0) === 0 ? 0 : Math.round(((r.jobs_completed ?? 0) / (r.jobs_created ?? 1)) * 10000) / 100;
                         points.push({ period, value, label: period });
                     }
                 }
@@ -195,9 +388,8 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
                     const byMonth = new Map();
                     for (const r of rows) {
                         const period = monthStart(new Date(typeof r.week_start === "string" ? r.week_start : String(r.week_start)));
-                        const cur = byMonth.get(period) ?? { jobs_created: 0, jobs_completed: 0, riskSum: 0, riskWeight: 0 };
+                        const cur = byMonth.get(period) ?? { jobs_created: 0, riskSum: 0, riskWeight: 0 };
                         cur.jobs_created += r.jobs_created ?? 0;
-                        cur.jobs_completed += r.jobs_completed ?? 0;
                         if (r.avg_risk != null && (r.jobs_created ?? 0) > 0) {
                             cur.riskSum += (r.avg_risk ?? 0) * (r.jobs_created ?? 0);
                             cur.riskWeight += r.jobs_created ?? 0;
@@ -211,19 +403,16 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
                             value = cur.jobs_created;
                         else if (metric === "risk")
                             value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100;
-                        else if (metric === "completion")
-                            value = cur.jobs_created === 0 ? 0 : Math.round((cur.jobs_completed / cur.jobs_created) * 10000) / 100;
                         points.push({ period, value, label: period });
                     }
                 }
-                const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
                 return res.json({ period: periodLabel, groupBy, metric, data: points });
             }
         }
         const { data: jobs, error: jobsError } = await fetchAllPages(async (offset, limit) => {
             const { data, error } = await supabaseClient_1.supabase
                 .from("jobs")
-                .select("id, risk_score, status, created_at")
+                .select("id, risk_score, status, created_at, completed_at")
                 .eq("organization_id", orgId)
                 .is("deleted_at", null)
                 .gte("created_at", since)
@@ -238,31 +427,67 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         const getBucketKey = (date) => groupBy === "month" ? monthStart(date) : groupBy === "week" ? weekStart(date) : toDateKey(date.toISOString());
         const bucketValues = new Map();
         const bucketRiskSums = new Map();
-        const bucketCompletion = new Map();
+        // Completion (fallback): bucket by creation; value = (jobs_completed / jobs_created) * 100, 0–100. Count completions only when completed_at is within [since, until].
+        const bucketCompleted = new Map();
+        // jobs_completed (fallback): bucket by completion date when not using MV (e.g. custom range)
+        const bucketCompletedByDate = new Map();
+        if (metric === "jobs_completed") {
+            const { data: completedJobs, error: completedError } = await fetchAllPages(async (offset, limit) => {
+                const { data, error } = await supabaseClient_1.supabase
+                    .from("jobs")
+                    .select("id, completed_at")
+                    .eq("organization_id", orgId)
+                    .is("deleted_at", null)
+                    .not("completed_at", "is", null)
+                    .gte("completed_at", since)
+                    .lte("completed_at", until)
+                    .order("completed_at", { ascending: false })
+                    .range(offset, offset + limit - 1);
+                return { data, error };
+            });
+            if (!completedError && completedJobs) {
+                for (const j of completedJobs) {
+                    if (j.completed_at) {
+                        const key = getBucketKey(new Date(j.completed_at));
+                        bucketCompletedByDate.set(key, (bucketCompletedByDate.get(key) ?? 0) + 1);
+                    }
+                }
+                for (const period of [...bucketCompletedByDate.keys()].sort((a, b) => a.localeCompare(b))) {
+                    points.push({ period, value: bucketCompletedByDate.get(period) ?? 0, label: period });
+                }
+                return res.json({ period: periodLabel, groupBy, metric, data: points });
+            }
+            if (completedError)
+                throw completedError;
+        }
         for (const j of jobList) {
-            const key = getBucketKey(new Date(j.created_at));
-            const completed = j.status?.toLowerCase() === "completed";
+            const keyCreated = getBucketKey(new Date(j.created_at));
+            const completed = j.status?.toLowerCase() === "completed" &&
+                j.completed_at != null &&
+                j.completed_at >= since &&
+                j.completed_at <= until;
             if (metric === "completion") {
-                const cur = bucketCompletion.get(key) ?? { total: 0, completed: 0 };
-                cur.total += 1;
-                if (completed)
-                    cur.completed += 1;
-                bucketCompletion.set(key, cur);
+                bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
+                if (completed) {
+                    bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1);
+                }
             }
             else if (metric === "jobs") {
-                bucketValues.set(key, (bucketValues.get(key) ?? 0) + 1);
+                bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
             }
             else if (metric === "risk" && j.risk_score != null) {
-                const cur = bucketRiskSums.get(key) ?? { sum: 0, count: 0 };
+                const cur = bucketRiskSums.get(keyCreated) ?? { sum: 0, count: 0 };
                 cur.sum += j.risk_score;
                 cur.count += 1;
-                bucketRiskSums.set(key, cur);
+                bucketRiskSums.set(keyCreated, cur);
             }
         }
         if (metric === "completion") {
-            for (const [period] of [...bucketCompletion.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const { total, completed } = bucketCompletion.get(period);
-                const value = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
+            for (const period of [...bucketValues.keys()].sort((a, b) => a.localeCompare(b))) {
+                const created = bucketValues.get(period) ?? 0;
+                const completed = bucketCompleted.get(period) ?? 0;
+                const rate = created === 0 ? 0 : (completed / created) * 100;
+                const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100));
                 points.push({ period, value, label: period });
             }
         }
@@ -285,6 +510,56 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         return res.status(500).json({ message: "Failed to fetch analytics trends" });
     }
 });
+// GET /api/analytics/status-by-period — weekly (or daily) job counts by status for Jobs-by-status chart
+exports.analyticsRouter.get("/status-by-period", auth_1.authenticate, async (req, res) => {
+    const authReq = req;
+    const status = authReq.user.subscriptionStatus;
+    const hasAnalytics = authReq.user.features.includes("analytics");
+    const isActive = ["active", "trialing", "free"].includes(status);
+    if (!isActive || !hasAnalytics) {
+        return res.json({ data: [], locked: true });
+    }
+    try {
+        const orgId = authReq.user.organization_id;
+        if (!orgId)
+            return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
+        const { days } = parsePeriod(authReq.query.period);
+        const { since, until } = customRange ?? dateRangeForDays(days);
+        const groupByRaw = authReq.query.groupBy || "week";
+        const groupBy = groupByRaw === "day" ? "day" : "week";
+        const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_analytics_status_by_period", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
+            p_group_by: groupBy,
+        });
+        if (error) {
+            if (error.code === '42883') {
+                console.warn('get_analytics_status_by_period RPC not found (migration 20260230100052 may not be applied):', error.message);
+                return res.json({ data: [], locked: false });
+            }
+            throw error;
+        }
+        const raw = (Array.isArray(rows) ? rows : []);
+        const byPeriod = new Map();
+        for (const r of raw) {
+            const period = typeof r.period_key === "string" ? r.period_key.slice(0, 10) : String(r.period_key).slice(0, 10);
+            const statusKey = (r.status ?? "unknown").replace(/_/g, " ");
+            const cur = byPeriod.get(period) ?? {};
+            cur[statusKey] = Number(r.cnt ?? 0);
+            byPeriod.set(period, cur);
+        }
+        const data = [...byPeriod.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([period, counts]) => ({ period, ...counts }));
+        return res.json({ data });
+    }
+    catch (error) {
+        console.error("Analytics status-by-period error:", error);
+        return res.status(500).json({ message: "Failed to fetch status by period" });
+    }
+});
 // GET /api/analytics/risk-heatmap — SQL-side aggregation by job_type and day_of_week
 exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, res) => {
     const authReq = req;
@@ -298,8 +573,9 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days } = parsePeriod(authReq.query.period);
-        const { since, until } = dateRangeForDays(days);
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_risk_heatmap_buckets", {
             p_org_id: orgId,
             p_since: since,
@@ -322,7 +598,7 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
     }
 });
 // GET /api/analytics/team-performance — jobs_assigned, jobs_completed, completion_rate, avg_days, overdue_count per user
-// Server-side aggregate via get_team_performance_kpis RPC; jobs_assigned includes all open assigned (including pre-period).
+// Server-side aggregate via get_team_performance_kpis RPC; jobs_assigned is period-scoped (completed in period + open jobs created in period).
 exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -335,8 +611,9 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days } = parsePeriod(authReq.query.period);
-        const { since, until } = dateRangeForDays(days);
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_team_performance_kpis", {
             p_org_id: orgId,
             p_since: since,
@@ -348,7 +625,7 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
         const members = rows.map((r) => {
             const jobs_assigned = Number(r.jobs_assigned ?? 0);
             const jobs_completed = Number(r.jobs_completed ?? 0);
-            const completion_rate = jobs_assigned === 0 ? 0 : Math.round((jobs_completed / jobs_assigned) * 10000) / 100;
+            const completion_rate = jobs_assigned === 0 ? 0 : Math.min(100, Math.max(0, Math.round((jobs_completed / jobs_assigned) * 10000) / 100));
             const count_completed = Number(r.count_completed ?? 0);
             const sum_days = Number(r.sum_days ?? 0);
             const avg_days = count_completed === 0 ? 0 : Math.round((sum_days / count_completed) * 100) / 100;
@@ -362,20 +639,19 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
             };
         });
         members.sort((a, b) => b.jobs_completed - a.jobs_completed);
-        const topMembers = members.slice(0, 50);
-        const userIds = topMembers.map((m) => m.user_id);
+        const userIds = members.map((m) => m.user_id);
         const userMap = new Map();
         if (userIds.length > 0) {
-            const { data: userRows } = await supabaseClient_1.supabase
-                .from("users")
-                .select("id, full_name")
-                .in("id", userIds);
-            for (const u of userRows || []) {
-                const name = u.full_name ?? "";
-                userMap.set(u.id, name.trim() || "Unknown");
+            const { data: nameRows } = await supabaseClient_1.supabase.rpc("get_team_member_display_names", {
+                p_org_id: orgId,
+                p_user_ids: userIds,
+            });
+            for (const row of (nameRows ?? [])) {
+                const name = (row.display_name ?? "").trim() || "Unknown";
+                userMap.set(row.user_id, name);
             }
         }
-        const membersWithNames = topMembers.map((m) => ({
+        const membersWithNames = members.map((m) => ({
             ...m,
             name: userMap.get(m.user_id) ?? "Unknown",
         }));
@@ -399,11 +675,13 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days } = parsePeriod(authReq.query.period);
-        const { since, until } = dateRangeForDays(days);
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const groupBy = authReq.query.groupBy === "location" ? "location" : "type";
+        const spanMs = new Date(until).getTime() - new Date(since).getTime();
         const prevUntil = since;
-        const prevSince = new Date(new Date(since).getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+        const prevSince = new Date(new Date(since).getTime() - spanMs).toISOString();
         const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_hazard_frequency_buckets", {
             p_org_id: orgId,
             p_since: since,
@@ -453,8 +731,9 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days } = parsePeriod(authReq.query.period);
-        const { since, until } = dateRangeForDays(days);
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_compliance_rate_kpis", {
             p_org_id: orgId,
             p_since: since,
@@ -517,8 +796,9 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const customRange = parseSinceUntil(authReq.query);
         const { days } = parsePeriod(authReq.query.period);
-        const { since, until } = dateRangeForDays(days);
+        const { since, until } = customRange ?? dateRangeForDays(days);
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_job_completion_kpis", {
             p_org_id: orgId,
             p_since: since,
@@ -542,7 +822,7 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
         }
         const total = Number(row.total ?? 0);
         const completed = Number(row.completed ?? 0);
-        const completion_rate = total === 0 ? 0 : Math.round((completed / total) * 10000) / 100;
+        const completion_rate = total === 0 ? 0 : Math.min(100, Math.max(0, Math.round((completed / total) * 10000) / 100));
         const avg_days_to_complete = Number(row.avg_days_to_complete ?? 0);
         const on_time_count = Number(row.on_time_count ?? 0);
         const on_time_rate = completed === 0 ? 0 : Math.round((on_time_count / completed) * 10000) / 100;
@@ -565,9 +845,14 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
         return res.status(500).json({ message: "Failed to fetch job completion" });
     }
 });
-// GET /api/analytics/insights — top 5 predictive insights (cached 1h)
+// GET /api/analytics/insights — top 5 predictive insights (cached 1h). Owner/admin only; members get 403.
+// Respects since/until query params; when absent, falls back to standard period (e.g. 30d) so insights match dashboard period.
 exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) => {
     const authReq = req;
+    const role = authReq.user.role ?? "member";
+    if (role === "member") {
+        return res.status(403).json({ insights: [], locked: true, message: "Insights are available to owners and admins only." });
+    }
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
@@ -578,8 +863,16 @@ exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) =
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const all = await getCachedInsights(orgId);
-        const insights = all.slice(0, 5);
+        const customRange = parseSinceUntil(authReq.query);
+        const { days, key: periodKey } = parsePeriod(authReq.query.period);
+        const { since, until } = customRange ??
+            (periodKey === "1y" ? calendarYearBounds() : dateRangeForDays(days));
+        const limitRaw = authReq.query.limit;
+        const limitStr = limitRaw == null ? undefined : Array.isArray(limitRaw) ? String(limitRaw[0]) : String(limitRaw);
+        const limitNum = limitStr != null ? parseInt(limitStr, 10) : 5;
+        const limit = Number.isNaN(limitNum) || limitNum < 1 ? 5 : Math.min(100, limitNum);
+        const all = await getCachedInsights(orgId, { since, until });
+        const insights = all.slice(0, limit);
         return res.json({ insights });
     }
     catch (error) {
@@ -587,14 +880,13 @@ exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) =
         return res.status(500).json({ message: "Failed to fetch insights" });
     }
 });
+// GET /api/analytics/mitigations — server-side aggregation via get_mitigations_analytics_kpis + get_mitigations_analytics_trend
 exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res) => {
     const authReq = req;
-    // Soft check: return empty analytics data if plan is inactive (better UX than 402)
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-        // Return empty analytics data instead of 402 (better UX)
         return res.json({
             org_id: authReq.user.organization_id,
             range_days: parseRangeDays(authReq.query.range),
@@ -613,7 +905,7 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
             jobs_missing_required_evidence: 0,
             required_evidence_policy: null,
             avg_time_to_first_photo_minutes: null,
-            trend_empty_reason: 'no_jobs',
+            trend_empty_reason: "no_jobs",
             locked: true,
             message: status === "none"
                 ? "Analytics requires an active subscription"
@@ -622,266 +914,90 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
     }
     try {
         const orgId = authReq.user.organization_id;
-        if (!orgId) {
+        if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
+        const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
+        const explicitRange = parseSinceUntil(authReq.query);
+        const rangeParam = authReq.query.range;
+        const rangeDays = parseRangeDays(rangeParam);
+        const { since, until } = explicitRange ?? (rangeParam === "1y" || rangeParam === "365d"
+            ? calendarYearBounds()
+            : dateRangeForDays(rangeDays));
+        const effectiveRangeDays = explicitRange
+            ? Math.ceil((new Date(until).getTime() - new Date(since).getTime()) / (24 * 60 * 60 * 1000)) + 1
+            : (rangeParam === "1y" || rangeParam === "365d" ? 365 : rangeDays);
+        const [kpisRes, trendRes] = await Promise.all([
+            supabaseClient_1.supabase.rpc("get_mitigations_analytics_kpis", {
+                p_org_id: orgId,
+                p_since: since,
+                p_until: until,
+                p_crew_id: crewId ?? null,
+            }),
+            supabaseClient_1.supabase.rpc("get_mitigations_analytics_trend", {
+                p_org_id: orgId,
+                p_since: since,
+                p_until: until,
+                p_crew_id: crewId ?? null,
+            }),
+        ]);
+        if (kpisRes.error)
+            throw kpisRes.error;
+        if (trendRes.error)
+            throw trendRes.error;
+        const kpiRow = Array.isArray(kpisRes.data) ? kpisRes.data[0] : kpisRes.data;
+        const trendRows = (Array.isArray(trendRes.data) ? trendRes.data : []);
+        const jobsTotal = Number(kpiRow?.jobs_total ?? 0);
+        const jobsWithEvidence = Number(kpiRow?.jobs_with_evidence ?? 0);
+        const totalMitigations = Number(kpiRow?.jobs_with_evidence ?? 0) + Number(kpiRow?.jobs_without_evidence ?? 0);
+        const trendEmptyReason = jobsTotal === 0 ? "no_jobs" : (trendRows.length === 0 ? "no_events" : null);
+        const trendByDate = new Map();
+        for (const r of trendRows) {
+            const dateStr = typeof r.period_key === "string"
+                ? r.period_key.slice(0, 10)
+                : new Date(r.period_key).toISOString().slice(0, 10);
+            trendByDate.set(dateStr, Number(r.completion_rate ?? 0));
         }
-        const rangeDays = parseRangeDays(authReq.query.range);
-        const crewId = authReq.query.crew_id
-            ? String(authReq.query.crew_id)
-            : undefined;
-        const sinceDate = new Date();
-        sinceDate.setHours(0, 0, 0, 0);
-        sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
-        const sinceIso = sinceDate.toISOString();
-        // When crew_id is supplied, scope jobs to those that have mitigation activity by this crew (denominators consistent with crew filter).
-        let jobIdsFilter = null;
-        if (crewId) {
-            const { data: crewMitigationRows } = await fetchAllPages(async (offset, limit) => {
-                const { data, error } = await supabaseClient_1.supabase
-                    .from("mitigation_items")
-                    .select("job_id")
-                    .eq("organization_id", orgId)
-                    .eq("completed_by", crewId)
-                    .or(`created_at.gte.${sinceIso},completed_at.gte.${sinceIso}`)
-                    .range(offset, offset + limit - 1);
-                return { data, error };
-            });
-            const crewJobIdsSet = new Set((crewMitigationRows ?? []).map((r) => r.job_id));
-            jobIdsFilter = crewJobIdsSet.size > 0 ? [...crewJobIdsSet] : [];
-        }
-        let jobs;
-        if (jobIdsFilter !== null) {
-            if (jobIdsFilter.length === 0) {
-                jobs = [];
-            }
-            else {
-                const jobsList = [];
-                for (const idChunk of chunkArray(jobIdsFilter, 500)) {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("jobs")
-                        .select("id, risk_score, created_at")
-                        .eq("organization_id", orgId)
-                        .is("deleted_at", null)
-                        .in("id", idChunk);
-                    if (error)
-                        throw error;
-                    jobsList.push(...(data ?? []));
-                }
-                jobs = jobsList;
-            }
-        }
-        else {
-            const { data: jobsData, error: jobsError } = await fetchAllPages(async (offset, limit) => {
-                const { data, error } = await supabaseClient_1.supabase
-                    .from("jobs")
-                    .select("id, risk_score, created_at")
-                    .eq("organization_id", orgId)
-                    .is("deleted_at", null)
-                    .gte("created_at", sinceIso)
-                    .order("created_at", { ascending: true })
-                    .range(offset, offset + limit - 1);
-                return { data, error };
-            });
-            if (jobsError)
-                throw jobsError;
-            jobs = jobsData ?? [];
-        }
-        const jobIds = jobs.map((j) => j.id);
-        if (jobIds.length === 0) {
-            return res.json({
-                org_id: orgId,
-                range_days: rangeDays,
-                completion_rate: 0,
-                avg_time_to_close_hours: 0,
-                high_risk_jobs: 0,
-                evidence_count: 0,
-                jobs_with_evidence: 0,
-                jobs_without_evidence: 0,
-                avg_time_to_first_evidence_hours: 0,
-                trend: [],
-                jobs_total: 0,
-                jobs_scored: 0,
-                jobs_with_any_evidence: 0,
-                jobs_with_photo_evidence: 0,
-                jobs_missing_required_evidence: 0,
-                required_evidence_policy: "Photo required for high-risk jobs",
-                avg_time_to_first_photo_minutes: null,
-                trend_empty_reason: "no_jobs",
-            });
-        }
-        const mitigationsByChunk = chunkArray(jobIds, 500);
-        const mitigationsRaw = [];
-        for (const ids of mitigationsByChunk) {
-            const { data, error } = await fetchAllPages(async (offset, limit) => {
-                let query = supabaseClient_1.supabase
-                    .from("mitigation_items")
-                    .select("id, job_id, created_at, completed_at, completed_by")
-                    .eq("organization_id", orgId)
-                    .in("job_id", ids);
-                if (crewId) {
-                    query = query
-                        .gte("created_at", sinceIso)
-                        .or(`completed_at.is.null,completed_at.gte.${sinceIso}`);
-                }
-                const { data, error } = await query
-                    .order("created_at", { ascending: true })
-                    .range(offset, offset + limit - 1);
-                return { data, error };
-            });
-            if (error)
-                throw error;
-            mitigationsRaw.push(...(data ?? []));
-        }
-        const documentsByChunk = chunkArray(jobIds, 500);
-        const documentsRaw = [];
-        for (const ids of documentsByChunk) {
-            const { data, error } = await fetchAllPages(async (offset, limit) => {
-                let query = supabaseClient_1.supabase
-                    .from("documents")
-                    .select("id, job_id, created_at, type")
-                    .eq("organization_id", orgId)
-                    .in("job_id", ids);
-                if (crewId) {
-                    query = query.gte("created_at", sinceIso);
-                }
-                const { data, error } = await query
-                    .order("created_at", { ascending: true })
-                    .range(offset, offset + limit - 1);
-                return { data, error };
-            });
-            if (error)
-                throw error;
-            documentsRaw.push(...(data ?? []));
-        }
-        const mitigations = mitigationsRaw.filter((item) => {
-            if (!crewId)
-                return true;
-            return item.completed_by === crewId;
-        });
-        const documents = documentsRaw;
-        const totalMitigations = mitigations.length;
-        const completedMitigations = mitigations.filter((item) => item.completed_at);
-        const completionRate = totalMitigations === 0
-            ? 0
-            : completedMitigations.length / totalMitigations;
-        const avgTimeToCloseHours = completedMitigations.length === 0
-            ? 0
-            : completedMitigations.reduce((acc, item) => {
-                const createdAt = new Date(item.created_at).getTime();
-                const completedAt = new Date(item.completed_at).getTime();
-                const diffHours = (completedAt - createdAt) / (1000 * 60 * 60);
-                return acc + Math.max(diffHours, 0);
-            }, 0) / completedMitigations.length;
-        const highRiskJobs = (jobs || []).filter((job) => {
-            if (job.risk_score === null || job.risk_score === undefined) {
-                return false;
-            }
-            return job.risk_score >= 70;
-        }).length;
-        const evidenceCount = documents.length;
-        const jobEvidenceMap = documents.reduce((acc, doc) => {
-            if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
-                acc[doc.job_id] = doc.created_at;
-            }
-            return acc;
-        }, {});
-        const jobsWithEvidence = Object.keys(jobEvidenceMap).length;
-        const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
-        // Photo evidence: only documents with type === "photo"
-        const photoDocuments = documents.filter((d) => d.type === "photo");
-        const jobPhotoMap = photoDocuments.reduce((acc, doc) => {
-            if (!acc[doc.job_id] || new Date(doc.created_at) < new Date(acc[doc.job_id])) {
-                acc[doc.job_id] = doc.created_at;
-            }
-            return acc;
-        }, {});
-        const jobsWithPhotoEvidence = Object.keys(jobPhotoMap).length;
-        // Calculate explicit evidence metrics
-        const jobsTotal = jobIds.length;
-        // Jobs missing required evidence: high-risk jobs without photo evidence (policy: photo required)
-        const highRiskJobIds = (jobs || [])
-            .filter((job) => job.risk_score !== null && job.risk_score >= 70)
-            .map((job) => job.id);
-        const highRiskJobsWithoutPhotoEvidence = highRiskJobIds.filter((jobId) => !jobPhotoMap[jobId]).length;
-        const jobsMissingRequiredEvidence = highRiskJobsWithoutPhotoEvidence;
-        const avgTimeToFirstEvidenceHours = jobsWithEvidence === 0
-            ? 0
-            : Object.entries(jobEvidenceMap).reduce((acc, [jobId, firstEvidence]) => {
-                const job = jobs?.find((item) => item.id === jobId);
-                if (!job)
-                    return acc;
-                const jobCreated = new Date(job.created_at).getTime();
-                const evidenceCreated = new Date(firstEvidence).getTime();
-                const diffHours = (evidenceCreated - jobCreated) / (1000 * 60 * 60);
-                return acc + Math.max(diffHours, 0);
-            }, 0) / jobsWithEvidence;
-        const avgTimeToFirstPhotoMinutes = jobsWithPhotoEvidence === 0
-            ? 0
-            : Object.entries(jobPhotoMap).reduce((acc, [jobId, firstPhotoAt]) => {
-                const job = jobs?.find((item) => item.id === jobId);
-                if (!job)
-                    return acc;
-                const jobCreated = new Date(job.created_at).getTime();
-                const photoCreated = new Date(firstPhotoAt).getTime();
-                const diffMinutes = (photoCreated - jobCreated) / (1000 * 60);
-                return acc + Math.max(diffMinutes, 0);
-            }, 0) / jobsWithPhotoEvidence;
-        // Trend (daily)
         const trend = [];
-        const dateCursor = new Date(sinceDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        while (dateCursor <= today) {
-            const dateKey = dateCursor.toISOString().slice(0, 10);
-            const itemsForDay = mitigations.filter((item) => toDateKey(item.created_at) === dateKey);
-            const dayCompleted = itemsForDay.filter((item) => {
-                if (!item.completed_at)
-                    return false;
-                return toDateKey(item.completed_at) === dateKey;
-            });
-            const dayRate = itemsForDay.length === 0
-                ? 0
-                : dayCompleted.length / itemsForDay.length;
-            trend.push({
-                date: dateKey,
-                completion_rate: Number(dayRate.toFixed(3)),
-            });
-            dateCursor.setDate(dateCursor.getDate() + 1);
+        const cursor = new Date(since);
+        cursor.setHours(0, 0, 0, 0);
+        const end = new Date(until);
+        end.setHours(23, 59, 59, 999);
+        while (cursor <= end) {
+            const dateStr = cursor.toISOString().slice(0, 10);
+            trend.push({ date: dateStr, completion_rate: trendByDate.get(dateStr) ?? 0 });
+            cursor.setDate(cursor.getDate() + 1);
         }
-        // Determine empty reasons
-        const trendEmptyReason = jobsTotal === 0
-            ? 'no_jobs'
-            : totalMitigations === 0
-                ? 'no_events'
-                : null;
         res.json({
             org_id: orgId,
-            range_days: rangeDays,
-            completion_rate: Number(completionRate.toFixed(3)),
-            avg_time_to_close_hours: Number(avgTimeToCloseHours.toFixed(2)),
-            high_risk_jobs: highRiskJobs,
-            evidence_count: evidenceCount,
+            range_days: effectiveRangeDays,
+            completion_rate: Number(kpiRow?.completion_rate ?? 0),
+            avg_time_to_close_hours: Number(kpiRow?.avg_time_to_close_hours ?? 0),
+            high_risk_jobs: Number(kpiRow?.high_risk_jobs ?? 0),
+            evidence_count: Number(kpiRow?.evidence_count ?? 0),
             jobs_with_evidence: jobsWithEvidence,
-            jobs_without_evidence: jobsWithoutEvidence,
-            avg_time_to_first_evidence_hours: Number(avgTimeToFirstEvidenceHours.toFixed(2)),
+            jobs_without_evidence: Number(kpiRow?.jobs_without_evidence ?? 0),
+            avg_time_to_first_evidence_hours: Number(kpiRow?.avg_time_to_first_evidence_hours ?? 0),
             trend,
-            // Explicit evidence denominators
             jobs_total: jobsTotal,
-            jobs_scored: (jobs || []).filter((job) => job.risk_score !== null).length,
-            jobs_with_any_evidence: jobsWithEvidence,
-            jobs_with_photo_evidence: jobsWithPhotoEvidence,
-            jobs_missing_required_evidence: jobsMissingRequiredEvidence,
-            required_evidence_policy: 'Photo required for high-risk jobs',
-            avg_time_to_first_photo_minutes: Math.round(avgTimeToFirstPhotoMinutes),
-            // Empty state reasons
+            jobs_scored: Number(kpiRow?.jobs_scored ?? 0),
+            jobs_with_any_evidence: Number(kpiRow?.jobs_with_any_evidence ?? 0),
+            jobs_with_photo_evidence: Number(kpiRow?.jobs_with_photo_evidence ?? 0),
+            jobs_missing_required_evidence: Number(kpiRow?.jobs_missing_required_evidence ?? 0),
+            required_evidence_policy: "Photo required for high-risk jobs",
+            avg_time_to_first_photo_minutes: kpiRow?.avg_time_to_first_photo_minutes != null
+                ? Math.round(Number(kpiRow.avg_time_to_first_photo_minutes))
+                : null,
             trend_empty_reason: trendEmptyReason,
         });
     }
     catch (error) {
-        console.error("Analytics metrics error:", error);
-        res.status(500).json({ message: "Failed to fetch analytics metrics" });
+        console.error("Analytics mitigations error:", error);
+        res.status(500).json({ message: "Failed to fetch analytics mitigations" });
     }
 });
+// GET /api/analytics/summary
+// Returns job counts by status, risk level distribution, evidence statistics, team activity.
+// Single server-side RPC to avoid multi-page scans and meet <500ms SLA.
 exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) => {
     const authReq = req;
     const status = authReq.user.subscriptionStatus;
@@ -899,6 +1015,7 @@ exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) =>
                 jobs_without_evidence: 0,
             },
             team_activity: [],
+            avg_risk: null,
             locked: true,
             message: status === "none"
                 ? "Analytics requires an active subscription"
@@ -910,95 +1027,45 @@ exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         if (!orgId) {
             return res.status(400).json({ message: "Missing organization id" });
         }
+        const customRange = parseSinceUntil(authReq.query);
         const rangeDays = parseRangeDays(authReq.query.range);
-        const sinceDate = new Date();
-        sinceDate.setHours(0, 0, 0, 0);
-        sinceDate.setDate(sinceDate.getDate() - (rangeDays - 1));
-        const sinceIso = sinceDate.toISOString();
-        const { data: jobs, error: jobsError } = await fetchAllPages(async (offset, limit) => {
-            const { data, error } = await supabaseClient_1.supabase
-                .from("jobs")
-                .select("id, status, risk_level, created_at")
-                .eq("organization_id", orgId)
-                .is("deleted_at", null)
-                .gte("created_at", sinceIso)
-                .order("created_at", { ascending: false })
-                .range(offset, offset + limit - 1);
-            return { data, error };
+        const { since, until } = customRange ?? dateRangeForDays(rangeDays);
+        const { data: row, error: rpcError } = await supabaseClient_1.supabase.rpc("get_analytics_summary", {
+            p_org_id: orgId,
+            p_since: since,
+            p_until: until,
         });
-        if (jobsError)
-            throw jobsError;
-        const jobList = (jobs ?? []);
-        const jobIds = jobList.map((j) => j.id);
-        const documents = [];
-        const completions = [];
-        for (const idChunk of chunkArray(jobIds, 500)) {
-            const [docRes, mitRes] = await Promise.all([
-                fetchAllPages(async (o, l) => {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("documents")
-                        .select("id, job_id")
-                        .eq("organization_id", orgId)
-                        .in("job_id", idChunk)
-                        .order("created_at", { ascending: false })
-                        .range(o, o + l - 1);
-                    return { data, error };
-                }),
-                fetchAllPages(async (o, l) => {
-                    const { data, error } = await supabaseClient_1.supabase
-                        .from("mitigation_items")
-                        .select("id, job_id, completed_at, completed_by")
-                        .eq("organization_id", orgId)
-                        .in("job_id", idChunk)
-                        .not("completed_at", "is", null)
-                        .gte("completed_at", sinceIso)
-                        .order("created_at", { ascending: false })
-                        .range(o, o + l - 1);
-                    return { data, error };
-                }),
-            ]);
-            if (docRes.error)
-                throw docRes.error;
-            if (mitRes.error)
-                throw mitRes.error;
-            documents.push(...(docRes.data ?? []));
-            completions.push(...(mitRes.data ?? []));
+        if (rpcError)
+            throw rpcError;
+        const r = Array.isArray(row) ? row[0] : row;
+        if (!r) {
+            return res.json({
+                org_id: orgId,
+                range_days: rangeDays,
+                job_counts_by_status: {},
+                risk_level_distribution: {},
+                evidence_statistics: { total_items: 0, jobs_with_evidence: 0, jobs_without_evidence: 0 },
+                team_activity: [],
+                avg_risk: null,
+            });
         }
-        const jobCountsByStatus = {};
-        for (const job of jobList) {
-            const s = job.status ?? "unknown";
-            jobCountsByStatus[s] = (jobCountsByStatus[s] ?? 0) + 1;
-        }
-        const riskLevelDistribution = {};
-        for (const job of jobList) {
-            const level = (job.risk_level ?? "unscored").toLowerCase();
-            riskLevelDistribution[level] = (riskLevelDistribution[level] ?? 0) + 1;
-        }
-        const jobsWithEvidenceSet = new Set(documents.map((d) => d.job_id).filter(Boolean));
-        const jobsWithEvidence = jobsWithEvidenceSet.size;
-        const jobsWithoutEvidence = Math.max(jobIds.length - jobsWithEvidence, 0);
-        const evidenceStatistics = {
-            total_items: documents.length,
-            jobs_with_evidence: jobsWithEvidence,
-            jobs_without_evidence: jobsWithoutEvidence,
+        const job_counts_by_status = (r.job_counts_by_status ?? {});
+        const risk_level_distribution = (r.risk_level_distribution ?? {});
+        const evidence_statistics = {
+            total_items: Number(r.total_evidence_items ?? 0),
+            jobs_with_evidence: Number(r.jobs_with_evidence ?? 0),
+            jobs_without_evidence: Number(r.jobs_without_evidence ?? 0),
         };
-        const completionsByUser = {};
-        for (const c of completions) {
-            const uid = c.completed_by ?? "unknown";
-            completionsByUser[uid] = (completionsByUser[uid] ?? 0) + 1;
-        }
-        const teamActivity = Object.entries(completionsByUser)
-            .filter(([id]) => id !== "unknown")
-            .map(([user_id, completions_count]) => ({ user_id, completions_count }))
-            .sort((a, b) => b.completions_count - a.completions_count)
-            .slice(0, 20);
+        const team_activity = (Array.isArray(r.team_activity) ? r.team_activity : []);
+        const avg_risk = r.avg_risk != null ? Number(r.avg_risk) : null;
         res.json({
             org_id: orgId,
             range_days: rangeDays,
-            job_counts_by_status: jobCountsByStatus,
-            risk_level_distribution: riskLevelDistribution,
-            evidence_statistics: evidenceStatistics,
-            team_activity: teamActivity,
+            job_counts_by_status,
+            risk_level_distribution,
+            evidence_statistics,
+            team_activity,
+            avg_risk,
         });
     }
     catch (error) {

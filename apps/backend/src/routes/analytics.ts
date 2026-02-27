@@ -941,7 +941,8 @@ analyticsRouter.get(
         customRange ??
         (periodKey === "1y" ? calendarYearBounds() : dateRangeForDays(days));
       const limitRaw = authReq.query.limit;
-      const limitNum = limitRaw != null ? parseInt(Array.isArray(limitRaw) ? limitRaw[0] : limitRaw, 10) : 5;
+      const limitStr = limitRaw == null ? undefined : Array.isArray(limitRaw) ? String(limitRaw[0]) : String(limitRaw);
+      const limitNum = limitStr != null ? parseInt(limitStr, 10) : 5;
       const limit = Number.isNaN(limitNum) || limitNum < 1 ? 5 : Math.min(100, limitNum);
       const all = await getCachedInsights(orgId, { since, until });
       const insights = all.slice(0, limit);

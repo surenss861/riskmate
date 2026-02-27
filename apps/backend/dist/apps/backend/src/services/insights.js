@@ -23,25 +23,37 @@ function dateRange(days) {
 /**
  * Generate all candidate insights for an organization; caller may take top N.
  * Returns spec-compliant types: deadline_risk, risk_pattern, pending_signatures, team_productivity, overdue_tasks.
+ * When options.since/until are provided, insights are scoped to that window; otherwise uses PERIOD_DAYS.
  */
-async function generateInsights(orgId) {
+async function generateInsights(orgId, options) {
     const insights = [];
-    const { since, until } = dateRange(PERIOD_DAYS);
-    const id = () => `insight-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const basePath = "/dashboard";
+    const { since, until } = options?.since && options?.until
+        ? { since: options.since, until: options.until }
+        : dateRange(PERIOD_DAYS);
+    const sinceDate = new Date(since);
+    const untilDate = new Date(until);
+    /** Reference date for drill-down links so list matches insight cohort (period end). Defined before first use. */
+    const ref = untilDate;
+    const periodDays = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    /** Deterministic ID from type + orgId + period range so same insight gets same ID across fetches; dismissals are period-scoped. */
+    const stableId = (type, keyData) => `insight-${type}-${orgId}-${since.slice(0, 10)}-${until.slice(0, 10)}-${keyData}`;
+    /** Use /operations routes so insight action links open valid filtered views (no /dashboard/* routes). */
+    const basePath = "/operations";
     const jobsPath = `${basePath}/jobs`;
-    const analyticsPath = `${basePath}/analytics`;
+    const analyticsPath = basePath;
+    const referenceDateIso = ref.toISOString();
+    const insightQuery = (insight) => `insight=${encodeURIComponent(insight)}&reference_date=${encodeURIComponent(referenceDateIso)}`;
     try {
-        const now = new Date();
-        const nowIso = now.toISOString();
-        const twoDaysFromNow = new Date(now.getTime() + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
-        const sevenDaysFromNow = new Date(now.getTime() + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+        const refMs = ref.getTime();
+        const nowIso = ref.toISOString();
+        const twoDaysLater = new Date(refMs + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
+        const sevenDaysLater = new Date(refMs + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
         // Full counts and limited payload via RPC (no cap; metrics reflect full set)
         const { data: dueCountsRows, error: dueCountsError } = await supabaseClient_1.supabase.rpc("get_insights_due_counts", {
             p_org_id: orgId,
             p_now: nowIso,
-            p_two_days_later: twoDaysFromNow.toISOString(),
-            p_seven_days_later: sevenDaysFromNow.toISOString(),
+            p_two_days_later: twoDaysLater.toISOString(),
+            p_seven_days_later: sevenDaysLater.toISOString(),
         });
         if (dueCountsError)
             return insights;
@@ -53,16 +65,16 @@ async function generateInsights(orgId) {
         // --- 1. Deadline risk: open jobs <50% complete with <2 days to due (full count from RPC) ---
         if (deadlineRiskCount > 0) {
             insights.push({
-                id: id(),
+                id: stableId("deadline_risk", "default"),
                 type: "deadline_risk",
                 title: "Deadline risk",
                 description: `${deadlineRiskCount} job(s) are less than 50% complete with under ${DEADLINE_RISK_DAYS} days to due date.`,
                 severity: deadlineRiskCount > 5 ? "critical" : deadlineRiskCount > 2 ? "warning" : "info",
                 metric_value: deadlineRiskCount,
                 metric_label: "Jobs at risk",
-                period_days: PERIOD_DAYS,
+                period_days: periodDays,
                 created_at: new Date().toISOString(),
-                action_url: `${jobsPath}?due_soon=true`,
+                action_url: `${jobsPath}?${insightQuery("deadline_risk")}`,
                 data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskCount },
             });
         }
@@ -90,16 +102,16 @@ async function generateInsights(orgId) {
             const [jobType, dayNum] = top[0].split("|");
             const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             insights.push({
-                id: id(),
+                id: stableId("risk_pattern", `${top[0]}-${top[1]}`),
                 type: "risk_pattern",
                 title: "Recurring high-risk pattern",
                 description: `High-risk jobs concentrate on ${dayNames[parseInt(dayNum, 10)]} for job type "${jobType}" (${top[1]} in period).`,
                 severity: top[1] >= 5 ? "critical" : top[1] >= 3 ? "warning" : "info",
                 metric_value: top[1],
                 metric_label: "Occurrences",
-                period_days: PERIOD_DAYS,
+                period_days: periodDays,
                 created_at: new Date().toISOString(),
-                action_url: `${analyticsPath}/risk-heatmap`,
+                action_url: analyticsPath,
                 data: { job_type: jobType, day_of_week: parseInt(dayNum, 10), count: top[1], patterns: recurringEntries.slice(0, 10).map(([k, v]) => ({ bucket: k, count: v })) },
             });
         }
@@ -108,21 +120,23 @@ async function generateInsights(orgId) {
         const pendingSignaturesJobIds = (dueCounts.pending_signatures_job_ids ?? []);
         if (pendingSignaturesCount > 0) {
             insights.push({
-                id: id(),
+                id: stableId("pending_signatures", "default"),
                 type: "pending_signatures",
                 title: "Pending signatures near deadline",
                 description: `${pendingSignaturesCount} job(s) have no signature and are within 7 days of compliance deadline.`,
                 severity: pendingSignaturesCount > 3 ? "critical" : pendingSignaturesCount > 1 ? "warning" : "info",
                 metric_value: pendingSignaturesCount,
                 metric_label: "Jobs",
-                period_days: PERIOD_DAYS,
+                period_days: periodDays,
                 created_at: new Date().toISOString(),
-                action_url: `${jobsPath}?pending_signatures=true`,
+                action_url: `${jobsPath}?${insightQuery("pending_signatures_near_deadline")}`,
                 data: { job_ids: pendingSignaturesJobIds.slice(0, 50), count: pendingSignaturesCount },
             });
         }
         // --- 4. Team productivity change vs previous period ---
-        const prevSince = new Date(new Date(since).getTime() - PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const periodMs = untilDate.getTime() - sinceDate.getTime();
+        const prevUntil = since;
+        const prevSince = new Date(sinceDate.getTime() - periodMs).toISOString();
         const [currentMit, previousMit] = await Promise.all([
             supabaseClient_1.supabase
                 .from("mitigation_items")
@@ -138,25 +152,25 @@ async function generateInsights(orgId) {
                 .eq("organization_id", orgId)
                 .not("completed_at", "is", null)
                 .gte("completed_at", prevSince)
-                .lt("completed_at", since)
+                .lt("completed_at", prevUntil)
                 .limit(MAX_JOBS),
         ]);
         const currentCompletions = (currentMit.data || []).length;
         const previousCompletions = (previousMit.data || []).length;
         const change = previousCompletions === 0 ? (currentCompletions > 0 ? 100 : 0) : ((currentCompletions - previousCompletions) / previousCompletions) * 100;
         insights.push({
-            id: id(),
+            id: stableId("team_productivity", "default"),
             type: "team_productivity",
             title: "Team productivity vs previous period",
             description: previousCompletions === 0
                 ? `Current period: ${currentCompletions} completions (no prior period data).`
-                : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${PERIOD_DAYS} days (${currentCompletions} vs ${previousCompletions}).`,
+                : `Completions ${change >= 0 ? "up" : "down"} ${Math.round(Math.abs(change) * 100) / 100}% vs previous ${periodDays} days (${currentCompletions} vs ${previousCompletions}).`,
             severity: change < -40 ? "critical" : change < -20 ? "warning" : "info",
             metric_value: Math.round(change * 100) / 100,
             metric_label: "% change",
-            period_days: PERIOD_DAYS,
+            period_days: periodDays,
             created_at: new Date().toISOString(),
-            action_url: `${analyticsPath}/team-performance`,
+            action_url: analyticsPath,
             data: { current_completions: currentCompletions, previous_completions: previousCompletions, change_pct: change },
         });
         // --- 5. Overdue tasks (full count from RPC) ---
@@ -164,16 +178,16 @@ async function generateInsights(orgId) {
         const overdueJobIds = (dueCounts.overdue_job_ids ?? []);
         if (overdueCount > 0) {
             insights.push({
-                id: id(),
+                id: stableId("overdue_tasks", "default"),
                 type: "overdue_tasks",
                 title: "Overdue tasks",
                 description: `${overdueCount} job(s) are past due and not yet completed.`,
                 severity: overdueCount > 10 ? "critical" : overdueCount > 3 ? "warning" : "info",
                 metric_value: overdueCount,
                 metric_label: "Overdue",
-                period_days: PERIOD_DAYS,
+                period_days: periodDays,
                 created_at: new Date().toISOString(),
-                action_url: `${jobsPath}?overdue=true`,
+                action_url: `${jobsPath}?${insightQuery("overdue")}`,
                 data: { job_ids: overdueJobIds.slice(0, 50), count: overdueCount },
             });
         }
