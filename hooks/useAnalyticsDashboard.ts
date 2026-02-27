@@ -14,15 +14,17 @@ type RiskHeatmap = Awaited<ReturnType<typeof analyticsApi.riskHeatmap>>;
 type Trends = Awaited<ReturnType<typeof analyticsApi.trends>>;
 type Insights = Awaited<ReturnType<typeof analyticsApi.insights>>;
 
-/** Compute current period [since, until]. For '1y' uses calendar year (Jan 1–today); otherwise rolling window. */
+/** Compute current period [since, until]. For '1y' uses calendar year in UTC (Jan 1–today UTC); otherwise rolling window. */
 function currentRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
   const now = new Date();
-  const until = new Date(now);
-  until.setHours(23, 59, 59, 999);
   if (period === '1y') {
-    const since = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const y = now.getUTCFullYear();
+    const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
     return { since: since.toISOString(), until: until.toISOString() };
   }
+  const until = new Date(now);
+  until.setHours(23, 59, 59, 999);
   const days = parseInt(period.replace('d', ''), 10) || 30;
   const since = new Date(until.getTime());
   since.setDate(since.getDate() - (days - 1));
@@ -30,13 +32,13 @@ function currentRangeForPeriod(period: DashboardPeriod): { since: string; until:
   return { since: since.toISOString(), until: until.toISOString() };
 }
 
-/** Compute prior period [since, until]. For '1y' uses prior calendar year (Jan 1–Dec 31); otherwise same-length window before current. */
+/** Compute prior period [since, until]. For '1y' uses prior calendar year in UTC (Jan 1–Dec 31 UTC); otherwise same-length window before current. */
 function priorRangeForPeriod(period: DashboardPeriod): { since: string; until: string } {
   const now = new Date();
   if (period === '1y') {
-    const y = now.getFullYear() - 1;
-    const priorSince = new Date(y, 0, 1, 0, 0, 0, 0);
-    const priorUntil = new Date(y, 11, 31, 23, 59, 59, 999);
+    const y = now.getUTCFullYear() - 1;
+    const priorSince = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    const priorUntil = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
     return { since: priorSince.toISOString(), until: priorUntil.toISOString() };
   }
   const until = new Date(now);

@@ -74,17 +74,19 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   const analyticsPath = basePath;
 
   try {
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const twoDaysFromNow = new Date(now.getTime() + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
-    const sevenDaysFromNow = new Date(now.getTime() + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    // When since/until are provided, use end of period as reference so overdue/due-soon/pending are computed for the selected window.
+    const ref = untilDate;
+    const refMs = ref.getTime();
+    const nowIso = ref.toISOString();
+    const twoDaysLater = new Date(refMs + DEADLINE_RISK_DAYS * 24 * 60 * 60 * 1000);
+    const sevenDaysLater = new Date(refMs + DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
     // Full counts and limited payload via RPC (no cap; metrics reflect full set)
     const { data: dueCountsRows, error: dueCountsError } = await supabase.rpc("get_insights_due_counts", {
       p_org_id: orgId,
       p_now: nowIso,
-      p_two_days_later: twoDaysFromNow.toISOString(),
-      p_seven_days_later: sevenDaysFromNow.toISOString(),
+      p_two_days_later: twoDaysLater.toISOString(),
+      p_seven_days_later: sevenDaysLater.toISOString(),
     });
     if (dueCountsError) return insights;
     const dueCounts = Array.isArray(dueCountsRows) ? dueCountsRows[0] : dueCountsRows;
