@@ -75,14 +75,37 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       q, // Search query
       time_range,
       missing_evidence,
+      created_after: createdAfterParam,
+      created_before: createdBeforeParam,
+      completed_after: completedAfterParam,
+      completed_before: completedBeforeParam,
     } = authReq.query;
     const includeArchived = include_archived === 'true' || include_archived === '1';
     // Map UI filter status to DB values (active -> in_progress, on-hold -> on_hold)
     const statusForQuery = status === "active" ? "in_progress" : status === "on-hold" ? "on_hold" : status;
 
-    // Parse time_range to date cutoff
+    /** Normalize date boundary for filtering: date-only (YYYY-MM-DD) → start/end of day UTC (dashboard flow consistency). */
+    const normalizeBoundary = (value: string | undefined, kind: 'start' | 'end'): string | null => {
+      if (!value || typeof value !== 'string' || !value.trim()) return null;
+      const s = value.trim();
+      if (s.length >= 10) {
+        const dateOnly = s.slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+          return kind === 'start' ? `${dateOnly}T00:00:00.000Z` : `${dateOnly}T23:59:59.999Z`;
+        }
+      }
+      return s;
+    };
+    const createdAfter = normalizeBoundary(String(createdAfterParam ?? ''), 'start') || null;
+    const createdBefore = normalizeBoundary(String(createdBeforeParam ?? ''), 'end') || null;
+    const completedAfter = normalizeBoundary(String(completedAfterParam ?? ''), 'start') || null;
+    const completedBefore = normalizeBoundary(String(completedBeforeParam ?? ''), 'end') || null;
+    const hasExplicitCreatedRange = createdAfter != null || createdBefore != null;
+    const hasExplicitCompletedRange = completedAfter != null || completedBefore != null;
+
+    // Parse time_range to date cutoff (only used when explicit created_after/created_before are not provided — backward compatibility)
     let dateCutoff: Date | null = null;
-    if (time_range && typeof time_range === 'string' && time_range !== 'all') {
+    if (!hasExplicitCreatedRange && time_range && typeof time_range === 'string' && time_range !== 'all') {
       const match = time_range.match(/(\d+)d/);
       if (match) {
         const days = parseInt(match[1], 10);
@@ -244,11 +267,28 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
     
-    // Apply time_range filter
+    // Apply time_range filter (only when explicit created_after/created_before not provided)
     if (dateCutoff) {
       query = query.gte("created_at", dateCutoff.toISOString());
     }
-    
+    // Chart drill-down: explicit created-date range (start-of-day/end-of-day normalized)
+    if (createdAfter) {
+      query = query.gte("created_at", createdAfter);
+    }
+    if (createdBefore) {
+      query = query.lte("created_at", createdBefore);
+    }
+    // Completed-date range (no time_range required)
+    if (hasExplicitCompletedRange) {
+      query = query.not("completed_at", "is", null);
+      if (completedAfter) {
+        query = query.gte("completed_at", completedAfter);
+      }
+      if (completedBefore) {
+        query = query.lte("completed_at", completedBefore);
+      }
+    }
+
     // Apply search filter (q parameter - search job name, address, or ID)
     if (q && typeof q === 'string' && q.trim()) {
       const searchTerm = q.trim();

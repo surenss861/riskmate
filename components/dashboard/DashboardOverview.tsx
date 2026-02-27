@@ -165,7 +165,7 @@ interface DashboardOverviewProps {
   workforceActivity: Array<{
     user_id: string
     name: string
-    last_login: string
+    last_login: string | null
     jobs_assigned: number
   }>
   complianceTrend: Array<{
@@ -707,7 +707,9 @@ export function DashboardOverview({
                         </p>
                       </div>
                       <span className="text-xs text-white/50">
-                        {new Date(worker.last_login).toLocaleDateString()}
+                        {worker.last_login && !Number.isNaN(new Date(worker.last_login).getTime())
+                          ? new Date(worker.last_login).toLocaleDateString()
+                          : 'Never'}
                       </span>
                     </div>
                   </div>

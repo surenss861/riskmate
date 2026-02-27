@@ -543,7 +543,7 @@ function DashboardPageInner() {
     return members.map((m) => ({
       user_id: m.user_id,
       name: m.name,
-      last_login: '', // team performance API does not return last_login
+      last_login: null as string | null, // team performance API does not return last_login; null makes absence explicit
       jobs_assigned: m.jobs_assigned,
     }))
   }, [dashboardData?.teamPerformance?.members])

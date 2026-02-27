@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import Supabase
 
 /// Comments tab for job detail: list comments, replies nested per comment, add comment and reply. Mentions shown as styled chips.
@@ -199,7 +200,7 @@ struct JobCommentsView: View {
                     let candidates = mentionCandidates(query: mentionQuery ?? "", forReplyParentId: nil)
                     if !candidates.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(candidates) { member in
+                            ForEach(candidates, id: \.id) { member in
                                 Button {
                                     insertMention(member: member, intoNewComment: true, replyParentId: nil)
                                 } label: {
@@ -621,7 +622,7 @@ struct JobCommentsView: View {
             }
             if !replyCandidates.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(replyCandidates) { member in
+                    ForEach(replyCandidates, id: \.id) { member in
                         Button {
                             insertMention(member: member, intoNewComment: false, replyParentId: comment.id)
                         } label: {

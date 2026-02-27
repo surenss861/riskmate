@@ -80,6 +80,7 @@ struct RMTheme {
         // Captions
         static let caption = Font.system(size: 13, weight: .regular, design: .default)
         static let captionBold = Font.system(size: 13, weight: .semibold, design: .default)
+        static let caption2 = Font.caption2
         static let captionSmall = Font.system(size: 11, weight: .regular, design: .default)
     }
     

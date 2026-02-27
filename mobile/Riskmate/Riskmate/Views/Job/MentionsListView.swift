@@ -258,7 +258,7 @@ struct MentionsListView: View {
     }
 
     private func markMentionsSeen() {
-        lastSeenAt = Date()
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: unreadKey)
         updateUnreadCount()
     }
 
