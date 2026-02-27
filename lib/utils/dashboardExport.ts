@@ -50,26 +50,26 @@ export function buildDashboardCsv(options: {
   rows.push(['Hazard type', 'Count', 'Avg risk']);
   options.hazards.forEach((h) => rows.push([h.category, String(h.count), String(h.avgRisk)]));
 
-  // Trend series (chart underlying data)
+  // Trend series (chart underlying data): header has 3 columns (section title, Period, Value); each data row must have 3 columns for alignment
   if (options.trendJobsCreated && options.trendJobsCreated.length > 0) {
     rows.push([]);
     rows.push(['Trend: Jobs created (by period)', 'Period', 'Value']);
-    options.trendJobsCreated.forEach((p) => rows.push([p.period, String(p.value)]));
+    options.trendJobsCreated.forEach((p) => rows.push(['', p.period, String(p.value)]));
   }
   if (options.trendJobsCompleted && options.trendJobsCompleted.length > 0) {
     rows.push([]);
     rows.push(['Trend: Jobs completed (by period)', 'Period', 'Value']);
-    options.trendJobsCompleted.forEach((p) => rows.push([p.period, String(p.value)]));
+    options.trendJobsCompleted.forEach((p) => rows.push(['', p.period, String(p.value)]));
   }
   if (options.trendCompletionPct && options.trendCompletionPct.length > 0) {
     rows.push([]);
     rows.push(['Trend: Completion % (by period)', 'Period', 'Value']);
-    options.trendCompletionPct.forEach((p) => rows.push([p.period, String(p.value)]));
+    options.trendCompletionPct.forEach((p) => rows.push(['', p.period, String(p.value)]));
   }
   if (options.trendRisk && options.trendRisk.length > 0) {
     rows.push([]);
     rows.push(['Trend: Risk (by period)', 'Period', 'Value']);
-    options.trendRisk.forEach((p) => rows.push([p.period, String(p.value)]));
+    options.trendRisk.forEach((p) => rows.push(['', p.period, String(p.value)]));
   }
 
   // Status-by-period (Jobs-by-status chart)

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import useSWR from 'swr'
-import { useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { jobsApi, filtersApi } from '@/lib/api'
@@ -28,10 +27,9 @@ interface Job {
 const JobsPageContent = () => {
   const adv = useAdvancedFilters()
   const { state } = adv
-  const searchParams = useSearchParams()
-  const insightParam = searchParams.get('insight')?.trim() || undefined
-  const referenceDateParam = searchParams.get('reference_date')?.trim() || undefined
   const debouncedSearchQuery = useDebounce(state.searchQuery, 300)
+  const insightParam = state.insight?.trim() || undefined
+  const referenceDateParam = state.reference_date?.trim() || undefined
 
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -158,7 +156,7 @@ const JobsPageContent = () => {
   )
 
   // Use debouncedSearchQuery (not state.searchQuery) so key and fetcher use the same value and results don't lag a keystroke
-  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.dueSoon}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}-${insightParam ?? ''}-${referenceDateParam ?? ''}`
+  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.dueSoon}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}-${state.insight}-${state.reference_date}`
 
   const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: true,

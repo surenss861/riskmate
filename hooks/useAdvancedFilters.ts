@@ -46,6 +46,10 @@ export interface AdvancedFiltersState {
   recent: boolean
   filterTemplateSource: string
   filterTemplateId: string
+  /** Insight drill-down cohort (from analytics chart click). */
+  insight: string
+  /** Reference date for insight drill-down (ISO string). */
+  reference_date: string
 }
 
 const DEFAULT_STATE: AdvancedFiltersState = {
@@ -74,6 +78,8 @@ const DEFAULT_STATE: AdvancedFiltersState = {
   recent: false,
   filterTemplateSource: '',
   filterTemplateId: '',
+  insight: '',
+  reference_date: '',
 }
 
 function parseBoolParam(value: string | null): boolean | undefined {
@@ -131,6 +137,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     recent: searchParams.get('recent') === 'true',
     filterTemplateSource: searchParams.get('template_source') ?? '',
     filterTemplateId: searchParams.get('template_id') ?? '',
+    insight: searchParams.get('insight') ?? '',
+    reference_date: searchParams.get('reference_date') ?? '',
   }
 }
 
@@ -165,6 +173,8 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.recent) params.set('recent', 'true')
   if (state.filterTemplateSource) params.set('template_source', state.filterTemplateSource)
   if (state.filterTemplateId) params.set('template_id', state.filterTemplateId)
+  if (state.insight) params.set('insight', state.insight)
+  if (state.reference_date) params.set('reference_date', state.reference_date)
   return params
 }
 
