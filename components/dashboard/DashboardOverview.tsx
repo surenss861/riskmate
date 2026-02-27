@@ -98,6 +98,8 @@ export type EnhancedAnalyticsProps = {
   periodLabel: string
   /** When period is 'custom', the selected range for charts and KPIs. */
   customRange?: CustomRange | null
+  /** True when any section included in export (KPIs, trends, team, hazards, insights) failed this fetch; export should be blocked or annotated. */
+  hasExportedSectionError?: boolean
   kpiItems: KpiGridItem[]
   insights: InsightItem[]
   insightsLoading: boolean
@@ -201,8 +203,10 @@ export function DashboardOverview({
   // Show custom date picker when user selects "Custom" from dropdown without calling parent until they apply a range.
   const [customPickerOpen, setCustomPickerOpen] = useState(false)
 
+  const exportBlocked = Boolean(enhancedAnalytics?.hasExportedSectionError)
+
   const handleExportCSV = () => {
-    if (!enhancedAnalytics) return
+    if (!enhancedAnalytics || exportBlocked) return
     const kpis: ExportKpi[] = enhancedAnalytics.kpiItems.map((k) => ({
       title: k.title,
       value: `${k.prefix ?? ''}${k.value}${k.suffix ?? ''}`,
@@ -250,7 +254,7 @@ export function DashboardOverview({
   }
 
   const handleExportPDF = async () => {
-    if (!enhancedAnalytics) return
+    if (!enhancedAnalytics || exportBlocked) return
     const kpis: ExportKpi[] = enhancedAnalytics.kpiItems.map((k) => ({
       title: k.title,
       value: `${k.prefix ?? ''}${k.value}${k.suffix ?? ''}`,
@@ -342,7 +346,8 @@ export function DashboardOverview({
                 <button
                   type="button"
                   onClick={handleExportCSV}
-                  disabled={enhancedAnalytics.isLoading}
+                  disabled={enhancedAnalytics.isLoading || exportBlocked}
+                  title={exportBlocked ? 'Export unavailable: some metrics failed to load for this period.' : undefined}
                   className="px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 border-r border-white/10 disabled:opacity-50"
                 >
                   Export CSV
@@ -350,7 +355,8 @@ export function DashboardOverview({
                 <button
                   type="button"
                   onClick={() => handleExportPDF()}
-                  disabled={enhancedAnalytics.isLoading}
+                  disabled={enhancedAnalytics.isLoading || exportBlocked}
+                  title={exportBlocked ? 'Export unavailable: some metrics failed to load for this period.' : undefined}
                   className="px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 disabled:opacity-50"
                 >
                   Export PDF

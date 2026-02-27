@@ -119,6 +119,19 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
     const priorUnavailableForRisk = se.priorTrendsRisk || avgRiskUnavailable;
     const priorUnavailableForCompliance = se.priorComplianceRate;
 
+    const hasExportedSectionError =
+      se.summary ||
+      se.jobCompletion ||
+      se.complianceRate ||
+      se.teamPerformance ||
+      se.hazardFrequency ||
+      se.trendsJobs ||
+      se.trendsRisk ||
+      se.trendsCompletion ||
+      se.trendsCompletedCounts ||
+      se.insights ||
+      se.statusByPeriod;
+
     const totalJobsTrendPct = priorUnavailableForJobs ? undefined : (priorTotal !== undefined ? percentChange(totalJobs, priorTotal) : undefined);
     const completionTrendPct = priorUnavailableForJobs ? undefined : (priorCompletion !== undefined ? percentChange(completionRate, priorCompletion) : undefined);
     const avgRiskTrendPct = priorUnavailableForRisk ? undefined : (priorAvgRisk !== undefined ? percentChange(avgRiskKpi, priorAvgRisk) : undefined);
@@ -195,6 +208,7 @@ export function useEnhancedAnalyticsProps(params: UseEnhancedAnalyticsPropsParam
       onPeriodChange: onAnalyticsPeriodChange,
       periodLabel: periodLabels[analyticsPeriod],
       customRange: analyticsPeriod === 'custom' ? customRange : null,
+      hasExportedSectionError,
       periodRangeStart,
       periodRangeEnd,
       trendsGranularity: effectiveGroupBy,

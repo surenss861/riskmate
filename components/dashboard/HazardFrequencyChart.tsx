@@ -10,6 +10,26 @@ import {
   Cell,
 } from 'recharts';
 
+/** Safely resolve the clicked data row from Recharts click event (prefer nested payload, with fallback). */
+function getClickedRow(event: unknown): { name?: string; category?: string; [k: string]: unknown } | null {
+  if (event == null || typeof event !== 'object') return null;
+  const obj = event as Record<string, unknown>;
+  const row =
+    obj.payload != null && typeof obj.payload === 'object' && !Array.isArray(obj.payload)
+      ? (obj.payload as { name?: string; category?: string; [k: string]: unknown })
+      : (obj as { name?: string; category?: string; [k: string]: unknown });
+  return row;
+}
+
+/** Resolve non-empty category string from clicked row (name is chart display; category is source field). */
+function getCategoryFromRow(row: { name?: string; category?: string } | null): string {
+  if (row == null) return '';
+  const fromName = typeof row.name === 'string' ? row.name.trim() : '';
+  if (fromName) return fromName;
+  const fromCategory = typeof row.category === 'string' ? row.category.trim() : '';
+  return fromCategory;
+}
+
 export type HazardFrequencyItem = {
   category: string;
   count: number;
@@ -106,7 +126,15 @@ export function HazardFrequencyChart({
               radius={[0, 4, 4, 0]}
               maxBarSize={24}
               cursor={onCategoryClick ? 'pointer' : 'default'}
-              onClick={onCategoryClick ? (data: { name?: string }) => data?.name && onCategoryClick(data.name) : undefined}
+              onClick={
+                onCategoryClick
+                  ? (event: unknown) => {
+                      const row = getClickedRow(event);
+                      const category = getCategoryFromRow(row);
+                      if (category) onCategoryClick(category);
+                    }
+                  : undefined
+              }
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
