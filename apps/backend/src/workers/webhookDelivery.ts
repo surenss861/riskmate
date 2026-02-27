@@ -158,13 +158,24 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     if (!success) {
       const nextAttempt = delivery.attempt_count + 1
       if (nextAttempt <= MAX_ATTEMPTS) {
-        const delayMs = RETRY_DELAYS_MS[nextAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+        const delayMs = RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
         const nextRetry = new Date(Date.now() + delayMs).toISOString()
         await supabase
           .from('webhook_deliveries')
           .update({
             attempt_count: nextAttempt,
             next_retry_at: nextRetry,
+            response_status: responseStatus,
+            response_body: responseBody,
+            duration_ms: durationMs,
+          })
+          .eq('id', delivery.id)
+      } else {
+        // Final failure: mark terminally so processPendingDeliveries never picks this row again
+        await supabase
+          .from('webhook_deliveries')
+          .update({
+            next_retry_at: null,
             response_status: responseStatus,
             response_body: responseBody,
             duration_ms: durationMs,
@@ -179,13 +190,23 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     await updateDeliveryResult(delivery.id, null, responseBody, durationMs, false)
     const nextAttempt = delivery.attempt_count + 1
     if (nextAttempt <= MAX_ATTEMPTS) {
-      const delayMs = RETRY_DELAYS_MS[nextAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+      const delayMs = RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
       const nextRetry = new Date(Date.now() + delayMs).toISOString()
       await supabase
         .from('webhook_deliveries')
         .update({
           attempt_count: nextAttempt,
           next_retry_at: nextRetry,
+          response_body: responseBody,
+          duration_ms: durationMs,
+        })
+        .eq('id', delivery.id)
+    } else {
+      // Final failure: mark terminally
+      await supabase
+        .from('webhook_deliveries')
+        .update({
+          next_retry_at: null,
           response_body: responseBody,
           duration_ms: durationMs,
         })
@@ -237,7 +258,8 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 }
 
 /**
- * Process pending deliveries: those with delivered_at IS NULL and next_retry_at <= now.
+ * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
+ * and attempt_count < MAX_ATTEMPTS (exclude terminally failed; manual retry resets attempt_count).
  */
 async function processPendingDeliveries(): Promise<void> {
   const now = new Date().toISOString()
@@ -245,7 +267,9 @@ async function processPendingDeliveries(): Promise<void> {
     .from('webhook_deliveries')
     .select('*')
     .is('delivered_at', null)
+    .not('next_retry_at', 'is', null)
     .lte('next_retry_at', now)
+    .lt('attempt_count', MAX_ATTEMPTS)
     .order('created_at', { ascending: true })
     .limit(50)
 

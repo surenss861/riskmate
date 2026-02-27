@@ -58,6 +58,7 @@ export async function POST(
       .update({
         next_retry_at: new Date().toISOString(),
         delivered_at: null,
+        attempt_count: 1,
       })
       .eq('id', deliveryId)
 

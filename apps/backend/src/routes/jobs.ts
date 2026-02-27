@@ -11,6 +11,7 @@ import { createErrorResponse, logErrorForSupport } from "../utils/errorResponse"
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { emitJobEvent, emitEvidenceEvent } from "../utils/realtimeEvents";
 import { hasJobsDeletePermission, canDeleteSingleJob } from "../utils/permissions";
+import { deliverEvent } from "../workers/webhookDelivery";
 import { EmailJobType, queueEmail } from "../workers/emailQueue";
 import { getNotificationPreferences } from "../services/notifications";
 import { jobCommentsRouter } from "./comments";
@@ -1569,6 +1570,15 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       });
     });
     await Promise.allSettled(auditPromises);
+    for (const jobId of eligibleIds) {
+      const job = jobMap.get(jobId)!;
+      deliverEvent(organization_id, "job.deleted", {
+        id: jobId,
+        deleted_at: deletedAt,
+        status: job.status,
+        bulk: true,
+      }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
+    }
     const total = eligibleIds.length + failed.length;
     res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed }, results: buildBulkResults(eligibleIds, failed) });
   } catch (err: any) {
@@ -1756,6 +1766,17 @@ jobsRouter.post("/:id/hazards", authenticate, requireWriteAccess, async (req: ex
       metadata: { job_id: jobId, sync_direct: true },
       ...clientMetadata,
     });
+
+    deliverEvent(organization_id, "hazard.created", {
+      id: inserted.id,
+      job_id: jobId,
+      title: inserted.title ?? "",
+      description: inserted.description ?? "",
+      severity: (inserted as any).severity ?? "medium",
+      status: (inserted as any).status ?? "open",
+      created_at: inserted.created_at,
+      updated_at: inserted.updated_at ?? inserted.created_at,
+    }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
 
     // Notify job owner and assignees (excluding creator)
     try {
@@ -2569,7 +2590,7 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAcc
       .update(updatePayload)
       .eq("id", mitigationId)
       .eq("job_id", jobId)
-      .select("id, title, description, done, is_completed, completed_at, created_at")
+      .select("id, title, description, done, is_completed, completed_at, created_at, hazard_id")
       .single();
 
     if (updateError) {
@@ -2599,6 +2620,19 @@ jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAcc
         done,
       },
     });
+
+    if ((updatedItem as { hazard_id?: string | null }).hazard_id == null) {
+      deliverEvent(organization_id, "hazard.updated", {
+        id: updatedItem.id,
+        job_id: jobId,
+        title: updatedItem.title ?? "",
+        description: updatedItem.description ?? "",
+        done: updatedItem.done,
+        is_completed: updatedItem.is_completed,
+        completed_at: updatedItem.completed_at,
+        created_at: updatedItem.created_at,
+      }).catch((e) => console.warn("[Jobs] Webhook hazard.updated enqueue failed:", e));
+    }
 
     invalidateJobReportCache(organization_id, jobId);
 
@@ -3618,10 +3652,17 @@ jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.
       ...clientMetadata,
     });
 
+    const deletedAt = new Date().toISOString();
+    deliverEvent(organization_id, "job.deleted", {
+      id: jobId,
+      deleted_at: deletedAt,
+      status: job.status,
+    }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
+
     res.json({
       data: {
         id: jobId,
-        deleted_at: new Date().toISOString(),
+        deleted_at: deletedAt,
       },
     });
   } catch (err: any) {
