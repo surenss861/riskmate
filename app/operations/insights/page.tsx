@@ -98,13 +98,21 @@ function InsightsPageInner() {
     return () => { cancelled = true; };
   }, [since, until]);
 
+  const handleLogout = async () => {
+    const supabase = createSupabaseBrowserClient();
+    const { cacheInvalidation } = await import('@/lib/cache');
+    cacheInvalidation.clearAll();
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
   const isMember = userRole === 'member';
 
   if (userRole !== null && isMember) {
     return (
       <ProtectedRoute>
         <AppBackground>
-          <DashboardNavbar email={user?.email} onLogout={async () => {}} />
+          <DashboardNavbar email={user?.email} onLogout={handleLogout} />
           <AppShell>
             <GlassCard className="p-8 text-center">
               <p className="text-white/70">Insights are available to owners and admins.</p>
