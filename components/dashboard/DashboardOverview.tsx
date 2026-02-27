@@ -32,20 +32,9 @@ const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ]
 
-export type CustomRange = { start: string; end: string }
+import { CustomRange, toLocalDateString, toDateOnly } from '@/lib/utils/dateRange'
 
-/** Normalize ISO datetime or date string to YYYY-MM-DD for <input type="date">. */
-function toDateOnly(value: string): string {
-  return value.length >= 10 ? value.slice(0, 10) : value
-}
-
-/** Format a Date as local YYYY-MM-DD for <input type="date"> (avoids UTC shift). */
-function toLocalDateString(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+export type { CustomRange }
 
 function CustomDateRangePicker({
   customRange,
@@ -61,21 +50,18 @@ function CustomDateRangePicker({
     return toLocalDateString(d)
   }, [])
   const [start, setStart] = useState(() =>
-    customRange?.start ? toLocalDateString(new Date(customRange.start)) : defaultStart
+    customRange?.start ? toDateOnly(customRange.start) : defaultStart
   )
   const [end, setEnd] = useState(() =>
-    customRange?.end ? toLocalDateString(new Date(customRange.end)) : defaultEnd
+    customRange?.end ? toDateOnly(customRange.end) : defaultEnd
   )
   useEffect(() => {
-    if (customRange?.start) setStart(toLocalDateString(new Date(customRange.start)))
-    if (customRange?.end) setEnd(toLocalDateString(new Date(customRange.end)))
+    if (customRange?.start) setStart(toDateOnly(customRange.start))
+    if (customRange?.end) setEnd(toDateOnly(customRange.end))
   }, [customRange?.start, customRange?.end])
   const handleApply = () => {
     if (!start || !end || start > end) return
-    // Normalize to start/end-of-day UTC only at apply time (interpret dates as local).
-    const startIso = new Date(start + 'T00:00:00').toISOString()
-    const endIso = new Date(end + 'T23:59:59.999').toISOString()
-    onApply(startIso, endIso)
+    onApply(start, end)
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -365,8 +351,8 @@ export function DashboardOverview({
             isLoading={enhancedAnalytics.insightsLoading}
             viewAllHref={
               enhancedAnalytics.period === 'custom' && enhancedAnalytics.customRange
-                ? `/operations?time_range=custom&range_start=${enhancedAnalytics.customRange.start.slice(0, 10)}&range_end=${enhancedAnalytics.customRange.end.slice(0, 10)}`
-                : `/operations?time_range=${enhancedAnalytics.period}`
+                ? `/operations/insights?time_range=custom&range_start=${enhancedAnalytics.customRange.start}&range_end=${enhancedAnalytics.customRange.end}`
+                : `/operations/insights?time_range=${enhancedAnalytics.period}`
             }
           />
 

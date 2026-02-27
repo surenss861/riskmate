@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { analyticsApi } from '@/lib/api';
+import { dateOnlyToApiBounds, type CustomRange } from '@/lib/utils/dateRange';
 
 export type DashboardPeriod = '7d' | '30d' | '90d' | '1y' | 'custom';
 
@@ -116,7 +117,7 @@ const emptyData: AnalyticsDashboardData = {
   priorTrendsCompliance: null,
 };
 
-export type CustomRange = { start: string; end: string };
+export type { CustomRange };
 
 export function useAnalyticsDashboard(
   period: DashboardPeriod,
@@ -142,15 +143,16 @@ export function useAnalyticsDashboard(
     const useCustom = period === 'custom' && customRange?.start && customRange?.end;
     const useCalendarYear = period === '1y';
     const currentRange = useCalendarYear ? currentRangeForPeriod('1y') : null;
-    const since = useCustom ? customRange!.start : useCalendarYear ? currentRange!.since : undefined;
-    const until = useCustom ? customRange!.end : useCalendarYear ? currentRange!.until : undefined;
+    const customBounds = useCustom ? dateOnlyToApiBounds(customRange!.start, customRange!.end) : null;
+    const since = useCustom ? customBounds!.since : useCalendarYear ? currentRange!.since : undefined;
+    const until = useCustom ? customBounds!.until : useCalendarYear ? currentRange!.until : undefined;
     const rangeForSummary = period === '1y' ? undefined : period;
     const prior = useCustom ? null : priorRangeForPeriod(period);
     // Single groupBy for custom: day for short ranges, week for longer; same for all trends and statusByPeriod
     const groupBy: 'day' | 'week' | 'month' =
       useCustom
         ? (() => {
-            const rangeMs = new Date(customRange!.end).getTime() - new Date(customRange!.start).getTime();
+            const rangeMs = new Date(customRange!.end + 'T12:00:00').getTime() - new Date(customRange!.start + 'T12:00:00').getTime();
             const rangeDays = rangeMs / (24 * 60 * 60 * 1000);
             return rangeDays <= 14 ? ('day' as const) : ('week' as const);
           })()
@@ -262,7 +264,7 @@ export function useAnalyticsDashboard(
 
   const effectiveGroupBy: 'day' | 'week' | 'month' = useMemo(() => {
     if (period === 'custom' && customRange?.start && customRange?.end) {
-      const rangeMs = new Date(customRange.end).getTime() - new Date(customRange.start).getTime();
+      const rangeMs = new Date(customRange.end + 'T12:00:00').getTime() - new Date(customRange.start + 'T12:00:00').getTime();
       const rangeDays = rangeMs / (24 * 60 * 60 * 1000);
       return rangeDays <= 14 ? 'day' : 'week';
     }

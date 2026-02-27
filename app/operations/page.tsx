@@ -16,7 +16,8 @@ import { AnalyticsTrendCharts } from '@/components/dashboard/AnalyticsTrendChart
 import EvidenceWidget from '@/components/dashboard/EvidenceWidget'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { DashboardSkeleton, JobListSkeleton } from '@/components/dashboard/SkeletonLoader'
-import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps, type CustomRange } from '@/components/dashboard/DashboardOverview'
+import { DashboardOverview, type DashboardPeriod, type EnhancedAnalyticsProps } from '@/components/dashboard/DashboardOverview'
+import { CustomRange, dateOnlyToApiBounds, toLocalDateString, toDateOnly } from '@/lib/utils/dateRange'
 import { Changelog } from '@/components/dashboard/Changelog'
 import { useAnalyticsDashboard } from '@/hooks/useAnalyticsDashboard'
 import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
@@ -72,15 +73,12 @@ function DashboardPageInner() {
   })
   const [customRange, setCustomRange] = useState<CustomRange | null>(() => {
     if (timeRangeParam === 'custom' && rangeStartParam && rangeEndParam) {
-      return {
-        start: rangeStartParam.length === 10 ? `${rangeStartParam}T00:00:00.000Z` : rangeStartParam,
-        end: rangeEndParam.length === 10 ? `${rangeEndParam}T23:59:59.999Z` : rangeEndParam,
-      }
+      return { start: toDateOnly(rangeStartParam), end: toDateOnly(rangeEndParam) }
     }
     return null
   })
   const analyticsRange = timeRange === 'all' ? 365 : timeRange === 'custom' && customRange
-    ? Math.ceil((new Date(customRange.end).getTime() - new Date(customRange.start).getTime()) / (24 * 60 * 60 * 1000))
+    ? Math.ceil((new Date(customRange.end + 'T12:00:00').getTime() - new Date(customRange.start + 'T12:00:00').getTime()) / (24 * 60 * 60 * 1000)) + 1
     : parseInt((timeRange as string).replace('d', ''), 10) || 30
   
   // Job Roster filters from URL params
@@ -176,12 +174,13 @@ function DashboardPageInner() {
       // Load jobs from database for Job Roster
       try {
         const isCustomRange = timeRange === 'custom' && customRange
+        const bounds = isCustomRange ? dateOnlyToApiBounds(customRange.start, customRange.end) : null
         const jobsResponse = await jobsApi.list({
           status: filterStatus || undefined,
           risk_level: filterRiskLevel || undefined,
           hazard: filterHazard || undefined,
-          ...(isCustomRange
-            ? { created_after: customRange!.start, created_before: customRange!.end }
+          ...(isCustomRange && bounds
+            ? { created_after: bounds.since, created_before: bounds.until }
             : { time_range: timeRange }),
           q: debouncedSearchQuery || undefined, // Search query
           sort: sortBy || undefined, // Sort mode
@@ -240,8 +239,8 @@ function DashboardPageInner() {
     if (timeRange && timeRange !== '30d') {
       params.set('time_range', timeRange)
       if (timeRange === 'custom' && customRange) {
-        params.set('range_start', customRange.start.slice(0, 10))
-        params.set('range_end', customRange.end.slice(0, 10))
+        params.set('range_start', customRange.start)
+        params.set('range_end', customRange.end)
       } else {
         params.delete('range_start')
         params.delete('range_end')
@@ -459,10 +458,7 @@ function DashboardPageInner() {
     const end = searchParams.get('range_end')?.trim() ?? ''
     if (param === 'custom' && start && end) {
       setTimeRange('custom')
-      setCustomRange({
-        start: start.length === 10 ? `${start}T00:00:00.000Z` : start,
-        end: end.length === 10 ? `${end}T23:59:59.999Z` : end,
-      })
+      setCustomRange({ start: toDateOnly(start), end: toDateOnly(end) })
       setDashboardPeriod('custom')
     } else if (param === '1y') {
       setTimeRange('all')
@@ -488,22 +484,20 @@ function DashboardPageInner() {
         refetchDashboard()
         return
       }
-      const end = new Date()
-      end.setHours(23, 59, 59, 999)
-      const start = new Date(end.getTime())
-      start.setDate(start.getDate() - 29)
-      start.setHours(0, 0, 0, 0)
+      const endDate = new Date()
+      const startDate = new Date(endDate.getTime())
+      startDate.setDate(startDate.getDate() - 29)
       const defaultRange: CustomRange = {
-        start: start.toISOString(),
-        end: end.toISOString(),
+        start: toLocalDateString(startDate),
+        end: toLocalDateString(endDate),
       }
       setCustomRange(defaultRange)
       setTimeRange('custom')
       setDashboardPeriod('custom')
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', 'custom')
-      params.set('range_start', defaultRange.start.slice(0, 10))
-      params.set('range_end', defaultRange.end.slice(0, 10))
+      params.set('range_start', defaultRange.start)
+      params.set('range_end', defaultRange.end)
       router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
@@ -529,16 +523,13 @@ function DashboardPageInner() {
     }
     setDashboardPeriod(period)
     if (period === 'custom' && range) {
-      // Normalize so start is start-of-day and end is end-of-day (include full end date)
-      const startNorm = range.start.length === 10 ? `${range.start}T00:00:00.000Z` : range.start
-      const endNorm = range.end.length === 10 ? `${range.end}T23:59:59.999Z` : range.end
-      const normalized: CustomRange = { start: startNorm, end: endNorm }
+      const normalized: CustomRange = { start: toDateOnly(range.start), end: toDateOnly(range.end) }
       setCustomRange(normalized)
       setTimeRange('custom')
       const params = new URLSearchParams(searchParams.toString())
       params.set('time_range', 'custom')
-      params.set('range_start', normalized.start.slice(0, 10))
-      params.set('range_end', normalized.end.slice(0, 10))
+      params.set('range_start', normalized.start)
+      params.set('range_end', normalized.end)
       router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false })
       refetchAnalytics()
       refetchDashboard()
@@ -569,7 +560,7 @@ function DashboardPageInner() {
     '90d': 'Last 90 Days',
     '1y': 'This Year',
     custom: customRange
-      ? `${new Date(customRange.start).toLocaleDateString()} – ${new Date(customRange.end).toLocaleDateString()}`
+      ? `${new Date(customRange.start + 'T12:00:00').toLocaleDateString()} – ${new Date(customRange.end + 'T12:00:00').toLocaleDateString()}`
       : 'Custom',
   }
 
@@ -664,7 +655,7 @@ function DashboardPageInner() {
     ]
     const useCustom = analyticsPeriod === 'custom' && customRange?.start && customRange?.end
     // Build calendar-year start/end in UTC so "This Year" does not shift a day in UTC- timezones
-    const periodRangeStart = useCustom ? customRange!.start.slice(0, 10) : analyticsPeriod === '1y'
+    const periodRangeStart = useCustom ? customRange!.start : analyticsPeriod === '1y'
       ? (() => {
           const y = new Date().getUTCFullYear()
           return new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0)).toISOString().slice(0, 10)
@@ -675,7 +666,7 @@ function DashboardPageInner() {
           d.setDate(d.getDate() - (days - 1))
           return d.toISOString().slice(0, 10)
         })()
-    const periodRangeEnd = useCustom ? customRange!.end.slice(0, 10) : analyticsPeriod === '1y'
+    const periodRangeEnd = useCustom ? customRange!.end : analyticsPeriod === '1y'
       ? (() => {
           const n = new Date()
           return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), 0, 0, 0, 0)).toISOString().slice(0, 10)
@@ -782,10 +773,9 @@ function DashboardPageInner() {
         const params = new URLSearchParams()
         params.set('hazard', category)
         if (analyticsPeriod === 'custom' && customRange) {
-          const startStr = customRange.start.slice(0, 10)
-          const endStr = customRange.end.slice(0, 10)
-          params.set('created_after', `${startStr}T00:00:00.000Z`)
-          params.set('created_before', `${endStr}T23:59:59.999Z`)
+          const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
+          params.set('created_after', bounds.since)
+          params.set('created_before', bounds.until)
         } else {
           const timeRangeForJobs = analyticsPeriod === '1y' ? 'all' : analyticsPeriod
           params.set('time_range', timeRangeForJobs)
@@ -854,8 +844,9 @@ function DashboardPageInner() {
     let dateCutoff: Date | null = null
     let dateCutoffEnd: Date | null = null
     if (timeRange === 'custom' && customRange) {
-      dateCutoff = new Date(customRange.start)
-      dateCutoffEnd = new Date(customRange.end)
+      const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
+      dateCutoff = new Date(bounds.since)
+      dateCutoffEnd = new Date(bounds.until)
     } else if (timeRange === '7d') {
       dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     } else if (timeRange === '30d') {
@@ -909,8 +900,9 @@ function DashboardPageInner() {
         let dateCutoff: Date | null = null
         let dateCutoffEnd: Date | null = null
         if (timeRange === 'custom' && customRange) {
-          dateCutoff = new Date(customRange.start)
-          dateCutoffEnd = new Date(customRange.end)
+          const bounds = dateOnlyToApiBounds(customRange.start, customRange.end)
+          dateCutoff = new Date(bounds.since)
+          dateCutoffEnd = new Date(bounds.until)
         } else if (timeRange === '7d') {
           dateCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         } else if (timeRange === '30d') {
@@ -989,7 +981,7 @@ function DashboardPageInner() {
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       )}
                     >
-                      {range === 'all' ? 'This Year' : range === 'custom' ? (timeRange === 'custom' && customRange ? `${new Date(customRange.start).toLocaleDateString()} – ${new Date(customRange.end).toLocaleDateString()}` : 'Custom') : range.toUpperCase()}
+                      {range === 'all' ? 'This Year' : range === 'custom' ? (timeRange === 'custom' && customRange ? `${new Date(customRange.start + 'T12:00:00').toLocaleDateString()} – ${new Date(customRange.end + 'T12:00:00').toLocaleDateString()}` : 'Custom') : range.toUpperCase()}
                     </button>
                   ))}
                 </div>
