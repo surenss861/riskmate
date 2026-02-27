@@ -72,6 +72,10 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
   const basePath = "/operations";
   const jobsPath = `${basePath}/jobs`;
   const analyticsPath = basePath;
+  /** Reference date for drill-down links so list matches insight cohort (period end). */
+  const referenceDateIso = ref.toISOString();
+  const insightQuery = (insight: string) =>
+    `insight=${encodeURIComponent(insight)}&reference_date=${encodeURIComponent(referenceDateIso)}`;
 
   try {
     // When since/until are provided, use end of period as reference so overdue/due-soon/pending are computed for the selected window.
@@ -107,7 +111,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
         metric_label: "Jobs at risk",
         period_days: periodDays,
         created_at: new Date().toISOString(),
-        action_url: `${jobsPath}?due_soon=true`,
+        action_url: `${jobsPath}?${insightQuery("deadline_risk")}`,
         data: { job_ids: deadlineRiskJobIds.slice(0, 50), count: deadlineRiskCount },
       });
     }
@@ -173,7 +177,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
         metric_label: "Jobs",
         period_days: periodDays,
         created_at: new Date().toISOString(),
-        action_url: `${jobsPath}?pending_signatures=true`,
+        action_url: `${jobsPath}?${insightQuery("pending_signatures_near_deadline")}`,
         data: { job_ids: pendingSignaturesJobIds.slice(0, 50), count: pendingSignaturesCount },
       });
     }
@@ -234,7 +238,7 @@ export async function generateInsights(orgId: string, options?: GenerateInsights
         metric_label: "Overdue",
         period_days: periodDays,
         created_at: new Date().toISOString(),
-        action_url: `${jobsPath}?overdue=true`,
+        action_url: `${jobsPath}?${insightQuery("overdue")}`,
         data: { job_ids: overdueJobIds.slice(0, 50), count: overdueCount },
       });
     }

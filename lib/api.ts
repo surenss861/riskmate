@@ -376,6 +376,10 @@ export const jobsApi = {
     completed_after?: string;
     completed_before?: string;
     hazard?: string;
+    /** Insight drill-down: same cohort as insights (deadline_risk | pending_signatures_near_deadline | overdue) */
+    insight?: 'deadline_risk' | 'pending_signatures_near_deadline' | 'overdue';
+    /** Reference date for insight drill-down (ISO string); period end so list matches insight. */
+    reference_date?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
@@ -419,6 +423,8 @@ export const jobsApi = {
     if (params?.unassigned === true) queryParams.set('unassigned', 'true');
     if (params?.recent === true) queryParams.set('recent', 'true');
     if (params?.assigned_to) queryParams.set('assigned_to', params.assigned_to);
+    if (params?.insight) queryParams.set('insight', params.insight);
+    if (params?.reference_date) queryParams.set('reference_date', params.reference_date);
     if (params?.debug && process.env.NODE_ENV === 'development') {
       queryParams.set('debug', '1');
     }

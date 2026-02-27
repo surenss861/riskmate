@@ -148,6 +148,16 @@ export async function GET(request: NextRequest) {
       parseBooleanParam(searchParams.get('needs_signatures')) ??
       parseBooleanParam(searchParams.get('pending_signatures'))
     const dueSoon = parseBooleanParam(searchParams.get('due_soon'))
+    // Insight drill-down: same cohort as insights generation (deadline-risk, pending-signatures-near-deadline, overdue)
+    const insightParam = searchParams.get('insight')?.trim() ?? ''
+    const insightDeadlineRisk = insightParam === 'deadline_risk'
+    const insightPendingSignaturesNearDeadline = insightParam === 'pending_signatures_near_deadline'
+    const insightOverdue = insightParam === 'overdue'
+    const referenceDateParam = searchParams.get('reference_date')?.trim() ?? ''
+    const referenceDate =
+      referenceDateParam && !Number.isNaN(Date.parse(referenceDateParam))
+        ? new Date(referenceDateParam).toISOString()
+        : null
     const unassigned = parseBooleanParam(searchParams.get('unassigned'))
     const recent = parseBooleanParam(searchParams.get('recent'))
     const timeRangeParam = searchParams.get('time_range')?.trim() ?? ''
@@ -350,6 +360,10 @@ export async function GET(request: NextRequest) {
       p_template_source: template_source,
       p_template_id: template_id,
       p_due_soon: dueSoon === true ? true : null,
+      p_reference_date: referenceDate,
+      p_insight_deadline_risk: insightDeadlineRisk ? true : null,
+      p_insight_pending_signatures_near_deadline: insightPendingSignaturesNearDeadline ? true : null,
+      p_insight_overdue: insightOverdue ? true : null,
     }
 
     let jobs: JobsListJob[] = []

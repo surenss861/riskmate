@@ -1,5 +1,7 @@
 -- Add p_due_soon to get_jobs_list and get_jobs_ranked for insight links (/operations/jobs?due_soon=true).
 -- When true: jobs with end_date in the next 7 days that are not yet completed.
+-- Insight-specific drill-down: p_insight_deadline_risk, p_insight_pending_signatures_near_deadline,
+-- p_insight_overdue use due_date and p_reference_date so list matches insight cohort (period-scoped).
 
 DROP FUNCTION IF EXISTS get_jobs_list(uuid, integer, integer, boolean, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer, boolean, boolean, boolean, text, uuid);
 
@@ -27,7 +29,11 @@ CREATE OR REPLACE FUNCTION get_jobs_list(
   p_needs_signatures BOOLEAN DEFAULT NULL,
   p_template_source TEXT DEFAULT NULL,
   p_template_id UUID DEFAULT NULL,
-  p_due_soon BOOLEAN DEFAULT NULL
+  p_due_soon BOOLEAN DEFAULT NULL,
+  p_reference_date TIMESTAMPTZ DEFAULT NULL,
+  p_insight_deadline_risk BOOLEAN DEFAULT NULL,
+  p_insight_pending_signatures_near_deadline BOOLEAN DEFAULT NULL,
+  p_insight_overdue BOOLEAN DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -45,6 +51,17 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 AS $$
+  WITH ref AS (
+    SELECT COALESCE(p_reference_date, CURRENT_TIMESTAMP) AS t
+  ),
+  mit_agg AS (
+    SELECT mi.job_id,
+      COUNT(*)::BIGINT AS total,
+      COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+    FROM mitigation_items mi
+    WHERE mi.organization_id = p_org_id
+    GROUP BY mi.job_id
+  )
   SELECT
     j.id,
     j.title,
@@ -58,6 +75,8 @@ AS $$
     j.updated_at,
     count(*) OVER () AS total_count
   FROM jobs j
+  CROSS JOIN ref
+  LEFT JOIN mit_agg m ON m.job_id = j.id
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND (p_include_archived OR j.archived_at IS NULL)
@@ -93,6 +112,25 @@ AS $$
       AND j.end_date::date <= (CURRENT_DATE + INTERVAL '7 days')
       AND LOWER(COALESCE(j.status, '')) <> 'completed'
     ))
+    AND (p_insight_deadline_risk IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date > ref.t
+      AND j.due_date <= (ref.t + INTERVAL '2 days')
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+      AND (COALESCE(m.total, 0) = 0 OR (m.completed::NUMERIC / NULLIF(m.total, 0)) < 0.5)
+    ))
+    AND (p_insight_pending_signatures_near_deadline IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date > ref.t
+      AND j.due_date <= (ref.t + INTERVAL '7 days')
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+      AND NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
+    ))
+    AND (p_insight_overdue IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date < ref.t
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+    ))
   ORDER BY
     (CASE WHEN p_sort_column = 'created_at' AND (p_sort_order IS NULL OR LOWER(p_sort_order) = 'asc')  THEN j.created_at END) ASC NULLS LAST,
     (CASE WHEN p_sort_column = 'created_at' AND LOWER(p_sort_order) = 'desc' THEN j.created_at END) DESC NULLS LAST,
@@ -109,7 +147,7 @@ AS $$
   OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;
 
--- get_jobs_ranked: add p_due_soon
+-- get_jobs_ranked: add p_due_soon and insight drill-down params
 DROP FUNCTION IF EXISTS get_jobs_ranked(uuid, text, integer, integer, boolean, text, text, text, text, uuid, real, real, text, text, uuid[], uuid[], boolean, boolean, integer, boolean, boolean, boolean, text, uuid);
 
 CREATE OR REPLACE FUNCTION get_jobs_ranked(
@@ -137,7 +175,11 @@ CREATE OR REPLACE FUNCTION get_jobs_ranked(
   p_needs_signatures BOOLEAN DEFAULT NULL,
   p_template_source TEXT DEFAULT NULL,
   p_template_id UUID DEFAULT NULL,
-  p_due_soon BOOLEAN DEFAULT NULL
+  p_due_soon BOOLEAN DEFAULT NULL,
+  p_reference_date TIMESTAMPTZ DEFAULT NULL,
+  p_insight_deadline_risk BOOLEAN DEFAULT NULL,
+  p_insight_pending_signatures_near_deadline BOOLEAN DEFAULT NULL,
+  p_insight_overdue BOOLEAN DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -159,6 +201,17 @@ STABLE
 AS $$
   WITH q AS (
     SELECT to_tsquery('english', p_query) AS tsq
+  ),
+  ref AS (
+    SELECT COALESCE(p_reference_date, CURRENT_TIMESTAMP) AS t
+  ),
+  mit_agg AS (
+    SELECT mi.job_id,
+      COUNT(*)::BIGINT AS total,
+      COUNT(*) FILTER (WHERE mi.completed_at IS NOT NULL)::BIGINT AS completed
+    FROM mitigation_items mi
+    WHERE mi.organization_id = p_org_id
+    GROUP BY mi.job_id
   )
   SELECT
     j.id,
@@ -184,6 +237,8 @@ AS $$
     ) AS highlight
   FROM jobs j
   CROSS JOIN q
+  CROSS JOIN ref
+  LEFT JOIN mit_agg m ON m.job_id = j.id
   WHERE j.organization_id = p_org_id
     AND j.deleted_at IS NULL
     AND j.search_vector @@ q.tsq
@@ -218,6 +273,25 @@ AS $$
       j.end_date IS NOT NULL
       AND j.end_date::date >= CURRENT_DATE
       AND j.end_date::date <= (CURRENT_DATE + INTERVAL '7 days')
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+    ))
+    AND (p_insight_deadline_risk IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date > ref.t
+      AND j.due_date <= (ref.t + INTERVAL '2 days')
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+      AND (COALESCE(m.total, 0) = 0 OR (m.completed::NUMERIC / NULLIF(m.total, 0)) < 0.5)
+    ))
+    AND (p_insight_pending_signatures_near_deadline IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date > ref.t
+      AND j.due_date <= (ref.t + INTERVAL '7 days')
+      AND LOWER(COALESCE(j.status, '')) <> 'completed'
+      AND NOT EXISTS (SELECT 1 FROM signatures s WHERE s.job_id = j.id AND s.organization_id = p_org_id)
+    ))
+    AND (p_insight_overdue IS NOT TRUE OR (
+      j.due_date IS NOT NULL
+      AND j.due_date < ref.t
       AND LOWER(COALESCE(j.status, '')) <> 'completed'
     ))
   ORDER BY
