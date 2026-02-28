@@ -1,6 +1,6 @@
 /**
  * Webhook delivery: enqueue deliveries for events, send with HMAC signature, retry with backoff.
- * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin after 5 consecutive failures.
+ * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin when a single delivery exhausts its retry attempts (with cooldown).
  * Secrets are read from webhook_endpoint_secrets (service-role only). Rotate SUPABASE_SERVICE_ROLE_KEY
  * regularly and restrict/audit service-role access.
  */
@@ -22,7 +22,6 @@ const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
 ]
 
 const MAX_ATTEMPTS = 5
-const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 /** Debounce delay for wake-up: coalesce rapid enqueues into one immediate run. */
 const WAKE_DEBOUNCE_MS = 100
@@ -498,27 +497,16 @@ async function updateDeliveryFailure(
     .update(updatePayload)
     .eq('id', deliveryId)
 
-  // Atomic increment on terminal failure only when it counts as a real delivery failure (not infrastructure transient).
-  // Alert only when returned count reaches threshold.
+  // On terminal failure (e.g. retry exhaustion after attempt 5), alert admin once per cooldown so one exhausted delivery produces the expected alert.
   if (terminal && countAsConsecutiveFailure) {
-    const { data: newCount, error: rpcError } = await supabase.rpc(
-      'increment_webhook_endpoint_consecutive_failures',
-      { p_endpoint_id: endpointId }
-    )
-    if (rpcError) {
-      console.error('[WebhookDelivery] Atomic increment consecutive_failures failed:', rpcError)
-      return
-    }
-    const count = typeof newCount === 'number' ? newCount : 0
-    if (count >= CONSECUTIVE_FAILURES_BEFORE_ALERT) {
-      await maybeAlertAdmin(endpointId)
-    }
+    await supabase.rpc('increment_webhook_endpoint_consecutive_failures', { p_endpoint_id: endpointId })
+    await maybeAlertAdmin(endpointId)
   }
 }
 
 /**
- * Alert org admins only after 5 consecutive terminal failures for this endpoint.
- * Cooldown prevents spamming. Resets consecutive_failures after sending so next 5 trigger again.
+ * Alert org admins when a delivery has exhausted retries for this endpoint.
+ * Cooldown prevents spamming; only one alert per endpoint per WEBHOOK_ALERT_COOLDOWN_MS.
  */
 async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const { data: endpoint, error: epError } = await supabase
@@ -531,16 +519,11 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
   const { data: alertState } = await supabase
     .from('webhook_endpoint_alert_state')
-    .select('last_alert_at, consecutive_failures')
+    .select('last_alert_at')
     .eq('endpoint_id', endpointId)
     .maybeSingle()
 
-  const consecutiveFailures = alertState?.consecutive_failures ?? 0
-  if (consecutiveFailures < CONSECUTIVE_FAILURES_BEFORE_ALERT) {
-    return
-  }
-
-  // Cooldown applies only when a real alert was sent (last_alert_at set after sendEmail succeeded).
+  // Cooldown: skip if we sent an alert recently for this endpoint.
   if (alertState?.last_alert_at != null) {
     const lastAlertAt = new Date(alertState.last_alert_at).getTime()
     if (Date.now() - lastAlertAt < WEBHOOK_ALERT_COOLDOWN_MS) {
@@ -581,9 +564,9 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const toList = Array.from(recipientEmails)
   if (toList.length === 0) return
 
-  const subject = 'Riskmate: Webhook delivery failures'
+  const subject = 'Riskmate: Webhook delivery failed after retries'
   const html = `
-    <p>Your webhook endpoint has had ${CONSECUTIVE_FAILURES_BEFORE_ALERT} consecutive delivery failures.</p>
+    <p>A webhook delivery has failed after exhausting all ${MAX_ATTEMPTS} retry attempts.</p>
     <p><strong>Endpoint URL:</strong> ${escapeHtml(endpoint.url || '(not set)')}</p>
     <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
   `

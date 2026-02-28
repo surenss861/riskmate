@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const adminOrgIds = roleResults
       .filter((r) => r.role === 'owner' || r.role === 'admin')
       .map((r) => r.orgId)
+      .sort()
     if (adminOrgIds.length === 0) {
       const { response, errorId } = createErrorResponse(
         'Forbidden: Only owners and admins can manage webhooks',
@@ -68,10 +69,24 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Fetch org names for multi-org selector (deterministic ordering is already applied to adminOrgIds).
+    const organization_options: { id: string; name: string }[] = []
+    if (adminOrgIds.length > 0) {
+      const { data: orgRows } = await admin
+        .from('organizations')
+        .select('id, name')
+        .in('id', adminOrgIds)
+      const byId = new Map((orgRows ?? []).map((r: { id: string; name: string | null }) => [r.id, r.name ?? r.id]))
+      for (const id of adminOrgIds) {
+        organization_options.push({ id, name: byId.get(id) ?? id })
+      }
+    }
+
     return NextResponse.json({
       data: endpoints ?? [],
       organization_ids: adminOrgIds,
       default_organization_id: adminOrgIds[0] ?? null,
+      organization_options,
     })
   } catch (err: unknown) {
     if (err instanceof ForbiddenError) {

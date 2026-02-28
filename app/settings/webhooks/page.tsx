@@ -25,6 +25,7 @@ export default function WebhooksPage() {
   const [loading, setLoading] = useState(true)
   const [canManage, setCanManage] = useState(true)
   const [defaultOrganizationId, setDefaultOrganizationId] = useState<string | null>(null)
+  const [organizationOptions, setOrganizationOptions] = useState<{ id: string; name: string }[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [logsEndpoint, setLogsEndpoint] = useState<{ id: string; url: string } | null>(null)
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null)
@@ -43,6 +44,7 @@ export default function WebhooksPage() {
       setCanManage(true)
       setEndpoints(Array.isArray(json.data) ? json.data : [])
       setDefaultOrganizationId(json.default_organization_id ?? null)
+      setOrganizationOptions(Array.isArray(json.organization_options) ? json.organization_options : [])
     } catch {
       setEndpoints([])
     } finally {
@@ -297,6 +299,7 @@ export default function WebhooksPage() {
         onClose={() => setAddOpen(false)}
         onCreated={handleCreated}
         organizationId={defaultOrganizationId}
+        organizationOptions={organizationOptions}
       />
       {logsEndpoint && (
         <DeliveryLogsModal

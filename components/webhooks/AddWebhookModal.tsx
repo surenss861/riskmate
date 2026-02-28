@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Button,
   Input,
@@ -29,11 +29,16 @@ interface AddWebhookModalProps {
   open: boolean
   onClose: () => void
   onCreated: (endpoint: WebhookEndpoint & { secret?: string }) => void
-  /** Target organization for the new endpoint; required so multi-org admins create in the intended tenant. */
+  /** Default organization (fallback when single org or no selection). */
   organizationId?: string | null
+  /** Options for organization selector when user is admin in multiple orgs; when length > 1, user must choose. */
+  organizationOptions?: { id: string; name: string }[]
 }
 
-export function AddWebhookModal({ open, onClose, onCreated, organizationId }: AddWebhookModalProps) {
+export function AddWebhookModal({ open, onClose, onCreated, organizationId, organizationOptions = [] }: AddWebhookModalProps) {
+  const multiOrg = organizationOptions.length > 1
+  const defaultOrgId = organizationId ?? organizationOptions[0]?.id ?? null
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(defaultOrgId)
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set())
@@ -41,6 +46,19 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
   const [error, setError] = useState<string | null>(null)
   const [createdSecret, setCreatedSecret] = useState<string | null>(null)
   const [createdEndpoint, setCreatedEndpoint] = useState<WebhookEndpoint | null>(null)
+
+  const effectiveOrganizationId = multiOrg ? selectedOrganizationId : defaultOrgId
+
+  useEffect(() => {
+    if (!open) return
+    const validIds = new Set(organizationOptions.map((o) => o.id))
+    if (multiOrg && selectedOrganizationId && !validIds.has(selectedOrganizationId)) {
+      setSelectedOrganizationId(defaultOrgId)
+    }
+    if (multiOrg && !selectedOrganizationId && defaultOrgId) {
+      setSelectedOrganizationId(defaultOrgId)
+    }
+  }, [open, multiOrg, organizationOptions, defaultOrgId, selectedOrganizationId])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {
@@ -68,6 +86,10 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
       setError('Select at least one event type')
       return
     }
+    if (multiOrg && !effectiveOrganizationId) {
+      setError('Please select an organization')
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch('/api/webhooks', {
@@ -78,7 +100,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
           url: url.trim(),
           description: description.trim() || null,
           events: Array.from(selectedEvents),
-          ...(organizationId ? { organization_id: organizationId } : {}),
+          ...(effectiveOrganizationId ? { organization_id: effectiveOrganizationId } : {}),
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -109,6 +131,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
   }
 
   const resetForm = () => {
+    setSelectedOrganizationId(defaultOrgId)
     setUrl('')
     setDescription('')
     setSelectedEvents(new Set())
@@ -161,6 +184,25 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
+            {multiOrg && (
+              <div>
+                <label className="block text-sm font-medium text-white/90 mb-1">Organization</label>
+                <select
+                  value={selectedOrganizationId ?? ''}
+                  onChange={(e) => setSelectedOrganizationId(e.target.value || null)}
+                  className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                  required
+                >
+                  <option value="">Select organization</option>
+                  {organizationOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-white/50 mt-1">Create this webhook in the selected organization.</p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-white/90 mb-1">Endpoint URL</label>
               <Input

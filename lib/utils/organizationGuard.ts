@@ -109,9 +109,10 @@ export async function getWebhookOrganizationContext(request?: Request): Promise<
     if (row.organization_id) orgIds.add(row.organization_id)
   }
 
+  // Deterministic ordering for fallback only; callers must use explicit org selection when multiple orgs exist.
   return {
     ...base,
-    organization_ids: Array.from(orgIds),
+    organization_ids: Array.from(orgIds).sort(),
   }
 }
 
