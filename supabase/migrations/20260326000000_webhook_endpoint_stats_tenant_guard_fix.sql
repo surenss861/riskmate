@@ -1,6 +1,5 @@
--- Allow get_webhook_endpoint_stats to be called with service_role (admin client) for Bearer-token auth.
--- In-function tenant guard: only return data when caller is service_role or p_org_id is in webhook_admin_org_ids() (owner/admin).
--- authenticated cannot execute; only service_role can (API uses admin client).
+-- Follow-up: restore in-function tenant guard and revoke authenticated for get_webhook_endpoint_stats.
+-- Apply in already-deployed environments that ran 20260325000000 without the tenant guard (cross-org data read fix).
 
 DROP FUNCTION IF EXISTS get_webhook_endpoint_stats(uuid);
 
