@@ -4,6 +4,7 @@ import { parseBulkJobIds, getBulkAuth, getBulkClientMetadata, buildBulkResults, 
 import { hasPermission } from '@/lib/utils/permissions'
 import { recordAuditLog } from '@/lib/audit/auditLogger'
 import { emitJobEvent } from '@/lib/realtime/emitJobEvent'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -138,6 +139,20 @@ export async function POST(request: NextRequest) {
     emitJobEvent(organization_id, 'job.updated', jobId, user_id),
   ])
   await Promise.allSettled(sideEffectPromises)
+
+  const completedAt = status === 'completed' ? new Date().toISOString() : undefined
+  for (const jobId of succeeded) {
+    const previousStatus = found.get(jobId)?.status
+    const payload = { id: jobId, status, ...(completedAt != null ? { completed_at: completedAt } : {}) }
+    triggerWebhookEvent(organization_id, 'job.updated', payload).catch((e) =>
+      console.warn('[Webhook] bulk job.updated trigger failed:', e)
+    )
+    if (status === 'completed' && previousStatus !== 'completed') {
+      triggerWebhookEvent(organization_id, 'job.completed', payload).catch((e) =>
+        console.warn('[Webhook] bulk job.completed trigger failed:', e)
+      )
+    }
+  }
 
   for (const id of eligibleIds) {
     if (!succeeded.includes(id)) {

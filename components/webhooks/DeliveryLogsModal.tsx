@@ -60,6 +60,8 @@ export interface DeliveryLogEntry {
   processing_since: string | null
   created_at: string
   attempts?: DeliveryAttemptEntry[]
+  /** Server-computed: true only when delivery is terminally failed and retry is allowed (excludes cancelled). */
+  can_retry?: boolean
 }
 
 interface DeliveryLogsModalProps {
@@ -107,13 +109,11 @@ export function DeliveryLogsModal({
     return d.toLocaleString()
   }
 
-  const retryEligible = deliveries.filter(
-    (d) =>
-      !retriedDeliveryIds.has(d.id) &&
-      !d.delivered_at &&
-      !d.next_retry_at &&
-      (d.attempt_count ?? 0) >= 1
-  )
+  const retryEligible = deliveries.filter((d) => {
+    if (retriedDeliveryIds.has(d.id)) return false
+    if (d.can_retry !== undefined) return d.can_retry === true
+    return !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
+  })
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
     if (d.delivered_at) return 'success'

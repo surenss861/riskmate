@@ -1229,6 +1229,20 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       });
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
+    const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
+    for (const jobId of succeeded) {
+      const previousStatus = found.get(jobId)?.status;
+      const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
+      if (completedAt != null) payload.completed_at = completedAt;
+      deliverEvent(organization_id, "job.updated", payload).catch((e) =>
+        console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
+      );
+      if (dbStatus === "completed" && previousStatus !== "completed") {
+        deliverEvent(organization_id, "job.completed", payload).catch((e) =>
+          console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
+        );
+      }
+    }
     const total = succeeded.length + failed.length;
     res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
   } catch (err: any) {
