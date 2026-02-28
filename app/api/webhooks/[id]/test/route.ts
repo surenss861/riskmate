@@ -5,6 +5,7 @@ import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
 
 export const runtime = 'nodejs'
 
@@ -202,13 +203,15 @@ export async function POST(
           : 'job.created'
     }
 
+    const rawObject = buildTestObjectForEventType(eventType)
+    const normalizedObject = buildWebhookEventObject(eventType, rawObject)
     const payload = {
       id: `evt_test_${Date.now()}`,
       type: eventType,
       created: new Date().toISOString(),
       organization_id: (endpoint as { organization_id: string }).organization_id,
       data: {
-        object: buildTestObjectForEventType(eventType),
+        object: normalizedObject,
       },
     }
 

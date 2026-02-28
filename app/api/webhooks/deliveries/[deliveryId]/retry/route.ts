@@ -6,7 +6,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 
 export const runtime = 'nodejs'
 
-/** POST - Reschedule a terminally failed delivery for retry. Sets next_retry_at = now and resets attempt_count to 1 so the worker (which selects attempt_count <= MAX_ATTEMPTS) can process it again. */
+/** POST - Retry a terminally failed delivery by creating a new webhook_deliveries row (same endpoint/event/payload) and enqueueing it. The original delivery row is left immutable so delivery logs show all historical attempts. */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ deliveryId: string }> }
@@ -17,10 +17,10 @@ export async function POST(
     const { deliveryId } = await params
     const supabase = await createSupabaseServerClient()
 
-    // Authorization-gated read: fetch delivery with endpoint ownership; return NOT_FOUND for unauthorized or missing
+    // Authorization-gated read: fetch delivery with endpoint ownership and payload for clone; return NOT_FOUND for unauthorized or missing
     const { data: deliveryRow, error: delError } = await supabase
       .from('webhook_deliveries')
-      .select('id, endpoint_id, delivered_at, next_retry_at, webhook_endpoints(organization_id)')
+      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, webhook_endpoints(organization_id)')
       .eq('id', deliveryId)
       .single()
 
@@ -66,22 +66,21 @@ export async function POST(
     }
 
     const now = new Date().toISOString()
-    const { data: updated, error: updateError } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from('webhook_deliveries')
-      .update({
-        next_retry_at: now,
-        processing_since: null,
+      .insert({
+        endpoint_id: delivery.endpoint_id,
+        event_type: delivery.event_type,
+        payload: delivery.payload,
         attempt_count: 1,
+        next_retry_at: now,
       })
-      .eq('id', deliveryId)
-      .is('delivered_at', null)
-      .is('next_retry_at', null)
       .select('id')
-      .maybeSingle()
+      .single()
 
-    if (updateError) {
+    if (insertError) {
       const { response, errorId } = createErrorResponse(
-        updateError.message,
+        insertError.message,
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
@@ -90,20 +89,20 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (!updated) {
+    if (!inserted?.id) {
       const { response, errorId } = createErrorResponse(
-        'Delivery is no longer in a terminal state; it may have been rescheduled or delivered',
-        'ALREADY_SCHEDULED',
-        { requestId, statusCode: 409 }
+        'Failed to create retry delivery',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
       )
       return NextResponse.json(response, {
-        status: 409,
+        status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 
     return NextResponse.json(
-      { data: { message: 'Retry scheduled', delivery_id: deliveryId } },
+      { data: { message: 'Retry scheduled', delivery_id: inserted.id } },
       { status: 200 }
     )
   } catch (err: unknown) {
