@@ -11,6 +11,7 @@ const mockUpsert = jest.fn()
 const mockSelect = jest.fn()
 const mockSingle = jest.fn()
 const mockMaybeSingle = jest.fn()
+const mockRpc = jest.fn().mockResolvedValue({ data: 0, error: null })
 
 function chain(handlers: Record<string, unknown>) {
   const chainable = {
@@ -34,7 +35,7 @@ let deliveryUpdatePayload: unknown
 
 jest.mock('../../lib/supabaseClient', () => ({
   supabase: {
-    rpc: () => Promise.resolve({ data: 0, error: null }),
+    rpc: (...args: unknown[]) => mockRpc(...args),
     from: (table: string) => {
       mockFrom(table)
       if (table === 'webhook_endpoints') {
@@ -190,5 +191,24 @@ describe('webhookDelivery – malformed URL is terminal (no retries)', () => {
     const payload = deliveryUpdatePayload as Record<string, unknown>
     expect(payload.terminal_outcome).toBe('cancelled_policy')
     expect(payload.next_retry_at).toBeNull()
+  })
+
+  it('cancelled_policy does not increment consecutive_failures or trigger admin alert', async () => {
+    mockRpc.mockClear()
+    mockValidateWebhookUrl.mockResolvedValue({
+      valid: false,
+      reason: 'Blocked by policy',
+      terminal: true,
+    })
+
+    await sendDelivery(deliveryRow)
+
+    expect(deliveryUpdatePayload).toBeDefined()
+    const payload = deliveryUpdatePayload as Record<string, unknown>
+    expect(payload.terminal_outcome).toBe('cancelled_policy')
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      'increment_webhook_endpoint_consecutive_failures',
+      expect.any(Object)
+    )
   })
 })

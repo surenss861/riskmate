@@ -66,6 +66,39 @@ describe('GET /api/webhooks/stats', () => {
     expect(body.data[ENDPOINT_ID].lastDelivery).toBe('2025-01-15T12:00:00Z')
   })
 
+  it('calls admin client RPC get_webhook_endpoint_stats and returns real rows for org with deliveries', async () => {
+    const rpcRows = [
+      {
+        endpoint_id: ENDPOINT_ID,
+        delivered: 10,
+        pending: 1,
+        failed: 0,
+        last_delivery: '2025-02-01T08:00:00Z',
+        last_success_at: '2025-02-01T08:00:00Z',
+        last_terminal_failure_at: null,
+        last_failure_at: null,
+      },
+    ]
+    supabaseAdminMock.rpc.mockResolvedValueOnce({ data: rpcRows, error: null })
+
+    const { GET } = await import('@/app/api/webhooks/stats/route')
+    const request = new NextRequest('http://localhost/api/webhooks/stats', { method: 'GET' })
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(supabaseAdminMock.rpc).toHaveBeenCalledWith('get_webhook_endpoint_stats', { p_org_id: ORG_ID })
+    expect(response.status).toBe(200)
+    expect(body.data[ENDPOINT_ID]).toEqual({
+      delivered: 10,
+      pending: 1,
+      failed: 0,
+      lastDelivery: '2025-02-01T08:00:00Z',
+      lastSuccessAt: '2025-02-01T08:00:00Z',
+      lastTerminalFailureAt: null,
+      lastFailureAt: null,
+    })
+  })
+
   it('aggregates stats from multiple orgs when user is admin in more than one', async () => {
     const org2 = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee'
     const endpoint2 = 'ffffffff-ffff-4000-8111-222233334444'

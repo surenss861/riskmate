@@ -420,6 +420,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       delivery.attempt_count,
       forceTerminal,
       forceTerminal ? 'cancelled_policy' : 'failed',
+      forceTerminal ? false : true, // do not count policy-cancelled toward consecutive_failures or admin alerts
     )
     return
   }
