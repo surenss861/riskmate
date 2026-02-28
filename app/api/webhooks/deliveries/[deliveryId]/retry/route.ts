@@ -17,13 +17,18 @@ export async function POST(
     const { deliveryId } = await params
     const supabase = await createSupabaseServerClient()
 
-    const { data: delivery, error: delError } = await supabase
+    // Authorization-gated read: fetch delivery with endpoint ownership; return NOT_FOUND for unauthorized or missing
+    const { data: deliveryRow, error: delError } = await supabase
       .from('webhook_deliveries')
-      .select('id, endpoint_id, delivered_at, next_retry_at')
+      .select('id, endpoint_id, delivered_at, next_retry_at, webhook_endpoints(organization_id)')
       .eq('id', deliveryId)
       .single()
 
-    if (delError || !delivery) {
+    type DeliveryWithEndpoint = typeof deliveryRow & { webhook_endpoints?: { organization_id: string } | null }
+    const delivery = deliveryRow as DeliveryWithEndpoint | null
+    const endpointOrgId = delivery?.webhook_endpoints?.organization_id ?? null
+
+    if (delError || !delivery || endpointOrgId !== organization_id) {
       const { response, errorId } = createErrorResponse(
         'Delivery not found',
         'NOT_FOUND',
@@ -35,6 +40,7 @@ export async function POST(
       })
     }
 
+    // Only after authorization: evaluate retry state for this authorized record
     if (delivery.delivered_at != null) {
       const { response, errorId } = createErrorResponse(
         'Delivery already succeeded; retry not allowed for successful deliveries',
@@ -55,24 +61,6 @@ export async function POST(
       )
       return NextResponse.json(response, {
         status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const { data: endpoint, error: epError } = await supabase
-      .from('webhook_endpoints')
-      .select('id, organization_id')
-      .eq('id', delivery.endpoint_id)
-      .single()
-
-    if (epError || !endpoint || endpoint.organization_id !== organization_id) {
-      const { response, errorId } = createErrorResponse(
-        'Delivery not found',
-        'NOT_FOUND',
-        { requestId, statusCode: 404 }
-      )
-      return NextResponse.json(response, {
-        status: 404,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }

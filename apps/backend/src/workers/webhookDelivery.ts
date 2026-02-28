@@ -149,11 +149,12 @@ async function recordAttempt(
 
 /**
  * Send one delivery: POST to endpoint URL with signed payload, update row, record attempt.
+ * If the endpoint is inactive (paused), does not send; terminalizes the delivery with a clear message.
  */
 export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> {
   const { data: endpoint, error: epError } = await supabase
     .from('webhook_endpoints')
-    .select('url, secret')
+    .select('url, secret, is_active')
     .eq('id', delivery.endpoint_id)
     .single()
 
@@ -167,6 +168,23 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       .update({
         response_status: null,
         response_body: 'Endpoint not found (missing or deleted)',
+        duration_ms: 0,
+        next_retry_at: null,
+        processing_since: null,
+      })
+      .eq('id', delivery.id)
+    return
+  }
+
+  if (endpoint.is_active === false) {
+    const msg = 'Endpoint is paused; delivery cancelled'
+    console.log('[WebhookDelivery] Endpoint paused, cancelling delivery:', delivery.id, delivery.endpoint_id)
+    await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0)
+    await supabase
+      .from('webhook_deliveries')
+      .update({
+        response_status: null,
+        response_body: msg,
         duration_ms: 0,
         next_retry_at: null,
         processing_since: null,

@@ -148,8 +148,10 @@ export async function PATCH(
     if (insurance_status !== undefined) updateData.insurance_status = insurance_status
     if (status !== undefined) updateData.status = status
 
-    // Update job if there are fields to update
-    if (Object.keys(updateData).length > 0) {
+    const hadMutableFields = Object.keys(updateData).length > 0
+
+    // Update job only if there are fields to update
+    if (hadMutableFields) {
       const { error: updateError } = await supabase
         .from('jobs')
         .update(updateData)
@@ -190,16 +192,18 @@ export async function PATCH(
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
 
-    // Webhooks: job.updated and job.completed (await so serverless teardown does not drop events)
-    await triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
-      console.warn('[Webhook] job.updated trigger failed:', e)
-    )
-    const transitionedToCompleted =
-      updatedJob?.status === 'completed' && previousStatus !== 'completed'
-    if (transitionedToCompleted) {
-      await triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
-        console.warn('[Webhook] job.completed trigger failed:', e)
+    // Webhooks: only emit job.updated / job.completed when an effective update occurred
+    if (hadMutableFields) {
+      await triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
+        console.warn('[Webhook] job.updated trigger failed:', e)
       )
+      const transitionedToCompleted =
+        updatedJob?.status === 'completed' && previousStatus !== 'completed'
+      if (transitionedToCompleted) {
+        await triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
+          console.warn('[Webhook] job.completed trigger failed:', e)
+        )
+      }
     }
 
     return NextResponse.json({
