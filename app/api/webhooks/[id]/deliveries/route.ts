@@ -121,16 +121,23 @@ export async function GET(
       }
     }
 
-    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; [k: string]: unknown }) => ({
-      ...d,
-      attempts: attemptsByDelivery[d.id] ?? [],
-      can_retry:
-        d.delivered_at == null &&
-        d.next_retry_at == null &&
-        d.terminal_outcome != null &&
-        d.terminal_outcome !== 'cancelled_paused' &&
-        d.terminal_outcome !== 'cancelled_policy',
-    }))
+    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; [k: string]: unknown }) => {
+      const undelivered = d.delivered_at == null
+      const unscheduled = d.next_retry_at == null
+      const explicitlyCancelled =
+        d.terminal_outcome === 'cancelled_paused' || d.terminal_outcome === 'cancelled_policy'
+      const can_retry =
+        undelivered &&
+        unscheduled &&
+        (d.terminal_outcome == null
+          ? true
+          : !explicitlyCancelled)
+      return {
+        ...d,
+        attempts: attemptsByDelivery[d.id] ?? [],
+        can_retry,
+      }
+    })
 
     return NextResponse.json({ data })
   } catch (err: unknown) {

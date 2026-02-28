@@ -6,6 +6,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { UnauthorizedError } from '@/lib/utils/adminAuth'
 
 export interface OrganizationContext {
   organization_id: string
@@ -43,7 +44,7 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
   }
 
   if (authError || !user) {
-    throw new Error('Unauthorized: User not authenticated')
+    throw new UnauthorizedError('Unauthorized: User not authenticated')
   }
 
   // Use service role client for database queries (bypasses RLS)
