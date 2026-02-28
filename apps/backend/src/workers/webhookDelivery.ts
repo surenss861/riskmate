@@ -22,6 +22,8 @@ const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000 // 10 min
+/** Max number of sendDelivery() calls in flight at once; avoids one slow endpoint blocking the queue. */
+const DELIVERY_CONCURRENCY = Math.max(1, Math.min(10, parseInt(process.env.WEBHOOK_DELIVERY_CONCURRENCY || '5', 10)))
 
 export type WebhookEventType =
   | 'job.created'
@@ -175,7 +177,13 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
 
   const urlCheck = await validateWebhookUrl(endpoint.url)
   if (!urlCheck.valid) {
-    console.error('[WebhookDelivery] Blocked unsafe URL:', delivery.endpoint_id, urlCheck.reason)
+    const forceTerminal = urlCheck.terminal // only true for explicit policy (SSRF/blocked); DNS/transient → retry
+    console.error(
+      '[WebhookDelivery]',
+      forceTerminal ? 'Blocked unsafe URL' : 'URL validation failed (transient)',
+      delivery.endpoint_id,
+      urlCheck.reason
+    )
     await recordAttempt(delivery.id, delivery.attempt_count, null, `Blocked: ${urlCheck.reason}`, 0)
     await updateDeliveryFailure(
       delivery.id,
@@ -184,7 +192,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       `Blocked: ${urlCheck.reason}`,
       0,
       delivery.attempt_count,
-      true, // terminal: URL will not become valid on retry
+      forceTerminal,
     )
     return
   }
@@ -399,10 +407,31 @@ async function recoverStaleClaims(): Promise<void> {
 }
 
 /**
+ * Run async tasks with bounded concurrency. Used so one slow endpoint does not block others.
+ */
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let index = 0
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const i = index++
+      if (i >= items.length) return
+      await fn(items[i])
+    }
+  }
+  const workers = Math.min(concurrency, items.length)
+  if (workers <= 0) return
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+}
+
+/**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
  * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
- * Only processes rows that are successfully claimed (processing_since was null) to avoid duplicate sends and retry races.
- * Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
+ * Claims rows first (one-by-one to preserve claim semantics), then dispatches sendDelivery() with bounded concurrency so one slow
+ * endpoint does not block others. Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
  */
 let processPendingDeliveriesRunning = false
 
@@ -428,11 +457,12 @@ async function processPendingDeliveries(): Promise<void> {
       return
     }
 
+    const claimed: WebhookDeliveryRow[] = []
     for (const row of pending || []) {
-      const claimed = await claimDelivery(row.id)
-      if (!claimed) continue
-      await sendDelivery(claimed)
+      const c = await claimDelivery(row.id)
+      if (c) claimed.push(c)
     }
+    await runWithConcurrency(claimed, DELIVERY_CONCURRENCY, sendDelivery)
   } finally {
     processPendingDeliveriesRunning = false
   }

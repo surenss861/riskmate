@@ -11,7 +11,8 @@ import { isIP } from 'node:net'
 
 export type WebhookUrlResult =
   | { valid: true }
-  | { valid: false; reason: string }
+  | { valid: false; reason: string; terminal: true }   // explicit policy (SSRF/blocked destination) — do not retry
+  | { valid: false; reason: string; terminal: false } // transient (DNS/lookup/runtime) — allow retries
 
 /**
  * Returns whether the URL is allowed for webhook delivery.
@@ -22,36 +23,39 @@ export async function validateWebhookUrl(urlString: string): Promise<WebhookUrlR
   try {
     const u = new URL(urlString)
     if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-      return { valid: false, reason: 'Only HTTP and HTTPS URLs are allowed' }
+      return { valid: false, reason: 'Only HTTP and HTTPS URLs are allowed', terminal: true }
     }
     const isDev = process.env.NODE_ENV === 'development'
     if (!isDev && u.protocol !== 'https:') {
-      return { valid: false, reason: 'HTTPS is required outside local development' }
+      return { valid: false, reason: 'HTTPS is required outside local development', terminal: true }
     }
     let hostname = u.hostname.toLowerCase()
     if (hostname.startsWith('[') && hostname.endsWith(']')) hostname = hostname.slice(1, -1)
     if (isBlockedHostname(hostname)) {
-      return { valid: false, reason: 'Webhook URL must point to a public destination' }
+      return { valid: false, reason: 'Webhook URL must point to a public destination', terminal: true }
     }
-    const resolvedBlocked = await resolveAndCheckAddresses(hostname)
-    if (resolvedBlocked) {
-      return { valid: false, reason: 'Webhook URL must point to a public destination' }
+    const resolution = await resolveAndCheckAddresses(hostname)
+    if (resolution === 'policy') {
+      return { valid: false, reason: 'Webhook URL must point to a public destination', terminal: true }
+    }
+    if (resolution === 'transient') {
+      return { valid: false, reason: 'Webhook URL must point to a public destination', terminal: false }
     }
     return { valid: true }
   } catch {
-    return { valid: false, reason: 'Invalid URL' }
+    return { valid: false, reason: 'Invalid URL', terminal: false }
   }
 }
 
 /**
- * If hostname is a literal IP (or IPv4-mapped IPv6, which some runtimes don't report as IPv6), check it;
- * otherwise resolve A/AAAA and check all addresses.
- * Returns true if any address is blocked (private/loopback/link-local/CGNAT/multicast).
+ * If hostname is a literal IP (or IPv4-mapped IPv6), check it; otherwise resolve A/AAAA and check all addresses.
+ * Returns 'policy' when destination is explicitly blocked (private/loopback/reserved) — terminal, no retry.
+ * Returns 'transient' when DNS resolution fails or no addresses returned — allow retries.
  */
-async function resolveAndCheckAddresses(hostname: string): Promise<boolean> {
-  if (getIpv4MappedDottedDecimal(hostname) !== null) return isBlockedIp(hostname)
+async function resolveAndCheckAddresses(hostname: string): Promise<'allowed' | 'policy' | 'transient'> {
+  if (getIpv4MappedDottedDecimal(hostname) !== null) return isBlockedIp(hostname) ? 'policy' : 'allowed'
   if (isLiteralIpv4(hostname) || isLiteralIpv6(hostname)) {
-    return isBlockedIp(hostname)
+    return isBlockedIp(hostname) ? 'policy' : 'allowed'
   }
   const addresses: string[] = []
   try {
@@ -61,10 +65,10 @@ async function resolveAndCheckAddresses(hostname: string): Promise<boolean> {
     ])
     addresses.push(...v4, ...v6)
   } catch {
-    return true
+    return 'transient'
   }
-  if (addresses.length === 0) return true
-  return addresses.some((addr) => isBlockedIp(addr))
+  if (addresses.length === 0) return 'transient'
+  return addresses.some((addr) => isBlockedIp(addr)) ? 'policy' : 'allowed'
 }
 
 function isLiteralIpv4(host: string): boolean {

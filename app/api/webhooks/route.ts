@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     const events = Array.isArray(body.events) ? body.events : []
     const description = typeof body.description === 'string' ? body.description.trim() : null
 
-    const urlValidation = url ? await validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required' }
+    const urlValidation = url ? await validateWebhookUrl(url) : { valid: false as const, reason: 'URL is required', terminal: true as const }
     if (!url || !urlValidation.valid) {
       const { response, errorId } = createErrorResponse(
         urlValidation.valid ? 'Valid URL is required' : urlValidation.reason,
