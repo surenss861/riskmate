@@ -1,7 +1,9 @@
 -- Webhook endpoints and delivery log for outbound webhooks (HMAC-signed events).
 -- API keys table included per spec for future Public API (this ticket focuses on webhooks).
 
--- Webhook endpoints (one row per URL per org; events = subscribed event types)
+-- Webhook endpoints (one row per URL per org; events = subscribed event types).
+-- Note: secret is stored in plaintext; only service_role and backend worker should access it.
+-- RLS restricts user access to endpoints by org; consider encryption at rest if DB exposure is a concern.
 CREATE TABLE IF NOT EXISTS webhook_endpoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

@@ -121,7 +121,7 @@ export async function POST(
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 

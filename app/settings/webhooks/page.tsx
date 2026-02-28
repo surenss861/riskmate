@@ -104,7 +104,13 @@ export default function WebhooksPage() {
     if (!confirm('Delete this webhook endpoint? This cannot be undone.')) return
     setDeletingId(id)
     try {
-      await fetch(`/api/webhooks/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await fetch(`/api/webhooks/${id}`, { method: 'DELETE', credentials: 'include' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = (json as { message?: string }).message ?? 'Delete failed'
+        alert(msg)
+        return
+      }
       await loadEndpoints()
     } finally {
       setDeletingId(null)
@@ -124,14 +130,14 @@ export default function WebhooksPage() {
     return `${Math.floor(diffH / 24)} days ago`
   }
 
-  // Show Failing when latest failure (any attempt, including during retries) is after last success,
-  // so endpoints show failing state immediately after unsuccessful attempts, not only after terminal exhaustion.
+  // Show Failing only when there are terminal failures (no more retries) after last success.
+  // Use lastTerminalFailureAt so endpoints with in-progress retries do not show as Failing.
   const isFailing = (epId: string) => {
     const s = stats[epId]
-    const lastFailure = s?.lastFailureAt ?? s?.lastTerminalFailureAt ?? null
-    if (!s || !lastFailure) return false
+    const lastTerminal = s?.lastTerminalFailureAt ?? null
+    if (!s || !lastTerminal) return false
     if (!s.lastSuccessAt) return true
-    return new Date(lastFailure) > new Date(s.lastSuccessAt)
+    return new Date(lastTerminal) > new Date(s.lastSuccessAt)
   }
 
   return (

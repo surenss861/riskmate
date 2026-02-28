@@ -116,6 +116,7 @@ function isBlockedIpv4(host: string): boolean {
  */
 function expandIpv6ToGroups(host: string): number[] | null {
   const normalized = host.toLowerCase().trim()
+  if (normalized === '::') return [0, 0, 0, 0, 0, 0, 0, 0]
   if (normalized.includes('.')) return null
   const parts = normalized.split(':')
   if (parts.length < 2 || parts.length > 8) return null

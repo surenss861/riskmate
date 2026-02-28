@@ -60,7 +60,7 @@ export async function GET(
 
     const { data: deliveries, error } = await supabase
       .from('webhook_deliveries')
-      .select('id, event_type, payload, response_status, response_body, duration_ms, attempt_count, delivered_at, next_retry_at, created_at')
+      .select('id, event_type, payload, response_status, response_body, duration_ms, attempt_count, delivered_at, next_retry_at, processing_since, created_at')
       .eq('endpoint_id', endpointId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)

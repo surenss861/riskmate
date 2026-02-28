@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
 
 export interface DeliveryAttemptEntry {
@@ -22,6 +22,7 @@ export interface DeliveryLogEntry {
   attempt_count: number
   delivered_at: string | null
   next_retry_at: string | null
+  processing_since: string | null
   created_at: string
   attempts?: DeliveryAttemptEntry[]
 }
@@ -69,6 +70,7 @@ export function DeliveryLogsModal({
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
     if (d.delivered_at) return 'success'
+    if (d.processing_since) return 'pending'
     if (d.next_retry_at) return 'pending'
     return (d.attempt_count ?? 0) >= 1 ? 'failed' : 'pending'
   }
@@ -124,6 +126,7 @@ export function DeliveryLogsModal({
                 size="sm"
                 onClick={handleRetryFailed}
                 disabled={!!retrying}
+                title="Reschedule for retry (up to 5 attempts)"
               >
                 Retry failed ({retryEligible.length})
               </Button>
@@ -179,78 +182,78 @@ export function DeliveryLogsModal({
                         ? 'text-sky-400'
                         : 'text-amber-400'
                   return (
-                    <tr key={d.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="p-3 whitespace-nowrap">{formatTime(d.created_at)}</td>
-                      <td className="p-3 font-mono text-xs">{d.event_type}</td>
-                      <td className="p-3">
-                        <span className={statusClass}>{statusLabel}</span>
-                      </td>
-                      <td className="p-3">{d.response_status ?? '—'}</td>
-                      <td className="p-3">{d.duration_ms != null ? `${d.duration_ms}ms` : '—'}</td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(isExpanded ? null : d.id)}
-                          className="text-white/70 hover:text-white"
-                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                        >
-                          {isExpanded ? '▼' : '▶'}
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={d.id}>
+                      <tr className="border-b border-white/5 hover:bg-white/5">
+                        <td className="p-3 whitespace-nowrap">{formatTime(d.created_at)}</td>
+                        <td className="p-3 font-mono text-xs">{d.event_type}</td>
+                        <td className="p-3">
+                          <span className={statusClass}>{statusLabel}</span>
+                        </td>
+                        <td className="p-3">{d.response_status ?? '—'}</td>
+                        <td className="p-3">{d.duration_ms != null ? `${d.duration_ms}ms` : '—'}</td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                            className="text-white/70 hover:text-white"
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${d.id}-detail`} className="border-b border-white/5 bg-white/5">
+                          <td colSpan={6} className="p-4">
+                            <div className="rounded-lg bg-white/5 border border-white/10 p-4 text-sm overflow-auto max-h-64 space-y-4">
+                              <div>
+                                <span className="text-white/60">Request payload:</span>
+                                <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
+                                  {JSON.stringify(d.payload ?? {}, null, 2)}
+                                </pre>
+                              </div>
+                              {(d.attempts?.length ?? 0) > 0 ? (
+                                <div>
+                                  <span className="text-white/60">Attempts:</span>
+                                  <div className="mt-2 space-y-3">
+                                    {d.attempts!.map((a) => (
+                                      <div key={a.id} className="rounded bg-black/30 p-3 border border-white/5">
+                                        <div className="flex flex-wrap gap-3 text-xs text-white/80 mb-1">
+                                          <span>Attempt {a.attempt_number}</span>
+                                          <span>{a.response_status != null ? `HTTP ${a.response_status}` : '—'}</span>
+                                          <span>{a.duration_ms != null ? `${a.duration_ms}ms` : '—'}</span>
+                                          <span>{formatTime(a.created_at)}</span>
+                                        </div>
+                                        {a.response_body != null && a.response_body !== '' && (
+                                          <pre className="mt-1 p-2 rounded bg-black/20 font-mono text-xs whitespace-pre-wrap break-all text-white/90">
+                                            {a.response_body}
+                                          </pre>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                d.response_body != null && (
+                                  <div>
+                                    <span className="text-white/60">Response body:</span>
+                                    <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
+                                      {d.response_body}
+                                    </pre>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
             </table>
           )}
         </div>
-        {deliveries.some((d) => expandedId === d.id) && (
-          <div className="mt-4 rounded-lg bg-white/5 border border-white/10 p-4 text-sm overflow-auto max-h-64">
-            {deliveries
-              .filter((d) => d.id === expandedId)
-              .map((d) => (
-                <div key={d.id} className="space-y-4">
-                  <div>
-                    <span className="text-white/60">Request payload:</span>
-                    <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
-                      {JSON.stringify(d.payload ?? {}, null, 2)}
-                    </pre>
-                  </div>
-                  {(d.attempts?.length ?? 0) > 0 ? (
-                    <div>
-                      <span className="text-white/60">Attempts:</span>
-                      <div className="mt-2 space-y-3">
-                        {d.attempts!.map((a) => (
-                          <div key={a.id} className="rounded bg-black/30 p-3 border border-white/5">
-                            <div className="flex flex-wrap gap-3 text-xs text-white/80 mb-1">
-                              <span>Attempt {a.attempt_number}</span>
-                              <span>{a.response_status != null ? `HTTP ${a.response_status}` : '—'}</span>
-                              <span>{a.duration_ms != null ? `${a.duration_ms}ms` : '—'}</span>
-                              <span>{formatTime(a.created_at)}</span>
-                            </div>
-                            {a.response_body != null && a.response_body !== '' && (
-                              <pre className="mt-1 p-2 rounded bg-black/20 font-mono text-xs whitespace-pre-wrap break-all text-white/90">
-                                {a.response_body}
-                              </pre>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    d.response_body != null && (
-                      <div>
-                        <span className="text-white/60">Response body:</span>
-                        <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
-                          {d.response_body}
-                        </pre>
-                      </div>
-                    )
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
       </GlassCard>
     </div>
   )

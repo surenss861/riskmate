@@ -127,11 +127,13 @@ export async function deliverEvent(
   const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
   if (insertError) {
     console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError)
+    throw new Error(`Webhook deliveries insert failed: ${insertError.message}`)
   }
 }
 
 /**
  * Record one send attempt in webhook_delivery_attempts for immutable per-attempt history.
+ * Uses upsert so re-runs (e.g. after stale-claim recovery) are idempotent.
  */
 async function recordAttempt(
   deliveryId: string,
@@ -140,13 +142,18 @@ async function recordAttempt(
   responseBody: string | null,
   durationMs: number
 ): Promise<void> {
-  await supabase.from('webhook_delivery_attempts').insert({
-    delivery_id: deliveryId,
-    attempt_number: attemptNumber,
-    response_status: responseStatus,
-    response_body: responseBody,
-    duration_ms: durationMs,
-  })
+  await supabase.from('webhook_delivery_attempts').upsert(
+    {
+      delivery_id: deliveryId,
+      attempt_number: attemptNumber,
+      response_status: responseStatus,
+      response_body: responseBody,
+      duration_ms: durationMs,
+    },
+    {
+      onConflict: 'delivery_id,attempt_number',
+    }
+  )
 }
 
 /**
@@ -239,7 +246,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
     const success = res.ok
     if (success) {
-      await updateDeliveryResult(delivery.id, responseStatus, responseBody, durationMs)
+      await updateDeliveryResult(delivery.id, delivery.endpoint_id, responseStatus, responseBody, durationMs)
     } else {
       await updateDeliveryFailure(
         delivery.id,
@@ -267,9 +274,10 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   }
 }
 
-/** Success: single atomic update — response fields, delivered_at, clear retry and claim. */
+/** Success: single atomic update — response fields, delivered_at, clear retry and claim; reset consecutive_failures for endpoint. */
 async function updateDeliveryResult(
   deliveryId: string,
+  endpointId: string,
   responseStatus: number | null,
   responseBody: string | null,
   durationMs: number,
@@ -285,6 +293,12 @@ async function updateDeliveryResult(
       processing_since: null,
     })
     .eq('id', deliveryId)
+
+  const now = new Date().toISOString()
+  await supabase.from('webhook_endpoint_alert_state').upsert(
+    { endpoint_id: endpointId, consecutive_failures: 0, last_alert_at: now, updated_at: now },
+    { onConflict: 'endpoint_id' }
+  )
 }
 
 /**
@@ -322,16 +336,26 @@ async function updateDeliveryFailure(
     })
     .eq('id', deliveryId)
 
-  // Alert only when retry exhaustion reaches the configured threshold (5 consecutive failures).
-  // Do not alert for forceTerminal paths (e.g. blocked URL) to avoid false "5 consecutive failures" emails.
-  if (terminal && nextAttempt > MAX_ATTEMPTS) {
+  // Increment consecutive_failures on terminal failure; alert only when count reaches threshold.
+  if (terminal) {
+    const { data: alertRow } = await supabase
+      .from('webhook_endpoint_alert_state')
+      .select('consecutive_failures')
+      .eq('endpoint_id', endpointId)
+      .maybeSingle()
+    const nextCount = (alertRow?.consecutive_failures ?? 0) + 1
+    const now = new Date().toISOString()
+    await supabase.from('webhook_endpoint_alert_state').upsert(
+      { endpoint_id: endpointId, consecutive_failures: nextCount, updated_at: now },
+      { onConflict: 'endpoint_id' }
+    )
     await maybeAlertAdmin(endpointId)
   }
 }
 
 /**
- * Alert org admins when a delivery has reached terminal failure (exhausted all retries).
- * Called only when a delivery has just failed its fifth attempt. Cooldown prevents spamming.
+ * Alert org admins only after 5 consecutive terminal failures for this endpoint.
+ * Cooldown prevents spamming. Resets consecutive_failures after sending so next 5 trigger again.
  */
 async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const { data: endpoint, error: epError } = await supabase
@@ -344,9 +368,14 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
   const { data: alertState } = await supabase
     .from('webhook_endpoint_alert_state')
-    .select('last_alert_at')
+    .select('last_alert_at, consecutive_failures')
     .eq('endpoint_id', endpointId)
     .maybeSingle()
+
+  const consecutiveFailures = alertState?.consecutive_failures ?? 0
+  if (consecutiveFailures < CONSECUTIVE_FAILURES_BEFORE_ALERT) {
+    return
+  }
 
   const lastAlertAt = alertState?.last_alert_at ? new Date(alertState.last_alert_at).getTime() : 0
   if (Date.now() - lastAlertAt < WEBHOOK_ALERT_COOLDOWN_MS) {
@@ -382,6 +411,7 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
         endpoint_id: endpointId,
         last_alert_at: now,
         updated_at: now,
+        consecutive_failures: 0,
       },
       { onConflict: 'endpoint_id' }
     )

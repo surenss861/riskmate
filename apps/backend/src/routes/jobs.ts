@@ -2215,14 +2215,14 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
     // Emit realtime event (push signal)
     await emitJobEvent(organization_id, "job.created", job.id, userId);
 
-    deliverEvent(organization_id, "job.created", {
+    await deliverEvent(organization_id, "job.created", {
       id: job.id,
       client_name,
       job_type,
       location,
       status: job.status,
       created_by: userId,
-    }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
+    });
 
     // Calculate risk score if risk factors provided
     let riskScoreResult = null;
@@ -2250,14 +2250,14 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
         // Generate mitigation items and emit hazard.created for each inserted item
         const insertedHazards = await generateMitigationItems(job.id, risk_factor_codes);
         for (const item of insertedHazards) {
-          deliverEvent(organization_id, "hazard.created", {
+          await deliverEvent(organization_id, "hazard.created", {
             id: item.id,
             job_id: job.id,
             title: item.title ?? "",
             description: item.description ?? "",
             created_at: item.created_at,
             updated_at: item.updated_at ?? item.created_at,
-          }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
+          });
         }
 
         await notifyHighRiskJob({
