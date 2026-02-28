@@ -23,6 +23,8 @@ const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
 const MAX_ATTEMPTS = 5
 const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
+/** Debounce delay for wake-up: coalesce rapid enqueues into one immediate run. */
+const WAKE_DEBOUNCE_MS = 100
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000 // 10 min
 /** Max number of sendDelivery() calls in flight at once; avoids one slow endpoint blocking the queue. */
@@ -214,6 +216,7 @@ export async function deliverEvent(
     console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError)
     throw new Error(`Webhook deliveries insert failed: ${insertError.message}`)
   }
+  wakeWebhookWorker()
 }
 
 /**
@@ -714,6 +717,20 @@ async function processPendingDeliveries(): Promise<void> {
 }
 
 let workerInterval: NodeJS.Timeout | null = null
+let wakeDebounceTimer: NodeJS.Timeout | null = null
+
+/**
+ * Schedule an immediate, debounced run of the delivery worker so fresh enqueues are processed
+ * without waiting for the next interval tick. Safe to call from both deliverEvent() and from
+ * the internal wake endpoint (Next.js trigger path). Reuses processPendingDeliveriesRunning guard.
+ */
+export function wakeWebhookWorker(): void {
+  if (wakeDebounceTimer) clearTimeout(wakeDebounceTimer)
+  wakeDebounceTimer = setTimeout(() => {
+    wakeDebounceTimer = null
+    processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Wake run error:', e))
+  }, WAKE_DEBOUNCE_MS)
+}
 
 export function startWebhookDeliveryWorker(): void {
   if (workerInterval) return
@@ -724,7 +741,8 @@ export function startWebhookDeliveryWorker(): void {
   } else {
     console.log('[WebhookDelivery] Supabase client: service role (secrets accessible)')
   }
-  const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '5000', 10))
+  // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback
+  const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '2000', 10))
   workerInterval = setInterval(() => {
     processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e))
   }, intervalMs)

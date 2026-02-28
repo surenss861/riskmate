@@ -83,6 +83,12 @@ describe('validateWebhookUrl – IPv4-mapped IPv6 and reserved ranges', () => {
   })
 
   describe('Non-mapped IPv6 reserved (must be blocked)', () => {
+    it('blocks :: (unspecified IPv6)', async () => {
+      const result = await validateWebhookUrl('https://[::]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
     it('blocks ::1 (loopback)', async () => {
       const result = await validateWebhookUrl('https://[::1]/callback')
       expect(result.valid).toBe(false)

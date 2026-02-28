@@ -85,4 +85,20 @@ export async function triggerWebhookEvent(
     console.error('[WebhookTrigger] Batched insert deliveries failed:', insertError)
     throw new Error(`Webhook delivery enqueue failed: ${insertError.message}`)
   }
+  wakeBackendWebhookWorker().catch(() => {})
+}
+
+/**
+ * Notify backend to run the delivery worker immediately so enqueued deliveries are processed
+ * within SLA. Fire-and-forget; requires BACKEND_URL and INTERNAL_API_KEY to be set.
+ */
+function wakeBackendWebhookWorker(): Promise<void> {
+  const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  const secret = process.env.INTERNAL_API_KEY
+  if (!url || !secret) return Promise.resolve()
+  const endpoint = `${url.replace(/\/$/, '')}/api/internal/wake-webhook-worker`
+  return fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
+  }).then(() => undefined)
 }

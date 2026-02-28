@@ -177,6 +177,7 @@ function getIpv4MappedDottedDecimal(host: string): string | null {
 
 function isBlockedIpv6(host: string): boolean {
   const normalized = host.toLowerCase()
+  if (normalized === '::') return true
   if (normalized === '::1') return true
   if (normalized.startsWith('fe80:')) return true
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
