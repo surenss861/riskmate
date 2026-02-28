@@ -662,9 +662,14 @@ async function runWithConcurrency<T>(
  * endpoint does not block others. Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
  */
 let processPendingDeliveriesRunning = false
+/** Set when wake/timer fires during an active run; triggers an immediate claim cycle after current batch completes so new rows are not delayed by long send timeouts. */
+let pendingRunRequested = false
 
 async function processPendingDeliveries(): Promise<void> {
-  if (processPendingDeliveriesRunning) return
+  if (processPendingDeliveriesRunning) {
+    pendingRunRequested = true
+    return
+  }
   processPendingDeliveriesRunning = true
   try {
     await recoverStaleClaims()
@@ -697,6 +702,10 @@ async function processPendingDeliveries(): Promise<void> {
       // no-op; ensures any future code in finally cannot prevent flag reset
     } finally {
       processPendingDeliveriesRunning = false
+      if (pendingRunRequested) {
+        pendingRunRequested = false
+        setImmediate(() => processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Rerun after batch error:', e)))
+      }
     }
   }
 }

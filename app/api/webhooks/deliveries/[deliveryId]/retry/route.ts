@@ -20,14 +20,14 @@ export async function POST(
     const { deliveryId } = await params
     const admin = createSupabaseAdminClient()
 
-    // Fetch delivery with admin client (bypass RLS) so join to webhook_endpoints always returns organization_id; enforce org membership in app code below.
+    // Fetch delivery with admin client (bypass RLS) so join to webhook_endpoints always returns organization_id and is_active; enforce org membership in app code below.
     const { data: deliveryRow, error: delError } = await admin
       .from('webhook_deliveries')
-      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, terminal_outcome, webhook_endpoints(organization_id)')
+      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, terminal_outcome, webhook_endpoints(organization_id, is_active)')
       .eq('id', deliveryId)
       .single()
 
-    type DeliveryWithEndpoint = typeof deliveryRow & { webhook_endpoints?: { organization_id: string } | null }
+    type DeliveryWithEndpoint = typeof deliveryRow & { webhook_endpoints?: { organization_id: string; is_active: boolean } | null }
     const delivery = deliveryRow as DeliveryWithEndpoint | null
     const endpointOrgId = delivery?.webhook_endpoints?.organization_id ?? null
 
@@ -86,6 +86,19 @@ export async function POST(
       const { response, errorId } = createErrorResponse(
         'Delivery is already scheduled for retry; wait for it to run or fail before rescheduling',
         'ALREADY_SCHEDULED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    // Block retry when endpoint is currently paused so we do not create a row that the worker will immediately cancel.
+    if (delivery.webhook_endpoints?.is_active === false) {
+      const { response, errorId } = createErrorResponse(
+        'Endpoint is paused; resume the endpoint first, then retry.',
+        'ENDPOINT_PAUSED',
         { requestId, statusCode: 400 }
       )
       return NextResponse.json(response, {

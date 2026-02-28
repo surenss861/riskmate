@@ -30,7 +30,7 @@ jest.mock('@/lib/supabase/server', () => ({
 }))
 
 jest.mock('@/lib/supabase/admin', () => ({
-  createSupabaseAdminClient: jest.fn(() => ({})),
+  createSupabaseAdminClient: jest.fn(() => supabaseMock),
 }))
 
 jest.mock('@/lib/utils/organizationGuard', () => ({
@@ -61,7 +61,8 @@ describe('POST /api/webhooks/deliveries/[deliveryId]/retry', () => {
               payload: PAYLOAD,
               delivered_at: null,
               next_retry_at: null,
-              webhook_endpoints: { organization_id: ORG_ID },
+              terminal_outcome: 'failed',
+              webhook_endpoints: { organization_id: ORG_ID, is_active: true },
             })
           }
           return {
@@ -106,5 +107,45 @@ describe('POST /api/webhooks/deliveries/[deliveryId]/retry', () => {
     })
     expect(lastInsertPayload!.next_retry_at).toBeDefined()
     expect(typeof lastInsertPayload!.next_retry_at).toBe('string')
+  })
+
+  it('returns 400 when endpoint is currently paused and does not create a retry row', async () => {
+    lastInsertPayload = null
+    let webhookDeliveriesCallCount = 0
+    supabaseMock = {
+      from: jest.fn((table: string) => {
+        if (table === 'webhook_deliveries') {
+          webhookDeliveriesCallCount += 1
+          if (webhookDeliveriesCallCount === 1) {
+            return buildSelectSingleMock({
+              id: DELIVERY_ID,
+              endpoint_id: ENDPOINT_ID,
+              event_type: EVENT_TYPE,
+              payload: PAYLOAD,
+              delivered_at: null,
+              next_retry_at: null,
+              terminal_outcome: 'failed',
+              webhook_endpoints: { organization_id: ORG_ID, is_active: false },
+            })
+          }
+          return { insert: jest.fn() }
+        }
+        if (table === 'webhook_endpoints') {
+          return buildSelectSingleMock({ id: ENDPOINT_ID, organization_id: ORG_ID })
+        }
+        return buildSelectSingleMock(null)
+      }),
+    }
+    const { POST } = await import('@/app/api/webhooks/deliveries/[deliveryId]/retry/route')
+    const request = new NextRequest(`http://localhost/api/webhooks/deliveries/${DELIVERY_ID}/retry`, {
+      method: 'POST',
+    })
+    const response = await POST(request, {
+      params: Promise.resolve({ deliveryId: DELIVERY_ID }),
+    })
+    const body = await response.json()
+    expect(response.status).toBe(400)
+    expect(body.code).toBe('ENDPOINT_PAUSED')
+    expect(lastInsertPayload).toBeNull()
   })
 })

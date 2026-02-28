@@ -53,7 +53,7 @@ export async function GET(
 
     const { data: deliveries, error } = await supabase
       .from('webhook_deliveries')
-      .select('id, event_type, payload, response_status, response_body, duration_ms, attempt_count, delivered_at, next_retry_at, processing_since, created_at')
+      .select('id, event_type, payload, response_status, response_body, duration_ms, attempt_count, delivered_at, next_retry_at, processing_since, terminal_outcome, created_at')
       .eq('endpoint_id', endpointId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -121,9 +121,15 @@ export async function GET(
       }
     }
 
-    const data = list.map((d: { id: string; [k: string]: unknown }) => ({
+    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; [k: string]: unknown }) => ({
       ...d,
       attempts: attemptsByDelivery[d.id] ?? [],
+      can_retry:
+        d.delivered_at == null &&
+        d.next_retry_at == null &&
+        d.terminal_outcome != null &&
+        d.terminal_outcome !== 'cancelled_paused' &&
+        d.terminal_outcome !== 'cancelled_policy',
     }))
 
     return NextResponse.json({ data })
