@@ -28,7 +28,7 @@ export async function POST(
     const delivery = deliveryRow as DeliveryWithEndpoint | null
     const endpointOrgId = delivery?.webhook_endpoints?.organization_id ?? null
 
-    if (delError || !delivery || (endpointOrgId != null && !organization_ids.includes(endpointOrgId))) {
+    if (delError || !delivery || !endpointOrgId || !organization_ids.includes(endpointOrgId)) {
       const { response, errorId } = createErrorResponse(
         'Delivery not found',
         'NOT_FOUND',

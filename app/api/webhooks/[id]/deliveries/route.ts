@@ -4,25 +4,11 @@ import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]/deliveries'
-
-async function getEndpointAndCheckOrg(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  endpointId: string,
-  organizationIds: string[]
-) {
-  const { data, error } = await supabase
-    .from('webhook_endpoints')
-    .select('id, organization_id')
-    .eq('id', endpointId)
-    .single()
-  if (error || !data) return null
-  if (!organizationIds.includes(data.organization_id)) return null
-  return data
-}
 
 /** GET - List delivery logs with status, response, timing */
 export async function GET(
@@ -91,6 +77,7 @@ export async function GET(
         .in('delivery_id', deliveryIds)
         .order('created_at', { ascending: true })
         .order('attempt_number', { ascending: true })
+        .limit(500)
 
       if (attemptsError) {
         const { response, errorId } = createErrorResponse(

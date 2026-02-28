@@ -6,25 +6,11 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
+import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]/test'
-
-async function getEndpointAndCheckOrg(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  endpointId: string,
-  organizationIds: string[]
-) {
-  const { data, error } = await supabase
-    .from('webhook_endpoints')
-    .select('id, organization_id, events, is_active')
-    .eq('id', endpointId)
-    .single()
-  if (error || !data) return null
-  if (!organizationIds.includes(data.organization_id)) return null
-  return data
-}
 
 /** Build event-specific sample object so test payload matches real contract for each event type. */
 function buildTestObjectForEventType(eventType: string): Record<string, unknown> {
@@ -126,7 +112,7 @@ export async function POST(
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids)
+    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids, 'id, organization_id, events, is_active')
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',

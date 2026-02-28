@@ -2,8 +2,9 @@
 -- API keys table included per spec for future Public API (this ticket focuses on webhooks).
 
 -- Webhook endpoints (one row per URL per org; events = subscribed event types).
--- Note: secret is stored in plaintext; only service_role and backend worker should access it.
--- RLS restricts user access to endpoints by org; consider encryption at rest if DB exposure is a concern.
+-- SECURITY: secret is stored in plaintext. Only service_role and backend worker should access it.
+-- RLS restricts user access to endpoints by org. If DB exposure is a concern: encrypt at rest (e.g. AES-256-GCM
+-- with a server-side key in env). Rotate SUPABASE_SERVICE_ROLE_KEY regularly and audit access to webhook_endpoints.
 CREATE TABLE IF NOT EXISTS webhook_endpoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

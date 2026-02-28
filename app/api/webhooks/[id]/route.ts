@@ -5,32 +5,14 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
+import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]'
 
-const EVENT_TYPES = [
-  'job.created', 'job.updated', 'job.completed', 'job.deleted',
-  'hazard.created', 'hazard.updated', 'signature.added', 'report.generated',
-  'evidence.uploaded', 'team.member_added',
-]
-
-
-async function getEndpointAndCheckOrg(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  endpointId: string,
-  organizationIds: string[]
-) {
-  const { data, error } = await supabase
-    .from('webhook_endpoints')
-    .select('id, organization_id')
-    .eq('id', endpointId)
-    .single()
-  if (error || !data) return null
-  if (!organizationIds.includes(data.organization_id)) return null
-  return data
-}
+const EVENT_TYPES_SET = new Set(WEBHOOK_EVENT_TYPES)
 
 /** PATCH - Update endpoint (URL, events, active status) */
 export async function PATCH(
@@ -77,7 +59,7 @@ export async function PATCH(
     }
     if (Array.isArray(body.events)) {
       const invalid = body.events.filter(
-        (e: unknown) => typeof e !== 'string' || !EVENT_TYPES.includes(e)
+        (e: unknown) => typeof e !== 'string' || !EVENT_TYPES_SET.has(e)
       )
       if (invalid.length > 0) {
         const { response, errorId } = createErrorResponse(

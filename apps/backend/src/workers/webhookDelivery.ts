@@ -1,6 +1,8 @@
 /**
  * Webhook delivery: enqueue deliveries for events, send with HMAC signature, retry with backoff.
  * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin after 5 consecutive failures.
+ * Note: webhook_endpoints.secret is read from DB (plaintext). Rotate SUPABASE_SERVICE_ROLE_KEY
+ * regularly and restrict/audit service-role access to webhook_endpoints.
  */
 
 import crypto from 'crypto'

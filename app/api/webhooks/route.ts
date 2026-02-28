@@ -6,23 +6,13 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { generateSecret } from '@/lib/utils/webhookSigning'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks'
 
-const EVENT_TYPES = [
-  'job.created',
-  'job.updated',
-  'job.completed',
-  'job.deleted',
-  'hazard.created',
-  'hazard.updated',
-  'signature.added',
-  'report.generated',
-  'evidence.uploaded',
-  'team.member_added',
-]
+const EVENT_TYPES_SET = new Set(WEBHOOK_EVENT_TYPES)
 
 
 /** GET - List org webhook endpoints (all orgs the user belongs to via users + organization_members) */
@@ -103,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const invalidEvents = events.filter(
-      (e: unknown) => typeof e !== 'string' || !EVENT_TYPES.includes(e)
+      (e: unknown) => typeof e !== 'string' || !EVENT_TYPES_SET.has(e)
     )
     if (invalidEvents.length > 0) {
       const { response, errorId } = createErrorResponse(

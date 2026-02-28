@@ -483,7 +483,12 @@ if (process.env.NODE_ENV !== "test") {
         startDeadlineReminderWorker();
       }
       startTaskReminderWorker();
-      startWebhookDeliveryWorker();
+      const disableWebhookWorker =
+        process.env.DISABLE_WEBHOOK_WORKER === 'true' ||
+        process.env.DISABLE_WEBHOOK_WORKER === '1';
+      if (!disableWebhookWorker) {
+        startWebhookDeliveryWorker();
+      }
     }
   });
 

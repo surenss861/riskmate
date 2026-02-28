@@ -2562,7 +2562,7 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
     const hadJobFieldChange =
       Object.keys(jobUpdates).length > 0 &&
       Object.keys(jobUpdates).some((k) => valueChanged(jobUpdates[k], (existingJob as Record<string, unknown>)[k]));
-    const hadActualChange = hadJobFieldChange || risk_factor_codes !== undefined;
+    const hadActualChange = hadJobFieldChange;
 
     if (hadActualChange) {
       await emitJobEvent(organization_id, "job.updated", jobId, userId);

@@ -46,7 +46,10 @@ export default function WebhooksPage() {
   }, [])
 
   useEffect(() => {
-    if (endpoints.length === 0) return
+    if (endpoints.length === 0) {
+      setStats({})
+      return
+    }
     const loadStats = async () => {
       try {
         const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
@@ -79,7 +82,7 @@ export default function WebhooksPage() {
     loadStats()
   }, [endpoints])
 
-  const handleCreated = () => {
+  const handleCreated = (_endpoint: WebhookEndpoint & { secret?: string }) => {
     setAddOpen(false)
     loadEndpoints()
   }
@@ -95,6 +98,30 @@ export default function WebhooksPage() {
         return
       }
       await loadEndpoints()
+      // Refresh stats so delivery count is up to date after test
+      try {
+        const statsRes = await fetch('/api/webhooks/stats', { credentials: 'include' })
+        const statsJson = await statsRes.json()
+        const data = statsJson.data ?? {}
+        setStats((prev) => {
+          const next = { ...prev }
+          const s = data[id]
+          if (s) {
+            next[id] = {
+              delivered: s.delivered ?? 0,
+              pending: s.pending ?? 0,
+              failed: s.failed ?? 0,
+              lastDelivery: s.lastDelivery ?? null,
+              lastSuccessAt: s.lastSuccessAt ?? null,
+              lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
+              lastFailureAt: s.lastFailureAt ?? null,
+            }
+          }
+          return next
+        })
+      } catch {
+        // Non-fatal; stats will refresh on next full load
+      }
     } finally {
       setTestingId(null)
     }
@@ -105,8 +132,8 @@ export default function WebhooksPage() {
     setDeletingId(id)
     try {
       const res = await fetch(`/api/webhooks/${id}`, { method: 'DELETE', credentials: 'include' })
-      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
         const msg = (json as { message?: string }).message ?? 'Delete failed'
         alert(msg)
         return
