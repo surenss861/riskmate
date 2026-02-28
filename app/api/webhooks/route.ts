@@ -213,9 +213,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
-      data: { ...endpoint, secret },
-    })
+    return NextResponse.json(
+      { data: { ...endpoint, secret } },
+      { status: 201 }
+    )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
     if (msg.includes('Forbidden')) {

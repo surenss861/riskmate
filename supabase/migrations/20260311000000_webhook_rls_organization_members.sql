@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION public.webhook_user_org_ids()
 RETURNS SETOF uuid
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
   SELECT organization_id FROM users WHERE id = auth.uid()

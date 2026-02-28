@@ -5,11 +5,11 @@ import { Button, Input, GlassCard } from '@/components/shared'
 import type { WebhookEndpoint } from './AddWebhookModal'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 
-/** Static grouping for UI; event names must exist in WEBHOOK_EVENT_TYPES. */
+/** UI grouping derived from WEBHOOK_EVENT_TYPES so new event types appear automatically. */
 const EVENT_GROUPS: { label: string; events: string[] }[] = [
-  { label: 'Jobs', events: ['job.created', 'job.updated', 'job.completed', 'job.deleted'] },
-  { label: 'Hazards', events: ['hazard.created', 'hazard.updated'] },
-  { label: 'Other', events: ['signature.added', 'report.generated', 'evidence.uploaded', 'team.member_added'] },
+  { label: 'Jobs', events: [...WEBHOOK_EVENT_TYPES.filter((e) => e.startsWith('job.'))] },
+  { label: 'Hazards', events: [...WEBHOOK_EVENT_TYPES.filter((e) => e.startsWith('hazard.'))] },
+  { label: 'Other', events: [...WEBHOOK_EVENT_TYPES.filter((e) => !e.startsWith('job.') && !e.startsWith('hazard.'))] },
 ]
 
 interface EditWebhookModalProps {

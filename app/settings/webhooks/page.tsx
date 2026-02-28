@@ -106,8 +106,7 @@ export default function WebhooksPage() {
         alert(msg)
         return
       }
-      await loadEndpoints()
-      // Refresh stats so delivery count is up to date after test
+      // Refresh stats so delivery count is up to date after test (endpoint list unchanged)
       try {
         const statsRes = await fetch('/api/webhooks/stats', { credentials: 'include' })
         const statsJson = await statsRes.json()

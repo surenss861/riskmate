@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
@@ -18,10 +17,10 @@ export async function POST(
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { deliveryId } = await params
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
-    // Authorization-gated read: fetch delivery with endpoint ownership and payload for clone; return NOT_FOUND for unauthorized or missing
-    const { data: deliveryRow, error: delError } = await supabase
+    // Fetch delivery with admin client (bypass RLS) so join to webhook_endpoints always returns organization_id; enforce org membership in app code below.
+    const { data: deliveryRow, error: delError } = await admin
       .from('webhook_deliveries')
       .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, webhook_endpoints(organization_id)')
       .eq('id', deliveryId)
@@ -42,7 +41,6 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const admin = createSupabaseAdminClient()
     const role = await getUserRole(admin, user_id, endpointOrgId)
     requireAdminOrOwner(role)
 
@@ -72,7 +70,7 @@ export async function POST(
     }
 
     const now = new Date().toISOString()
-    const { data: inserted, error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await admin
       .from('webhook_deliveries')
       .insert({
         endpoint_id: delivery.endpoint_id,

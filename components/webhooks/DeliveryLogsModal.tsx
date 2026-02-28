@@ -49,6 +49,9 @@ export function DeliveryLogsModal({
 
   useEffect(() => {
     if (!open || !endpointId) return
+    setExpandedId(null)
+    setRetryErrors([])
+    setRetrySuccessMessage(null)
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
       .then((r) => r.json())

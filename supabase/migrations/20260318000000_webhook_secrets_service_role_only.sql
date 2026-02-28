@@ -26,10 +26,16 @@ GRANT ALL ON webhook_endpoint_secrets TO service_role;
 COMMENT ON TABLE webhook_endpoint_secrets IS 'Signing secrets for webhook endpoints. Service-role only; never exposed to authenticated users after creation.';
 -- TODO: Encrypt secrets at rest (e.g. AES-256-GCM with WEBHOOK_SECRET_ENCRYPTION_KEY in env). create_webhook_endpoint_with_secret would encrypt before insert; sendDelivery would decrypt before use. See .env.example WEBHOOK_SECRET_ENCRYPTION_KEY.
 
--- Migrate existing secrets from webhook_endpoints into the new table
-INSERT INTO webhook_endpoint_secrets (endpoint_id, secret)
-  SELECT id, secret FROM webhook_endpoints WHERE secret IS NOT NULL AND secret != ''
-  ON CONFLICT (endpoint_id) DO NOTHING;
-
--- Remove secret from broadly readable table
-ALTER TABLE webhook_endpoints DROP COLUMN IF EXISTS secret;
+-- Migrate existing secrets from webhook_endpoints into the new table (only if column still exists; idempotent for re-runs or when secret was already dropped)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'webhook_endpoints' AND column_name = 'secret'
+  ) THEN
+    INSERT INTO webhook_endpoint_secrets (endpoint_id, secret)
+      SELECT id, secret FROM webhook_endpoints WHERE secret IS NOT NULL AND secret != ''
+      ON CONFLICT (endpoint_id) DO NOTHING;
+    ALTER TABLE webhook_endpoints DROP COLUMN secret;
+  END IF;
+END $$;

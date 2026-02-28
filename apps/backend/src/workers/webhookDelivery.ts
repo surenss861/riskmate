@@ -695,7 +695,11 @@ async function processPendingDeliveries(): Promise<void> {
     }
     await runWithConcurrency(claimed, DELIVERY_CONCURRENCY, sendDelivery)
   } finally {
-    processPendingDeliveriesRunning = false
+    try {
+      // no-op; ensures any future code in finally cannot prevent flag reset
+    } finally {
+      processPendingDeliveriesRunning = false
+    }
   }
 }
 
@@ -703,6 +707,13 @@ let workerInterval: NodeJS.Timeout | null = null
 
 export function startWebhookDeliveryWorker(): void {
   if (workerInterval) return
+  // Backend supabase client must use SUPABASE_SERVICE_ROLE_KEY so webhook_endpoint_secrets (service-role only) is readable
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
+  if (!key) {
+    console.error('[WebhookDelivery] SUPABASE_SERVICE_ROLE_KEY is missing; secret fetch will fail')
+  } else {
+    console.log('[WebhookDelivery] Supabase client: service role (secrets accessible)')
+  }
   const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '5000', 10))
   workerInterval = setInterval(() => {
     processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e))
