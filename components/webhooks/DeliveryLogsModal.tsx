@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
 
 export interface DeliveryAttemptEntry {
+  id: string
   attempt_number: number
   response_status: number | null
   response_body: string | null
@@ -216,7 +217,7 @@ export function DeliveryLogsModal({
                       <span className="text-white/60">Attempts:</span>
                       <div className="mt-2 space-y-3">
                         {d.attempts!.map((a) => (
-                          <div key={a.attempt_number} className="rounded bg-black/30 p-3 border border-white/5">
+                          <div key={a.id} className="rounded bg-black/30 p-3 border border-white/5">
                             <div className="flex flex-wrap gap-3 text-xs text-white/80 mb-1">
                               <span>Attempt {a.attempt_number}</span>
                               <span>{a.response_status != null ? `HTTP ${a.response_status}` : '—'}</span>

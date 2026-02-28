@@ -49,8 +49,14 @@ export async function GET(
     }
 
     const { searchParams } = request.nextUrl
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
-    const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10))
+    const rawLimit = parseInt(searchParams.get('limit') || '50', 10)
+    const rawOffset = parseInt(searchParams.get('offset') || '0', 10)
+    const limit = Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(100, Math.max(1, Math.floor(rawLimit)))
+      : 50
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0
+      ? Math.max(0, Math.floor(rawOffset))
+      : 0
 
     const { data: deliveries, error } = await supabase
       .from('webhook_deliveries')
@@ -76,23 +82,25 @@ export async function GET(
 
     const list = deliveries ?? []
     const deliveryIds = list.map((d: { id: string }) => d.id)
-    const attemptsByDelivery: Record<string, Array<{ attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
+    const attemptsByDelivery: Record<string, Array<{ id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
 
     if (deliveryIds.length > 0) {
       const { data: attempts } = await supabase
         .from('webhook_delivery_attempts')
-        .select('delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
+        .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)
+        .order('created_at', { ascending: true })
         .order('attempt_number', { ascending: true })
       for (const a of attempts ?? []) {
-        const d = a as { delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }
-        if (!attemptsByDelivery[d.delivery_id]) attemptsByDelivery[d.delivery_id] = []
-        attemptsByDelivery[d.delivery_id].push({
-          attempt_number: d.attempt_number,
-          response_status: d.response_status,
-          response_body: d.response_body,
-          duration_ms: d.duration_ms,
-          created_at: d.created_at,
+        const row = a as { id: string; delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }
+        if (!attemptsByDelivery[row.delivery_id]) attemptsByDelivery[row.delivery_id] = []
+        attemptsByDelivery[row.delivery_id].push({
+          id: row.id,
+          attempt_number: row.attempt_number,
+          response_status: row.response_status,
+          response_body: row.response_body,
+          duration_ms: row.duration_ms,
+          created_at: row.created_at,
         })
       }
     }
