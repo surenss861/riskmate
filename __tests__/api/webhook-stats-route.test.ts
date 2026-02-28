@@ -1,7 +1,6 @@
 /**
- * GET /api/webhooks/stats must return non-empty stats when deliveries exist.
- * The route uses createSupabaseServerClient() so get_webhook_endpoint_stats
- * runs with end-user auth context (auth.uid()) and returns rows.
+ * GET /api/webhooks/stats returns stats using admin client with explicit org scoping
+ * so Bearer and cookie auth behave identically.
  */
 
 import { NextRequest } from 'next/server'
@@ -9,12 +8,7 @@ import { NextRequest } from 'next/server'
 const ORG_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const ENDPOINT_ID = 'eeeeeeee-ffff-4000-8111-222233334444'
 
-let supabaseServerMock: { rpc: jest.Mock }
-let supabaseAdminMock: { from: jest.Mock }
-
-jest.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: jest.fn(() => Promise.resolve(supabaseServerMock)),
-}))
+let supabaseAdminMock: { rpc: jest.Mock; from: jest.Mock }
 
 jest.mock('@/lib/supabase/admin', () => ({
   createSupabaseAdminClient: jest.fn(() => supabaseAdminMock),
@@ -33,7 +27,7 @@ jest.mock('@/lib/utils/adminAuth', () => ({
 
 describe('GET /api/webhooks/stats', () => {
   beforeEach(() => {
-    supabaseServerMock = {
+    supabaseAdminMock = {
       rpc: jest.fn().mockResolvedValue({
         data: [
           {
@@ -49,8 +43,6 @@ describe('GET /api/webhooks/stats', () => {
         ],
         error: null,
       }),
-    }
-    supabaseAdminMock = {
       from: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockResolvedValue({ data: [], error: null }),
@@ -86,7 +78,7 @@ describe('GET /api/webhooks/stats', () => {
     ;(getUserRole as jest.Mock).mockImplementation(
       async (_admin: unknown, _userId: string, orgId: string) => (orgId === ORG_ID || orgId === org2 ? 'admin' : 'member')
     )
-    supabaseServerMock.rpc.mockImplementation((_name: string, args: { p_org_id: string }) => {
+    supabaseAdminMock.rpc.mockImplementation((_name: string, args: { p_org_id: string }) => {
       if (args.p_org_id === ORG_ID) {
         return Promise.resolve({
           data: [{ endpoint_id: ENDPOINT_ID, delivered: 2, pending: 0, failed: 0, last_delivery: null, last_success_at: null, last_terminal_failure_at: null, last_failure_at: null }],

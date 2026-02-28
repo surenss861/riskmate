@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
@@ -46,9 +45,8 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const supabase = await createSupabaseServerClient()
-
-    const { data: endpoints, error } = await supabase
+    // Use admin client with explicit org scoping so Bearer and cookie auth behave identically
+    const { data: endpoints, error } = await admin
       .from('webhook_endpoints')
       .select('id, url, events, is_active, description, created_at')
       .in('organization_id', adminOrgIds)

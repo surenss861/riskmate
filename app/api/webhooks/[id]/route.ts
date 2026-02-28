@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
@@ -26,9 +25,9 @@ export async function PATCH(
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id } = await params
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, id, organization_ids)
+    const endpoint = await getEndpointAndCheckOrg(admin, id, organization_ids)
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -95,7 +94,7 @@ export async function PATCH(
     if (typeof body.is_active === 'boolean') updates.is_active = body.is_active
     if (typeof body.description === 'string') updates.description = body.description.trim() || null
 
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await admin
       .from('webhook_endpoints')
       .update(updates)
       .eq('id', id)
@@ -160,9 +159,9 @@ export async function DELETE(
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id } = await params
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, id, organization_ids)
+    const endpoint = await getEndpointAndCheckOrg(admin, id, organization_ids)
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -174,11 +173,10 @@ export async function DELETE(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const admin = createSupabaseAdminClient()
     const role = await getUserRole(admin, user_id, endpoint.organization_id)
     requireAdminOrOwner(role)
 
-    const { error } = await supabase.from('webhook_endpoints').delete().eq('id', id)
+    const { error } = await admin.from('webhook_endpoints').delete().eq('id', id)
 
     if (error) {
       const { response, errorId } = createErrorResponse(

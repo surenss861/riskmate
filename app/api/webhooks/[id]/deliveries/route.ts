@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
@@ -23,9 +22,9 @@ export async function GET(
   try {
     const { organization_id, organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
-    const supabase = await createSupabaseServerClient()
+    const admin = createSupabaseAdminClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids)
+    const endpoint = await getEndpointAndCheckOrg(admin, endpointId, organization_ids)
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -37,7 +36,6 @@ export async function GET(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const admin = createSupabaseAdminClient()
     const role = await getUserRole(admin, user_id, endpoint.organization_id)
     requireAdminOrOwner(role)
 
@@ -51,7 +49,7 @@ export async function GET(
       ? Math.max(0, Math.floor(rawOffset))
       : 0
 
-    const { data: deliveries, error } = await supabase
+    const { data: deliveries, error } = await admin
       .from('webhook_deliveries')
       .select('id, event_type, payload, response_status, response_body, duration_ms, attempt_count, delivered_at, next_retry_at, processing_since, terminal_outcome, created_at')
       .eq('endpoint_id', endpointId)
@@ -79,7 +77,7 @@ export async function GET(
 
     if (deliveryIds.length > 0) {
       const attemptsLimit = Math.min(limit * MAX_ATTEMPTS_PER_DELIVERY, 2000)
-      const { data: attempts, error: attemptsError } = await supabase
+      const { data: attempts, error: attemptsError } = await admin
         .from('webhook_delivery_attempts')
         .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)

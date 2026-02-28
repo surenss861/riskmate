@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
@@ -114,9 +113,9 @@ export async function POST(
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
-    const supabase = await createSupabaseServerClient()
+    const adminClient = createSupabaseAdminClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids, 'id, organization_id, events, is_active')
+    const endpoint = await getEndpointAndCheckOrg(adminClient, endpointId, organization_ids, 'id, organization_id, events, is_active')
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -128,7 +127,6 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const adminClient = createSupabaseAdminClient()
     const role = await getUserRole(adminClient, user_id, (endpoint as { organization_id: string }).organization_id)
     requireAdminOrOwner(role)
 
