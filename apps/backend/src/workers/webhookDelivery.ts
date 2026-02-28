@@ -707,7 +707,6 @@ async function recoverStaleClaims(): Promise<void> {
     .from('webhook_deliveries')
     .update({ processing_since: null })
     .is('delivered_at', null)
-    .is('terminal_outcome', null)
     .not('processing_since', 'is', null)
     .lt('processing_since', staleBefore)
   if (error) {

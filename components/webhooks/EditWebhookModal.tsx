@@ -35,7 +35,7 @@ export function EditWebhookModal({ open, endpoint, onClose, onSaved }: EditWebho
       setIsActive(endpoint.is_active ?? true)
       setSelectedEvents(new Set(endpoint.events || []))
     }
-  }, [endpoint])
+  }, [open, endpoint])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {

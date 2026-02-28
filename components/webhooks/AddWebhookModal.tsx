@@ -15,6 +15,21 @@ const EVENT_GROUPS: { label: string; events: string[] }[] = [
   { label: 'Other', events: [...WEBHOOK_EVENT_TYPES.filter((e) => !e.startsWith('job.') && !e.startsWith('hazard.'))] },
 ]
 
+function CopySecretButton({ secret }: { secret: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(secret).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
+  }
+  return (
+    <Button type="button" variant="secondary" size="sm" onClick={handleCopy} className="shrink-0">
+      {copied ? 'Copied!' : 'Copy'}
+    </Button>
+  )
+}
+
 export interface WebhookEndpoint {
   id: string
   url: string
@@ -59,15 +74,12 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     prevOpenRef.current = open
     if (!open) return
     const justOpened = open && !wasOpen
-    const validIds = new Set(organizationOptions.map((o) => o.id))
     if (multiOrg) {
-      // Require explicit org choice: clear selection only when modal opens.
       if (justOpened) setSelectedOrganizationId(null)
-      else if (selectedOrganizationId && !validIds.has(selectedOrganizationId)) setSelectedOrganizationId(null)
     } else {
       setSelectedOrganizationId(defaultOrgId)
     }
-  }, [open, multiOrg, organizationOptions, defaultOrgId, selectedOrganizationId])
+  }, [open, multiOrg, organizationOptions, defaultOrgId])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {
@@ -188,8 +200,11 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
             <p className="text-sm text-white/80">
               Copy this secret now. It won’t be shown again. Use it to verify webhook signatures.
             </p>
-            <div className="rounded-lg bg-white/5 border border-white/10 p-3 font-mono text-sm text-white break-all">
-              {createdSecret}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 p-3 font-mono text-sm text-white break-all">
+                {createdSecret}
+              </div>
+              <CopySecretButton secret={createdSecret} />
             </div>
             <Button onClick={handleCloseAfterSecret}>Done</Button>
           </div>
@@ -200,7 +215,11 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
                 <label className="block text-sm font-medium text-white/90 mb-1">Organization</label>
                 <select
                   value={selectedOrganizationId ?? ''}
-                  onChange={(e) => setSelectedOrganizationId(e.target.value || null)}
+                  onChange={(e) => {
+                    const value = e.target.value || null
+                    const validIds = new Set(organizationOptions.map((o) => o.id))
+                    setSelectedOrganizationId(value && validIds.has(value) ? value : null)
+                  }}
                   className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
                   required
                 >

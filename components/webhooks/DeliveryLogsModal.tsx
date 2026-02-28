@@ -79,6 +79,7 @@ export function DeliveryLogsModal({
 }: DeliveryLogsModalProps) {
   const [deliveries, setDeliveries] = useState<DeliveryLogEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [retryErrors, setRetryErrors] = useState<Array<{ id: string; message: string }>>([])
@@ -93,13 +94,17 @@ export function DeliveryLogsModal({
     setRetrySuccessMessage(null)
     setRetriedDeliveryIds(new Set())
     setPayloadShowFull({})
+    setFetchError(null)
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
       .then((r) => r.json())
       .then((json) => {
         setDeliveries(Array.isArray(json.data) ? json.data : [])
       })
-      .catch(() => setDeliveries([]))
+      .catch(() => {
+        setDeliveries([])
+        setFetchError('Failed to load delivery logs. Please close and reopen.')
+      })
       .finally(() => setLoading(false))
   }, [open, endpointId])
 
@@ -163,9 +168,11 @@ export function DeliveryLogsModal({
           const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
           const json = await res.json()
           setDeliveries(Array.isArray(json.data) ? json.data : [])
+          setFetchError(null)
           // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
         } catch (e) {
           console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)
+          setFetchError('Failed to load delivery logs. Please close and reopen.')
         }
       }
     } finally {
@@ -223,9 +230,16 @@ export function DeliveryLogsModal({
             </ul>
           </div>
         )}
+        {fetchError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/40 text-sm text-red-200">
+            {fetchError}
+          </div>
+        )}
         <div className="flex-1 overflow-auto border border-white/10 rounded-lg">
           {loading ? (
             <div className="p-8 text-center text-white/60">Loading…</div>
+          ) : fetchError ? (
+            <div className="p-8 text-center text-white/60">Failed to load delivery logs. Please close and reopen.</div>
           ) : deliveries.length === 0 ? (
             <div className="p-8 text-center text-white/60">No deliveries yet</div>
           ) : (

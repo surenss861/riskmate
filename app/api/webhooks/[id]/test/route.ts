@@ -13,8 +13,6 @@ import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/ut
 
 export const runtime = 'nodejs'
 
-const ROUTE = '/api/webhooks/[id]/test'
-
 /** Build event-specific sample object so test payload matches real contract for each event type. */
 function buildTestObjectForEventType(eventType: string): Record<string, unknown> {
   const ts = new Date().toISOString()

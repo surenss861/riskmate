@@ -2591,9 +2591,10 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
       Object.keys(jobUpdates).some((k) => valueChanged(jobUpdates[k], (existingJob as Record<string, unknown>)[k]));
     const hadActualChange = hadJobFieldChange;
 
-    if (hadActualChange) {
-      await emitJobEvent(organization_id, "job.updated", jobId, userId);
+    // Realtime: emit on every PATCH so dashboard stays in sync (previously unconditional).
+    await emitJobEvent(organization_id, "job.updated", jobId, userId);
 
+    if (hadActualChange) {
       deliverEvent(organization_id, "job.updated", {
         id: jobId,
         ...updatedJob,

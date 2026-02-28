@@ -94,7 +94,5 @@ export function wakeBackendWebhookWorker(): Promise<void> {
   return fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
-  })
-    .then(() => undefined)
-    .catch(() => {})
+  }).then(() => undefined)
 }

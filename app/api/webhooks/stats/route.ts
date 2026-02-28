@@ -47,14 +47,14 @@ export async function GET(request: NextRequest) {
       const settled = results[i]
       const orgId = adminOrgIds[i]
       if (settled.status === 'rejected') {
-        logApiError(500, 'QUERY_ERROR', undefined, requestId, orgId, settled.reason?.message ?? 'RPC failed', {
+        logApiError(500, 'QUERY_ERROR', 'stats-rpc-error', requestId, orgId, settled.reason?.message ?? 'RPC failed', {
           category: 'internal', severity: 'error', route: ROUTE,
         })
         continue
       }
       const { data: rows, error } = settled.value
       if (error) {
-        logApiError(500, 'QUERY_ERROR', undefined, requestId, orgId, error.message, {
+        logApiError(500, 'QUERY_ERROR', 'stats-rpc-error', requestId, orgId, error.message, {
           category: 'internal', severity: 'error', route: ROUTE,
         })
         continue

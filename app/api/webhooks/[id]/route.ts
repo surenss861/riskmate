@@ -11,8 +11,6 @@ import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/ut
 
 export const runtime = 'nodejs'
 
-const ROUTE = '/api/webhooks/[id]'
-
 const EVENT_TYPES_SET = new Set(WEBHOOK_EVENT_TYPES)
 
 /** PATCH - Update endpoint (URL, events, active status). Requires owner/admin. */

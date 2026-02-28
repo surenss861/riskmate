@@ -1,6 +1,7 @@
 -- Use a JWT-based service_role check reliable under PostgREST/Supabase (request.jwt.claims.role).
 -- session_user/current_user may not equal 'service_role' when the service-role key is used due to
 -- authenticator/role switching; the JWT role claim is set correctly for service-role invocations.
+-- Defensive: if neither JWT role nor webhook_admin_org_ids() grants access, raise instead of returning empty.
 
 CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
@@ -13,11 +14,19 @@ RETURNS TABLE (
   last_terminal_failure_at timestamptz,
   last_failure_at timestamptz
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+BEGIN
+  IF (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') IS DISTINCT FROM 'service_role'
+     AND NOT (p_org_id IN (SELECT public.webhook_admin_org_ids()))
+  THEN
+    RAISE EXCEPTION 'get_webhook_endpoint_stats: access denied for org % (neither service_role nor admin)', p_org_id;
+  END IF;
+
+  RETURN QUERY
   WITH attempt_stats AS (
     SELECT
       wd.endpoint_id,
@@ -66,7 +75,8 @@ AS $$
       OR p_org_id IN (SELECT public.webhook_admin_org_ids())
     )
   GROUP BY wd.endpoint_id, ast.last_attempt_at, ast.last_failure_at;
+END;
 $$;
 
 COMMENT ON FUNCTION get_webhook_endpoint_stats(uuid) IS
-  'Returns per-endpoint delivery counts and last delivery time for org. Excludes in-progress (processing_since set) from failed count. In-function tenant guard: JWT role = service_role (PostgREST) or p_org_id in webhook_admin_org_ids(). Only service_role may execute; API uses admin client.';
+  'Returns per-endpoint delivery counts and last delivery time for org. Excludes in-progress (processing_since set) from failed count. In-function tenant guard: JWT role = service_role (PostgREST) or p_org_id in webhook_admin_org_ids(); raises if neither (avoids silent empty result). API uses admin client.';

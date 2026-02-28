@@ -24,6 +24,7 @@ export default function WebhooksPage() {
   const [endpoints, setEndpoints] = useState<WebhookEndpoint[]>([])
   const [stats, setStats] = useState<Record<string, DeliveryStats>>({})
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [canManage, setCanManage] = useState(true)
   const [defaultOrganizationId, setDefaultOrganizationId] = useState<string | null>(null)
   const [organizationOptions, setOrganizationOptions] = useState<{ id: string; name: string }[]>([])
@@ -139,6 +140,7 @@ export default function WebhooksPage() {
   }
 
   const loadEndpoints = async () => {
+    setRefreshing(true)
     setFetchError(null)
     setStatsLoadFailed(false)
     try {
@@ -158,6 +160,8 @@ export default function WebhooksPage() {
     } catch {
       setEndpoints([])
       setFetchError('Failed to load webhooks. Please refresh the page.')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -280,7 +284,7 @@ export default function WebhooksPage() {
             )}
             {canManage && (
               <div className="flex justify-end mb-6">
-                <Button onClick={() => setAddOpen(true)}>Add endpoint</Button>
+                <Button onClick={() => setAddOpen(true)} disabled={refreshing}>Add endpoint</Button>
               </div>
             )}
 
@@ -341,6 +345,7 @@ export default function WebhooksPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => setLogsEndpoint({ id: ep.id, url: ep.url })}
+                            disabled={refreshing}
                           >
                             View logs
                           </Button>
@@ -348,6 +353,7 @@ export default function WebhooksPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => setEditingEndpoint(ep)}
+                            disabled={refreshing}
                           >
                             Edit
                           </Button>
@@ -355,7 +361,7 @@ export default function WebhooksPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleTest(ep.id)}
-                            disabled={!!testingId || !ep.is_active}
+                            disabled={!!testingId || !ep.is_active || refreshing}
                             title={!ep.is_active ? 'Resume the endpoint to send a test' : undefined}
                           >
                             {testingId === ep.id ? 'Sending…' : 'Send test'}
@@ -364,7 +370,7 @@ export default function WebhooksPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleDeleteClick(ep.id)}
-                            disabled={!!deletingId}
+                            disabled={!!deletingId || refreshing}
                           >
                             Delete
                           </Button>
