@@ -16,6 +16,7 @@ interface DeliveryStats {
   lastDelivery: string | null
   lastSuccessAt: string | null
   lastTerminalFailureAt: string | null
+  lastFailureAt: string | null
 }
 
 export default function WebhooksPage() {
@@ -62,14 +63,15 @@ export default function WebhooksPage() {
                 lastDelivery: s.lastDelivery ?? null,
                 lastSuccessAt: s.lastSuccessAt ?? null,
                 lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
+                lastFailureAt: s.lastFailureAt ?? null,
               }
-            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null }
+            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
         }
         setStats(next)
       } catch {
         const fallback: Record<string, DeliveryStats> = {}
         for (const ep of endpoints) {
-          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null }
+          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
         }
         setStats(fallback)
       }
@@ -116,13 +118,14 @@ export default function WebhooksPage() {
     return `${Math.floor(diffH / 24)} days ago`
   }
 
-  // Show Failing when current/most-recent delivery health is terminal failure:
-  // endpoint has at least one terminal failure and either no success ever, or the latest terminal failure is after the last success.
+  // Show Failing when latest failure (any attempt, including during retries) is after last success,
+  // so endpoints show failing state immediately after unsuccessful attempts, not only after terminal exhaustion.
   const isFailing = (epId: string) => {
     const s = stats[epId]
-    if (!s || !s.lastTerminalFailureAt) return false
+    const lastFailure = s?.lastFailureAt ?? s?.lastTerminalFailureAt ?? null
+    if (!s || !lastFailure) return false
     if (!s.lastSuccessAt) return true
-    return new Date(s.lastTerminalFailureAt) > new Date(s.lastSuccessAt)
+    return new Date(lastFailure) > new Date(s.lastSuccessAt)
   }
 
   return (

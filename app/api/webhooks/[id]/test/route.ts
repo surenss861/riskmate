@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,95 @@ async function getEndpointAndCheckOrg(
   if (error || !data) return null
   if (data.organization_id !== organizationId) return null
   return data
+}
+
+/** Build event-specific sample object so test payload matches real contract for each event type. */
+function buildTestObjectForEventType(eventType: string): Record<string, unknown> {
+  const ts = new Date().toISOString()
+  const testId = `test_${Date.now()}`
+  switch (eventType) {
+    case 'job.created':
+    case 'job.updated':
+    case 'job.completed':
+      return {
+        id: testId,
+        title: 'Test webhook from RiskMate',
+        status: eventType === 'job.completed' ? 'completed' : 'draft',
+        test: true,
+        created_at: ts,
+        updated_at: ts,
+        ...(eventType === 'job.completed' ? { completed_at: ts } : {}),
+      }
+    case 'job.deleted':
+      return {
+        id: testId,
+        deleted_at: ts,
+        status: 'draft',
+        bulk: false,
+        test: true,
+      }
+    case 'hazard.created':
+    case 'hazard.updated':
+      return {
+        id: testId,
+        job_id: testId,
+        title: 'Test hazard',
+        description: 'Sample for webhook test',
+        done: false,
+        is_completed: false,
+        completed_at: null,
+        created_at: ts,
+        updated_at: ts,
+        test: true,
+      }
+    case 'signature.added':
+      return {
+        signoff_id: testId,
+        job_id: testId,
+        signer_id: testId,
+        signoff_type: 'approval',
+        created_at: ts,
+        test: true,
+      }
+    case 'team.member_added':
+      return {
+        user_id: testId,
+        email: 'test@example.com',
+        role: 'member',
+        invited_by: testId,
+        invite_id: testId,
+        test: true,
+      }
+    case 'report.generated':
+      return {
+        report_run_id: testId,
+        job_id: testId,
+        packet_type: 'standard',
+        status: 'completed',
+        data_hash: 'test_hash',
+        generated_at: ts,
+        test: true,
+      }
+    case 'evidence.uploaded':
+      return {
+        document_id: testId,
+        job_id: testId,
+        name: 'test-document.pdf',
+        type: 'application/pdf',
+        file_path: 'uploads/test.pdf',
+        uploaded_by: testId,
+        created_at: ts,
+        test: true,
+      }
+    default:
+      return {
+        id: testId,
+        title: 'Test webhook from RiskMate',
+        status: 'draft',
+        test: true,
+        created_at: ts,
+      }
+  }
 }
 
 /** POST - Send test event to this endpoint only (enqueues one delivery) */
@@ -48,29 +138,65 @@ export async function POST(
       })
     }
 
-    // Use the endpoint's subscribed events so the test matches what they receive in production
     const events = Array.isArray((endpoint as { events?: string[] }).events)
       ? (endpoint as { events: string[] }).events
       : []
-    const eventType =
-      events.length > 0
-        ? events.includes('job.created')
-          ? 'job.created'
-          : events[0]
-        : 'job.created'
+
+    // Optional: accept requested test event type in body; validate against subscribed events
+    let eventType: string
+    try {
+      const body = await request.json().catch(() => ({}))
+      const requested = typeof (body as { event_type?: string }).event_type === 'string'
+        ? (body as { event_type: string }).event_type.trim()
+        : null
+      if (requested) {
+        if (!WEBHOOK_EVENT_TYPES.includes(requested as (typeof WEBHOOK_EVENT_TYPES)[number])) {
+          const { response, errorId } = createErrorResponse(
+            'Invalid event_type for test',
+            'VALIDATION_ERROR',
+            { requestId, statusCode: 400 }
+          )
+          return NextResponse.json(response, {
+            status: 400,
+            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+          })
+        }
+        if (!events.includes(requested)) {
+          const { response, errorId } = createErrorResponse(
+            'Requested event_type is not subscribed for this endpoint',
+            'VALIDATION_ERROR',
+            { requestId, statusCode: 400 }
+          )
+          return NextResponse.json(response, {
+            status: 400,
+            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+          })
+        }
+        eventType = requested
+      } else {
+        eventType =
+          events.length > 0
+            ? events.includes('job.created')
+              ? 'job.created'
+              : events[0]
+            : 'job.created'
+      }
+    } catch {
+      eventType =
+        events.length > 0
+          ? events.includes('job.created')
+            ? 'job.created'
+            : events[0]
+          : 'job.created'
+    }
+
     const payload = {
       id: `evt_test_${Date.now()}`,
       type: eventType,
       created: new Date().toISOString(),
       organization_id,
       data: {
-        object: {
-          id: endpointId,
-          title: 'Test webhook from RiskMate',
-          status: 'draft',
-          test: true,
-          created_at: new Date().toISOString(),
-        },
+        object: buildTestObjectForEventType(eventType),
       },
     }
 

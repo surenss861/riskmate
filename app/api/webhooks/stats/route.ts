@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       lastDelivery: string | null
       lastSuccessAt: string | null
       lastTerminalFailureAt: string | null
+      lastFailureAt: string | null
     }> = {}
     for (const row of list) {
       const r = row as {
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
         last_delivery: string | null
         last_success_at: string | null
         last_terminal_failure_at: string | null
+        last_failure_at: string | null
       }
       data[r.endpoint_id] = {
         delivered: Number(r.delivered ?? 0),
@@ -61,6 +63,7 @@ export async function GET(request: NextRequest) {
         lastDelivery: r.last_delivery ?? null,
         lastSuccessAt: r.last_success_at ?? null,
         lastTerminalFailureAt: r.last_terminal_failure_at ?? null,
+        lastFailureAt: r.last_failure_at ?? null,
       }
     }
 

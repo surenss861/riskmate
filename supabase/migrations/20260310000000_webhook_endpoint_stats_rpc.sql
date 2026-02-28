@@ -6,8 +6,10 @@
 -- Other terminal states (paused endpoint, blocked URL, etc.) have delivered_at IS NULL AND next_retry_at IS NULL
 -- but attempt_count < 5; they are not counted as failed. To expose them separately, consider adding a
 -- terminal_reason or is_terminal column to webhook_deliveries and a cancelled count here.
+-- Drop first when changing return type (PostgreSQL does not allow changing OUT/rettype with CREATE OR REPLACE).
+DROP FUNCTION IF EXISTS get_webhook_endpoint_stats(uuid);
 
-CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
+CREATE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
   endpoint_id uuid,
   delivered bigint,
@@ -15,7 +17,8 @@ RETURNS TABLE (
   failed bigint,
   last_delivery timestamptz,
   last_success_at timestamptz,
-  last_terminal_failure_at timestamptz
+  last_terminal_failure_at timestamptz,
+  last_failure_at timestamptz
 )
 LANGUAGE sql
 STABLE
@@ -39,7 +42,13 @@ AS $$
       COALESCE(max(wd.created_at), '1970-01-01'::timestamptz)
     ), '1970-01-01'::timestamptz) AS last_delivery,
     max(wd.delivered_at) FILTER (WHERE wd.delivered_at IS NOT NULL) AS last_success_at,
-    max(wd.created_at) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 5) AS last_terminal_failure_at
+    max(wd.created_at) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 5) AS last_terminal_failure_at,
+    (SELECT max(wda.created_at)
+     FROM webhook_delivery_attempts wda
+     JOIN webhook_deliveries wd2 ON wd2.id = wda.delivery_id
+     WHERE wd2.endpoint_id = wd.endpoint_id
+       AND (wda.response_status IS NULL OR wda.response_status < 200 OR wda.response_status >= 300)
+    ) AS last_failure_at
   FROM webhook_deliveries wd
   JOIN webhook_endpoints we ON we.id = wd.endpoint_id
   WHERE we.organization_id = p_org_id
