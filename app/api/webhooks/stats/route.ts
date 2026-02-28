@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       )
     )
     const allRows: unknown[] = []
+    let failedOrgs = 0
     for (let i = 0; i < results.length; i++) {
       const settled = results[i]
       const orgId = adminOrgIds[i]
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         logApiError(500, 'QUERY_ERROR', 'stats-rpc-error', requestId, orgId, settled.reason?.message ?? 'RPC failed', {
           category: 'internal', severity: 'error', route: ROUTE,
         })
+        failedOrgs += 1
         continue
       }
       const { data: rows, error } = settled.value
@@ -57,11 +59,13 @@ export async function GET(request: NextRequest) {
         logApiError(500, 'QUERY_ERROR', 'stats-rpc-error', requestId, orgId, error.message, {
           category: 'internal', severity: 'error', route: ROUTE,
         })
+        failedOrgs += 1
         continue
       }
       if (Array.isArray(rows)) allRows.push(...rows)
     }
 
+    const degraded = failedOrgs > 0
     const list = allRows
     const data: Record<string, {
       delivered: number
@@ -94,6 +98,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (degraded) {
+      return NextResponse.json(
+        { data, degraded: true },
+        { status: 503, headers: { 'X-Request-ID': requestId } }
+      )
+    }
     return NextResponse.json({ data })
   } catch (err: unknown) {
     if (err instanceof ForbiddenError) {

@@ -80,6 +80,11 @@ export default function WebhooksPage() {
           return
         }
         const statsJson = statsRes.json
+        if (statsJson?.degraded === true) {
+          setStatsLoadFailed(true)
+          setStats({})
+          return
+        }
         const data = statsJson?.data ?? {}
         const next: Record<string, DeliveryStats> = {}
         for (const ep of eps) {

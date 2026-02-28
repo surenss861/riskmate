@@ -97,8 +97,23 @@ export function DeliveryLogsModal({
     setFetchError(null)
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((json) => {
+      .then(async (res) => {
+        if (!res.ok) {
+          let msg = `Request failed (${res.status})`
+          try {
+            const j = await res.json()
+            msg = (j as { message?: string }).message ?? (j as { error?: string }).error ?? msg
+          } catch {
+            try {
+              const t = await res.text()
+              if (t) msg = t
+            } catch { /* ignore */ }
+          }
+          setFetchError(msg)
+          setDeliveries([])
+          return
+        }
+        const json = await res.json()
         setDeliveries(Array.isArray(json.data) ? json.data : [])
       })
       .catch(() => {
@@ -166,9 +181,23 @@ export function DeliveryLogsModal({
       if (endpointId) {
         try {
           const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
-          const json = await res.json()
-          setDeliveries(Array.isArray(json.data) ? json.data : [])
-          setFetchError(null)
+          if (!res.ok) {
+            let msg = `Request failed (${res.status})`
+            try {
+              const j = await res.json()
+              msg = (j as { message?: string }).message ?? (j as { error?: string }).error ?? msg
+            } catch {
+              try {
+                const t = await res.text()
+                if (t) msg = t
+              } catch { /* ignore */ }
+            }
+            setFetchError(msg)
+          } else {
+            const json = await res.json()
+            setDeliveries(Array.isArray(json.data) ? json.data : [])
+            setFetchError(null)
+          }
           // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
         } catch (e) {
           console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)

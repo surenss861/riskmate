@@ -94,5 +94,11 @@ export function wakeBackendWebhookWorker(): Promise<void> {
   return fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
-  }).then(() => undefined)
+  }).then(async (response) => {
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`Wake worker failed: ${response.status} ${text}`)
+    }
+    return undefined
+  })
 }
