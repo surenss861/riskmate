@@ -17,7 +17,7 @@ async function getEndpointAndCheckOrg(
 ) {
   const { data, error } = await supabase
     .from('webhook_endpoints')
-    .select('id, organization_id, events')
+    .select('id, organization_id, events, is_active')
     .eq('id', endpointId)
     .single()
   if (error || !data) return null
@@ -134,6 +134,18 @@ export async function POST(
       )
       return NextResponse.json(response, {
         status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if ((endpoint as { is_active?: boolean }).is_active === false) {
+      const { response, errorId } = createErrorResponse(
+        'Cannot send test: endpoint is paused. Resume the endpoint to send test events.',
+        'ENDPOINT_PAUSED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }

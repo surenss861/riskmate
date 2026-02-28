@@ -87,7 +87,13 @@ export default function WebhooksPage() {
   const handleTest = async (id: string) => {
     setTestingId(id)
     try {
-      await fetch(`/api/webhooks/${id}/test`, { method: 'POST', credentials: 'include' })
+      const res = await fetch(`/api/webhooks/${id}/test`, { method: 'POST', credentials: 'include' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = (json as { message?: string }).message ?? 'Test request failed'
+        alert(msg)
+        return
+      }
       await loadEndpoints()
     } finally {
       setTestingId(null)
@@ -207,7 +213,8 @@ export default function WebhooksPage() {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleTest(ep.id)}
-                          disabled={!!testingId}
+                          disabled={!!testingId || !ep.is_active}
+                          title={!ep.is_active ? 'Resume the endpoint to send a test' : undefined}
                         >
                           {testingId === ep.id ? 'Sending…' : 'Send test'}
                         </Button>
