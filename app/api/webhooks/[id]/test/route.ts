@@ -126,8 +126,8 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const admin = createSupabaseAdminClient()
-    const role = await getUserRole(admin, user_id, (endpoint as { organization_id: string }).organization_id)
+    const adminClient = createSupabaseAdminClient()
+    const role = await getUserRole(adminClient, user_id, (endpoint as { organization_id: string }).organization_id)
     requireAdminOrOwner(role)
 
     if ((endpoint as { is_active?: boolean }).is_active === false) {
@@ -206,8 +206,7 @@ export async function POST(
       },
     }
 
-    const admin = createSupabaseAdminClient()
-    const { error: insertError } = await admin.from('webhook_deliveries').insert({
+    const { error: insertError } = await adminClient.from('webhook_deliveries').insert({
       endpoint_id: endpointId,
       event_type: eventType,
       payload,
