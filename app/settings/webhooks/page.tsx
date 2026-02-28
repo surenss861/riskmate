@@ -14,6 +14,8 @@ interface DeliveryStats {
   pending: number
   failed: number
   lastDelivery: string | null
+  lastSuccessAt: string | null
+  lastTerminalFailureAt: string | null
 }
 
 export default function WebhooksPage() {
@@ -58,14 +60,16 @@ export default function WebhooksPage() {
                 pending: s.pending ?? 0,
                 failed: s.failed ?? 0,
                 lastDelivery: s.lastDelivery ?? null,
+                lastSuccessAt: s.lastSuccessAt ?? null,
+                lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
               }
-            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
+            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null }
         }
         setStats(next)
       } catch {
         const fallback: Record<string, DeliveryStats> = {}
         for (const ep of endpoints) {
-          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null }
+          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null }
         }
         setStats(fallback)
       }
@@ -112,11 +116,13 @@ export default function WebhooksPage() {
     return `${Math.floor(diffH / 24)} days ago`
   }
 
-  // Show Failing only when endpoint has never successfully delivered (delivered === 0 and failed > 0).
-  // This avoids permanently marking as Failing after recovery (historical failures but recent success).
+  // Show Failing when current/most-recent delivery health is terminal failure:
+  // endpoint has at least one terminal failure and either no success ever, or the latest terminal failure is after the last success.
   const isFailing = (epId: string) => {
     const s = stats[epId]
-    return !!(s && s.failed > 0 && s.delivered === 0)
+    if (!s || !s.lastTerminalFailureAt) return false
+    if (!s.lastSuccessAt) return true
+    return new Date(s.lastTerminalFailureAt) > new Date(s.lastSuccessAt)
   }
 
   return (

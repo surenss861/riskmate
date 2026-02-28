@@ -2247,8 +2247,18 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
           })
           .eq("id", job.id);
 
-        // Generate mitigation items
-        await generateMitigationItems(job.id, risk_factor_codes);
+        // Generate mitigation items and emit hazard.created for each inserted item
+        const insertedHazards = await generateMitigationItems(job.id, risk_factor_codes);
+        for (const item of insertedHazards) {
+          deliverEvent(organization_id, "hazard.created", {
+            id: item.id,
+            job_id: job.id,
+            title: item.title ?? "",
+            description: item.description ?? "",
+            created_at: item.created_at,
+            updated_at: item.updated_at ?? item.created_at,
+          }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
+        }
 
         await notifyHighRiskJob({
           organizationId: organization_id,
@@ -2469,8 +2479,18 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
             })
             .eq("id", jobId);
 
-          // Generate new mitigation items
-          await generateMitigationItems(jobId, risk_factor_codes);
+          // Generate new mitigation items and emit hazard.created for each inserted item
+          const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes);
+          for (const item of insertedHazards) {
+            deliverEvent(organization_id, "hazard.created", {
+              id: item.id,
+              job_id: jobId,
+              title: item.title ?? "",
+              description: item.description ?? "",
+              created_at: item.created_at,
+              updated_at: item.updated_at ?? item.created_at,
+            }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
+          }
 
           updatedRiskScore = riskScoreResult.overall_score;
         } else {

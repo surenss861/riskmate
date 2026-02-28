@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { limitsFor } from '@/lib/utils/planRules'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -189,6 +190,15 @@ export async function POST(request: NextRequest) {
     } catch (inviteInsertError: any) {
       console.warn('Invite row insert failed:', inviteInsertError?.message)
     }
+
+    // Emit team.member_added so webhook consumers get consistent events (same as backend invite flow)
+    await triggerWebhookEvent(organizationId, 'team.member_added', {
+      user_id: newUserId,
+      email: normalizedEmail,
+      role,
+      invited_by: user.id,
+      invite_id: inviteRow?.id ?? null,
+    }).catch((e) => console.warn('[Team] Webhook team.member_added trigger failed:', e))
 
     return NextResponse.json({
       data: inviteRow,

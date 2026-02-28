@@ -121,15 +121,24 @@ export async function calculateRiskScore(
   };
 }
 
+export interface InsertedMitigationItem {
+  id: string;
+  title: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 /**
- * Generate mitigation items from triggered risk factors
+ * Generate mitigation items from triggered risk factors.
+ * Returns inserted rows so callers can emit hazard.created webhooks.
  */
 export async function generateMitigationItems(
   jobId: string,
   riskFactorCodes: string[]
-): Promise<void> {
+): Promise<InsertedMitigationItem[]> {
   if (!riskFactorCodes || riskFactorCodes.length === 0) {
-    return;
+    return [];
   }
 
   // Fetch risk factors with mitigation steps
@@ -145,7 +154,7 @@ export async function generateMitigationItems(
   }
 
   if (!riskFactors || riskFactors.length === 0) {
-    return;
+    return [];
   }
 
   // Create mitigation items for each risk factor
@@ -179,16 +188,19 @@ export async function generateMitigationItems(
     }
   }
 
-  // Insert mitigation items in batch
+  // Insert mitigation items in batch and return inserted rows
   if (mitigationItems.length > 0) {
-    const { error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from('mitigation_items')
-      .insert(mitigationItems);
+      .insert(mitigationItems)
+      .select('id, title, description, created_at, updated_at');
 
     if (insertError) {
       console.error('Error creating mitigation items:', insertError);
       throw new Error('Failed to create mitigation items');
     }
+    return (inserted ?? []) as InsertedMitigationItem[];
   }
+  return [];
 }
 

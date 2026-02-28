@@ -13,7 +13,9 @@ RETURNS TABLE (
   delivered bigint,
   pending bigint,
   failed bigint,
-  last_delivery timestamptz
+  last_delivery timestamptz,
+  last_success_at timestamptz,
+  last_terminal_failure_at timestamptz
 )
 LANGUAGE sql
 STABLE
@@ -35,7 +37,9 @@ AS $$
       ),
       COALESCE(max(wd.delivered_at), '1970-01-01'::timestamptz),
       COALESCE(max(wd.created_at), '1970-01-01'::timestamptz)
-    ), '1970-01-01'::timestamptz) AS last_delivery
+    ), '1970-01-01'::timestamptz) AS last_delivery,
+    max(wd.delivered_at) FILTER (WHERE wd.delivered_at IS NOT NULL) AS last_success_at,
+    max(wd.created_at) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 5) AS last_terminal_failure_at
   FROM webhook_deliveries wd
   JOIN webhook_endpoints we ON we.id = wd.endpoint_id
   WHERE we.organization_id = p_org_id

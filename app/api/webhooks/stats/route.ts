@@ -36,14 +36,31 @@ export async function GET(request: NextRequest) {
     }
 
     const list = Array.isArray(rows) ? rows : []
-    const data: Record<string, { delivered: number; pending: number; failed: number; lastDelivery: string | null }> = {}
+    const data: Record<string, {
+      delivered: number
+      pending: number
+      failed: number
+      lastDelivery: string | null
+      lastSuccessAt: string | null
+      lastTerminalFailureAt: string | null
+    }> = {}
     for (const row of list) {
-      const r = row as { endpoint_id: string; delivered: number; pending: number; failed: number; last_delivery: string | null }
+      const r = row as {
+        endpoint_id: string
+        delivered: number
+        pending: number
+        failed: number
+        last_delivery: string | null
+        last_success_at: string | null
+        last_terminal_failure_at: string | null
+      }
       data[r.endpoint_id] = {
         delivered: Number(r.delivered ?? 0),
         pending: Number(r.pending ?? 0),
         failed: Number(r.failed ?? 0),
         lastDelivery: r.last_delivery ?? null,
+        lastSuccessAt: r.last_success_at ?? null,
+        lastTerminalFailureAt: r.last_terminal_failure_at ?? null,
       }
     }
 

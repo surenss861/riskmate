@@ -952,8 +952,18 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', jobId)
 
-        // Generate mitigation items
-        await generateMitigationItems(jobId, risk_factor_codes)
+        // Generate mitigation items and emit hazard.created for each inserted item
+        const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes)
+        for (const item of insertedHazards) {
+          await triggerWebhookEvent(organization_id, 'hazard.created', {
+            id: item.id,
+            job_id: jobId,
+            title: item.title ?? '',
+            description: item.description ?? '',
+            created_at: item.created_at,
+            updated_at: item.updated_at ?? item.created_at,
+          }).catch((e) => console.warn('[Webhook] hazard.created trigger failed:', e))
+        }
       } catch (riskError: any) {
         console.error('Risk scoring failed:', riskError)
         // Continue without risk score - job is still created
