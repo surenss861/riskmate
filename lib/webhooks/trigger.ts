@@ -91,8 +91,9 @@ export async function triggerWebhookEvent(
 /**
  * Notify backend to run the delivery worker immediately so enqueued deliveries are processed
  * within SLA. Fire-and-forget; requires BACKEND_URL and INTERNAL_API_KEY to be set.
+ * Exported for use by manual webhook flows (test, retry) that enqueue deliveries without going through triggerWebhookEvent.
  */
-function wakeBackendWebhookWorker(): Promise<void> {
+export function wakeBackendWebhookWorker(): Promise<void> {
   const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
   const secret = process.env.INTERNAL_API_KEY
   if (!url || !secret) return Promise.resolve()

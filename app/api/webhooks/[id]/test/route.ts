@@ -4,7 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
-import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { WEBHOOK_EVENT_TYPES, wakeBackendWebhookWorker } from '@/lib/webhooks/trigger'
 import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 import { getUserRole } from '@/lib/utils/adminAuth'
@@ -224,6 +224,8 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+
+    wakeBackendWebhookWorker().catch(() => {})
 
     return NextResponse.json({
       data: { message: 'Test event queued for delivery', event_type: eventType },

@@ -5,6 +5,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getUserRole } from '@/lib/utils/adminAuth'
 import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
+import { wakeBackendWebhookWorker } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -104,6 +105,8 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+
+    wakeBackendWebhookWorker().catch(() => {})
 
     return NextResponse.json(
       { data: { message: 'Retry scheduled', delivery_id: inserted.id } },

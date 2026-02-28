@@ -243,18 +243,10 @@ export async function POST(
 
       reportRun = newRun
       console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
-      const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-      await triggerWebhookEvent(organization_id, 'report.generated', {
-        report_run_id: reportRun.id,
-        job_id: jobId,
-        packet_type: packetType,
-        status: reportRun.status,
-        data_hash: reportRun.data_hash,
-        generated_at: reportRun.generated_at,
-      }).catch((e) => console.warn('[Webhook] report.generated trigger failed:', e))
     }
 
-    // When skipPdfGeneration is true, return run id and hash only (no PDF) for signature workflow
+    // When skipPdfGeneration is true, return run id and hash only (no PDF) for signature workflow.
+    // Do not emit report.generated here — no artifact is produced.
     if (skipPdfGeneration) {
       const intendedSignerUserIds = Array.isArray(body.intendedSignerUserIds)
         ? (body.intendedSignerUserIds as string[]).filter((id): id is string => typeof id === 'string')
@@ -473,15 +465,28 @@ export async function POST(
 
       // STAGE: Update report_run with PDF metadata
       console.log(`[reports][${requestId}][stage] update_report_run_start`)
+      const pdfGeneratedAt = new Date().toISOString()
       await supabase
         .from('report_runs')
         .update({
           pdf_path: storagePath,
           pdf_signed_url: pdfUrl,
-          pdf_generated_at: new Date().toISOString(),
+          pdf_generated_at: pdfGeneratedAt,
         })
         .eq('id', reportRun.id)
       console.log(`[reports][${requestId}][stage] update_report_run_ok`)
+
+      // Emit report.generated only after PDF artifact is persisted (completion semantics).
+      const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
+      await triggerWebhookEvent(organization_id, 'report.generated', {
+        report_run_id: reportRun.id,
+        job_id: jobId,
+        packet_type: packetType,
+        status: reportRun.status,
+        data_hash: reportRun.data_hash,
+        generated_at: pdfGeneratedAt,
+        storage_path: storagePath,
+      }).catch((e) => console.warn('[Webhook] report.generated trigger failed:', e))
     } catch (uploadError: any) {
       const errorMessage = uploadError?.message || 'Unknown upload error'
       const stage = errorMessage.match(/\[stage=(\w+)\]/)?.[1] || 'upload'
