@@ -155,7 +155,9 @@ export async function POST(
       })
     }
 
-    wakeBackendWebhookWorker().catch(() => {})
+    wakeBackendWebhookWorker().catch((err: unknown) => {
+      console.warn('[WebhookTrigger] Wake worker call failed (delivery will be picked up on next poll):', err instanceof Error ? err.message : err)
+    })
 
     return NextResponse.json(
       { data: { message: 'Retry scheduled', delivery_id: inserted.id } },

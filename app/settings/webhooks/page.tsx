@@ -34,17 +34,29 @@ export default function WebhooksPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingConfirmId, setDeletingConfirmId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [statsLoadFailed, setStatsLoadFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setFetchError(null)
+    setStatsLoadFailed(false)
     const endpointsPromise = fetch('/api/webhooks', { credentials: 'include' }).then(async (r) => ({ status: r.status, json: await r.json() }))
     const statsPromise = fetch('/api/webhooks/stats', { credentials: 'include' }).then(async (r) => ({ status: r.status, json: await r.json() }))
-    Promise.all([endpointsPromise, statsPromise])
-      .then(([endpointsRes, statsRes]) => {
+    Promise.allSettled([endpointsPromise, statsPromise])
+      .then(([endpointsResult, statsResult]) => {
         if (cancelled) return
+        const endpointsRes = endpointsResult.status === 'fulfilled' ? endpointsResult.value : null
+        const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null
+        if (endpointsResult.status === 'rejected') {
+          setFetchError('Failed to load webhooks. Please refresh the page.')
+          setEndpoints([])
+          setStats({})
+          return
+        }
+        if (!endpointsRes) return
         const endpointsJson = endpointsRes.json
-        const statsJson = statsRes.json
         if (endpointsRes.status === 403) {
           setCanManage(false)
           setEndpoints([])
@@ -56,6 +68,16 @@ export default function WebhooksPage() {
         setEndpoints(eps)
         setDefaultOrganizationId(endpointsJson?.default_organization_id ?? null)
         setOrganizationOptions(Array.isArray(endpointsJson?.organization_options) ? endpointsJson.organization_options : [])
+        if (statsResult.status === 'rejected' || !statsRes) {
+          setStatsLoadFailed(true)
+          const next: Record<string, DeliveryStats> = {}
+          for (const ep of eps) {
+            next[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
+          }
+          setStats(next)
+          return
+        }
+        const statsJson = statsRes.json
         const data = statsJson?.data ?? {}
         const next: Record<string, DeliveryStats> = {}
         for (const ep of eps) {
@@ -73,9 +95,6 @@ export default function WebhooksPage() {
             : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
         }
         setStats(next)
-      })
-      .catch(() => {
-        if (!cancelled) setEndpoints([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -118,6 +137,8 @@ export default function WebhooksPage() {
   }
 
   const loadEndpoints = async () => {
+    setFetchError(null)
+    setStatsLoadFailed(false)
     try {
       const res = await fetch('/api/webhooks', { credentials: 'include' })
       const json = await res.json()
@@ -134,6 +155,7 @@ export default function WebhooksPage() {
       await loadStatsOnly(eps)
     } catch {
       setEndpoints([])
+      setFetchError('Failed to load webhooks. Please refresh the page.')
     }
   }
 
@@ -228,6 +250,23 @@ export default function WebhooksPage() {
                 >
                   ×
                 </button>
+              </div>
+            )}
+            {!loading && fetchError && (
+              <div className="mb-4 p-4 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 flex items-center justify-between gap-2">
+                <span>{fetchError}</span>
+                <button
+                  type="button"
+                  onClick={() => { setFetchError(null); loadEndpoints(); }}
+                  className="shrink-0 text-white/80 hover:text-white underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {!loading && statsLoadFailed && endpoints.length > 0 && (
+              <div className="mb-4 p-4 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200">
+                Delivery stats could not be loaded. Endpoints are shown with zero counts. Refresh the page to retry.
               </div>
             )}
             {canManage && (

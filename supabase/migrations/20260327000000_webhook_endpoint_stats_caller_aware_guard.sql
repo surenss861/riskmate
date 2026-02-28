@@ -1,6 +1,6 @@
--- Caller-aware tenant guard for get_webhook_endpoint_stats (SECURITY DEFINER).
--- Inside SECURITY DEFINER, current_user is the function owner; session_user is the invoker.
--- Use session_user = 'service_role' so admin client (service_role) gets rows; keep org-membership branch for authenticated.
+-- Tenant guard for get_webhook_endpoint_stats (SECURITY DEFINER).
+-- The API layer enforces authorization (admin/owner) before calling this function; this guard
+-- restricts rows to orgs the caller may access (webhook_admin_org_ids() for authenticated users).
 
 DROP FUNCTION IF EXISTS get_webhook_endpoint_stats(uuid);
 
@@ -62,12 +62,12 @@ AS $$
   LEFT JOIN attempt_stats ast ON ast.endpoint_id = wd.endpoint_id
   LEFT JOIN terminal_failure_times tft ON tft.endpoint_id = wd.endpoint_id
   WHERE we.organization_id = p_org_id
-    AND (session_user = 'service_role' OR p_org_id IN (SELECT public.webhook_admin_org_ids()))
+    AND p_org_id IN (SELECT public.webhook_admin_org_ids())
   GROUP BY wd.endpoint_id, ast.last_attempt_at, ast.last_failure_at;
 $$;
 
 COMMENT ON FUNCTION get_webhook_endpoint_stats(uuid) IS
-  'Returns per-endpoint delivery counts and last delivery time for org. In-function tenant guard: session_user = service_role (caller-aware) or p_org_id in webhook_admin_org_ids(). Only service_role may execute; API uses admin client.';
+  'Returns per-endpoint delivery counts and last delivery time for org. In-function tenant guard: p_org_id in webhook_admin_org_ids(). API enforces authorization before calling.';
 
 REVOKE EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION get_webhook_endpoint_stats(uuid) FROM anon;

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
@@ -196,7 +197,7 @@ export async function POST(
     const rawObject = buildTestObjectForEventType(eventType)
     const normalizedObject = buildWebhookEventObject(eventType, rawObject)
     const payload = {
-      id: `evt_test_${Date.now()}`,
+      id: `evt_test_${crypto.randomUUID()}`,
       type: eventType,
       created: new Date().toISOString(),
       organization_id: (endpoint as { organization_id: string }).organization_id,
@@ -225,7 +226,9 @@ export async function POST(
       })
     }
 
-    wakeBackendWebhookWorker().catch(() => {})
+    wakeBackendWebhookWorker().catch((err: unknown) => {
+      console.warn('[WebhookTrigger] Wake worker call failed (delivery will be picked up on next poll):', err instanceof Error ? err.message : err)
+    })
 
     return NextResponse.json({
       data: { message: 'Test event queued for delivery', event_type: eventType },

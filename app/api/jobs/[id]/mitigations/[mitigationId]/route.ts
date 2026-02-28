@@ -69,6 +69,10 @@ export async function PATCH(
       )
     }
 
+    // Fire hazard.updated only when the toggled item is itself a hazard (hazard_id IS NULL).
+    // Control completions (items with a non-null hazard_id) are excluded: we do not emit
+    // hazard.updated for the parent hazard when a control is toggled, to avoid ambiguity
+    // about which entity changed and to keep the webhook payload aligned with the updated row.
     if ((updatedItem as { hazard_id?: string | null }).hazard_id == null) {
       await triggerWebhookEvent(organization_id, 'hazard.updated', {
         id: updatedItem.id,

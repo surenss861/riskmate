@@ -76,7 +76,9 @@ export async function triggerWebhookEvent(
     console.error('[WebhookTrigger] Batched insert deliveries failed:', insertError)
     throw new Error(`Webhook delivery enqueue failed: ${insertError.message}`)
   }
-  wakeBackendWebhookWorker().catch(() => {})
+  wakeBackendWebhookWorker().catch((err: unknown) => {
+    console.warn('[WebhookTrigger] Wake worker call failed (delivery will be picked up on next poll):', err instanceof Error ? err.message : err)
+  })
 }
 
 /**

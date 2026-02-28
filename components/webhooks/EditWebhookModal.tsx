@@ -28,12 +28,12 @@ export function EditWebhookModal({ open, endpoint, onClose, onSaved }: EditWebho
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setError(null)
     if (endpoint) {
       setUrl(endpoint.url)
       setDescription(endpoint.description ?? '')
       setIsActive(endpoint.is_active ?? true)
       setSelectedEvents(new Set(endpoint.events || []))
-      setError(null)
     }
   }, [endpoint])
 

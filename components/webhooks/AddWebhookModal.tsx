@@ -67,7 +67,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     } else {
       setSelectedOrganizationId(defaultOrgId)
     }
-  }, [open, multiOrg, organizationOptions, defaultOrgId])
+  }, [open, multiOrg, organizationOptions, defaultOrgId, selectedOrganizationId])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {
