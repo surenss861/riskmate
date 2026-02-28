@@ -465,6 +465,7 @@ async function updateDeliveryResult(
  * When forceTerminal is true (e.g. blocked URL), no retries are scheduled.
  * terminalOutcomeReason: 'failed' for retry exhaustion or missing endpoint; 'cancelled_policy' for policy blocks (e.g. blocked URL).
  * countAsConsecutiveFailure: when false (e.g. secret fetch or endpoint fetch transient errors), do not increment consecutive_failures so infrastructure blips do not trigger admin alerts.
+ * attempt_count: when terminal (including retry exhaustion), we persist the attempt just executed (currentAttemptCount), not nextAttempt, so it never exceeds MAX_ATTEMPTS.
  */
 async function updateDeliveryFailure(
   deliveryId: string,
@@ -484,13 +485,14 @@ async function updateDeliveryFailure(
       ? 0
       : (RETRY_DELAYS_AFTER_ATTEMPT_MS[nextAttempt - 2] ?? RETRY_DELAYS_AFTER_ATTEMPT_MS[RETRY_DELAYS_AFTER_ATTEMPT_MS.length - 1])
   const nextRetryAt = terminal ? null : new Date(Date.now() + delayMs).toISOString()
+  const attemptCountToPersist = terminal ? currentAttemptCount : nextAttempt
 
   const updatePayload: Record<string, unknown> = {
     response_status: responseStatus,
     response_body: responseBody,
     duration_ms: durationMs,
     delivered_at: null,
-    attempt_count: nextAttempt,
+    attempt_count: attemptCountToPersist,
     next_retry_at: nextRetryAt,
     processing_since: null,
   }

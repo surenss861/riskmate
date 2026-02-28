@@ -4,6 +4,7 @@
  * Requires internal credential (WEBHOOK_EMIT_SECRET); not callable by standard end-user JWTs.
  */
 
+import crypto from 'node:crypto'
 import express, { type Router as ExpressRouter } from 'express'
 import { deliverEvent, ALLOWED_WEBHOOK_EVENT_TYPES, validateWebhookEmitPayload } from '../workers/webhookDelivery'
 
@@ -14,6 +15,7 @@ const ALLOWED_SET = new Set<string>(ALLOWED_WEBHOOK_EVENT_TYPES as unknown as st
 /**
  * Middleware: require internal service-to-service secret. Rejects standard JWT auth for /emit
  * so that only trusted server code (or callers with WEBHOOK_EMIT_SECRET) can trigger deliveries.
+ * Uses constant-time comparison (hash + timingSafeEqual) to avoid timing side-channels.
  */
 function requireWebhookEmitSecret(
   req: express.Request,
@@ -32,7 +34,9 @@ function requireWebhookEmitSecret(
     req.headers['x-webhook-internal-secret'] ?? (req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.slice(7).trim()
       : null)
-  if (!headerSecret || headerSecret !== secret) {
+  const expected = crypto.createHash('sha256').update(secret, 'utf8').digest()
+  const received = crypto.createHash('sha256').update(String(headerSecret ?? ''), 'utf8').digest()
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
     res.status(403).json({
       message: 'Forbidden: invalid or missing internal credential',
       code: 'FORBIDDEN',
