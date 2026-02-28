@@ -93,7 +93,6 @@ export async function deliverEvent(
   data: Record<string, unknown>
 ): Promise<void> {
   const payload = buildWebhookPayload(eventType, orgId, data)
-  const payloadJson = JSON.stringify(payload)
 
   const { data: endpoints, error: fetchError } = await supabase
     .from('webhook_endpoints')
@@ -110,17 +109,20 @@ export async function deliverEvent(
     (e: WebhookEndpointRow) => e.events && e.events.includes(eventType)
   )
 
-  for (const ep of filtered) {
-    const { error: insertError } = await supabase.from('webhook_deliveries').insert({
-      endpoint_id: ep.id,
-      event_type: eventType,
-      payload: payload as unknown as Record<string, unknown>,
-      attempt_count: 1,
-      next_retry_at: new Date().toISOString(),
-    })
-    if (insertError) {
-      console.error('[WebhookDelivery] Insert delivery failed:', insertError)
-    }
+  if (filtered.length === 0) return
+
+  const nextRetryAt = new Date().toISOString()
+  const rows = filtered.map((ep: WebhookEndpointRow) => ({
+    endpoint_id: ep.id,
+    event_type: eventType,
+    payload: payload as unknown as Record<string, unknown>,
+    attempt_count: 1,
+    next_retry_at: nextRetryAt,
+  }))
+
+  const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
+  if (insertError) {
+    console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError)
   }
 }
 

@@ -8,6 +8,7 @@ import { getIdempotencyKey } from '../utils/idempotency'
 import { sendEvidenceUploadedNotification } from '../services/notifications'
 import { uploadRateLimiter } from '../middleware/rateLimiter'
 import { logWithRequest } from '../utils/structuredLog'
+import { deliverEvent } from '../workers/webhookDelivery'
 import crypto from 'crypto'
 import busboy, { type FileInfo } from 'busboy'
 import type { Request, Response } from 'express'
@@ -515,6 +516,27 @@ evidenceRouter.post(
           error: (notifyErr as Error).message,
         })
       }
+
+      // Enqueue webhook so subscribers receive evidence.uploaded (error-isolated; do not fail upload response)
+      deliverEvent(organization_id, 'evidence.uploaded', {
+        id: insertedEvidence.id,
+        job_id: jobId,
+        evidence_id: evidenceId,
+        file_name: fileName,
+        file_sha256: fileSha256,
+        file_size: fileData.length,
+        mime_type: mimeType,
+        storage_path: storagePath,
+        phase: metadata.phase || null,
+        evidence_type: metadata.evidence_type || null,
+        uploaded_by: userId,
+        created_at: insertedEvidence.created_at,
+        sealed_at: insertedEvidence.sealed_at,
+      }).catch((e) =>
+        logWithRequest('warn', 'Webhook evidence.uploaded enqueue failed', requestId, {
+          error: (e as Error).message,
+        })
+      )
 
       // Create signed URL for download
       const { data: signedUrlData } = await supabase.storage

@@ -62,13 +62,19 @@ export async function triggerWebhookEvent(
     (e: { id: string; events: string[] }) => e.events && Array.isArray(e.events) && e.events.includes(eventType)
   )
 
-  for (const ep of filtered) {
-    await supabase.from('webhook_deliveries').insert({
-      endpoint_id: ep.id,
-      event_type: eventType,
-      payload,
-      attempt_count: 1,
-      next_retry_at: new Date().toISOString(),
-    })
+  if (filtered.length === 0) return
+
+  const nextRetryAt = new Date().toISOString()
+  const rows = filtered.map((ep: { id: string }) => ({
+    endpoint_id: ep.id,
+    event_type: eventType,
+    payload,
+    attempt_count: 1,
+    next_retry_at: nextRetryAt,
+  }))
+
+  const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
+  if (insertError) {
+    console.error('[WebhookTrigger] Batched insert deliveries failed:', insertError)
   }
 }
