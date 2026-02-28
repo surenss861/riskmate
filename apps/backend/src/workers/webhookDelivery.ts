@@ -231,7 +231,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     .eq('id', delivery.endpoint_id)
     .single()
 
-  const { data: secretRow } = await supabase
+  const { data: secretRow, error: secretError } = await supabase
     .from('webhook_endpoint_secrets')
     .select('secret')
     .eq('endpoint_id', delivery.endpoint_id)
@@ -240,16 +240,67 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   const secret = secretRow?.secret ?? null
   const endpointWithSecret = endpoint ? { ...endpoint, secret } : null
 
-  if (epError || !endpointWithSecret || !secret) {
-    console.error('[WebhookDelivery] Endpoint not found:', delivery.endpoint_id)
-    const attemptNumber = delivery.attempt_count
-    await recordAttempt(delivery.id, attemptNumber, null, 'Endpoint not found (missing or deleted)', 0)
-    // Terminalize so this row is not retried indefinitely (missing/deleted endpoint is undeliverable)
+  // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
+  if (epError) {
+    const isEndpointMissing = epError.code === 'PGRST116'
+    const reason = isEndpointMissing
+      ? 'Endpoint not found (deleted)'
+      : `Endpoint fetch failed (transient): ${epError.message}`
+    console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
+    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    if (isEndpointMissing) {
+      await supabase
+        .from('webhook_deliveries')
+        .update({
+          response_status: null,
+          response_body: reason,
+          duration_ms: 0,
+          next_retry_at: null,
+          processing_since: null,
+          terminal_outcome: 'failed',
+        })
+        .eq('id', delivery.id)
+    } else {
+      await updateDeliveryFailure(
+        delivery.id,
+        delivery.endpoint_id,
+        null,
+        reason,
+        0,
+        delivery.attempt_count,
+        false,
+        'failed',
+      )
+    }
+    return
+  }
+
+  if (secretError) {
+    const reason = `Secret fetch failed (transient): ${secretError.message}`
+    console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
+    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    await updateDeliveryFailure(
+      delivery.id,
+      delivery.endpoint_id,
+      null,
+      reason,
+      0,
+      delivery.attempt_count,
+      false,
+      'failed',
+    )
+    return
+  }
+
+  if (!endpoint || !endpointWithSecret || !secret) {
+    const reason = 'Endpoint has no secret'
+    console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
+    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
     await supabase
       .from('webhook_deliveries')
       .update({
         response_status: null,
-        response_body: 'Endpoint not found (missing or deleted)',
+        response_body: reason,
         duration_ms: 0,
         next_retry_at: null,
         processing_since: null,

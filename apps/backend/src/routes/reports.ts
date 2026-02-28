@@ -270,11 +270,15 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
     if (reportRecord) {
       deliverEvent(organization_id, "report.generated", {
         id: reportRecord.id,
+        report_run_id: reportRecord.id,
         job_id: jobId,
         storage_path: storagePath ?? null,
         hash,
+        data_hash: hash,
         snapshot_id: snapshotId,
         generated_by: userId,
+        status: "completed",
+        generated_at: new Date().toISOString(),
       }).catch((e) => console.warn("[Reports] Webhook report.generated enqueue failed:", e));
     }
 

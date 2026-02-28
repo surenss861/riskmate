@@ -4,8 +4,11 @@
  * receive a stable data.object contract regardless of producer (web vs backend).
  */
 
+const REPORT_GENERATED_REQUIRED = ['report_run_id', 'job_id', 'status', 'data_hash'] as const
+
 /**
  * Build canonical data.object for report.generated.
+ * Throws if required fields are missing (no silent empty strings); enqueue only after validation.
  */
 function buildReportGeneratedObject(raw: Record<string, unknown>): Record<string, unknown> {
   const report_run_id =
@@ -19,6 +22,13 @@ function buildReportGeneratedObject(raw: Record<string, unknown>): Record<string
     (raw.generated_at as string) ?? new Date().toISOString()
   const generated_by = (raw.generated_by as string | null) ?? null
   const id = (raw.id as string) ?? report_run_id
+
+  for (const key of REPORT_GENERATED_REQUIRED) {
+    const value = key === 'report_run_id' ? report_run_id : key === 'job_id' ? job_id : key === 'status' ? status : data_hash
+    if (value === undefined || value === null || String(value).trim() === '') {
+      throw new Error(`report.generated missing required field: ${key}`)
+    }
+  }
 
   return {
     report_run_id,
