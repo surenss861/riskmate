@@ -23,22 +23,28 @@ export interface ReportGeneratedObject {
   id?: string
 }
 
-/** Canonical evidence.uploaded data.object */
+/** Semantic evidence kind for evidence.uploaded; stable across web, backend, and test. */
+export type EvidenceTypeKind = 'photo' | 'document' | 'other'
+
+/** Canonical evidence.uploaded data.object. All emitters produce this shape. */
 export interface EvidenceUploadedObject {
   id: string
   job_id: string
   name: string
-  type: string
+  /** MIME type (e.g. image/jpeg, application/pdf). Always present. */
+  mime_type: string
+  /** Semantic kind: photo | document | other. Always present. */
+  evidence_type: EvidenceTypeKind
   file_path: string
   uploaded_by: string
   created_at: string
+  /** @deprecated Use evidence_type. Emitted for backward compatibility. */
+  type: EvidenceTypeKind
   /** Optional: evidence_id from backend evidence table */
   evidence_id?: string | null
   file_sha256?: string | null
   file_size?: number | null
-  mime_type?: string | null
   phase?: string | null
-  evidence_type?: string | null
   sealed_at?: string | null
   /** @deprecated Use id */
   document_id?: string
@@ -92,34 +98,56 @@ export function buildReportGeneratedObject(raw: Record<string, unknown>): Report
   }
 }
 
+const EVIDENCE_TYPE_KINDS: EvidenceTypeKind[] = ['photo', 'document', 'other']
+
+function deriveEvidenceType(raw: Record<string, unknown>, mimeType: string): EvidenceTypeKind {
+  const rawType = (raw.type as string)?.toLowerCase().trim()
+  if (rawType === 'photo') return 'photo'
+  if (rawType === 'evidence') return 'document'
+  const rawEvidenceType = (raw.evidence_type as string)?.toLowerCase().trim()
+  if (rawEvidenceType && EVIDENCE_TYPE_KINDS.includes(rawEvidenceType as EvidenceTypeKind))
+    return rawEvidenceType as EvidenceTypeKind
+  if (mimeType.toLowerCase().startsWith('image/')) return 'photo'
+  if (
+    mimeType.toLowerCase().startsWith('application/') ||
+    mimeType.toLowerCase().startsWith('video/')
+  )
+    return 'document'
+  return 'other'
+}
+
 /**
  * Build canonical data.object for evidence.uploaded.
- * Accepts app shape (document_id, ...) or backend shape (id, evidence_id, file_name, storage_path, ...).
+ * Accepts app shape (document_id, type: photo|evidence) or backend shape (id, evidence_id, file_name, storage_path, mime_type).
+ * Ensures mime_type and evidence_type are always set; missing mime_type defaults to application/octet-stream; evidence_type is derived from type or mime_type.
  */
 export function buildEvidenceUploadedObject(raw: Record<string, unknown>): EvidenceUploadedObject {
   const id = (raw.id as string) ?? (raw.document_id as string) ?? ''
   const job_id = (raw.job_id as string) ?? ''
   const name = (raw.name as string) ?? (raw.file_name as string) ?? ''
-  const type = (raw.type as string) ?? ''
   const file_path = (raw.file_path as string) ?? (raw.storage_path as string) ?? ''
   const uploaded_by = (raw.uploaded_by as string) ?? ''
   const created_at = (raw.created_at as string) ?? new Date().toISOString()
+
+  const mime_type =
+    (typeof raw.mime_type === 'string' && raw.mime_type.trim()) || 'application/octet-stream'
+  const evidence_type = deriveEvidenceType(raw, mime_type)
 
   const out: EvidenceUploadedObject = {
     id,
     job_id,
     name,
-    type,
+    mime_type,
+    evidence_type,
     file_path,
     uploaded_by,
     created_at,
+    type: evidence_type,
   }
   if (raw.evidence_id != null) out.evidence_id = raw.evidence_id as string
   if (raw.file_sha256 != null) out.file_sha256 = raw.file_sha256 as string
   if (raw.file_size != null) out.file_size = raw.file_size as number
-  if (raw.mime_type != null) out.mime_type = raw.mime_type as string
   if (raw.phase != null) out.phase = raw.phase as string
-  if (raw.evidence_type != null) out.evidence_type = raw.evidence_type as string
   if (raw.sealed_at != null) out.sealed_at = raw.sealed_at as string
   if ((raw.document_id as string) && (raw.document_id as string) !== id)
     out.document_id = raw.document_id as string

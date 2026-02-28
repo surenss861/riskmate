@@ -84,10 +84,11 @@ function buildTestObjectForEventType(eventType: string): Record<string, unknown>
       }
     case 'evidence.uploaded':
       return {
-        document_id: testId,
+        id: testId,
         job_id: testId,
         name: 'test-document.pdf',
-        type: 'application/pdf',
+        mime_type: 'application/pdf',
+        evidence_type: 'document',
         file_path: 'uploads/test.pdf',
         uploaded_by: testId,
         created_at: ts,

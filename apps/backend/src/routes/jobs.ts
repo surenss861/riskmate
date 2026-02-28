@@ -3054,8 +3054,10 @@ jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: 
       job_id: jobId,
       name: inserted.name,
       type: inserted.type,
+      mime_type: inserted.mime_type ?? "application/octet-stream",
       file_path: inserted.file_path,
       uploaded_by: userId,
+      created_at: inserted.created_at,
     }).catch((e) => console.warn("[Jobs] Webhook evidence.uploaded enqueue failed:", e));
 
     invalidateJobReportCache(organization_id, jobId);

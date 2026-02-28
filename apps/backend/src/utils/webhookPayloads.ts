@@ -43,33 +43,73 @@ function buildReportGeneratedObject(raw: Record<string, unknown>): Record<string
   }
 }
 
+const EVIDENCE_TYPE_KINDS = ['photo', 'document', 'other'] as const
+type EvidenceTypeKind = (typeof EVIDENCE_TYPE_KINDS)[number]
+
+function deriveEvidenceType(raw: Record<string, unknown>, mimeType: string): EvidenceTypeKind {
+  const rawType = (raw.type as string)?.toLowerCase().trim()
+  if (rawType === 'photo') return 'photo'
+  if (rawType === 'evidence') return 'document'
+  const rawEvidenceType = (raw.evidence_type as string)?.toLowerCase().trim()
+  if (rawEvidenceType && EVIDENCE_TYPE_KINDS.includes(rawEvidenceType as EvidenceTypeKind))
+    return rawEvidenceType as EvidenceTypeKind
+  if (mimeType.toLowerCase().startsWith('image/')) return 'photo'
+  if (
+    mimeType.toLowerCase().startsWith('application/') ||
+    mimeType.toLowerCase().startsWith('video/')
+  )
+    return 'document'
+  return 'other'
+}
+
+const EVIDENCE_UPLOADED_REQUIRED = ['id', 'job_id', 'name', 'file_path', 'uploaded_by', 'created_at'] as const
+
 /**
  * Build canonical data.object for evidence.uploaded.
+ * Same contract as app lib/webhooks/payloads.ts: mime_type and evidence_type always set; validation for required fields.
  */
 function buildEvidenceUploadedObject(raw: Record<string, unknown>): Record<string, unknown> {
   const id = (raw.id as string) ?? (raw.document_id as string) ?? ''
   const job_id = (raw.job_id as string) ?? ''
   const name = (raw.name as string) ?? (raw.file_name as string) ?? ''
-  const type = (raw.type as string) ?? ''
   const file_path = (raw.file_path as string) ?? (raw.storage_path as string) ?? ''
   const uploaded_by = (raw.uploaded_by as string) ?? ''
   const created_at = (raw.created_at as string) ?? new Date().toISOString()
+
+  const mime_type =
+    (typeof raw.mime_type === 'string' && raw.mime_type.trim()) || 'application/octet-stream'
+  const evidence_type = deriveEvidenceType(raw, mime_type)
+
+  const required: Record<string, string> = {
+    id,
+    job_id,
+    name,
+    file_path,
+    uploaded_by,
+    created_at,
+  }
+  for (const key of EVIDENCE_UPLOADED_REQUIRED) {
+    const value = required[key]
+    if (value === undefined || value === null || String(value).trim() === '') {
+      throw new Error(`evidence.uploaded missing required field: ${key}`)
+    }
+  }
 
   const out: Record<string, unknown> = {
     id,
     job_id,
     name,
-    type,
+    mime_type,
+    evidence_type,
     file_path,
     uploaded_by,
     created_at,
+    type: evidence_type,
   }
   if (raw.evidence_id != null) out.evidence_id = raw.evidence_id
   if (raw.file_sha256 != null) out.file_sha256 = raw.file_sha256
   if (raw.file_size != null) out.file_size = raw.file_size
-  if (raw.mime_type != null) out.mime_type = raw.mime_type
   if (raw.phase != null) out.phase = raw.phase
-  if (raw.evidence_type != null) out.evidence_type = raw.evidence_type
   if (raw.sealed_at != null) out.sealed_at = raw.sealed_at
   if ((raw.document_id as string) && (raw.document_id as string) !== id)
     out.document_id = raw.document_id

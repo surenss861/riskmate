@@ -280,10 +280,11 @@ export async function POST(
     if (isEvidenceOrPhoto) {
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
       await triggerWebhookEvent(organization_id, 'evidence.uploaded', {
-        document_id: inserted.id,
+        id: inserted.id,
         job_id: jobId,
         name: inserted.name,
         type: inserted.type,
+        mime_type: inserted.mime_type ?? 'application/octet-stream',
         file_path: inserted.file_path,
         uploaded_by: userId,
         created_at: inserted.created_at,
