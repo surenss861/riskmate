@@ -148,18 +148,30 @@ export async function POST(request: NextRequest) {
   await Promise.allSettled(sideEffectPromises)
 
   const completedAt = status === 'completed' ? new Date().toISOString() : undefined
+  const webhookPromises: Array<{ jobId: string; event: 'job.updated' | 'job.completed'; promise: Promise<unknown> }> = []
   for (const jobId of succeeded) {
     const previousStatus = found.get(jobId)?.status
     const payload = { id: jobId, status, ...(completedAt != null ? { completed_at: completedAt } : {}) }
-    triggerWebhookEvent(organization_id, 'job.updated', payload).catch((e) =>
-      console.warn('[Webhook] bulk job.updated trigger failed:', e)
-    )
+    webhookPromises.push({
+      jobId,
+      event: 'job.updated',
+      promise: triggerWebhookEvent(organization_id, 'job.updated', payload),
+    })
     if (status === 'completed' && previousStatus !== 'completed') {
-      triggerWebhookEvent(organization_id, 'job.completed', payload).catch((e) =>
-        console.warn('[Webhook] bulk job.completed trigger failed:', e)
-      )
+      webhookPromises.push({
+        jobId,
+        event: 'job.completed',
+        promise: triggerWebhookEvent(organization_id, 'job.completed', payload),
+      })
     }
   }
+  const webhookResults = await Promise.allSettled(webhookPromises.map((w) => w.promise))
+  webhookResults.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      const { jobId, event } = webhookPromises[i]
+      console.warn('[Webhook] bulk enqueue failed', { jobId, event, error: result.reason })
+    }
+  })
 
   for (const id of eligibleIds) {
     if (!succeeded.includes(id)) {
