@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
@@ -7,6 +8,8 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { getUserRole } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -14,14 +17,14 @@ const ROUTE = '/api/webhooks/[id]'
 
 const EVENT_TYPES_SET = new Set(WEBHOOK_EVENT_TYPES)
 
-/** PATCH - Update endpoint (URL, events, active status) */
+/** PATCH - Update endpoint (URL, events, active status). Requires owner/admin. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id } = await params
     const supabase = await createSupabaseServerClient()
 
@@ -37,6 +40,9 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const admin = createSupabaseAdminClient()
+    const role = await getUserRole(admin, user_id, endpoint.organization_id)
+    requireAdminOrOwner(role)
 
     const body = await request.json().catch(() => ({}))
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -111,6 +117,17 @@ export async function PATCH(
     return NextResponse.json({ data: updated })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Forbidden')) {
+      const { response, errorId } = createErrorResponse(
+        msg,
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     if (msg.includes('Unauthorized') || msg.includes('organization')) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
@@ -134,14 +151,14 @@ export async function PATCH(
   }
 }
 
-/** DELETE - Delete endpoint */
+/** DELETE - Delete endpoint. Requires owner/admin. */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id } = await params
     const supabase = await createSupabaseServerClient()
 
@@ -157,6 +174,9 @@ export async function DELETE(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const admin = createSupabaseAdminClient()
+    const role = await getUserRole(admin, user_id, endpoint.organization_id)
+    requireAdminOrOwner(role)
 
     const { error } = await supabase.from('webhook_endpoints').delete().eq('id', id)
 
@@ -175,6 +195,17 @@ export async function DELETE(
     return new NextResponse(null, { status: 204 })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Forbidden')) {
+      const { response, errorId } = createErrorResponse(
+        msg,
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     if (msg.includes('Unauthorized') || msg.includes('organization')) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',

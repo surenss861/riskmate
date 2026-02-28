@@ -23,6 +23,7 @@ export default function WebhooksPage() {
   const [endpoints, setEndpoints] = useState<WebhookEndpoint[]>([])
   const [stats, setStats] = useState<Record<string, DeliveryStats>>({})
   const [loading, setLoading] = useState(true)
+  const [canManage, setCanManage] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [logsEndpoint, setLogsEndpoint] = useState<{ id: string; url: string } | null>(null)
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null)
@@ -33,6 +34,12 @@ export default function WebhooksPage() {
     try {
       const res = await fetch('/api/webhooks', { credentials: 'include' })
       const json = await res.json()
+      if (res.status === 403) {
+        setCanManage(false)
+        setEndpoints([])
+        return
+      }
+      setCanManage(true)
       setEndpoints(Array.isArray(json.data) ? json.data : [])
     } catch {
       setEndpoints([])
@@ -177,12 +184,19 @@ export default function WebhooksPage() {
               title="Webhooks"
               subtitle="Send events to your own endpoints when jobs, hazards, and reports change."
             />
-            <div className="flex justify-end mb-6">
-              <Button onClick={() => setAddOpen(true)}>Add endpoint</Button>
-            </div>
+            {canManage && (
+              <div className="flex justify-end mb-6">
+                <Button onClick={() => setAddOpen(true)}>Add endpoint</Button>
+              </div>
+            )}
 
             {loading ? (
               <div className="text-white/60">Loading…</div>
+            ) : !canManage ? (
+              <GlassCard className="p-8 text-center text-white/70">
+                <p className="mb-4">Only owners and admins can view and manage webhook endpoints.</p>
+                <p className="text-sm text-white/50">Ask an organization owner or admin to grant you access or to manage webhooks.</p>
+              </GlassCard>
             ) : endpoints.length === 0 ? (
               <GlassCard className="p-8 text-center text-white/70">
                 <p className="mb-4">No webhook endpoints yet.</p>
@@ -227,39 +241,41 @@ export default function WebhooksPage() {
                           <span>Last: {formatLast(stats[ep.id]?.lastDelivery ?? null)}</span>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setLogsEndpoint({ id: ep.id, url: ep.url })}
-                        >
-                          View logs
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setEditingEndpoint(ep)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleTest(ep.id)}
-                          disabled={!!testingId || !ep.is_active}
-                          title={!ep.is_active ? 'Resume the endpoint to send a test' : undefined}
-                        >
-                          {testingId === ep.id ? 'Sending…' : 'Send test'}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleDelete(ep.id)}
-                          disabled={!!deletingId}
-                        >
-                          Delete
-                        </Button>
-                      </div>
+                      {canManage && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setLogsEndpoint({ id: ep.id, url: ep.url })}
+                          >
+                            View logs
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setEditingEndpoint(ep)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleTest(ep.id)}
+                            disabled={!!testingId || !ep.is_active}
+                            title={!ep.is_active ? 'Resume the endpoint to send a test' : undefined}
+                          >
+                            {testingId === ep.id ? 'Sending…' : 'Send test'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleDelete(ep.id)}
+                            disabled={!!deletingId}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </GlassCard>
                 ))}

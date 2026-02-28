@@ -7,6 +7,8 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
+import { getUserRole } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -108,7 +110,7 @@ export async function POST(
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 
@@ -124,6 +126,9 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const admin = createSupabaseAdminClient()
+    const role = await getUserRole(admin, user_id, (endpoint as { organization_id: string }).organization_id)
+    requireAdminOrOwner(role)
 
     if ((endpoint as { is_active?: boolean }).is_active === false) {
       const { response, errorId } = createErrorResponse(
@@ -227,6 +232,17 @@ export async function POST(
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Forbidden')) {
+      const { response, errorId } = createErrorResponse(
+        msg,
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     if (msg.includes('Unauthorized') || msg.includes('organization')) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',

@@ -29,10 +29,20 @@ jest.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: jest.fn(() => Promise.resolve(supabaseMock)),
 }))
 
+jest.mock('@/lib/supabase/admin', () => ({
+  createSupabaseAdminClient: jest.fn(() => ({})),
+}))
+
 jest.mock('@/lib/utils/organizationGuard', () => ({
   getWebhookOrganizationContext: jest.fn().mockResolvedValue({
     organization_ids: [ORG_ID],
+    user_id: 'user-id-for-test',
   }),
+}))
+
+jest.mock('@/lib/utils/adminAuth', () => ({
+  getUserRole: jest.fn().mockResolvedValue('admin'),
+  requireAdminOrOwner: jest.fn(),
 }))
 
 describe('POST /api/webhooks/deliveries/[deliveryId]/retry', () => {
@@ -51,6 +61,7 @@ describe('POST /api/webhooks/deliveries/[deliveryId]/retry', () => {
               payload: PAYLOAD,
               delivered_at: null,
               next_retry_at: null,
+              webhook_endpoints: { organization_id: ORG_ID },
             })
           }
           return {

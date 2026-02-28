@@ -1,8 +1,8 @@
 /**
  * Webhook delivery: enqueue deliveries for events, send with HMAC signature, retry with backoff.
  * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin after 5 consecutive failures.
- * Note: webhook_endpoints.secret is read from DB (plaintext). Rotate SUPABASE_SERVICE_ROLE_KEY
- * regularly and restrict/audit service-role access to webhook_endpoints.
+ * Secrets are read from webhook_endpoint_secrets (service-role only). Rotate SUPABASE_SERVICE_ROLE_KEY
+ * regularly and restrict/audit service-role access.
  */
 
 import crypto from 'crypto'
@@ -164,7 +164,7 @@ export async function deliverEvent(
 
   const { data: endpoints, error: fetchError } = await supabase
     .from('webhook_endpoints')
-    .select('id, organization_id, url, secret, events, is_active')
+    .select('id, organization_id, url, events, is_active')
     .eq('organization_id', orgId)
     .eq('is_active', true)
 
@@ -227,11 +227,20 @@ async function recordAttempt(
 export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> {
   const { data: endpoint, error: epError } = await supabase
     .from('webhook_endpoints')
-    .select('url, secret, is_active')
+    .select('url, is_active')
     .eq('id', delivery.endpoint_id)
     .single()
 
-  if (epError || !endpoint) {
+  const { data: secretRow } = await supabase
+    .from('webhook_endpoint_secrets')
+    .select('secret')
+    .eq('endpoint_id', delivery.endpoint_id)
+    .maybeSingle()
+
+  const secret = secretRow?.secret ?? null
+  const endpointWithSecret = endpoint ? { ...endpoint, secret } : null
+
+  if (epError || !endpointWithSecret || !secret) {
     console.error('[WebhookDelivery] Endpoint not found:', delivery.endpoint_id)
     const attemptNumber = delivery.attempt_count
     await recordAttempt(delivery.id, attemptNumber, null, 'Endpoint not found (missing or deleted)', 0)
@@ -249,7 +258,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  if (endpoint.is_active === false) {
+  if (endpointWithSecret.is_active === false) {
     const msg = 'Endpoint is paused; delivery cancelled'
     console.log('[WebhookDelivery] Endpoint paused, cancelling delivery:', delivery.id, delivery.endpoint_id)
     await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0)
@@ -266,7 +275,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  const urlCheck = await validateWebhookUrl(endpoint.url)
+  const urlCheck = await validateWebhookUrl(endpointWithSecret.url)
   if (!urlCheck.valid) {
     const forceTerminal = urlCheck.terminal // only true for explicit policy (SSRF/blocked); DNS/transient → retry
     console.error(
@@ -289,7 +298,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   }
 
   const payloadStr = JSON.stringify(delivery.payload)
-  const headers = buildSignatureHeaders(payloadStr, endpoint.secret)
+  const headers = buildSignatureHeaders(payloadStr, endpointWithSecret.secret)
 
   const start = Date.now()
   let responseStatus: number | null = null

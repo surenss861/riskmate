@@ -27,7 +27,13 @@ jest.mock('@/lib/utils/organizationGuard', () => ({
   getWebhookOrganizationContext: jest.fn().mockResolvedValue({
     organization_id: ORG_ID,
     organization_ids: [ORG_ID],
+    user_id: 'user-id-for-test',
   }),
+}))
+
+jest.mock('@/lib/utils/adminAuth', () => ({
+  getUserRole: jest.fn().mockResolvedValue('admin'),
+  requireAdminOrOwner: jest.fn(),
 }))
 
 const buildSelectSingleMock = (data: unknown) => ({

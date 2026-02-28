@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
+import { getUserRole } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]/deliveries'
 
-/** GET - List delivery logs with status, response, timing */
+/** GET - List delivery logs with status, response, timing. Requires owner/admin. */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_id, organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 
@@ -33,6 +36,9 @@ export async function GET(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const admin = createSupabaseAdminClient()
+    const role = await getUserRole(admin, user_id, endpoint.organization_id)
+    requireAdminOrOwner(role)
 
     const { searchParams } = request.nextUrl
     const rawLimit = parseInt(searchParams.get('limit') || '50', 10)
@@ -119,6 +125,17 @@ export async function GET(
     return NextResponse.json({ data })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Forbidden')) {
+      const { response, errorId } = createErrorResponse(
+        msg,
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     if (msg.includes('Unauthorized') || msg.includes('organization')) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',

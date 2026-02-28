@@ -1,23 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
+import { getUserRole } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/stats'
 
-/** GET - Aggregate delivery stats per endpoint (full history) for the org's webhooks dashboard. */
+/** GET - Aggregate delivery stats per endpoint (full history). Requires owner/admin in each org. */
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_ids } = await getWebhookOrganizationContext(request)
+    const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
+    const admin = createSupabaseAdminClient()
+    const adminOrgIds: string[] = []
+    for (const orgId of organization_ids) {
+      const role = await getUserRole(admin, user_id, orgId)
+      if (role === 'owner' || role === 'admin') adminOrgIds.push(orgId)
+    }
+    if (adminOrgIds.length === 0) {
+      const { response, errorId } = createErrorResponse(
+        'Forbidden: Only owners and admins can view webhook stats',
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     const supabase = await createSupabaseServerClient()
 
     const allRows: unknown[] = []
-    for (const orgId of organization_ids) {
+    for (const orgId of adminOrgIds) {
       const { data: rows, error } = await supabase.rpc('get_webhook_endpoint_stats', {
         p_org_id: orgId,
       })
@@ -73,6 +92,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
+    if (msg.includes('Forbidden')) {
+      const { response, errorId } = createErrorResponse(
+        msg,
+        'FORBIDDEN',
+        { requestId, statusCode: 403 }
+      )
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     if (msg.includes('Unauthorized') || msg.includes('organization')) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
