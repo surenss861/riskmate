@@ -6,7 +6,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { generateSecret } from '@/lib/utils/webhookSigning'
-import { encryptWebhookSecret } from '@/lib/utils/secretEncryption'
+import { encryptWebhookSecret, WEBHOOK_SECRET_ENCRYPTION_KEY_ERROR } from '@/lib/utils/secretEncryption'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
 import { getUserRole } from '@/lib/utils/adminAuth'
@@ -191,8 +191,25 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = generateSecret()
-    const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
-    const secretToStore = encryptWebhookSecret(secret, keyHex) ?? secret
+    let secretToStore: string
+    try {
+      const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
+      secretToStore = encryptWebhookSecret(secret, keyHex)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : WEBHOOK_SECRET_ENCRYPTION_KEY_ERROR
+      const { response, errorId } = createErrorResponse(
+        `Server configuration error: ${msg}. Webhook creation is disabled until fixed.`,
+        'CONFIG_ERROR',
+        { requestId, statusCode: 503 }
+      )
+      logApiError(503, 'CONFIG_ERROR', errorId, requestId, organization_id, response.message, {
+        category: 'internal', severity: 'error', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 503,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
 
     const { data: rows, error } = await admin.rpc('create_webhook_endpoint_with_secret', {
       p_organization_id: organization_id,

@@ -98,7 +98,7 @@ function isBlockedIpv4(host: string): boolean {
   if (parts.length !== 4) return false
   const octets = parts.map((p) => parseInt(p, 10))
   if (octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false
-  const [a, b] = octets
+  const [a, b, c] = octets
   if (a === 0) return true
   if (a === 10) return true
   if (a === 127) return true
@@ -107,6 +107,12 @@ function isBlockedIpv4(host: string): boolean {
   if (a === 192 && b === 168) return true
   if (a === 100 && b >= 64 && b <= 127) return true
   if (a >= 224 && a <= 239) return true
+  if (a >= 240) return true
+  if (a === 198 && b >= 18 && b <= 19) return true
+  if (a === 192 && b === 0 && c === 0) return true
+  if (a === 192 && b === 0 && c === 2) return true
+  if (a === 198 && b === 51 && c === 100) return true
+  if (a === 203 && b === 0 && c === 113) return true
   return false
 }
 

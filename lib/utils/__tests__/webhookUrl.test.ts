@@ -107,4 +107,80 @@ describe('validateWebhookUrl – IPv4-mapped IPv6 and reserved ranges', () => {
       expect(result.valid === false && result.reason).toContain('public')
     })
   })
+
+  describe('IPv4 reserved / special-use ranges (must be blocked)', () => {
+    it('blocks 240.0.0.1 (240.0.0.0/4 Class E)', async () => {
+      const result = await validateWebhookUrl('https://240.0.0.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 255.255.255.255 (limited broadcast)', async () => {
+      const result = await validateWebhookUrl('https://255.255.255.255/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 198.18.0.1 (198.18.0.0/15 benchmarking)', async () => {
+      const result = await validateWebhookUrl('https://198.18.0.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 198.19.255.1 (198.18.0.0/15)', async () => {
+      const result = await validateWebhookUrl('https://198.19.255.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 192.0.0.1 (192.0.0.0/24 IETF)', async () => {
+      const result = await validateWebhookUrl('https://192.0.0.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 192.0.2.1 (TEST-NET)', async () => {
+      const result = await validateWebhookUrl('https://192.0.2.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 198.51.100.1 (TEST-NET-2)', async () => {
+      const result = await validateWebhookUrl('https://198.51.100.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 203.0.113.1 (TEST-NET-3)', async () => {
+      const result = await validateWebhookUrl('https://203.0.113.1/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+  })
+
+  describe('IPv4-mapped IPv6 reserved ranges (must be blocked)', () => {
+    it('blocks ::ffff:240.0.0.1 (240.0.0.0/4)', async () => {
+      const result = await validateWebhookUrl('https://[::ffff:240.0.0.1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks ::ffff:255.255.255.255 (limited broadcast)', async () => {
+      const result = await validateWebhookUrl('https://[::ffff:255.255.255.255]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks ::ffff:198.18.0.1 (198.18.0.0/15)', async () => {
+      const result = await validateWebhookUrl('https://[::ffff:198.18.0.1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks ::ffff:192.0.2.1 (TEST-NET)', async () => {
+      const result = await validateWebhookUrl('https://[::ffff:192.0.2.1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+  })
 })

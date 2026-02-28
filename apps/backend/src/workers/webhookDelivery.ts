@@ -8,7 +8,7 @@
 import crypto from 'crypto'
 import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
-import { decryptWebhookSecret } from '../utils/secretEncryption'
+import { decryptWebhookSecret, validateWebhookSecretEncryptionKey } from '../utils/secretEncryption'
 import { validateWebhookUrl } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
 import { buildWebhookEventObject } from '../utils/webhookPayloads'
@@ -252,8 +252,29 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     .maybeSingle()
 
   const rawSecret = secretRow?.secret ?? null
-  const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
-  const secret = rawSecret != null ? decryptWebhookSecret(rawSecret, keyHex) : null
+  let secret: string | null = null
+  if (rawSecret != null) {
+    try {
+      const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
+      secret = decryptWebhookSecret(rawSecret, keyHex)
+    } catch (decryptErr) {
+      const reason = decryptErr instanceof Error ? decryptErr.message : 'Webhook secret decryption failed (invalid or missing WEBHOOK_SECRET_ENCRYPTION_KEY)'
+      console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
+      await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+      await supabase
+        .from('webhook_deliveries')
+        .update({
+          response_status: null,
+          response_body: reason,
+          duration_ms: 0,
+          next_retry_at: null,
+          processing_since: null,
+          terminal_outcome: 'failed',
+        })
+        .eq('id', delivery.id)
+      return
+    }
+  }
   const endpointWithSecret = endpoint ? { ...endpoint, secret } : null
 
   // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
@@ -734,6 +755,10 @@ export function startWebhookDeliveryWorker(): void {
     console.error('[WebhookDelivery] SUPABASE_SERVICE_ROLE_KEY is missing; secret fetch will fail')
   } else {
     console.log('[WebhookDelivery] Supabase client: service role (secrets accessible)')
+  }
+  const keyValidation = validateWebhookSecretEncryptionKey(process.env.WEBHOOK_SECRET_ENCRYPTION_KEY)
+  if (!keyValidation.valid) {
+    console.error('[WebhookDelivery]', keyValidation.message, '- encrypted webhook secrets will fail to decrypt; ensure web and backend use the same key')
   }
   // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback
   const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '2000', 10))
