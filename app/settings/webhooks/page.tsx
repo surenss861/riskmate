@@ -112,9 +112,11 @@ export default function WebhooksPage() {
     return `${Math.floor(diffH / 24)} days ago`
   }
 
+  // Show Failing only when endpoint has never successfully delivered (delivered === 0 and failed > 0).
+  // This avoids permanently marking as Failing after recovery (historical failures but recent success).
   const isFailing = (epId: string) => {
     const s = stats[epId]
-    return !!(s && s.failed > 0)
+    return !!(s && s.failed > 0 && s.delivered === 0)
   }
 
   return (

@@ -1,9 +1,11 @@
 /**
- * SSRF-safe webhook URL validation (defense-in-depth): reject localhost, loopback,
- * private, link-local, CGNAT, multicast, and reserved ranges. Resolves DNS (A/AAAA)
- * and rejects if any resolved address is non-public. Used before sending in the worker
- * to mitigate DNS rebinding between endpoint creation and delivery.
+ * SSRF-safe webhook URL validation: reject localhost, loopback, private,
+ * link-local, CGNAT, multicast, and reserved ranges; enforce HTTPS outside local development.
+ * Resolves DNS (A/AAAA) and rejects if any resolved address is non-public to prevent
+ * DNS rebinding and hostnames that resolve to internal IPs.
  * IPv4-mapped IPv6 (including hex forms like ::ffff:7f00:1) are normalized and checked.
+ *
+ * Canonical source: lib/utils/webhookUrl.ts. Keep in sync with that file (CI checks identity).
  */
 
 import { promises as dns } from 'node:dns'
@@ -15,9 +17,8 @@ export type WebhookUrlResult =
   | { valid: false; reason: string; terminal: false } // transient (DNS/lookup/runtime) — allow retries
 
 /**
- * Returns whether the URL is allowed for webhook delivery.
+ * Returns whether the URL is allowed for webhook endpoints.
  * Resolves hostnames and rejects if any resolved IP is private/loopback/link-local/CGNAT/multicast.
- * Call before fetch() in the worker to re-validate at send-time.
  */
 export async function validateWebhookUrl(urlString: string): Promise<WebhookUrlResult> {
   try {

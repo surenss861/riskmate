@@ -97,9 +97,13 @@ export function DeliveryLogsModal({
     }
     setRetryErrors(errors)
     if (endpointId) {
-      const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
-      const json = await res.json()
-      setDeliveries(Array.isArray(json.data) ? json.data : [])
+      try {
+        const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
+        const json = await res.json()
+        setDeliveries(Array.isArray(json.data) ? json.data : [])
+      } catch (e) {
+        console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)
+      }
     }
   }
 

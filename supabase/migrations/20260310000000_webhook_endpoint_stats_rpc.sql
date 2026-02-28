@@ -1,6 +1,11 @@
 -- Aggregate webhook delivery stats per endpoint for dashboard (full history, not paginated).
 -- Used by GET /api/webhooks/stats to show accurate delivered/pending/failed counts and last delivery.
 -- Tenant scoping: returns data only if p_org_id is an organization the caller belongs to (users or organization_members).
+--
+-- failed: only counts deliveries that exhausted all retries (attempt_count >= 5, matching MAX_ATTEMPTS in the worker).
+-- Other terminal states (paused endpoint, blocked URL, etc.) have delivered_at IS NULL AND next_retry_at IS NULL
+-- but attempt_count < 5; they are not counted as failed. To expose them separately, consider adding a
+-- terminal_reason or is_terminal column to webhook_deliveries and a cancelled count here.
 
 CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
@@ -19,7 +24,7 @@ AS $$
     wd.endpoint_id,
     count(*) FILTER (WHERE wd.delivered_at IS NOT NULL)::bigint AS delivered,
     count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NOT NULL)::bigint AS pending,
-    count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 1)::bigint AS failed,
+    count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.attempt_count >= 5)::bigint AS failed,
     NULLIF(GREATEST(
       COALESCE(
         (SELECT max(wda.created_at)

@@ -4,6 +4,8 @@
  * Resolves DNS (A/AAAA) and rejects if any resolved address is non-public to prevent
  * DNS rebinding and hostnames that resolve to internal IPs.
  * IPv4-mapped IPv6 (including hex forms like ::ffff:7f00:1) are normalized and checked.
+ *
+ * Canonical source: this file. Keep in sync with apps/backend/src/utils/webhookUrl.ts (CI checks identity).
  */
 
 import { promises as dns } from 'node:dns'

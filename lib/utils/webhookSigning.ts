@@ -3,6 +3,8 @@
  * Signatures are computed over a canonical timestamp-bound message (timestamp + separator + payload)
  * so that replay and header tampering are detectable. Headers: X-RiskMate-Signature: sha256={hash},
  * X-RiskMate-Timestamp: {unix}.
+ *
+ * Canonical source: this file. Keep in sync with apps/backend/src/utils/webhookSigning.ts (CI checks identity).
  */
 
 import crypto from 'crypto'

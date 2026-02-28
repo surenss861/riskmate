@@ -48,7 +48,16 @@ export async function POST(
       })
     }
 
-    const eventType = 'job.created'
+    // Use the endpoint's subscribed events so the test matches what they receive in production
+    const events = Array.isArray((endpoint as { events?: string[] }).events)
+      ? (endpoint as { events: string[] }).events
+      : []
+    const eventType =
+      events.length > 0
+        ? events.includes('job.created')
+          ? 'job.created'
+          : events[0]
+        : 'job.created'
     const payload = {
       id: `evt_test_${Date.now()}`,
       type: eventType,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'
 import { calculateRiskScore, generateMitigationItems } from '@/lib/utils/riskScoring'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -118,8 +119,21 @@ export async function POST(
       ? finalFactorCodes
       : newFactorCodes.filter((code) => !currentFactorCodes.includes(code))
 
+    let insertedHazards: Awaited<ReturnType<typeof generateMitigationItems>> = []
     if (newFactorsForMitigation.length > 0) {
-      await generateMitigationItems(jobId, newFactorsForMitigation)
+      insertedHazards = await generateMitigationItems(jobId, newFactorsForMitigation)
+    }
+
+    // Fire hazard.created for each new mitigation item (hazard) created via apply-template
+    for (const item of insertedHazards) {
+      await triggerWebhookEvent(organization_id, 'hazard.created', {
+        id: item.id,
+        job_id: jobId,
+        title: item.title ?? '',
+        description: item.description ?? '',
+        created_at: item.created_at,
+        updated_at: item.updated_at ?? item.created_at,
+      }).catch((e) => console.warn('[ApplyTemplate] Webhook hazard.created enqueue failed:', e))
     }
 
     // Create audit log entry

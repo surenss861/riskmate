@@ -76,5 +76,6 @@ export async function triggerWebhookEvent(
   const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
   if (insertError) {
     console.error('[WebhookTrigger] Batched insert deliveries failed:', insertError)
+    throw new Error(`Webhook delivery enqueue failed: ${insertError.message}`)
   }
 }

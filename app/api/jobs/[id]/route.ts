@@ -1,3 +1,9 @@
+/**
+ * Next.js API: GET /api/jobs/[id], PATCH /api/jobs/[id].
+ * Single-job DELETE is not implemented here: the web client uses the Express backend (BACKEND_URL)
+ * for DELETE /api/jobs/:id, which performs eligibility checks, soft-delete, and fires
+ * deliverEvent(organization_id, 'job.deleted', ...). No DELETE handler is needed in this file.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getOrganizationContext, verifyJobOwnership } from '@/lib/utils/organizationGuard'

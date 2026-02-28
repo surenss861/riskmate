@@ -99,10 +99,18 @@ export async function calculateRiskScore(
   }
 }
 
+export interface InsertedMitigationItem {
+  id: string
+  title: string | null
+  description: string | null
+  created_at: string
+  updated_at: string | null
+}
+
 export async function generateMitigationItems(
   jobId: string,
   riskFactorCodes: string[]
-): Promise<void> {
+): Promise<InsertedMitigationItem[]> {
   const supabase = await createSupabaseServerClient()
 
   // Fetch risk factors with mitigation steps
@@ -114,10 +122,10 @@ export async function generateMitigationItems(
 
   if (error || !riskFactors) {
     console.error('Error fetching risk factors for mitigation:', error)
-    return
+    return []
   }
 
-  // Generate mitigation items from all risk factors
+  // Generate mitigation items from all risk factors (hazards: no hazard_id)
   const mitigationItems: Array<{
     job_id: string
     title: string
@@ -140,9 +148,17 @@ export async function generateMitigationItems(
     }
   }
 
-  // Insert mitigation items
-  if (mitigationItems.length > 0) {
-    await supabase.from('mitigation_items').insert(mitigationItems)
+  if (mitigationItems.length === 0) return []
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('mitigation_items')
+    .insert(mitigationItems)
+    .select('id, title, description, created_at, updated_at')
+
+  if (insertError) {
+    console.error('Error inserting mitigation items:', insertError)
+    return []
   }
+  return (inserted ?? []) as InsertedMitigationItem[]
 }
 

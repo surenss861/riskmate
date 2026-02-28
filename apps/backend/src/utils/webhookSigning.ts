@@ -1,8 +1,10 @@
 /**
- * HMAC signing for webhook payloads (backend copy; mirrors lib/utils/webhookSigning.ts).
+ * HMAC signing for webhook payloads.
  * Signatures are computed over a canonical timestamp-bound message (timestamp + separator + payload)
  * so that replay and header tampering are detectable. Headers: X-RiskMate-Signature: sha256={hash},
  * X-RiskMate-Timestamp: {unix}.
+ *
+ * Canonical source: lib/utils/webhookSigning.ts. Keep in sync with that file (CI checks identity).
  */
 
 import crypto from 'crypto'
@@ -11,8 +13,10 @@ const ALGORITHM = 'sha256'
 const SIGNATURE_PREFIX = 'sha256='
 /** Separator for canonical message: timestamp + SEPARATOR + payload. */
 const TIMESTAMP_PAYLOAD_SEPARATOR = '.'
-const SHA256_HEX_LENGTH = 64
 
+/**
+ * Generate a 32-byte hex secret for webhook signing.
+ */
 export function generateSecret(): string {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -25,6 +29,10 @@ export function buildTimestampBoundMessage(timestamp: string, payload: string): 
   return timestamp + TIMESTAMP_PAYLOAD_SEPARATOR + payload
 }
 
+/**
+ * Sign a payload with HMAC-SHA256 using the given secret (payload only; prefer signPayloadWithTimestamp for webhooks).
+ * Returns the hex digest (without "sha256=" prefix; add when setting header).
+ */
 export function signPayload(payload: string, secret: string): string {
   return crypto.createHmac(ALGORITHM, secret).update(payload, 'utf8').digest('hex')
 }
@@ -41,6 +49,8 @@ export function signPayloadWithTimestamp(
   const message = buildTimestampBoundMessage(timestamp, payload)
   return crypto.createHmac(ALGORITHM, secret).update(message, 'utf8').digest('hex')
 }
+
+const SHA256_HEX_LENGTH = 64
 
 function parseAndCompareSignature(
   expected: string,
