@@ -18,6 +18,7 @@ export async function getEndpointAndCheckOrg(
     .eq('id', endpointId)
     .single()
   if (error || !data) return null
-  if (!organizationIds.includes(data.organization_id)) return null
-  return data as { id: string; organization_id: string; [k: string]: unknown }
+  const row = data as unknown as { id: string; organization_id: string; [k: string]: unknown }
+  if (!organizationIds.includes(row.organization_id)) return null
+  return row
 }

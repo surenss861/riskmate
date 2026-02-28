@@ -142,9 +142,8 @@ export async function POST(
       })
     }
 
-    const events = Array.isArray((endpoint as { events?: string[] }).events)
-      ? (endpoint as { events: string[] }).events
-      : []
+    const rawEvents = (endpoint as Record<string, unknown>).events
+    const events = Array.isArray(rawEvents) ? (rawEvents as string[]) : []
 
     // Optional: accept requested test event type in body; validate against subscribed events
     let eventType: string

@@ -65,7 +65,7 @@ export async function PATCH(
     }
     if (Array.isArray(body.events)) {
       const invalid = body.events.filter(
-        (e: unknown) => typeof e !== 'string' || !EVENT_TYPES_SET.has(e)
+        (e: unknown) => typeof e !== 'string' || !(EVENT_TYPES_SET as Set<string>).has(e)
       )
       if (invalid.length > 0) {
         const { response, errorId } = createErrorResponse(

@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     const invalidEvents = events.filter(
-      (e: unknown) => typeof e !== 'string' || !EVENT_TYPES_SET.has(e)
+      (e: unknown) => typeof e !== 'string' || !(EVENT_TYPES_SET as Set<string>).has(e)
     )
     if (invalidEvents.length > 0) {
       const { response, errorId } = createErrorResponse(
