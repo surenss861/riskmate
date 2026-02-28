@@ -23,7 +23,7 @@ export async function POST(
     // Fetch delivery with admin client (bypass RLS) so join to webhook_endpoints always returns organization_id; enforce org membership in app code below.
     const { data: deliveryRow, error: delError } = await admin
       .from('webhook_deliveries')
-      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, webhook_endpoints(organization_id)')
+      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, terminal_outcome, webhook_endpoints(organization_id)')
       .eq('id', deliveryId)
       .single()
 
@@ -50,6 +50,30 @@ export async function POST(
       const { response, errorId } = createErrorResponse(
         'Delivery already succeeded; retry not allowed for successful deliveries',
         'ALREADY_DELIVERED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (delivery.terminal_outcome === 'cancelled_policy') {
+      const { response, errorId } = createErrorResponse(
+        'Delivery was cancelled due to a policy violation (blocked URL); update the endpoint URL before retrying.',
+        'CANCELLED_POLICY',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (delivery.terminal_outcome === 'cancelled_paused') {
+      const { response, errorId } = createErrorResponse(
+        'Delivery was cancelled because the endpoint was paused; resume the endpoint first, then retry if needed.',
+        'CANCELLED_PAUSED',
         { requestId, statusCode: 400 }
       )
       return NextResponse.json(response, {

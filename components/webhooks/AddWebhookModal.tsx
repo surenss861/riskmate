@@ -136,6 +136,8 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     setDescription('')
     setSelectedEvents(new Set())
     setError(null)
+    setCreatedSecret(null)
+    setCreatedEndpoint(null)
   }
 
   const handleCloseAfterSecret = () => {

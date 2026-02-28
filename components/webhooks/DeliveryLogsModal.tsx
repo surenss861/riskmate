@@ -89,6 +89,7 @@ export function DeliveryLogsModal({
     setExpandedId(null)
     setRetryErrors([])
     setRetrySuccessMessage(null)
+    setRetriedDeliveryIds(new Set())
     setPayloadShowFull({})
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })

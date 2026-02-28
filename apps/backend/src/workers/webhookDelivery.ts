@@ -497,10 +497,14 @@ async function updateDeliveryFailure(
     .update(updatePayload)
     .eq('id', deliveryId)
 
-  // On terminal failure (e.g. retry exhaustion after attempt 5), alert admin once per cooldown so one exhausted delivery produces the expected alert.
+  // On terminal failure (e.g. retry exhaustion after attempt 5), increment consecutive_failures and alert admin only when count reaches threshold (e.g. 5).
   if (terminal && countAsConsecutiveFailure) {
-    await supabase.rpc('increment_webhook_endpoint_consecutive_failures', { p_endpoint_id: endpointId })
-    await maybeAlertAdmin(endpointId)
+    const { data: newCount } = await supabase.rpc('increment_webhook_endpoint_consecutive_failures', {
+      p_endpoint_id: endpointId,
+    })
+    if (newCount != null && newCount >= 5) {
+      await maybeAlertAdmin(endpointId)
+    }
   }
 }
 
@@ -604,6 +608,7 @@ async function claimDelivery(id: string): Promise<WebhookDeliveryRow | null> {
     .eq('id', id)
     .is('delivered_at', null)
     .is('processing_since', null)
+    .is('terminal_outcome', null)
     .select('*')
     .maybeSingle()
 
@@ -621,6 +626,7 @@ async function recoverStaleClaims(): Promise<void> {
     .from('webhook_deliveries')
     .update({ processing_since: null })
     .is('delivered_at', null)
+    .is('terminal_outcome', null)
     .not('processing_since', 'is', null)
     .lt('processing_since', staleBefore)
   if (error) {
