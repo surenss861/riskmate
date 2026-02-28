@@ -2405,10 +2405,10 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
     let updatedRiskScore: number | null = null;
     let updatedClientName: string | null = null;
 
-    // Verify job belongs to organization and get current status/completed_at for transition logic
+    // Verify job belongs to organization and get current row for transition + effective-change detection
     const { data: existingJob, error: jobError } = await supabase
       .from("jobs")
-      .select("id, organization_id, risk_score, risk_level, status, completed_at")
+      .select("*")
       .eq("id", jobId)
       .eq("organization_id", organization_id)
       .single();
@@ -2531,22 +2531,36 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
       ...clientMetadata,
     });
 
-    // Emit realtime event (push signal)
-    await emitJobEvent(organization_id, "job.updated", jobId, userId);
+    // Only emit webhooks when at least one persisted mutable column actually changed (not no-op PATCH)
+    const valueChanged = (a: unknown, b: unknown): boolean => {
+      const na = a === undefined || a === null ? null : a;
+      const nb = b === undefined || b === null ? null : b;
+      if (na === null && nb === null) return false;
+      if (na === null || nb === null) return true;
+      return String(na) !== String(nb);
+    };
+    const hadJobFieldChange =
+      Object.keys(jobUpdates).length > 0 &&
+      Object.keys(jobUpdates).some((k) => valueChanged(jobUpdates[k], (existingJob as Record<string, unknown>)[k]));
+    const hadActualChange = hadJobFieldChange || risk_factor_codes !== undefined;
 
-    deliverEvent(organization_id, "job.updated", {
-      id: jobId,
-      ...updatedJob,
-    }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
+    if (hadActualChange) {
+      await emitJobEvent(organization_id, "job.updated", jobId, userId);
 
-    const didTransitionToCompleted =
-      jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
-    if (didTransitionToCompleted) {
-      deliverEvent(organization_id, "job.completed", {
+      deliverEvent(organization_id, "job.updated", {
         id: jobId,
-        completed_at: updatedJob?.completed_at ?? new Date().toISOString(),
-        status: "completed",
-      }).catch((e) => console.warn("[Jobs] Webhook job.completed enqueue failed:", e));
+        ...updatedJob,
+      }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
+
+      const didTransitionToCompleted =
+        jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
+      if (didTransitionToCompleted) {
+        deliverEvent(organization_id, "job.completed", {
+          id: jobId,
+          completed_at: updatedJob?.completed_at ?? new Date().toISOString(),
+          status: "completed",
+        }).catch((e) => console.warn("[Jobs] Webhook job.completed enqueue failed:", e));
+      }
     }
 
     // If risk score changed, log separate event

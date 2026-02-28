@@ -110,10 +110,12 @@ export async function PATCH(
 
     const supabase = await createSupabaseServerClient()
 
-    // Capture pre-update status so we only emit job.completed on transition to completed
+    // Capture pre-update row (all mutable columns) to detect actual changes for webhooks
     const { data: existingJob } = await supabase
       .from('jobs')
-      .select('status')
+      .select(
+        'client_name, client_type, job_type, location, description, start_date, end_date, has_subcontractors, subcontractor_count, insurance_status, status'
+      )
       .eq('id', jobId)
       .single()
     const previousStatus = existingJob?.status
@@ -149,6 +151,19 @@ export async function PATCH(
     if (status !== undefined) updateData.status = status
 
     const hadMutableFields = Object.keys(updateData).length > 0
+
+    // Only emit webhooks when at least one persisted mutable column actually changed (not no-op PATCH)
+    const valueChanged = (a: unknown, b: unknown): boolean => {
+      const na = a === undefined || a === null ? null : a
+      const nb = b === undefined || b === null ? null : b
+      if (na === null && nb === null) return false
+      if (na === null || nb === null) return true
+      return String(na) !== String(nb)
+    }
+    const hadActualChange =
+      hadMutableFields &&
+      existingJob &&
+      Object.keys(updateData).some((k) => valueChanged(updateData[k], (existingJob as Record<string, unknown>)[k]))
 
     // Update job only if there are fields to update
     if (hadMutableFields) {
@@ -192,8 +207,8 @@ export async function PATCH(
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
 
-    // Webhooks: only emit job.updated / job.completed when an effective update occurred
-    if (hadMutableFields) {
+    // Webhooks: only emit job.updated / job.completed when at least one persisted mutable column changed
+    if (hadActualChange) {
       await triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
         console.warn('[Webhook] job.updated trigger failed:', e)
       )

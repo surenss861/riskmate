@@ -168,7 +168,9 @@ syncRouter.post(
 
               const { data: existing, error: fetchError } = await supabase
                 .from("jobs")
-                .select("id, updated_at, created_by, status, completed_at")
+                .select(
+                  "id, updated_at, created_by, status, completed_at, client_name, client_type, job_type, location, description, start_date, end_date, has_subcontractors, subcontractor_count, insurance_status"
+                )
                 .eq("id", jobId)
                 .eq("organization_id", organization_id)
                 .single();
@@ -258,7 +260,18 @@ syncRouter.post(
                   metadata: { sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                if (updatedJobRow) {
+                // Only emit webhooks when at least one persisted mutable column actually changed
+                const valueChanged = (a: unknown, b: unknown): boolean => {
+                  const na = a === undefined || a === null ? null : a;
+                  const nb = b === undefined || b === null ? null : b;
+                  if (na === null && nb === null) return false;
+                  if (na === null || nb === null) return true;
+                  return String(na) !== String(nb);
+                };
+                const hadActualChange = Object.keys(updates).some((k) =>
+                  valueChanged(updates[k], (existing as Record<string, unknown>)[k])
+                );
+                if (updatedJobRow && hadActualChange) {
                   deliverEvent(organization_id, "job.updated", {
                     id: jobId,
                     ...updatedJobRow,
