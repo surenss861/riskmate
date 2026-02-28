@@ -95,7 +95,7 @@ jest.mock('../../utils/webhookUrl', () => ({ validateWebhookUrl: (...args: unkno
 jest.mock('../../utils/email', () => ({ sendEmail: () => Promise.resolve() }))
 jest.mock('../../utils/webhookPayloads', () => ({ buildWebhookEventObject: (x: unknown) => x }))
 
-import { sendDelivery } from '../../workers/webhookDelivery'
+import { sendDelivery, parseSafeBoundedInt } from '../../workers/webhookDelivery'
 
 describe('webhookDelivery – attempt persistence failure', () => {
   const deliveryRow = {
@@ -210,5 +210,53 @@ describe('webhookDelivery – malformed URL is terminal (no retries)', () => {
       'increment_webhook_endpoint_consecutive_failures',
       expect.any(Object)
     )
+  })
+})
+
+describe('webhookDelivery – env parser (parseSafeBoundedInt)', () => {
+  it('returns default when value is non-numeric string (concurrency 1..10, default 5)', () => {
+    expect(parseSafeBoundedInt('abc', 5, 1, 10)).toBe(5)
+    expect(parseSafeBoundedInt('nope', 5, 1, 10)).toBe(5)
+    expect(parseSafeBoundedInt('5x', 5, 1, 10)).toBe(5)
+  })
+
+  it('returns default when value is non-numeric string (interval >= 2000, default 2000)', () => {
+    expect(parseSafeBoundedInt('abc', 2000, 2000, 86400000)).toBe(2000)
+    expect(parseSafeBoundedInt('2s', 2000, 2000, 86400000)).toBe(2000)
+  })
+
+  it('returns default for empty string and undefined', () => {
+    expect(parseSafeBoundedInt('', 5, 1, 10)).toBe(5)
+    expect(parseSafeBoundedInt(undefined, 5, 1, 10)).toBe(5)
+    expect(parseSafeBoundedInt('', 2000, 2000, 86400000)).toBe(2000)
+    expect(parseSafeBoundedInt(undefined, 2000, 2000, 86400000)).toBe(2000)
+  })
+
+  it('clamps concurrency to 1..10 and uses default for NaN', () => {
+    expect(parseSafeBoundedInt('3', 5, 1, 10)).toBe(3)
+    expect(parseSafeBoundedInt('1', 5, 1, 10)).toBe(1)
+    expect(parseSafeBoundedInt('10', 5, 1, 10)).toBe(10)
+    expect(parseSafeBoundedInt('0', 5, 1, 10)).toBe(1)
+    expect(parseSafeBoundedInt('11', 5, 1, 10)).toBe(10)
+    expect(parseSafeBoundedInt('-1', 5, 1, 10)).toBe(1)
+  })
+
+  it('clamps interval to >= 2000 and uses default for invalid', () => {
+    expect(parseSafeBoundedInt('2000', 2000, 2000, 86400000)).toBe(2000)
+    expect(parseSafeBoundedInt('5000', 2000, 2000, 86400000)).toBe(5000)
+    expect(parseSafeBoundedInt('0', 2000, 2000, 86400000)).toBe(2000)
+    expect(parseSafeBoundedInt('1000', 2000, 2000, 86400000)).toBe(2000)
+    expect(parseSafeBoundedInt('999999999', 2000, 2000, 86400000)).toBe(86400000)
+  })
+
+  it('guarantees fallback prevents zero workers and 0ms interval (claimed-but-unprocessed regression)', () => {
+    // Concurrency 0 would create zero workers; parser must never return 0 for 1..10 range
+    const concurrency = parseSafeBoundedInt('not-a-number', 5, 1, 10)
+    expect(concurrency).toBeGreaterThanOrEqual(1)
+    expect(concurrency).toBeLessThanOrEqual(10)
+    // Interval 0 would cause setInterval(..., 0) tight-loop; parser must never return < 2000 when min is 2000
+    const intervalMs = parseSafeBoundedInt('invalid', 2000, 2000, 86400000)
+    expect(intervalMs).toBeGreaterThanOrEqual(2000)
+    expect(Number.isFinite(intervalMs)).toBe(true)
   })
 })

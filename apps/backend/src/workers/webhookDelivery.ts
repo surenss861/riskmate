@@ -27,8 +27,30 @@ const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 const WAKE_DEBOUNCE_MS = 100
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000 // 10 min
+
+/**
+ * Parse an env value as a finite integer within [min, max]; invalid or out-of-range yields default.
+ * Prevents NaN from non-numeric env (e.g. WEBHOOK_DELIVERY_CONCURRENCY=foo) from creating zero workers
+ * or WEBHOOK_WORKER_INTERVAL_MS from becoming 0ms and causing tight-loop polling.
+ */
+export function parseSafeBoundedInt(
+  envValue: string | undefined,
+  defaultVal: number,
+  min: number,
+  max: number
+): number {
+  const n = parseInt(envValue ?? '', 10)
+  if (!Number.isFinite(n)) return defaultVal
+  return Math.max(min, Math.min(max, Math.floor(n)))
+}
+
 /** Max number of sendDelivery() calls in flight at once; avoids one slow endpoint blocking the queue. */
-const DELIVERY_CONCURRENCY = Math.max(1, Math.min(10, parseInt(process.env.WEBHOOK_DELIVERY_CONCURRENCY || '5', 10)))
+const DELIVERY_CONCURRENCY = parseSafeBoundedInt(
+  process.env.WEBHOOK_DELIVERY_CONCURRENCY,
+  5,
+  1,
+  10
+)
 
 export type WebhookEventType =
   | 'job.created'
@@ -785,7 +807,12 @@ export async function startWebhookDeliveryWorker(): Promise<void> {
     console.error('[WebhookDelivery]', keyValidation.message, '- encrypted webhook secrets will fail to decrypt; ensure web and backend use the same key')
   }
   // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback
-  const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '2000', 10))
+  const intervalMs = parseSafeBoundedInt(
+    process.env.WEBHOOK_WORKER_INTERVAL_MS,
+    2000,
+    2000,
+    24 * 60 * 60 * 1000
+  )
   workerInterval = setInterval(() => {
     processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e))
   }, intervalMs)
