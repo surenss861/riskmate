@@ -202,6 +202,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       headers,
       body: payloadStr,
       signal: AbortSignal.timeout(30000),
+      redirect: 'manual',
     })
     responseStatus = res.status
     responseBody = await res.text().catch(() => null)
