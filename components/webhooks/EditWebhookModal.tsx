@@ -33,6 +33,7 @@ export function EditWebhookModal({ open, endpoint, onClose, onSaved }: EditWebho
       setDescription(endpoint.description ?? '')
       setIsActive(endpoint.is_active ?? true)
       setSelectedEvents(new Set(endpoint.events || []))
+      setError(null)
     }
   }, [endpoint])
 

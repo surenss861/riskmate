@@ -76,11 +76,12 @@ export async function GET(
     const attemptsByDelivery: Record<string, Array<{ id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
 
     if (deliveryIds.length > 0) {
-      const attemptsLimit = Math.min(limit * MAX_ATTEMPTS_PER_DELIVERY, 2000)
+      const attemptsLimit = limit * MAX_ATTEMPTS_PER_DELIVERY
       const { data: attempts, error: attemptsError } = await admin
         .from('webhook_delivery_attempts')
         .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)
+        .order('delivery_id', { ascending: true })
         .order('attempt_number', { ascending: true })
         .limit(attemptsLimit)
 
@@ -122,14 +123,11 @@ export async function GET(
     const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; [k: string]: unknown }) => {
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
-      const explicitlyCancelled =
-        d.terminal_outcome === 'cancelled_paused' || d.terminal_outcome === 'cancelled_policy'
       const can_retry =
         undelivered &&
         unscheduled &&
-        (d.terminal_outcome == null
-          ? true
-          : !explicitlyCancelled)
+        d.terminal_outcome !== 'cancelled_paused' &&
+        d.terminal_outcome !== 'cancelled_policy'
       return {
         ...d,
         attempts: attemptsByDelivery[d.id] ?? [],

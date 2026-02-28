@@ -776,14 +776,10 @@ async function processPendingDeliveries(): Promise<void> {
     }
     await runWithConcurrency(claimed, DELIVERY_CONCURRENCY, sendDelivery)
   } finally {
-    try {
-      // no-op; ensures any future code in finally cannot prevent flag reset
-    } finally {
-      processPendingDeliveriesRunning = false
-      if (pendingRunRequested) {
-        pendingRunRequested = false
-        setImmediate(() => processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Rerun after batch error:', e)))
-      }
+    processPendingDeliveriesRunning = false
+    if (pendingRunRequested) {
+      pendingRunRequested = false
+      setImmediate(() => processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Rerun after batch error:', e)))
     }
   }
 }

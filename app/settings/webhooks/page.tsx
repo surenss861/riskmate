@@ -31,6 +31,7 @@ export default function WebhooksPage() {
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const loadEndpoints = async () => {
     try {
@@ -56,68 +57,20 @@ export default function WebhooksPage() {
     loadEndpoints()
   }, [])
 
-  useEffect(() => {
-    if (endpoints.length === 0) {
+  const loadStats = async (endpointList: WebhookEndpoint[]) => {
+    if (endpointList.length === 0) {
       setStats({})
       return
     }
-    const loadStats = async () => {
-      try {
-        const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
-        const json = await res.json()
-        const data = json.data ?? {}
-        const next: Record<string, DeliveryStats> = {}
-        for (const ep of endpoints) {
-          const s = data[ep.id]
-          next[ep.id] = s
-            ? {
-                delivered: s.delivered ?? 0,
-                pending: s.pending ?? 0,
-                failed: s.failed ?? 0,
-                lastDelivery: s.lastDelivery ?? null,
-                lastSuccessAt: s.lastSuccessAt ?? null,
-                lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
-                lastFailureAt: s.lastFailureAt ?? null,
-              }
-            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
-        }
-        setStats(next)
-      } catch {
-        const fallback: Record<string, DeliveryStats> = {}
-        for (const ep of endpoints) {
-          fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
-        }
-        setStats(fallback)
-      }
-    }
-    loadStats()
-  }, [endpoints])
-
-  const handleCreated = (_endpoint: WebhookEndpoint & { secret?: string }) => {
-    setAddOpen(false)
-    loadEndpoints()
-  }
-
-  const handleTest = async (id: string) => {
-    setTestingId(id)
     try {
-      const res = await fetch(`/api/webhooks/${id}/test`, { method: 'POST', credentials: 'include' })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        const msg = (json as { message?: string }).message ?? 'Test request failed'
-        alert(msg)
-        return
-      }
-      // Refresh stats so delivery count is up to date after test (endpoint list unchanged)
-      try {
-        const statsRes = await fetch('/api/webhooks/stats', { credentials: 'include' })
-        const statsJson = await statsRes.json()
-        const data = statsJson.data ?? {}
-        setStats((prev) => {
-          const next = { ...prev }
-          const s = data[id]
-          if (s) {
-            next[id] = {
+      const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
+      const json = await res.json()
+      const data = json.data ?? {}
+      const next: Record<string, DeliveryStats> = {}
+      for (const ep of endpointList) {
+        const s = data[ep.id]
+        next[ep.id] = s
+          ? {
               delivered: s.delivered ?? 0,
               pending: s.pending ?? 0,
               failed: s.failed ?? 0,
@@ -126,12 +79,40 @@ export default function WebhooksPage() {
               lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
               lastFailureAt: s.lastFailureAt ?? null,
             }
-          }
-          return next
-        })
-      } catch {
-        // Non-fatal; stats will refresh on next full load
+          : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
       }
+      setStats(next)
+    } catch {
+      const fallback: Record<string, DeliveryStats> = {}
+      for (const ep of endpointList) {
+        fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
+      }
+      setStats(fallback)
+    }
+  }
+
+  useEffect(() => {
+    loadStats(endpoints)
+  }, [endpoints])
+
+  const handleCreated = (_endpoint: WebhookEndpoint & { secret?: string }) => {
+    setAddOpen(false)
+    loadEndpoints()
+  }
+
+  const handleTest = async (id: string) => {
+    setActionError(null)
+    setTestingId(id)
+    try {
+      const res = await fetch(`/api/webhooks/${id}/test`, { method: 'POST', credentials: 'include' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = (json as { message?: string }).message ?? 'Test request failed'
+        setActionError(msg)
+        return
+      }
+      // Full stats refresh so all endpoints show up-to-date counts after test
+      await loadStats(endpoints)
     } finally {
       setTestingId(null)
     }
@@ -139,13 +120,14 @@ export default function WebhooksPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this webhook endpoint? This cannot be undone.')) return
+    setActionError(null)
     setDeletingId(id)
     try {
       const res = await fetch(`/api/webhooks/${id}`, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         const msg = (json as { message?: string }).message ?? 'Delete failed'
-        alert(msg)
+        setActionError(msg)
         return
       }
       await loadEndpoints()
@@ -187,6 +169,19 @@ export default function WebhooksPage() {
               title="Webhooks"
               subtitle="Send events to your own endpoints when jobs, hazards, and reports change."
             />
+            {actionError && (
+              <div className="mb-4 p-4 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 flex items-center justify-between gap-2">
+                <span>{actionError}</span>
+                <button
+                  type="button"
+                  onClick={() => setActionError(null)}
+                  className="shrink-0 text-white/80 hover:text-white"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {canManage && (
               <div className="flex justify-end mb-6">
                 <Button onClick={() => setAddOpen(true)}>Add endpoint</Button>

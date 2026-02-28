@@ -38,6 +38,9 @@ export async function triggerWebhookEvent(
   eventType: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  if (!(WEBHOOK_EVENT_TYPES as readonly string[]).includes(eventType)) {
+    throw new Error(`Invalid webhook event type: ${eventType}. Must be one of: ${WEBHOOK_EVENT_TYPES.join(', ')}`)
+  }
   const supabase = createSupabaseAdminClient()
   const normalized = buildWebhookEventObject(eventType, data)
   const payload = buildPayload(eventType, organizationId, normalized)
