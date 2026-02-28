@@ -7,7 +7,7 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
-import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
 import { getUserRole } from '@/lib/utils/adminAuth'
 import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 

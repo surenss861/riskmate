@@ -8,7 +8,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { generateSecret } from '@/lib/utils/webhookSigning'
 import { encryptWebhookSecret } from '@/lib/utils/secretEncryption'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
-import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
 import { getUserRole } from '@/lib/utils/adminAuth'
 import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 

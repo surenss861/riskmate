@@ -10,21 +10,9 @@
 import crypto from 'crypto'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
 
-export const WEBHOOK_EVENT_TYPES = [
-  'job.created',
-  'job.updated',
-  'job.completed',
-  'job.deleted',
-  'hazard.created',
-  'hazard.updated',
-  'signature.added',
-  'report.generated',
-  'evidence.uploaded',
-  'team.member_added',
-] as const
-
-export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number]
+export type { WebhookEventType } from '@/lib/webhooks/eventTypes'
 
 function buildPayload(
   eventType: string,

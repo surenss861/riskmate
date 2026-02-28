@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button, Input, GlassCard } from '@/components/shared'
 import type { WebhookEndpoint } from './AddWebhookModal'
-import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
 
 /** UI grouping derived from WEBHOOK_EVENT_TYPES so new event types appear automatically. */
 const EVENT_GROUPS: { label: string; events: string[] }[] = [

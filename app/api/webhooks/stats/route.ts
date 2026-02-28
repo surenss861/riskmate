@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
@@ -36,10 +37,11 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    // Use admin client so get_webhook_endpoint_stats (SECURITY INVOKER) sees rows via service_role and multi-org admins get correct stats
+    // Use server client so get_webhook_endpoint_stats (SECURITY INVOKER) runs with auth.uid() and returns rows for the caller's orgs
+    const supabase = await createSupabaseServerClient()
     const results = await Promise.all(
       adminOrgIds.map((orgId) =>
-        admin.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
+        supabase.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
       )
     )
     const allRows: unknown[] = []
