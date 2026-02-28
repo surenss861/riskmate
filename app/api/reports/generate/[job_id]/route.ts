@@ -476,8 +476,7 @@ export async function POST(
         .eq('id', reportRun.id)
       console.log(`[reports][${requestId}][stage] update_report_run_ok`)
 
-      // Emit report.generated only after PDF artifact is persisted (completion semantics).
-      // Use status 'completed' to align with backend emitter contract (artifact-ready event).
+      // Webhook: report.generated — owned by this route only. Web client uses Next.js POST /api/reports/generate/[job_id] exclusively (lib/api.ts, report page). Do not also emit from Express reports route for the same run to avoid duplicate deliveries.
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
       await triggerWebhookEvent(organization_id, 'report.generated', {
         report_run_id: reportRun.id,

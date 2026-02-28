@@ -2247,9 +2247,10 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
           })
           .eq("id", job.id);
 
-        // Generate mitigation items and emit hazard.created for each inserted item
+        // Generate mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
         const insertedHazards = await generateMitigationItems(job.id, risk_factor_codes);
         for (const item of insertedHazards) {
+          if (item.hazard_id != null) continue;
           deliverEvent(organization_id, "hazard.created", {
             id: item.id,
             job_id: job.id,
@@ -2479,9 +2480,10 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
             })
             .eq("id", jobId);
 
-          // Generate new mitigation items and emit hazard.created for each inserted item
+          // Generate new mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL)
           const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes);
           for (const item of insertedHazards) {
+            if (item.hazard_id != null) continue;
             deliverEvent(organization_id, "hazard.created", {
               id: item.id,
               job_id: jobId,

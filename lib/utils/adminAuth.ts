@@ -5,6 +5,22 @@
  * Use this instead of inline role checks to avoid "DB says yes, API says no" bugs.
  */
 
+export class ForbiddenError extends Error {
+  constructor(message = 'Forbidden - Only owners and admins can access this resource') {
+    super(message)
+    this.name = 'ForbiddenError'
+    Object.setPrototypeOf(this, ForbiddenError.prototype)
+  }
+}
+
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message)
+    this.name = 'UnauthorizedError'
+    Object.setPrototypeOf(this, UnauthorizedError.prototype)
+  }
+}
+
 /**
  * Check if a user role is admin or owner
  */
@@ -18,7 +34,7 @@ export function isAdminOrOwner(role: string | null | undefined): boolean {
  */
 export function requireAdminOrOwner(role: string | null | undefined): void {
   if (!isAdminOrOwner(role)) {
-    throw new Error('Forbidden - Only owners and admins can access this resource')
+    throw new ForbiddenError('Forbidden - Only owners and admins can access this resource')
   }
 }
 

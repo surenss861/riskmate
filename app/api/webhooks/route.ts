@@ -6,10 +6,11 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { generateSecret } from '@/lib/utils/webhookSigning'
+import { encryptWebhookSecret } from '@/lib/utils/secretEncryption'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 import { getUserRole } from '@/lib/utils/adminAuth'
-import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -73,10 +74,9 @@ export async function GET(request: NextRequest) {
       default_organization_id: adminOrgIds[0] ?? null,
     })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',
@@ -175,6 +176,8 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = generateSecret()
+    const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
+    const secretToStore = encryptWebhookSecret(secret, keyHex) ?? secret
 
     const { data: rows, error } = await admin.rpc('create_webhook_endpoint_with_secret', {
       p_organization_id: organization_id,
@@ -182,7 +185,7 @@ export async function POST(request: NextRequest) {
       p_events: validEvents,
       p_description: description || '',
       p_created_by: user_id,
-      p_secret: secret,
+      p_secret: secretToStore,
     })
 
     if (error) {
@@ -218,10 +221,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -230,7 +232,7 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -241,6 +243,7 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',

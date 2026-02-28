@@ -4,7 +4,7 @@ import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getUserRole } from '@/lib/utils/adminAuth'
-import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 import { wakeBackendWebhookWorker } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
@@ -113,10 +113,9 @@ export async function POST(
       { status: 200 }
     )
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -125,7 +124,7 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -136,6 +135,7 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',

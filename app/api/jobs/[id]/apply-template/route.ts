@@ -124,8 +124,9 @@ export async function POST(
       insertedHazards = await generateMitigationItems(jobId, newFactorsForMitigation)
     }
 
-    // Fire hazard.created for each new mitigation item (hazard) created via apply-template
+    // Emit hazard.created only for top-level hazards (hazard_id IS NULL)
     for (const item of insertedHazards) {
+      if (item.hazard_id != null) continue
       await triggerWebhookEvent(organization_id, 'hazard.created', {
         id: item.id,
         job_id: jobId,

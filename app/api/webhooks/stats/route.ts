@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { getUserRole } from '@/lib/utils/adminAuth'
+import { getUserRole, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -37,11 +36,10 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const supabase = await createSupabaseServerClient()
-
+    // Use admin client so get_webhook_endpoint_stats (SECURITY INVOKER) sees rows via service_role and multi-org admins get correct stats
     const results = await Promise.all(
       adminOrgIds.map((orgId) =>
-        supabase.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
+        admin.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
       )
     )
     const allRows: unknown[] = []
@@ -99,10 +97,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -111,7 +108,7 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -122,6 +119,7 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',

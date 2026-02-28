@@ -8,6 +8,7 @@
 import crypto from 'crypto'
 import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
+import { decryptWebhookSecret } from '../utils/secretEncryption'
 import { validateWebhookUrl } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
 import { buildWebhookEventObject } from '../utils/webhookPayloads'
@@ -120,16 +121,6 @@ export interface WebhookEventPayload {
   created: string
   organization_id: string
   data: Record<string, unknown>
-}
-
-/** Full endpoint row including secret (used in sendDelivery after fetching secret separately). */
-interface WebhookEndpointRow {
-  id: string
-  organization_id: string
-  url: string
-  secret: string
-  events: string[]
-  is_active: boolean
 }
 
 /** Endpoint list row without secret (e.g. deliverEvent only needs id, events, is_active). */
@@ -261,7 +252,9 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     .eq('endpoint_id', delivery.endpoint_id)
     .maybeSingle()
 
-  const secret = secretRow?.secret ?? null
+  const rawSecret = secretRow?.secret ?? null
+  const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY
+  const secret = rawSecret != null ? decryptWebhookSecret(rawSecret, keyHex) : null
   const endpointWithSecret = endpoint ? { ...endpoint, secret } : null
 
   // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
@@ -695,6 +688,7 @@ async function processPendingDeliveries(): Promise<void> {
       .not('next_retry_at', 'is', null)
       .lte('next_retry_at', now)
       .lte('attempt_count', MAX_ATTEMPTS)
+      .is('terminal_outcome', null)
       .order('created_at', { ascending: true })
       .limit(50)
 

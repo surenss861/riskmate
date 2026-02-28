@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       console.warn('Invite row insert failed:', inviteInsertError?.message)
     }
 
-    // Emit team.member_added so webhook consumers get consistent events (same as backend invite flow)
+    // Webhook: team.member_added — owned by this route only. Web clients use this Next.js route exclusively (lib/api.ts POST /api/team/invite). Do not also emit from Express POST /api/team/invite for the same invite to avoid duplicate deliveries.
     await triggerWebhookEvent(organizationId, 'team.member_added', {
       user_id: newUserId,
       email: normalizedEmail,

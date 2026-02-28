@@ -952,9 +952,10 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', jobId)
 
-        // Generate mitigation items and emit hazard.created for each inserted item
+        // Emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
         const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes)
         for (const item of insertedHazards) {
+          if (item.hazard_id != null) continue
           await triggerWebhookEvent(organization_id, 'hazard.created', {
             id: item.id,
             job_id: jobId,

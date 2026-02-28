@@ -267,6 +267,7 @@ reportsRouter.post("/generate/:jobId", authenticate as unknown as RequestHandler
       },
     });
 
+    // Webhook: report.generated — owned by Express route only. Mobile/backend use POST /api/reports/generate/:jobId. Do not also emit from Next.js report generate route for the same run to avoid duplicate deliveries.
     if (reportRecord) {
       deliverEvent(organization_id, "report.generated", {
         id: reportRecord.id,

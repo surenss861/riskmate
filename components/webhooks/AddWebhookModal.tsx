@@ -108,15 +108,25 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
     }
   }
 
+  const resetForm = () => {
+    setUrl('')
+    setDescription('')
+    setSelectedEvents(new Set())
+    setError(null)
+  }
+
   const handleCloseAfterSecret = () => {
     if (createdEndpoint && createdSecret) {
       onCreated({ ...createdEndpoint, secret: createdSecret })
     }
     setCreatedSecret(null)
     setCreatedEndpoint(null)
-    setUrl('')
-    setDescription('')
-    setSelectedEvents(new Set())
+    resetForm()
+    onClose()
+  }
+
+  const handleCloseWithoutCreate = () => {
+    resetForm()
     onClose()
   }
 
@@ -131,7 +141,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
           </h2>
           <button
             type="button"
-            onClick={createdSecret ? handleCloseAfterSecret : onClose}
+            onClick={createdSecret ? handleCloseAfterSecret : handleCloseWithoutCreate}
             className="text-white/70 hover:text-white"
             aria-label="Close"
           >
@@ -202,7 +212,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId }: Ad
               <p className="text-sm text-red-400">{error}</p>
             )}
             <div className="flex gap-3 justify-end">
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="secondary" onClick={handleCloseWithoutCreate}>
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>

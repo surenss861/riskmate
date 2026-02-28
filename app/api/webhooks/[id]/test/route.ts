@@ -8,7 +8,7 @@ import { WEBHOOK_EVENT_TYPES, wakeBackendWebhookWorker } from '@/lib/webhooks/tr
 import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 import { getUserRole } from '@/lib/utils/adminAuth'
-import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -231,10 +231,9 @@ export async function POST(
       data: { message: 'Test event queued for delivery', event_type: eventType },
     })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -243,7 +242,7 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -254,6 +253,7 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',

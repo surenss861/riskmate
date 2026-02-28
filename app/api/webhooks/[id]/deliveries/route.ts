@@ -7,7 +7,7 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
 import { getUserRole } from '@/lib/utils/adminAuth'
-import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
+import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 
 export const runtime = 'nodejs'
 
@@ -128,10 +128,9 @@ export async function GET(
 
     return NextResponse.json({ data })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized'
-    if (msg.includes('Forbidden')) {
+    if (err instanceof ForbiddenError) {
       const { response, errorId } = createErrorResponse(
-        msg,
+        err.message,
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -140,7 +139,7 @@ export async function GET(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (msg.includes('Unauthorized') || msg.includes('organization')) {
+    if (err instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in',
         'UNAUTHORIZED',
@@ -151,6 +150,7 @@ export async function GET(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
+    const msg = err instanceof Error ? err.message : 'Unauthorized'
     const { response, errorId } = createErrorResponse(
       msg,
       'INTERNAL_ERROR',

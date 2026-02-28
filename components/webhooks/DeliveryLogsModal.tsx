@@ -3,6 +3,41 @@
 import React, { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
 
+const PAYLOAD_TRUNCATE_LENGTH = 10000
+
+function PayloadDisplay({
+  payload,
+  deliveryId,
+  showFull,
+  onToggleFull,
+}: {
+  payload: Record<string, unknown> | undefined
+  deliveryId: string
+  showFull: boolean
+  onToggleFull: () => void
+}) {
+  const str = JSON.stringify(payload ?? {}, null, 2)
+  const truncated = str.length > PAYLOAD_TRUNCATE_LENGTH && !showFull
+  const display = truncated ? str.slice(0, PAYLOAD_TRUNCATE_LENGTH) : str
+  return (
+    <div className="mt-1">
+      <pre className="p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
+        {display}
+        {truncated && '…'}
+      </pre>
+      {str.length > PAYLOAD_TRUNCATE_LENGTH && (
+        <button
+          type="button"
+          onClick={onToggleFull}
+          className="mt-1 text-xs text-sky-400 hover:text-sky-300"
+        >
+          {showFull ? 'Show less' : `Show full payload (${(str.length - PAYLOAD_TRUNCATE_LENGTH).toLocaleString()} more chars)`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export interface DeliveryAttemptEntry {
   id: string
   attempt_number: number
@@ -46,12 +81,15 @@ export function DeliveryLogsModal({
   const [retrying, setRetrying] = useState<string | null>(null)
   const [retryErrors, setRetryErrors] = useState<Array<{ id: string; message: string }>>([])
   const [retrySuccessMessage, setRetrySuccessMessage] = useState<string | null>(null)
+  const [retriedDeliveryIds, setRetriedDeliveryIds] = useState<Set<string>>(new Set())
+  const [payloadShowFull, setPayloadShowFull] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!open || !endpointId) return
     setExpandedId(null)
     setRetryErrors([])
     setRetrySuccessMessage(null)
+    setPayloadShowFull({})
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
       .then((r) => r.json())
@@ -69,7 +107,11 @@ export function DeliveryLogsModal({
   }
 
   const retryEligible = deliveries.filter(
-    (d) => !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
+    (d) =>
+      !retriedDeliveryIds.has(d.id) &&
+      !d.delivered_at &&
+      !d.next_retry_at &&
+      (d.attempt_count ?? 0) >= 1
   )
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
@@ -97,6 +139,7 @@ export function DeliveryLogsModal({
           errors.push({ id: d.id, message: msg })
         } else {
           successCount += 1
+          setRetriedDeliveryIds((prev) => new Set(prev).add(d.id))
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Request failed'
@@ -224,10 +267,18 @@ export function DeliveryLogsModal({
                           <td colSpan={6} className="p-4">
                             <div className="rounded-lg bg-white/5 border border-white/10 p-4 text-sm overflow-auto max-h-64 space-y-4">
                               <div>
-                                <span className="text-white/60">Request payload:</span>
-                                <pre className="mt-1 p-2 rounded bg-black/30 font-mono text-xs whitespace-pre-wrap break-all">
-                                  {JSON.stringify(d.payload ?? {}, null, 2)}
-                                </pre>
+                                <span className="text-white/60">Request payload (data sent to the external endpoint):</span>
+                                <PayloadDisplay
+                                  payload={d.payload}
+                                  deliveryId={d.id}
+                                  showFull={payloadShowFull[d.id]}
+                                  onToggleFull={() =>
+                                    setPayloadShowFull((prev) => ({
+                                      ...prev,
+                                      [d.id]: !prev[d.id],
+                                    }))
+                                  }
+                                />
                               </div>
                               {(d.attempts?.length ?? 0) > 0 ? (
                                 <div>

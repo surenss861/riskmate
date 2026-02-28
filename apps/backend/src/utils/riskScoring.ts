@@ -127,6 +127,7 @@ export interface InsertedMitigationItem {
   description: string | null;
   created_at: string;
   updated_at: string | null;
+  hazard_id: string | null;
 }
 
 /**
@@ -193,7 +194,7 @@ export async function generateMitigationItems(
     const { data: inserted, error: insertError } = await supabase
       .from('mitigation_items')
       .insert(mitigationItems)
-      .select('id, title, description, created_at, updated_at');
+      .select('id, title, description, created_at, updated_at, hazard_id');
 
     if (insertError) {
       console.error('Error creating mitigation items:', insertError);
