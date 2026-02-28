@@ -22,7 +22,7 @@ const EVENT_TYPES_SET = new Set(WEBHOOK_EVENT_TYPES)
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
+    const { organization_id: baseOrganizationId, organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const admin = createSupabaseAdminClient()
     const roleResults = await Promise.all(
       organization_ids.map(async (orgId) => {
@@ -80,10 +80,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Context-aware default: user's active/base org when they have webhook access; otherwise first admin org.
+    const default_organization_id =
+      baseOrganizationId && adminOrgIds.includes(baseOrganizationId)
+        ? baseOrganizationId
+        : (adminOrgIds[0] ?? null)
+
     return NextResponse.json({
       data: endpoints ?? [],
       organization_ids: adminOrgIds,
-      default_organization_id: adminOrgIds[0] ?? null,
+      default_organization_id,
       organization_options,
     })
   } catch (err: unknown) {

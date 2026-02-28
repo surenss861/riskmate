@@ -38,7 +38,10 @@ interface AddWebhookModalProps {
 export function AddWebhookModal({ open, onClose, onCreated, organizationId, organizationOptions = [] }: AddWebhookModalProps) {
   const multiOrg = organizationOptions.length > 1
   const defaultOrgId = organizationId ?? organizationOptions[0]?.id ?? null
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(defaultOrgId)
+  // Multi-org: require explicit choice (no preselection). Single-org: use default.
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() =>
+    multiOrg ? null : defaultOrgId
+  )
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set())
@@ -51,14 +54,17 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
   const prevOpenRef = useRef(open)
 
   useEffect(() => {
-    if (prevOpenRef.current && !open) resetForm()
+    const wasOpen = prevOpenRef.current
+    if (wasOpen && !open) resetForm()
     prevOpenRef.current = open
     if (!open) return
+    const justOpened = open && !wasOpen
     const validIds = new Set(organizationOptions.map((o) => o.id))
-    if (multiOrg && selectedOrganizationId && !validIds.has(selectedOrganizationId)) {
-      setSelectedOrganizationId(defaultOrgId)
-    }
-    if (multiOrg && !selectedOrganizationId && defaultOrgId) {
+    if (multiOrg) {
+      // Require explicit org choice: clear selection only when modal opens.
+      if (justOpened) setSelectedOrganizationId(null)
+      else if (selectedOrganizationId && !validIds.has(selectedOrganizationId)) setSelectedOrganizationId(null)
+    } else {
       setSelectedOrganizationId(defaultOrgId)
     }
   }, [open, multiOrg, organizationOptions, defaultOrgId, selectedOrganizationId])
@@ -134,7 +140,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
   }
 
   const resetForm = () => {
-    setSelectedOrganizationId(defaultOrgId)
+    setSelectedOrganizationId(multiOrg ? null : defaultOrgId)
     setUrl('')
     setDescription('')
     setSelectedEvents(new Set())

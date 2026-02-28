@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { limitsFor } from '@/lib/utils/planRules'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -190,7 +191,14 @@ export async function POST(request: NextRequest) {
       console.warn('Invite row insert failed:', inviteInsertError?.message)
     }
 
-    // Webhook team.member_added: emitted only from Express (apps/backend/src/routes/team.ts). Web client uses lib.api.ts which calls BACKEND_URL, so invites go to Express only. This Next.js route is not used for invites by the current web app; do not add triggerWebhookEvent here to avoid duplicate deliveries.
+    // Webhook team.member_added: emitted from this route when invite is created via Next.js. The Express invite route (apps/backend/src/routes/team.ts) emits for invites via that path. Each request is handled by one stack only, so no duplicate delivery per invite.
+    await triggerWebhookEvent(organizationId, 'team.member_added', {
+      user_id: newUserId,
+      email: normalizedEmail,
+      role,
+      invited_by: user.id,
+      invite_id: inviteRow?.id ?? null,
+    }).catch((e) => console.warn('[Team invite] Webhook team.member_added enqueue failed:', e))
 
     return NextResponse.json({
       data: inviteRow,
