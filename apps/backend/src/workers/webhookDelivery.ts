@@ -38,6 +38,68 @@ export type WebhookEventType =
   | 'evidence.uploaded'
   | 'team.member_added'
 
+/** Strict allowlist for internal emit endpoint; do not accept arbitrary event_type from callers. */
+export const ALLOWED_WEBHOOK_EVENT_TYPES: readonly WebhookEventType[] = [
+  'job.created',
+  'job.updated',
+  'job.completed',
+  'job.deleted',
+  'hazard.created',
+  'hazard.updated',
+  'signature.added',
+  'report.generated',
+  'evidence.uploaded',
+  'team.member_added',
+] as const
+
+/**
+ * Validate payload shape for internal emit. Ensures data is a non-null object and has required fields per event type.
+ */
+export function validateWebhookEmitPayload(
+  eventType: string,
+  data: unknown
+): { valid: true } | { valid: false; message: string } {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return { valid: false, message: 'data must be a non-null object' }
+  }
+  const obj = data as Record<string, unknown>
+  switch (eventType) {
+    case 'job.created':
+    case 'job.updated':
+    case 'job.completed':
+    case 'job.deleted':
+    case 'hazard.created':
+    case 'hazard.updated':
+      if (typeof obj.id !== 'string') {
+        return { valid: false, message: `${eventType} requires data.id (string)` }
+      }
+      break
+    case 'signature.added':
+      if (typeof (obj.signoff_id ?? obj.id) !== 'string') {
+        return { valid: false, message: 'signature.added requires data.signoff_id or data.id' }
+      }
+      break
+    case 'report.generated':
+      if (typeof (obj.report_run_id ?? obj.id) !== 'string') {
+        return { valid: false, message: 'report.generated requires data.report_run_id or data.id' }
+      }
+      break
+    case 'evidence.uploaded':
+      if (typeof (obj.id ?? obj.document_id) !== 'string') {
+        return { valid: false, message: 'evidence.uploaded requires data.id or data.document_id' }
+      }
+      break
+    case 'team.member_added':
+      if (typeof (obj.user_id ?? obj.id) !== 'string') {
+        return { valid: false, message: 'team.member_added requires data.user_id or data.id' }
+      }
+      break
+    default:
+      return { valid: false, message: `unknown event_type: ${eventType}` }
+  }
+  return { valid: true }
+}
+
 export interface WebhookEventPayload {
   id: string
   type: string
@@ -336,20 +398,20 @@ async function updateDeliveryFailure(
     })
     .eq('id', deliveryId)
 
-  // Increment consecutive_failures on terminal failure; alert only when count reaches threshold.
+  // Atomic increment on terminal failure; alert only when returned count reaches threshold.
   if (terminal) {
-    const { data: alertRow } = await supabase
-      .from('webhook_endpoint_alert_state')
-      .select('consecutive_failures')
-      .eq('endpoint_id', endpointId)
-      .maybeSingle()
-    const nextCount = (alertRow?.consecutive_failures ?? 0) + 1
-    const now = new Date().toISOString()
-    await supabase.from('webhook_endpoint_alert_state').upsert(
-      { endpoint_id: endpointId, consecutive_failures: nextCount, updated_at: now },
-      { onConflict: 'endpoint_id' }
+    const { data: newCount, error: rpcError } = await supabase.rpc(
+      'increment_webhook_endpoint_consecutive_failures',
+      { p_endpoint_id: endpointId }
     )
-    await maybeAlertAdmin(endpointId)
+    if (rpcError) {
+      console.error('[WebhookDelivery] Atomic increment consecutive_failures failed:', rpcError)
+      return
+    }
+    const count = typeof newCount === 'number' ? newCount : 0
+    if (count >= CONSECUTIVE_FAILURES_BEFORE_ALERT) {
+      await maybeAlertAdmin(endpointId)
+    }
   }
 }
 
@@ -385,15 +447,38 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
     }
   }
 
-  const { data: admins } = await supabase
+  // Include admins/owners from users.organization_id and from organization_members (multi-org).
+  const recipientEmails = new Set<string>()
+
+  const { data: usersAsAdmins } = await supabase
     .from('users')
     .select('id, email')
     .eq('organization_id', endpoint.organization_id)
     .in('role', ['owner', 'admin'])
     .not('email', 'is', null)
+  for (const u of usersAsAdmins ?? []) {
+    if (u.email) recipientEmails.add(u.email)
+  }
 
-  const recipientEmails = (admins || []).map((a: { email: string }) => a.email).filter(Boolean)
-  if (recipientEmails.length === 0) return
+  const { data: orgMemberAdmins } = await supabase
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', endpoint.organization_id)
+    .in('role', ['owner', 'admin'])
+  const memberUserIds = (orgMemberAdmins ?? []).map((m: { user_id: string }) => m.user_id).filter(Boolean)
+  if (memberUserIds.length > 0) {
+    const { data: memberUsers } = await supabase
+      .from('users')
+      .select('email')
+      .in('id', memberUserIds)
+      .not('email', 'is', null)
+    for (const u of memberUsers ?? []) {
+      if (u.email) recipientEmails.add(u.email)
+    }
+  }
+
+  const toList = Array.from(recipientEmails)
+  if (toList.length === 0) return
 
   const subject = 'Riskmate: Webhook delivery failures'
   const html = `
@@ -404,7 +489,7 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
   try {
     await sendEmail({
-      to: recipientEmails,
+      to: toList,
       subject,
       html,
     })
