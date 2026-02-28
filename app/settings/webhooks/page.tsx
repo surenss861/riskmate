@@ -315,8 +315,8 @@ export default function WebhooksPage() {
                           <span className="font-mono text-sm text-white truncate max-w-md">
                             {ep.url}
                           </span>
-                          <Badge variant={isFailing(ep.id) ? 'critical' : ep.is_active ? 'success' : 'neutral'}>
-                            {isFailing(ep.id) ? 'Failing' : ep.is_active ? 'Active' : 'Paused'}
+                          <Badge variant={statsLoadFailed ? 'neutral' : isFailing(ep.id) ? 'critical' : ep.is_active ? 'success' : 'neutral'}>
+                            {statsLoadFailed ? 'Unknown' : isFailing(ep.id) ? 'Failing' : ep.is_active ? 'Active' : 'Paused'}
                           </Badge>
                         </div>
                         {ep.description && (

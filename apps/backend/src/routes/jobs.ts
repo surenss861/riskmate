@@ -4015,12 +4015,13 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
     });
 
     deliverEvent(organization_id, "signature.added", {
-      id: data.id,
+      signoff_id: data.id,
       job_id: jobId,
       signoff_type,
       signer_id: userId,
       signer_role: signerRole,
       signed_at: data.signed_at,
+      created_at: data.created_at,
     }).catch((e) => console.warn("[Jobs] Webhook signature.added enqueue failed:", e));
 
     // After successful DB commit: trigger mention notifications when comments contain @mentions
