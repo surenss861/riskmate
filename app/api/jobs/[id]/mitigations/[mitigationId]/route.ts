@@ -5,6 +5,13 @@ import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
+/**
+ * Webhook ownership: This Next.js route owns hazard.updated emission for web-client mitigation
+ * updates. The Express route at apps/backend/src/routes/jobs.ts (PATCH /:id/mitigations/:mitigationId)
+ * owns emission for mobile/direct API clients. The two paths are mutually exclusive — do not proxy
+ * mitigation PATCH to Express for the same request to avoid duplicate deliveries.
+ */
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; mitigationId: string }> }

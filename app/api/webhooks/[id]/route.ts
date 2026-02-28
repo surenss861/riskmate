@@ -43,7 +43,7 @@ export async function PATCH(
     requireAdminOrOwner(role)
 
     const body = await request.json().catch(() => ({}))
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    const updates: Record<string, unknown> = {}
 
     if (typeof body.url === 'string') {
       const url = body.url.trim()
@@ -92,6 +92,16 @@ export async function PATCH(
     }
     if (typeof body.is_active === 'boolean') updates.is_active = body.is_active
     if (typeof body.description === 'string') updates.description = body.description.trim() || null
+
+    if (Object.keys(updates).length === 0) {
+      const { data: current } = await admin
+        .from('webhook_endpoints')
+        .select('id, url, events, is_active, description, updated_at')
+        .eq('id', id)
+        .single()
+      return NextResponse.json({ data: current ?? endpoint })
+    }
+    updates.updated_at = new Date().toISOString()
 
     const { data: updated, error } = await admin
       .from('webhook_endpoints')

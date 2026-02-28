@@ -127,7 +127,8 @@ export async function GET(
         undelivered &&
         unscheduled &&
         d.terminal_outcome !== 'cancelled_paused' &&
-        d.terminal_outcome !== 'cancelled_policy'
+        d.terminal_outcome !== 'cancelled_policy' &&
+        d.processing_since == null
       return {
         ...d,
         attempts: attemptsByDelivery[d.id] ?? [],

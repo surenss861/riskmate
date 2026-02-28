@@ -126,29 +126,31 @@ export function DeliveryLogsModal({
     setRetryErrors([])
     setRetrySuccessMessage(null)
     const errors: Array<{ id: string; message: string }> = []
-    let successCount = 0
-    for (const d of retryEligible) {
-      setRetrying(d.id)
-      try {
-        const res = await fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
+    const results = await Promise.allSettled(
+      retryEligible.map((d) =>
+        fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
           method: 'POST',
           credentials: 'include',
+        }).then(async (res) => {
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
+            errors.push({ id: d.id, message: msg })
+          } else {
+            setRetriedDeliveryIds((prev) => new Set(prev).add(d.id))
+            return d.id
+          }
         })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
-          errors.push({ id: d.id, message: msg })
-        } else {
-          successCount += 1
-          setRetriedDeliveryIds((prev) => new Set(prev).add(d.id))
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Request failed'
-        errors.push({ id: d.id, message: msg })
-      } finally {
-        setRetrying(null)
+      )
+    )
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        errors.push({ id: 'unknown', message: r.reason instanceof Error ? r.reason.message : 'Request failed' })
       }
     }
+    const successCount = results.filter(
+      (r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value
+    ).length
     setRetryErrors(errors)
     if (successCount > 0) {
       setRetrySuccessMessage('Retry scheduled — a new delivery has been queued.')

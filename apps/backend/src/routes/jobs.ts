@@ -2640,6 +2640,9 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
 });
 
 // PATCH /api/jobs/:id/mitigations/:mitigationId
+// Webhook ownership: This Express route owns hazard.updated emission for mobile/direct API clients.
+// The Next.js route app/api/jobs/[id]/mitigations/[mitigationId]/route.ts owns emission for web-client
+// mitigation updates. The two paths are mutually exclusive; do not proxy web mitigation PATCH here.
 jobsRouter.patch("/:id/mitigations/:mitigationId", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {

@@ -6,6 +6,13 @@ import { getSessionToken, BACKEND_URL } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
 
+/**
+ * Webhook ownership: This Next.js route owns evidence.uploaded emission for web-client document
+ * uploads. The Express route at apps/backend/src/routes/evidence.ts owns emission for
+ * mobile/direct API clients. The web client must not call both endpoints for the same upload
+ * event to avoid duplicate deliveries.
+ */
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

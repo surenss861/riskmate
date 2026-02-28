@@ -37,28 +37,27 @@ export async function GET(request: NextRequest) {
       })
     }
     // Use admin client with explicit org scoping (adminOrgIds) so Bearer and cookie auth behave identically
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       adminOrgIds.map((orgId) =>
         admin.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
       )
     )
     const allRows: unknown[] = []
     for (let i = 0; i < results.length; i++) {
-      const { data: rows, error } = results[i]
+      const settled = results[i]
       const orgId = adminOrgIds[i]
-      if (error) {
-        const { response, errorId } = createErrorResponse(
-          error.message,
-          'QUERY_ERROR',
-          { requestId, statusCode: 500 }
-        )
-        logApiError(500, 'QUERY_ERROR', errorId, requestId, orgId, response.message, {
+      if (settled.status === 'rejected') {
+        logApiError(500, 'QUERY_ERROR', undefined, requestId, orgId, settled.reason?.message ?? 'RPC failed', {
           category: 'internal', severity: 'error', route: ROUTE,
         })
-        return NextResponse.json(response, {
-          status: 500,
-          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        continue
+      }
+      const { data: rows, error } = settled.value
+      if (error) {
+        logApiError(500, 'QUERY_ERROR', undefined, requestId, orgId, error.message, {
+          category: 'internal', severity: 'error', route: ROUTE,
         })
+        continue
       }
       if (Array.isArray(rows)) allRows.push(...rows)
     }

@@ -53,7 +53,7 @@ export async function triggerWebhookEvent(
 
   if (fetchError) {
     console.error('[WebhookTrigger] Fetch endpoints failed:', fetchError)
-    return
+    throw new Error('Webhook endpoints fetch failed: ' + fetchError.message)
   }
 
   const filtered = (endpoints || []).filter(

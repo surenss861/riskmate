@@ -23,7 +23,7 @@ export async function POST(
     // Fetch delivery with admin client (bypass RLS) so join to webhook_endpoints always returns organization_id and is_active; enforce org membership in app code below.
     const { data: deliveryRow, error: delError } = await admin
       .from('webhook_deliveries')
-      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, terminal_outcome, webhook_endpoints(organization_id, is_active)')
+      .select('id, endpoint_id, event_type, payload, delivered_at, next_retry_at, processing_since, terminal_outcome, webhook_endpoints(organization_id, is_active)')
       .eq('id', deliveryId)
       .single()
 
@@ -46,6 +46,18 @@ export async function POST(
     requireAdminOrOwner(role)
 
     // Only after authorization: evaluate retry state for this authorized record
+    if (delivery.processing_since != null) {
+      const { response, errorId } = createErrorResponse(
+        'Delivery is currently being processed; wait for it to complete before retrying',
+        'DELIVERY_IN_PROGRESS',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     if (delivery.delivered_at != null) {
       const { response, errorId } = createErrorResponse(
         'Delivery already succeeded; retry not allowed for successful deliveries',

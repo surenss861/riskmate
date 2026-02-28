@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
+
+/**
+ * Webhook ownership: This Next.js route owns signature.added emission for web-client signoff
+ * creation. The Express route at apps/backend/src/routes/jobs.ts owns emission for mobile/direct
+ * API clients. Do not proxy signoff creation to Express for the same request — each path must
+ * emit from one stack only to avoid duplicate deliveries.
+ */
 
 /**
  * GET /api/jobs/[id]/signoffs
@@ -165,7 +173,6 @@ export async function POST(
       throw signoffError
     }
 
-    const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
     await triggerWebhookEvent(organizationId, 'signature.added', {
       signoff_id: signoff.id,
       job_id: jobId,
