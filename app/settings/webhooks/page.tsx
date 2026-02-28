@@ -70,11 +70,12 @@ export default function WebhooksPage() {
         setOrganizationOptions(Array.isArray(endpointsJson?.organization_options) ? endpointsJson.organization_options : [])
         if (statsResult.status === 'rejected' || !statsRes) {
           setStatsLoadFailed(true)
-          const next: Record<string, DeliveryStats> = {}
-          for (const ep of eps) {
-            next[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
-          }
-          setStats(next)
+          setStats({})
+          return
+        }
+        if (!statsRes.status || statsRes.status < 200 || statsRes.status >= 300) {
+          setStatsLoadFailed(true)
+          setStats({})
           return
         }
         const statsJson = statsRes.json
@@ -109,6 +110,10 @@ export default function WebhooksPage() {
     }
     try {
       const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
+      if (!res.ok) {
+        setStatsLoadFailed(true)
+        return
+      }
       const json = await res.json()
       const data = json.data ?? {}
       const next: Record<string, DeliveryStats> = {}
@@ -127,12 +132,9 @@ export default function WebhooksPage() {
           : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
       }
       setStats(next)
+      setStatsLoadFailed(false)
     } catch {
-      const fallback: Record<string, DeliveryStats> = {}
-      for (const ep of endpointList) {
-        fallback[ep.id] = { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
-      }
-      setStats(fallback)
+      setStatsLoadFailed(true)
     }
   }
 
@@ -265,8 +267,15 @@ export default function WebhooksPage() {
               </div>
             )}
             {!loading && statsLoadFailed && endpoints.length > 0 && (
-              <div className="mb-4 p-4 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200">
-                Delivery stats could not be loaded. Endpoints are shown with zero counts. Refresh the page to retry.
+              <div className="mb-4 p-4 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 flex items-center justify-between gap-2">
+                <span>Delivery stats could not be loaded. Refresh the page or click Retry to try again.</span>
+                <button
+                  type="button"
+                  onClick={() => { setStatsLoadFailed(false); loadStatsOnly(endpoints); }}
+                  className="shrink-0 text-amber-100 hover:text-white underline"
+                >
+                  Retry
+                </button>
               </div>
             )}
             {canManage && (
