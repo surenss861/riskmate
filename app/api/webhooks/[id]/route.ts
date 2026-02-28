@@ -39,7 +39,6 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    const admin = createSupabaseAdminClient()
     const role = await getUserRole(admin, user_id, endpoint.organization_id)
     requireAdminOrOwner(role)
 
