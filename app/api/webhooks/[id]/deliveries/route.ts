@@ -24,7 +24,7 @@ export async function GET(
     const { id: endpointId } = await params
     const admin = createSupabaseAdminClient()
 
-    const endpoint = await getEndpointAndCheckOrg(admin, endpointId, organization_ids)
+    const endpoint = await getEndpointAndCheckOrg(admin, endpointId, organization_ids, 'id, organization_id, is_active')
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -120,10 +120,12 @@ export async function GET(
       }
     }
 
-    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; [k: string]: unknown }) => {
+    const endpointPaused = endpoint.is_active === false
+    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; processing_since: string | null; [k: string]: unknown }) => {
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
       const can_retry =
+        !endpointPaused &&
         undelivered &&
         unscheduled &&
         d.terminal_outcome !== 'cancelled_paused' &&

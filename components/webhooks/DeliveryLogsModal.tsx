@@ -123,47 +123,53 @@ export function DeliveryLogsModal({
   }
 
   const handleRetryFailed = async () => {
+    if (retrying) return
+    setRetrying('batch')
     setRetryErrors([])
     setRetrySuccessMessage(null)
     const errors: Array<{ id: string; message: string }> = []
-    const results = await Promise.allSettled(
-      retryEligible.map((d) =>
-        fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
-          method: 'POST',
-          credentials: 'include',
-        }).then(async (res) => {
-          const json = await res.json().catch(() => ({}))
-          if (!res.ok) {
-            const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
-            errors.push({ id: d.id, message: msg })
-          } else {
-            setRetriedDeliveryIds((prev) => new Set(prev).add(d.id))
-            return d.id
-          }
-        })
+    try {
+      const results = await Promise.allSettled(
+        retryEligible.map((d) =>
+          fetch(`/api/webhooks/deliveries/${d.id}/retry`, {
+            method: 'POST',
+            credentials: 'include',
+          }).then(async (res) => {
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
+              errors.push({ id: d.id, message: msg })
+            } else {
+              setRetriedDeliveryIds((prev) => new Set(prev).add(d.id))
+              return d.id
+            }
+          })
+        )
       )
-    )
-    for (const r of results) {
-      if (r.status === 'rejected') {
-        errors.push({ id: 'unknown', message: r.reason instanceof Error ? r.reason.message : 'Request failed' })
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          errors.push({ id: 'unknown', message: r.reason instanceof Error ? r.reason.message : 'Request failed' })
+        }
       }
-    }
-    const successCount = results.filter(
-      (r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value
-    ).length
-    setRetryErrors(errors)
-    if (successCount > 0) {
-      setRetrySuccessMessage('Retry scheduled — a new delivery has been queued.')
-    }
-    if (endpointId) {
-      try {
-        const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
-        const json = await res.json()
-        setDeliveries(Array.isArray(json.data) ? json.data : [])
-        // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
-      } catch (e) {
-        console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)
+      const successCount = results.filter(
+        (r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value
+      ).length
+      setRetryErrors(errors)
+      if (successCount > 0) {
+        setRetrySuccessMessage('Retry scheduled — a new delivery has been queued.')
       }
+      if (endpointId) {
+        try {
+          const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
+          const json = await res.json()
+          setDeliveries(Array.isArray(json.data) ? json.data : [])
+          // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
+        } catch (e) {
+          console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)
+        }
+      }
+    } finally {
+      setRetrying(null)
     }
   }
 
