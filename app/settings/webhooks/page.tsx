@@ -24,6 +24,7 @@ export default function WebhooksPage() {
   const [stats, setStats] = useState<Record<string, DeliveryStats>>({})
   const [loading, setLoading] = useState(true)
   const [canManage, setCanManage] = useState(true)
+  const [defaultOrganizationId, setDefaultOrganizationId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [logsEndpoint, setLogsEndpoint] = useState<{ id: string; url: string } | null>(null)
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null)
@@ -41,6 +42,7 @@ export default function WebhooksPage() {
       }
       setCanManage(true)
       setEndpoints(Array.isArray(json.data) ? json.data : [])
+      setDefaultOrganizationId(json.default_organization_id ?? null)
     } catch {
       setEndpoints([])
     } finally {
@@ -165,7 +167,7 @@ export default function WebhooksPage() {
   }
 
   // Show Failing only when there are terminal failures (no more retries) after last success.
-  // Use lastTerminalFailureAt so endpoints with in-progress retries do not show as Failing.
+  // Stats exclude intentional cancellations (cancelled_paused, cancelled_policy), so paused endpoints do not show as Failing.
   const isFailing = (epId: string) => {
     const s = stats[epId]
     const lastTerminal = s?.lastTerminalFailureAt ?? null
@@ -295,6 +297,7 @@ export default function WebhooksPage() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onCreated={handleCreated}
+        organizationId={defaultOrganizationId}
       />
       {logsEndpoint && (
         <DeliveryLogsModal

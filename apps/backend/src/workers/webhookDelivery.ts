@@ -253,6 +253,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
         duration_ms: 0,
         next_retry_at: null,
         processing_since: null,
+        terminal_outcome: 'failed',
       })
       .eq('id', delivery.id)
     return
@@ -270,6 +271,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
         duration_ms: 0,
         next_retry_at: null,
         processing_since: null,
+        terminal_outcome: 'cancelled_paused',
       })
       .eq('id', delivery.id)
     return
@@ -293,6 +295,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       0,
       delivery.attempt_count,
       forceTerminal,
+      forceTerminal ? 'cancelled_policy' : 'failed',
     )
     return
   }
@@ -328,6 +331,8 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
         responseBody,
         durationMs,
         delivery.attempt_count,
+        false,
+        'failed',
       )
     }
   } catch (err: unknown) {
@@ -342,6 +347,8 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       responseBody,
       durationMs,
       delivery.attempt_count,
+      false,
+      'failed',
     )
     console.error('[WebhookDelivery] Send failed:', delivery.id, msg)
   }
@@ -364,6 +371,7 @@ async function updateDeliveryResult(
       delivered_at: new Date().toISOString(),
       next_retry_at: null,
       processing_since: null,
+      terminal_outcome: 'delivered',
     })
     .eq('id', deliveryId)
 
@@ -378,6 +386,7 @@ async function updateDeliveryResult(
  * Failure: single atomic update — response fields, attempt_count, next_retry_at, and claim release.
  * No intermediate write that clears processing_since alone, avoiding duplicate claims and resends.
  * When forceTerminal is true (e.g. blocked URL), no retries are scheduled.
+ * terminalOutcomeReason: 'failed' for retry exhaustion or missing endpoint; 'cancelled_policy' for policy blocks (e.g. blocked URL).
  */
 async function updateDeliveryFailure(
   deliveryId: string,
@@ -387,6 +396,7 @@ async function updateDeliveryFailure(
   durationMs: number,
   currentAttemptCount: number,
   forceTerminal = false,
+  terminalOutcomeReason: 'failed' | 'cancelled_policy' = 'failed',
 ): Promise<void> {
   const nextAttempt = currentAttemptCount + 1
   const terminal = forceTerminal || nextAttempt > MAX_ATTEMPTS
@@ -396,17 +406,22 @@ async function updateDeliveryFailure(
         Date.now() + (RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]),
       ).toISOString()
 
+  const updatePayload: Record<string, unknown> = {
+    response_status: responseStatus,
+    response_body: responseBody,
+    duration_ms: durationMs,
+    delivered_at: null,
+    attempt_count: nextAttempt,
+    next_retry_at: nextRetryAt,
+    processing_since: null,
+  }
+  if (terminal) {
+    updatePayload.terminal_outcome = terminalOutcomeReason
+  }
+
   await supabase
     .from('webhook_deliveries')
-    .update({
-      response_status: responseStatus,
-      response_body: responseBody,
-      duration_ms: durationMs,
-      delivered_at: null,
-      attempt_count: nextAttempt,
-      next_retry_at: nextRetryAt,
-      processing_since: null,
-    })
+    .update(updatePayload)
     .eq('id', deliveryId)
 
   // Atomic increment on terminal failure; alert only when returned count reaches threshold.

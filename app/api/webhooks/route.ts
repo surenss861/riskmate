@@ -63,7 +63,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ data: endpoints ?? [] })
+    return NextResponse.json({
+      data: endpoints ?? [],
+      organization_ids: adminOrgIds,
+      default_organization_id: adminOrgIds[0] ?? null,
+    })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unauthorized'
     if (msg.includes('Forbidden')) {
@@ -100,15 +104,28 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST - Create endpoint (generate secret, validate URL). Requires owner/admin. */
+/** POST - Create endpoint (generate secret, validate URL). Requires owner/admin. Accepts explicit organization_id so multi-org admins create in the intended tenant. */
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, user_id } = await getWebhookOrganizationContext(request)
+    const { organization_id: baseOrganizationId, organization_ids, user_id } = await getWebhookOrganizationContext(request)
+    const body = await request.json().catch(() => ({}))
+    const requestedOrgId = typeof body.organization_id === 'string' ? body.organization_id.trim() : null
+    if (requestedOrgId && !organization_ids.includes(requestedOrgId)) {
+      const { response, errorId } = createErrorResponse(
+        'Organization not found or you do not have access to create webhooks for it',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const organization_id = requestedOrgId ?? baseOrganizationId
     const admin = createSupabaseAdminClient()
     const role = await getUserRole(admin, user_id, organization_id)
     requireAdminOrOwner(role)
-    const body = await request.json().catch(() => ({}))
     const url = typeof body.url === 'string' ? body.url.trim() : ''
     const events = Array.isArray(body.events) ? body.events : []
     const description = typeof body.description === 'string' ? body.description.trim() : null
@@ -154,20 +171,16 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = generateSecret()
-    const supabase = await createSupabaseServerClient()
+    const adminClient = createSupabaseAdminClient()
 
-    const { data: endpoint, error } = await supabase
-      .from('webhook_endpoints')
-      .insert({
-        organization_id,
-        url,
-        events: validEvents,
-        is_active: true,
-        description: description || null,
-        created_by: user_id,
-      })
-      .select('id, url, events, is_active, description, created_at')
-      .single()
+    const { data: rows, error } = await adminClient.rpc('create_webhook_endpoint_with_secret', {
+      p_organization_id: organization_id,
+      p_url: url,
+      p_events: validEvents,
+      p_description: description || '',
+      p_created_by: user_id,
+      p_secret: secret,
+    })
 
     if (error) {
       const { response, errorId } = createErrorResponse(
@@ -184,20 +197,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const adminClient = createSupabaseAdminClient()
-    const { error: secretError } = await adminClient
-      .from('webhook_endpoint_secrets')
-      .insert({ endpoint_id: endpoint.id, secret })
-
-    if (secretError) {
+    const endpoint = Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+    if (!endpoint) {
       const { response, errorId } = createErrorResponse(
-        'Failed to store webhook secret',
+        'Webhook creation failed: no endpoint returned',
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
-      logApiError(500, 'SECRET_INSERT_ERROR', errorId, requestId, organization_id, secretError.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
-      })
       return NextResponse.json(response, {
         status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },

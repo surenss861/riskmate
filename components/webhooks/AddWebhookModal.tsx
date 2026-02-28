@@ -40,9 +40,11 @@ interface AddWebhookModalProps {
   open: boolean
   onClose: () => void
   onCreated: (endpoint: WebhookEndpoint & { secret?: string }) => void
+  /** Target organization for the new endpoint; required so multi-org admins create in the intended tenant. */
+  organizationId?: string | null
 }
 
-export function AddWebhookModal({ open, onClose, onCreated }: AddWebhookModalProps) {
+export function AddWebhookModal({ open, onClose, onCreated, organizationId }: AddWebhookModalProps) {
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set())
@@ -87,6 +89,7 @@ export function AddWebhookModal({ open, onClose, onCreated }: AddWebhookModalPro
           url: url.trim(),
           description: description.trim() || null,
           events: Array.from(selectedEvents),
+          ...(organizationId ? { organization_id: organizationId } : {}),
         }),
       })
       const json = await res.json().catch(() => ({}))
