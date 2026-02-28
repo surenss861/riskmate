@@ -190,14 +190,14 @@ export async function PATCH(
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
 
-    // Webhooks: job.updated and job.completed only on transition to completed
-    triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
+    // Webhooks: job.updated and job.completed (await so serverless teardown does not drop events)
+    await triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
       console.warn('[Webhook] job.updated trigger failed:', e)
     )
     const transitionedToCompleted =
       updatedJob?.status === 'completed' && previousStatus !== 'completed'
     if (transitionedToCompleted) {
-      triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
+      await triggerWebhookEvent(organization_id, 'job.completed', { ...updatedJob }).catch((e) =>
         console.warn('[Webhook] job.completed trigger failed:', e)
       )
     }

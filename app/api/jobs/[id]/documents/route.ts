@@ -275,7 +275,7 @@ export async function POST(
     }
 
     const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-    triggerWebhookEvent(organization_id, 'evidence.uploaded', {
+    await triggerWebhookEvent(organization_id, 'evidence.uploaded', {
       document_id: inserted.id,
       job_id: jobId,
       name: inserted.name,

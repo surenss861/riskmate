@@ -3,9 +3,11 @@
  * link-local, CGNAT, multicast, and reserved ranges; enforce HTTPS outside local development.
  * Resolves DNS (A/AAAA) and rejects if any resolved address is non-public to prevent
  * DNS rebinding and hostnames that resolve to internal IPs.
+ * IPv4-mapped IPv6 (including hex forms like ::ffff:7f00:1) are normalized and checked.
  */
 
 import { promises as dns } from 'node:dns'
+import { isIP } from 'node:net'
 
 export type WebhookUrlResult =
   | { valid: true }
@@ -25,7 +27,8 @@ export async function validateWebhookUrl(urlString: string): Promise<WebhookUrlR
     if (!isDev && u.protocol !== 'https:') {
       return { valid: false, reason: 'HTTPS is required outside local development' }
     }
-    const hostname = u.hostname.toLowerCase()
+    let hostname = u.hostname.toLowerCase()
+    if (hostname.startsWith('[') && hostname.endsWith(']')) hostname = hostname.slice(1, -1)
     if (isBlockedHostname(hostname)) {
       return { valid: false, reason: 'Webhook URL must point to a public destination' }
     }
@@ -40,10 +43,12 @@ export async function validateWebhookUrl(urlString: string): Promise<WebhookUrlR
 }
 
 /**
- * If hostname is a literal IP, check it; otherwise resolve A/AAAA and check all addresses.
+ * If hostname is a literal IP (or IPv4-mapped IPv6, which some runtimes don't report as IPv6), check it;
+ * otherwise resolve A/AAAA and check all addresses.
  * Returns true if any address is blocked (private/loopback/link-local/CGNAT/multicast).
  */
 async function resolveAndCheckAddresses(hostname: string): Promise<boolean> {
+  if (getIpv4MappedDottedDecimal(hostname) !== null) return isBlockedIp(hostname)
   if (isLiteralIpv4(hostname) || isLiteralIpv6(hostname)) {
     return isBlockedIp(hostname)
   }
@@ -62,14 +67,11 @@ async function resolveAndCheckAddresses(hostname: string): Promise<boolean> {
 }
 
 function isLiteralIpv4(host: string): boolean {
-  const parts = host.split('.')
-  if (parts.length !== 4) return false
-  const octets = parts.map((p) => parseInt(p, 10))
-  return !octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)
+  return isIP(host) === 4
 }
 
 function isLiteralIpv6(host: string): boolean {
-  return host.includes(':')
+  return isIP(host) === 6
 }
 
 function isBlockedHostname(host: string): boolean {
@@ -80,10 +82,9 @@ function isBlockedHostname(host: string): boolean {
 }
 
 function isBlockedIp(host: string): boolean {
-  if (host.includes(':')) {
-    return isBlockedIpv6(host)
-  }
-  return isBlockedIpv4(host)
+  if (isIP(host) === 6) return isBlockedIpv6(host)
+  if (isIP(host) === 4) return isBlockedIpv4(host)
+  return false
 }
 
 function isBlockedIpv4(host: string): boolean {
@@ -103,21 +104,77 @@ function isBlockedIpv4(host: string): boolean {
   return false
 }
 
+/**
+ * Expand IPv6 string to 8 x 16-bit groups (decimal). Returns null if not valid IPv6.
+ * Handles :: compression; all non-empty segments must be valid hex (1–4 hex digits).
+ */
+function expandIpv6ToGroups(host: string): number[] | null {
+  const normalized = host.toLowerCase().trim()
+  if (normalized.includes('.')) return null
+  const parts = normalized.split(':')
+  if (parts.length < 2 || parts.length > 8) return null
+  const firstNonEmpty = parts.findIndex((p) => p !== '')
+  const lastNonEmpty =
+    parts.length -
+    1 -
+    [...parts].reverse().findIndex((p) => p !== '')
+  if (firstNonEmpty === -1 || lastNonEmpty < firstNonEmpty) return null
+  const middle = parts.slice(firstNonEmpty, lastNonEmpty + 1)
+  const zerosNeeded = 8 - middle.length
+  if (zerosNeeded < 0) return null
+  const parsed = middle.map((p) => parseInt(p, 16))
+  if (parsed.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null
+  return [...Array(zerosNeeded).fill(0), ...parsed]
+}
+
+/**
+ * If host is an IPv4-mapped IPv6 address (any form: dotted or hex), return the
+ * canonical IPv4 dotted-decimal string; otherwise null.
+ */
+function getIpv4MappedDottedDecimal(host: string): string | null {
+  const normalized = host.toLowerCase().trim()
+  if (normalized.startsWith('::ffff:')) {
+    const tail = normalized.slice(7)
+    const v4 = tail.split('.')
+    if (v4.length === 4) {
+      const o = v4.map((p) => parseInt(p, 10))
+      if (!o.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return tail
+    }
+  }
+  const groups = expandIpv6ToGroups(host)
+  if (!groups) return null
+  const isStandardMapped =
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0 &&
+    groups[5] === 0xffff
+  const isAlternateMapped =
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0xffff &&
+    groups[5] === 0
+  if (!isStandardMapped && !isAlternateMapped) return null
+  const hi = groups[6]
+  const lo = groups[7]
+  const addr = (hi << 16) | lo
+  const a = (addr >>> 24) & 0xff
+  const b = (addr >>> 16) & 0xff
+  const c = (addr >>> 8) & 0xff
+  const d = addr & 0xff
+  return `${a}.${b}.${c}.${d}`
+}
+
 function isBlockedIpv6(host: string): boolean {
   const normalized = host.toLowerCase()
   if (normalized === '::1') return true
   if (normalized.startsWith('fe80:')) return true
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
   if (normalized.startsWith('ff')) return true
-  if (normalized.startsWith('::ffff:')) {
-    const tail = normalized.slice(7)
-    const v4 = tail.split('.')
-    if (v4.length === 4) {
-      const o = v4.map((p) => parseInt(p, 10))
-      if (!o.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
-        return isBlockedIpv4(tail)
-      }
-    }
-  }
+  const mappedV4 = getIpv4MappedDottedDecimal(host)
+  if (mappedV4 !== null) return isBlockedIpv4(mappedV4)
   return false
 }

@@ -166,7 +166,7 @@ export async function POST(
     }
 
     const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-    triggerWebhookEvent(organizationId, 'signature.added', {
+    await triggerWebhookEvent(organizationId, 'signature.added', {
       signoff_id: signoff.id,
       job_id: jobId,
       signer_id: user.id,

@@ -892,8 +892,8 @@ export async function POST(request: NextRequest) {
     // At this point, TypeScript knows job.id exists
     const jobId = job.id
 
-    // Webhook: job.created
-    triggerWebhookEvent(organization_id, 'job.created', {
+    // Webhook: job.created (await so serverless teardown does not drop the event)
+    await triggerWebhookEvent(organization_id, 'job.created', {
       id: jobId,
       ...filteredJobRow,
       created_at: new Date().toISOString(),

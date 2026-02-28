@@ -63,7 +63,7 @@ export async function PATCH(
     }
 
     if ((updatedItem as { hazard_id?: string | null }).hazard_id == null) {
-      triggerWebhookEvent(organization_id, 'hazard.updated', {
+      await triggerWebhookEvent(organization_id, 'hazard.updated', {
         id: updatedItem.id,
         job_id: jobId,
         title: updatedItem.title ?? '',

@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
   const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
   for (const jobId of eligibleIds) {
     const job = jobMap.get(jobId)!
-    triggerWebhookEvent(organization_id, 'job.deleted', {
+    await triggerWebhookEvent(organization_id, 'job.deleted', {
       id: jobId,
       deleted_at: deletedAt,
       status: job.status,

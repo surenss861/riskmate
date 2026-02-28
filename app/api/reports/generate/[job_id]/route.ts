@@ -244,7 +244,7 @@ export async function POST(
       reportRun = newRun
       console.log(`[reports][${requestId}][stage] create_report_run_ok runId=${reportRun.id}`)
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-      triggerWebhookEvent(organization_id, 'report.generated', {
+      await triggerWebhookEvent(organization_id, 'report.generated', {
         report_run_id: reportRun.id,
         job_id: jobId,
         packet_type: packetType,
