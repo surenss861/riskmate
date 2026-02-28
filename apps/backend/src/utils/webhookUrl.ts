@@ -44,7 +44,8 @@ export async function validateWebhookUrl(urlString: string): Promise<WebhookUrlR
     }
     return { valid: true }
   } catch {
-    return { valid: false, reason: 'Invalid URL', terminal: false }
+    // Parse/format failure: malformed URL is not transient — fail fast, do not retry.
+    return { valid: false, reason: 'Invalid URL', terminal: true }
   }
 }
 

@@ -1,9 +1,31 @@
 /**
  * Regression tests: SSRF webhook URL validation must block IPv4-mapped IPv6
  * loopback and private addresses in all encodings (dotted decimal and hex).
+ * Invalid URL parse/format must be terminal (no retries); DNS/network transient remains retryable.
  */
 
 import { validateWebhookUrl } from '../webhookUrl'
+
+describe('validateWebhookUrl – invalid URL parse (terminal)', () => {
+  it('returns terminal invalid for malformed URL (parse failure)', async () => {
+    const result = await validateWebhookUrl('not-a-valid-url')
+    expect(result.valid).toBe(false)
+    expect(result.valid === false && result.reason).toContain('Invalid URL')
+    expect(result.valid === false && result.terminal).toBe(true)
+  })
+
+  it('returns terminal invalid for empty string', async () => {
+    const result = await validateWebhookUrl('')
+    expect(result.valid).toBe(false)
+    expect(result.valid === false && result.terminal).toBe(true)
+  })
+
+  it('returns terminal invalid for invalid URL shape', async () => {
+    const result = await validateWebhookUrl('https://')
+    expect(result.valid).toBe(false)
+    expect(result.valid === false && result.terminal).toBe(true)
+  })
+})
 
 describe('validateWebhookUrl – IPv4-mapped IPv6 and reserved ranges', () => {
   describe('IPv4-mapped IPv6 loopback (must be blocked)', () => {

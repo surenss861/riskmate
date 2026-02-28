@@ -212,6 +212,8 @@ export async function deliverEvent(
 /**
  * Record one send attempt in webhook_delivery_attempts for immutable per-attempt history.
  * Uses upsert so re-runs (e.g. after stale-claim recovery) are idempotent.
+ * Returns true if the write succeeded; false on error (logs with delivery/attempt context).
+ * Callers must treat false as a first-class error and not report the delivery as successful.
  */
 async function recordAttempt(
   deliveryId: string,
@@ -219,8 +221,8 @@ async function recordAttempt(
   responseStatus: number | null,
   responseBody: string | null,
   durationMs: number
-): Promise<void> {
-  await supabase.from('webhook_delivery_attempts').upsert(
+): Promise<boolean> {
+  const { error } = await supabase.from('webhook_delivery_attempts').upsert(
     {
       delivery_id: deliveryId,
       attempt_number: attemptNumber,
@@ -232,6 +234,14 @@ async function recordAttempt(
       onConflict: 'delivery_id,attempt_number',
     }
   )
+  if (error) {
+    console.error(
+      '[WebhookDelivery] Attempt persistence failed',
+      { deliveryId, attemptNumber, error: error.message, code: error.code }
+    )
+    return false
+  }
+  return true
 }
 
 /**
@@ -260,7 +270,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     } catch (decryptErr) {
       const reason = decryptErr instanceof Error ? decryptErr.message : 'Webhook secret decryption failed (invalid or missing WEBHOOK_SECRET_ENCRYPTION_KEY)'
       console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
-      await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+      const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+      if (!attemptOk) {
+        await markDeliveryAttemptPersistenceFailed(delivery.id)
+        return
+      }
       await supabase
         .from('webhook_deliveries')
         .update({
@@ -284,7 +298,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       ? 'Endpoint not found (deleted)'
       : `Endpoint fetch failed (transient): ${epError.message}`
     console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
-    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     if (isEndpointMissing) {
       await supabase
         .from('webhook_deliveries')
@@ -316,7 +334,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   if (secretError) {
     const reason = `Secret fetch failed (transient): ${secretError.message}`
     console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
-    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     await updateDeliveryFailure(
       delivery.id,
       delivery.endpoint_id,
@@ -334,7 +356,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   if (!endpoint || !endpointWithSecret || !secret) {
     const reason = 'Endpoint has no secret'
     console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
-    await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     await supabase
       .from('webhook_deliveries')
       .update({
@@ -352,7 +378,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   if (endpointWithSecret.is_active === false) {
     const msg = 'Endpoint is paused; delivery cancelled'
     console.log('[WebhookDelivery] Endpoint paused, cancelling delivery:', delivery.id, delivery.endpoint_id)
-    await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     await supabase
       .from('webhook_deliveries')
       .update({
@@ -369,14 +399,18 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
 
   const urlCheck = await validateWebhookUrl(endpointWithSecret.url)
   if (!urlCheck.valid) {
-    const forceTerminal = urlCheck.terminal // only true for explicit policy (SSRF/blocked); DNS/transient → retry
+    const forceTerminal = urlCheck.terminal // only true for explicit policy (SSRF/blocked) or invalid URL shape; DNS/transient → retry
     console.error(
       '[WebhookDelivery]',
       forceTerminal ? 'Blocked unsafe URL' : 'URL validation failed (transient)',
       delivery.endpoint_id,
       urlCheck.reason
     )
-    await recordAttempt(delivery.id, delivery.attempt_count, null, `Blocked: ${urlCheck.reason}`, 0)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, `Blocked: ${urlCheck.reason}`, 0)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     await updateDeliveryFailure(
       delivery.id,
       delivery.endpoint_id,
@@ -409,7 +443,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     responseBody = await res.text().catch(() => null)
     const durationMs = Date.now() - start
 
-    await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     const success = res.ok
     if (success) {
       await updateDeliveryResult(delivery.id, delivery.endpoint_id, responseStatus, responseBody, durationMs)
@@ -429,7 +467,11 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     const durationMs = Date.now() - start
     const msg = err instanceof Error ? err.message : String(err)
     responseBody = msg
-    await recordAttempt(delivery.id, delivery.attempt_count, null, responseBody, durationMs)
+    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, responseBody, durationMs)
+    if (!attemptOk) {
+      await markDeliveryAttemptPersistenceFailed(delivery.id)
+      return
+    }
     await updateDeliveryFailure(
       delivery.id,
       delivery.endpoint_id,
@@ -442,6 +484,21 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     )
     console.error('[WebhookDelivery] Send failed:', delivery.id, msg)
   }
+}
+
+/** Mark delivery as terminally failed because attempt log could not be persisted; do not report as success. */
+async function markDeliveryAttemptPersistenceFailed(deliveryId: string): Promise<void> {
+  await supabase
+    .from('webhook_deliveries')
+    .update({
+      response_status: null,
+      response_body: 'Attempt persistence failed; delivery history may be incomplete',
+      duration_ms: null,
+      next_retry_at: null,
+      processing_since: null,
+      terminal_outcome: 'failed',
+    })
+    .eq('id', deliveryId)
 }
 
 /** Success: single atomic update — response fields, delivered_at, clear retry and claim; reset consecutive_failures for endpoint. */
