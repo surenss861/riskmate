@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -13,29 +13,32 @@ const ROUTE = '/api/webhooks/stats'
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_ids } = await getWebhookOrganizationContext(request)
     const supabase = await createSupabaseServerClient()
 
-    const { data: rows, error } = await supabase.rpc('get_webhook_endpoint_stats', {
-      p_org_id: organization_id,
-    })
-
-    if (error) {
-      const { response, errorId } = createErrorResponse(
-        error.message,
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
-      )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
+    const allRows: unknown[] = []
+    for (const orgId of organization_ids) {
+      const { data: rows, error } = await supabase.rpc('get_webhook_endpoint_stats', {
+        p_org_id: orgId,
       })
-      return NextResponse.json(response, {
-        status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
+      if (error) {
+        const { response, errorId } = createErrorResponse(
+          error.message,
+          'QUERY_ERROR',
+          { requestId, statusCode: 500 }
+        )
+        logApiError(500, 'QUERY_ERROR', errorId, requestId, orgId, response.message, {
+          category: 'internal', severity: 'error', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 500,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      if (Array.isArray(rows)) allRows.push(...rows)
     }
 
-    const list = Array.isArray(rows) ? rows : []
+    const list = allRows
     const data: Record<string, {
       delivered: number
       pending: number

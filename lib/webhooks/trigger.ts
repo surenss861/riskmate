@@ -5,6 +5,7 @@
 
 import crypto from 'crypto'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { buildWebhookEventObject } from '@/lib/webhooks/payloads'
 
 export const WEBHOOK_EVENT_TYPES = [
   'job.created',
@@ -38,6 +39,7 @@ function buildPayload(
 /**
  * Enqueue webhook deliveries for the given event. One row per active endpoint subscribed to the event.
  * Backend worker will pick these up and send.
+ * Uses canonical payload schema per event type so consumers get a stable contract.
  */
 export async function triggerWebhookEvent(
   organizationId: string,
@@ -45,7 +47,8 @@ export async function triggerWebhookEvent(
   data: Record<string, unknown>
 ): Promise<void> {
   const supabase = createSupabaseAdminClient()
-  const payload = buildPayload(eventType, organizationId, data)
+  const normalized = buildWebhookEventObject(eventType, data)
+  const payload = buildPayload(eventType, organizationId, normalized)
 
   const { data: endpoints, error: fetchError } = await supabase
     .from('webhook_endpoints')

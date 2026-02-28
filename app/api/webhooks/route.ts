@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -25,17 +25,17 @@ const EVENT_TYPES = [
 ]
 
 
-/** GET - List org webhook endpoints */
+/** GET - List org webhook endpoints (all orgs the user belongs to via users + organization_members) */
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_ids } = await getWebhookOrganizationContext(request)
     const supabase = await createSupabaseServerClient()
 
     const { data: endpoints, error } = await supabase
       .from('webhook_endpoints')
       .select('id, url, events, is_active, description, created_at')
-      .eq('organization_id', organization_id)
+      .in('organization_id', organization_ids)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_ids[0], response.message, {
         category: 'internal', severity: 'error', route: ROUTE,
       })
       return NextResponse.json(response, {
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id, user_id } = await getOrganizationContext(request)
+    const { organization_id, user_id } = await getWebhookOrganizationContext(request)
     const body = await request.json().catch(() => ({}))
     const url = typeof body.url === 'string' ? body.url.trim() : ''
     const events = Array.isArray(body.events) ? body.events : []

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 
@@ -13,7 +13,7 @@ export async function POST(
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_ids } = await getWebhookOrganizationContext(request)
     const { deliveryId } = await params
     const supabase = await createSupabaseServerClient()
 
@@ -28,7 +28,7 @@ export async function POST(
     const delivery = deliveryRow as DeliveryWithEndpoint | null
     const endpointOrgId = delivery?.webhook_endpoints?.organization_id ?? null
 
-    if (delError || !delivery || endpointOrgId !== organization_id) {
+    if (delError || !delivery || (endpointOrgId != null && !organization_ids.includes(endpointOrgId))) {
       const { response, errorId } = createErrorResponse(
         'Delivery not found',
         'NOT_FOUND',

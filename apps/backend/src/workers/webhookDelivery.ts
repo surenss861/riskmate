@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
 import { validateWebhookUrl } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
+import { buildWebhookEventObject } from '../utils/webhookPayloads'
 
 const RETRY_DELAYS_MS = [
   0,           // attempt 1: immediate
@@ -94,7 +95,8 @@ export async function deliverEvent(
   eventType: string,
   data: Record<string, unknown>
 ): Promise<void> {
-  const payload = buildWebhookPayload(eventType, orgId, data)
+  const normalized = buildWebhookEventObject(eventType, data)
+  const payload = buildWebhookPayload(eventType, orgId, normalized)
 
   const { data: endpoints, error: fetchError } = await supabase
     .from('webhook_endpoints')

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
@@ -13,7 +13,7 @@ const ROUTE = '/api/webhooks/[id]/test'
 async function getEndpointAndCheckOrg(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   endpointId: string,
-  organizationId: string
+  organizationIds: string[]
 ) {
   const { data, error } = await supabase
     .from('webhook_endpoints')
@@ -21,7 +21,7 @@ async function getEndpointAndCheckOrg(
     .eq('id', endpointId)
     .single()
   if (error || !data) return null
-  if (data.organization_id !== organizationId) return null
+  if (!organizationIds.includes(data.organization_id)) return null
   return data
 }
 
@@ -121,11 +121,11 @@ export async function POST(
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_ids } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_id)
+    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids)
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',

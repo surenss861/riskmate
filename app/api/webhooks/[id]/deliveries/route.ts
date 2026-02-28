@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -12,7 +12,7 @@ const ROUTE = '/api/webhooks/[id]/deliveries'
 async function getEndpointAndCheckOrg(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   endpointId: string,
-  organizationId: string
+  organizationIds: string[]
 ) {
   const { data, error } = await supabase
     .from('webhook_endpoints')
@@ -20,7 +20,7 @@ async function getEndpointAndCheckOrg(
     .eq('id', endpointId)
     .single()
   if (error || !data) return null
-  if (data.organization_id !== organizationId) return null
+  if (!organizationIds.includes(data.organization_id)) return null
   return data
 }
 
@@ -31,11 +31,11 @@ export async function GET(
 ) {
   const requestId = getRequestId(request)
   try {
-    const { organization_id } = await getOrganizationContext(request)
+    const { organization_id, organization_ids } = await getWebhookOrganizationContext(request)
     const { id: endpointId } = await params
     const supabase = await createSupabaseServerClient()
 
-    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_id)
+    const endpoint = await getEndpointAndCheckOrg(supabase, endpointId, organization_ids)
     if (!endpoint) {
       const { response, errorId } = createErrorResponse(
         'Webhook endpoint not found',
@@ -85,12 +85,31 @@ export async function GET(
     const attemptsByDelivery: Record<string, Array<{ id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
 
     if (deliveryIds.length > 0) {
-      const { data: attempts } = await supabase
+      const { data: attempts, error: attemptsError } = await supabase
         .from('webhook_delivery_attempts')
         .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)
         .order('created_at', { ascending: true })
         .order('attempt_number', { ascending: true })
+
+      if (attemptsError) {
+        const { response, errorId } = createErrorResponse(
+          'Failed to load delivery attempt history',
+          'QUERY_ERROR',
+          { requestId, statusCode: 500, details: attemptsError.message }
+        )
+        logApiError(500, 'QUERY_ERROR', errorId, requestId, organization_id, response.message, {
+          category: 'internal',
+          severity: 'error',
+          route: ROUTE,
+          details: { attemptsError: attemptsError.message },
+        })
+        return NextResponse.json(response, {
+          status: 500,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+
       for (const a of attempts ?? []) {
         const row = a as { id: string; delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }
         if (!attemptsByDelivery[row.delivery_id]) attemptsByDelivery[row.delivery_id] = []

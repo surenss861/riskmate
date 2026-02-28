@@ -65,14 +65,53 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
     throw new Error('Failed to get organization ID')
   }
 
-  if (!userData?.organization_id) {
-    throw new Error('Failed to get organization ID: User has no organization')
+  let organization_id = userData?.organization_id ?? null
+  if (!organization_id) {
+    const { data: memberRows, error: memberError } = await serviceSupabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .order('organization_id', { ascending: true })
+      .limit(1)
+    if (memberError || !memberRows?.length) {
+      throw new Error('Failed to get organization ID: User has no organization')
+    }
+    organization_id = memberRows[0].organization_id
   }
 
   return {
-    organization_id: userData.organization_id,
+    organization_id,
     user_id: user.id,
-    user_role: userData.role,
+    user_role: userData?.role ?? 'member',
+  }
+}
+
+/**
+ * Webhook-specific org context aligned with webhook_user_org_ids().
+ * Returns all org IDs the user belongs to (users.organization_id + organization_members)
+ * so /api/webhooks/* can allow access when the endpoint belongs to any of those orgs.
+ */
+export interface WebhookOrganizationContext extends OrganizationContext {
+  organization_ids: string[]
+}
+
+export async function getWebhookOrganizationContext(request?: Request): Promise<WebhookOrganizationContext> {
+  const base = await getOrganizationContext(request)
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+  const serviceSupabase = createSupabaseAdminClient()
+
+  const orgIds = new Set<string>([base.organization_id])
+  const { data: memberRows } = await serviceSupabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', base.user_id)
+  for (const row of memberRows ?? []) {
+    if (row.organization_id) orgIds.add(row.organization_id)
+  }
+
+  return {
+    ...base,
+    organization_ids: Array.from(orgIds),
   }
 }
 
