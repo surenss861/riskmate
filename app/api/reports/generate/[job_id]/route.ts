@@ -477,12 +477,13 @@ export async function POST(
       console.log(`[reports][${requestId}][stage] update_report_run_ok`)
 
       // Emit report.generated only after PDF artifact is persisted (completion semantics).
+      // Use status 'completed' to align with backend emitter contract (artifact-ready event).
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
       await triggerWebhookEvent(organization_id, 'report.generated', {
         report_run_id: reportRun.id,
         job_id: jobId,
         packet_type: packetType,
-        status: reportRun.status,
+        status: 'completed',
         data_hash: reportRun.data_hash,
         generated_at: pdfGeneratedAt,
         storage_path: storagePath,

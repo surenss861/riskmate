@@ -274,16 +274,21 @@ export async function POST(
       }
     }
 
-    const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-    await triggerWebhookEvent(organization_id, 'evidence.uploaded', {
-      document_id: inserted.id,
-      job_id: jobId,
-      name: inserted.name,
-      type: inserted.type,
-      file_path: inserted.file_path,
-      uploaded_by: userId,
-      created_at: inserted.created_at,
-    }).catch((e) => console.warn('[Webhook] evidence.uploaded trigger failed:', e))
+    // Emit evidence.uploaded only for evidence/photo uploads (not generic documents).
+    const isEvidenceOrPhoto =
+      inserted.type === 'photo' || inserted.type === 'evidence'
+    if (isEvidenceOrPhoto) {
+      const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
+      await triggerWebhookEvent(organization_id, 'evidence.uploaded', {
+        document_id: inserted.id,
+        job_id: jobId,
+        name: inserted.name,
+        type: inserted.type,
+        file_path: inserted.file_path,
+        uploaded_by: userId,
+        created_at: inserted.created_at,
+      }).catch((e) => console.warn('[Webhook] evidence.uploaded trigger failed:', e))
+    }
 
     // Notify job owner and assignees when uploader is not the recipient (evidence upload notification)
     try {
