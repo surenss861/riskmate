@@ -120,11 +120,21 @@ export interface WebhookEventPayload {
   data: Record<string, unknown>
 }
 
+/** Full endpoint row including secret (used in sendDelivery after fetching secret separately). */
 interface WebhookEndpointRow {
   id: string
   organization_id: string
   url: string
   secret: string
+  events: string[]
+  is_active: boolean
+}
+
+/** Endpoint list row without secret (e.g. deliverEvent only needs id, events, is_active). */
+interface WebhookEndpointListRow {
+  id: string
+  organization_id: string
+  url: string
   events: string[]
   is_active: boolean
 }
@@ -185,13 +195,13 @@ export async function deliverEvent(
   }
 
   const filtered = (endpoints || []).filter(
-    (e: WebhookEndpointRow) => e.events && e.events.includes(eventType)
+    (e: WebhookEndpointListRow) => e.events && e.events.includes(eventType)
   )
 
   if (filtered.length === 0) return
 
   const nextRetryAt = new Date().toISOString()
-  const rows = filtered.map((ep: WebhookEndpointRow) => ({
+  const rows = filtered.map((ep: WebhookEndpointListRow) => ({
     endpoint_id: ep.id,
     event_type: eventType,
     payload: payload as unknown as Record<string, unknown>,

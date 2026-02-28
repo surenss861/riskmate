@@ -16,6 +16,7 @@ const auth_1 = require("../middleware/auth");
 const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const audit_1 = require("../middleware/audit");
 const audit_2 = require("../middleware/audit");
+const webhookDelivery_1 = require("../workers/webhookDelivery");
 exports.syncRouter = express_1.default.Router();
 const MAX_BATCH_SIZE = 200; // Support 100+ as per ticket, allow up to 200
 // POST /api/sync/batch - Upload pending operations
@@ -114,6 +115,14 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
+                                id: job.id,
+                                client_name,
+                                job_type,
+                                location,
+                                status: data.status ?? "draft",
+                                created_by: userId,
+                            }).catch((e) => console.warn("[Sync] Webhook job.created enqueue failed:", e));
                         }
                         results.push(baseResult);
                         break;
@@ -123,7 +132,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                         const data = op.data || {};
                         const { data: existing, error: fetchError } = await supabaseClient_1.supabase
                             .from("jobs")
-                            .select("id, updated_at, created_by")
+                            .select("id, updated_at, created_by, status, completed_at, client_name, client_type, job_type, location, description, start_date, end_date, has_subcontractors, subcontractor_count, insurance_status")
                             .eq("id", jobId)
                             .eq("organization_id", organization_id)
                             .single();
@@ -181,11 +190,13 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             results.push(baseResult);
                             continue;
                         }
-                        const { error: updateError } = await supabaseClient_1.supabase
+                        const { data: updatedJobRow, error: updateError } = await supabaseClient_1.supabase
                             .from("jobs")
                             .update(updates)
                             .eq("id", jobId)
-                            .eq("organization_id", organization_id);
+                            .eq("organization_id", organization_id)
+                            .select("*")
+                            .single();
                         if (updateError) {
                             baseResult.status = "error";
                             baseResult.error = updateError.message;
@@ -208,6 +219,31 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            // Only emit webhooks when at least one persisted mutable column actually changed
+                            const valueChanged = (a, b) => {
+                                const na = a === undefined || a === null ? null : a;
+                                const nb = b === undefined || b === null ? null : b;
+                                if (na === null && nb === null)
+                                    return false;
+                                if (na === null || nb === null)
+                                    return true;
+                                return String(na) !== String(nb);
+                            };
+                            const hadActualChange = Object.keys(updates).some((k) => valueChanged(updates[k], existing[k]));
+                            if (updatedJobRow && hadActualChange) {
+                                (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", {
+                                    id: jobId,
+                                    ...updatedJobRow,
+                                }).catch((e) => console.warn("[Sync] Webhook job.updated enqueue failed:", e));
+                                const didTransitionToCompleted = updates.status === "completed" && (existing.completed_at ?? null) == null;
+                                if (didTransitionToCompleted) {
+                                    (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", {
+                                        id: jobId,
+                                        completed_at: updatedJobRow.completed_at ?? new Date().toISOString(),
+                                        status: "completed",
+                                    }).catch((e) => console.warn("[Sync] Webhook job.completed enqueue failed:", e));
+                                }
+                            }
                         }
                         results.push(baseResult);
                         break;
@@ -240,9 +276,10 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             results.push(baseResult);
                             continue;
                         }
+                        const deletedAt = new Date().toISOString();
                         const { error: deleteError } = await supabaseClient_1.supabase
                             .from("jobs")
-                            .update({ deleted_at: new Date().toISOString() })
+                            .update({ deleted_at: deletedAt })
                             .eq("id", jobId)
                             .eq("organization_id", organization_id);
                         if (deleteError) {
@@ -261,6 +298,11 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.deleted", {
+                                id: jobId,
+                                deleted_at: deletedAt,
+                                status: existing.status,
+                            }).catch((e) => console.warn("[Sync] Webhook job.deleted enqueue failed:", e));
                         }
                         results.push(baseResult);
                         break;
@@ -307,7 +349,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                         const { data: inserted, error: insertErr } = await supabaseClient_1.supabase
                             .from("mitigation_items")
                             .insert(insertPayload)
-                            .select("id")
+                            .select("id, created_at, updated_at")
                             .single();
                         if (insertErr) {
                             baseResult.status = "error";
@@ -325,6 +367,16 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
+                                id: inserted.id,
+                                job_id: jobId,
+                                title,
+                                description: description ?? "",
+                                severity: "medium",
+                                status: "open",
+                                created_at: inserted.created_at ?? new Date().toISOString(),
+                                updated_at: inserted.updated_at ?? inserted.created_at ?? new Date().toISOString(),
+                            }).catch((e) => console.warn("[Sync] Webhook hazard.created enqueue failed:", e));
                         }
                         results.push(baseResult);
                         break;
@@ -459,13 +511,13 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             updates.title = data.name;
                         if (data.description !== undefined)
                             updates.description = data.description;
-                        const { data: updated, error: updateErr } = await supabaseClient_1.supabase
+                        const { data: updatedItem, error: updateErr } = await supabaseClient_1.supabase
                             .from("mitigation_items")
                             .update(updates)
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
                             .eq("organization_id", organization_id)
-                            .select("id")
+                            .select("id, job_id, title, description, done, is_completed, completed_at, created_at")
                             .single();
                         if (updateErr) {
                             baseResult.status = "error";
@@ -483,6 +535,18 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            if (updatedItem) {
+                                (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.updated", {
+                                    id: updatedItem.id,
+                                    job_id: updatedItem.job_id ?? jobId,
+                                    title: updatedItem.title ?? "",
+                                    description: updatedItem.description ?? "",
+                                    done: updatedItem.done,
+                                    is_completed: updatedItem.is_completed,
+                                    completed_at: updatedItem.completed_at,
+                                    created_at: updatedItem.created_at,
+                                }).catch((e) => console.warn("[Sync] Webhook hazard.updated enqueue failed:", e));
+                            }
                         }
                         results.push(baseResult);
                         break;

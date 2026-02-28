@@ -15,6 +15,7 @@ const notifications_1 = require("../services/notifications");
 const jobReport_1 = require("../utils/jobReport");
 const limits_1 = require("../middleware/limits");
 const emailQueue_1 = require("../workers/emailQueue");
+const webhookDelivery_1 = require("../workers/webhookDelivery");
 exports.reportsRouter = express_1.default.Router();
 const ensuredBuckets = new Set();
 const BASE_SHARE_URL = process.env.REPORT_SHARE_BASE_URL ||
@@ -214,6 +215,20 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
                 mitigation_count: (reportData.mitigations ?? []).length,
             },
         });
+        if (reportRecord) {
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "report.generated", {
+                id: reportRecord.id,
+                report_run_id: reportRecord.id,
+                job_id: jobId,
+                storage_path: storagePath ?? null,
+                hash,
+                data_hash: hash,
+                snapshot_id: snapshotId,
+                generated_by: userId,
+                status: "completed",
+                generated_at: new Date().toISOString(),
+            }).catch((e) => console.warn("[Reports] Webhook report.generated enqueue failed:", e));
+        }
         await (0, notifications_1.notifyReportReady)({
             organizationId: organization_id,
             jobId,

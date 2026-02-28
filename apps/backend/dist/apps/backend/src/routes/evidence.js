@@ -13,6 +13,7 @@ const idempotency_1 = require("../utils/idempotency");
 const notifications_1 = require("../services/notifications");
 const rateLimiter_1 = require("../middleware/rateLimiter");
 const structuredLog_1 = require("../utils/structuredLog");
+const webhookDelivery_1 = require("../workers/webhookDelivery");
 const crypto_1 = __importDefault(require("crypto"));
 const busboy_1 = __importDefault(require("busboy"));
 exports.evidenceRouter = express_1.default.Router();
@@ -459,6 +460,24 @@ exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, ra
                 error: notifyErr.message,
             });
         }
+        // Enqueue webhook so subscribers receive evidence.uploaded (error-isolated; do not fail upload response)
+        (0, webhookDelivery_1.deliverEvent)(organization_id, 'evidence.uploaded', {
+            id: insertedEvidence.id,
+            job_id: jobId,
+            evidence_id: evidenceId,
+            file_name: fileName,
+            file_sha256: fileSha256,
+            file_size: fileData.length,
+            mime_type: mimeType,
+            storage_path: storagePath,
+            phase: metadata.phase || null,
+            evidence_type: metadata.evidence_type || null,
+            uploaded_by: userId,
+            created_at: insertedEvidence.created_at,
+            sealed_at: insertedEvidence.sealed_at,
+        }).catch((e) => (0, structuredLog_1.logWithRequest)('warn', 'Webhook evidence.uploaded enqueue failed', requestId, {
+            error: e.message,
+        }));
         // Create signed URL for download
         const { data: signedUrlData } = await supabaseClient_1.supabase.storage
             .from('evidence')

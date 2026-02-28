@@ -83,11 +83,12 @@ async function calculateRiskScore(riskFactorCodes) {
     };
 }
 /**
- * Generate mitigation items from triggered risk factors
+ * Generate mitigation items from triggered risk factors.
+ * Returns inserted rows so callers can emit hazard.created webhooks.
  */
 async function generateMitigationItems(jobId, riskFactorCodes) {
     if (!riskFactorCodes || riskFactorCodes.length === 0) {
-        return;
+        return [];
     }
     // Fetch risk factors with mitigation steps
     const { data: riskFactors, error } = await supabaseClient_1.supabase
@@ -100,7 +101,7 @@ async function generateMitigationItems(jobId, riskFactorCodes) {
         throw new Error('Failed to fetch risk factors');
     }
     if (!riskFactors || riskFactors.length === 0) {
-        return;
+        return [];
     }
     // Create mitigation items for each risk factor
     const mitigationItems = [];
@@ -131,15 +132,18 @@ async function generateMitigationItems(jobId, riskFactorCodes) {
             });
         }
     }
-    // Insert mitigation items in batch
+    // Insert mitigation items in batch and return inserted rows
     if (mitigationItems.length > 0) {
-        const { error: insertError } = await supabaseClient_1.supabase
+        const { data: inserted, error: insertError } = await supabaseClient_1.supabase
             .from('mitigation_items')
-            .insert(mitigationItems);
+            .insert(mitigationItems)
+            .select('id, title, description, created_at, updated_at');
         if (insertError) {
             console.error('Error creating mitigation items:', insertError);
             throw new Error('Failed to create mitigation items');
         }
+        return (inserted ?? []);
     }
+    return [];
 }
 //# sourceMappingURL=riskScoring.js.map

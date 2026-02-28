@@ -73,6 +73,7 @@ const dashboard_1 = require("./routes/dashboard");
 const comments_1 = require("./routes/comments");
 const tasks_1 = require("./routes/tasks");
 const resendWebhook_1 = require("./routes/resendWebhook");
+const webhooks_1 = require("./routes/webhooks");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -80,6 +81,7 @@ const emailQueue_1 = require("./workers/emailQueue");
 const weeklyDigest_1 = require("./workers/weeklyDigest");
 const deadlineReminders_1 = require("./workers/deadlineReminders");
 const taskReminders_1 = require("./workers/taskReminders");
+const webhookDelivery_1 = require("./workers/webhookDelivery");
 const requestId_1 = require("./middleware/requestId");
 const errorResponse_1 = require("./utils/errorResponse");
 const auth_1 = require("./middleware/auth");
@@ -373,6 +375,7 @@ app.use("/api/comments", comments_1.commentsRouter);
 app.use("/api/tasks", tasks_1.tasksRouter);
 app.use("/api/task-templates", tasks_1.taskTemplatesRouter);
 app.use("/api/webhooks/resend", resendWebhook_1.resendWebhookRouter);
+app.use("/api/webhooks", webhooks_1.webhooksRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -397,6 +400,7 @@ v1Router.use("/comments", comments_1.commentsRouter);
 v1Router.use("/tasks", tasks_1.tasksRouter);
 v1Router.use("/task-templates", tasks_1.taskTemplatesRouter);
 v1Router.use("/webhooks/resend", resendWebhook_1.resendWebhookRouter);
+v1Router.use("/webhooks", webhooks_1.webhooksRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {
@@ -461,11 +465,17 @@ if (process.env.NODE_ENV !== "test") {
                 (0, deadlineReminders_1.startDeadlineReminderWorker)();
             }
             (0, taskReminders_1.startTaskReminderWorker)();
+            const disableWebhookWorker = process.env.DISABLE_WEBHOOK_WORKER === 'true' ||
+                process.env.DISABLE_WEBHOOK_WORKER === '1';
+            if (!disableWebhookWorker) {
+                (0, webhookDelivery_1.startWebhookDeliveryWorker)();
+            }
         }
     });
     function shutdown(signal) {
         console.log(`[BOOT] ${signal} received, shutting down...`);
         (0, taskReminders_1.stopTaskReminderWorker)();
+        (0, webhookDelivery_1.stopWebhookDeliveryWorker)();
         server.close(() => {
             console.log("[BOOT] Server closed");
             process.exit(0);

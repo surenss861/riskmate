@@ -24,8 +24,16 @@ export interface RiskScoreResult {
  * Calculate risk score from selected risk factor codes
  */
 export declare function calculateRiskScore(riskFactorCodes: string[]): Promise<RiskScoreResult>;
+export interface InsertedMitigationItem {
+    id: string;
+    title: string | null;
+    description: string | null;
+    created_at: string;
+    updated_at: string | null;
+}
 /**
- * Generate mitigation items from triggered risk factors
+ * Generate mitigation items from triggered risk factors.
+ * Returns inserted rows so callers can emit hazard.created webhooks.
  */
-export declare function generateMitigationItems(jobId: string, riskFactorCodes: string[]): Promise<void>;
+export declare function generateMitigationItems(jobId: string, riskFactorCodes: string[]): Promise<InsertedMitigationItem[]>;
 //# sourceMappingURL=riskScoring.d.ts.map

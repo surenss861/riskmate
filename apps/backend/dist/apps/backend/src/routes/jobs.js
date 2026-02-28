@@ -49,6 +49,7 @@ const errorResponse_1 = require("../utils/errorResponse");
 const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const realtimeEvents_1 = require("../utils/realtimeEvents");
 const permissions_1 = require("../utils/permissions");
+const webhookDelivery_1 = require("../workers/webhookDelivery");
 const emailQueue_1 = require("../workers/emailQueue");
 const notifications_2 = require("../services/notifications");
 const comments_1 = require("./comments");
@@ -1429,6 +1430,15 @@ exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_
             });
         });
         await Promise.allSettled(auditPromises);
+        for (const jobId of eligibleIds) {
+            const job = jobMap.get(jobId);
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.deleted", {
+                id: jobId,
+                deleted_at: deletedAt,
+                status: job.status,
+                bulk: true,
+            }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
+        }
         const total = eligibleIds.length + failed.length;
         res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed }, results: buildBulkResults(eligibleIds, failed) });
     }
@@ -1600,6 +1610,16 @@ exports.jobsRouter.post("/:id/hazards", auth_1.authenticate, requireWriteAccess_
             metadata: { job_id: jobId, sync_direct: true },
             ...clientMetadata,
         });
+        (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
+            id: inserted.id,
+            job_id: jobId,
+            title: inserted.title ?? "",
+            description: inserted.description ?? "",
+            severity: inserted.severity ?? "medium",
+            status: inserted.status ?? "open",
+            created_at: inserted.created_at,
+            updated_at: inserted.updated_at ?? inserted.created_at,
+        }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
         // Notify job owner and assignees (excluding creator)
         try {
             const { data: jobRow } = await supabaseClient_1.supabase
@@ -1976,6 +1996,14 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.created", job.id, userId);
+        (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
+            id: job.id,
+            client_name,
+            job_type,
+            location,
+            status: job.status,
+            created_by: userId,
+        }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
         // Calculate risk score if risk factors provided
         let riskScoreResult = null;
         if (risk_factor_codes && risk_factor_codes.length > 0) {
@@ -1996,8 +2024,18 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
                     risk_level: riskScoreResult.risk_level,
                 })
                     .eq("id", job.id);
-                // Generate mitigation items
-                await (0, riskScoring_1.generateMitigationItems)(job.id, risk_factor_codes);
+                // Generate mitigation items and emit hazard.created for each inserted item
+                const insertedHazards = await (0, riskScoring_1.generateMitigationItems)(job.id, risk_factor_codes);
+                for (const item of insertedHazards) {
+                    (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
+                        id: item.id,
+                        job_id: job.id,
+                        title: item.title ?? "",
+                        description: item.description ?? "",
+                        created_at: item.created_at,
+                        updated_at: item.updated_at ?? item.created_at,
+                    }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
+                }
                 await (0, notifications_1.notifyHighRiskJob)({
                     organizationId: organization_id,
                     jobId: job.id,
@@ -2135,10 +2173,10 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         const { risk_factor_codes, ...jobUpdates } = updateData;
         let updatedRiskScore = null;
         let updatedClientName = null;
-        // Verify job belongs to organization and get current status/completed_at for transition logic
+        // Verify job belongs to organization and get current row for transition + effective-change detection
         const { data: existingJob, error: jobError } = await supabaseClient_1.supabase
             .from("jobs")
-            .select("id, organization_id, risk_score, risk_level, status, completed_at")
+            .select("*")
             .eq("id", jobId)
             .eq("organization_id", organization_id)
             .single();
@@ -2191,8 +2229,18 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
                         risk_level: riskScoreResult.risk_level,
                     })
                         .eq("id", jobId);
-                    // Generate new mitigation items
-                    await (0, riskScoring_1.generateMitigationItems)(jobId, risk_factor_codes);
+                    // Generate new mitigation items and emit hazard.created for each inserted item
+                    const insertedHazards = await (0, riskScoring_1.generateMitigationItems)(jobId, risk_factor_codes);
+                    for (const item of insertedHazards) {
+                        (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
+                            id: item.id,
+                            job_id: jobId,
+                            title: item.title ?? "",
+                            description: item.description ?? "",
+                            created_at: item.created_at,
+                            updated_at: item.updated_at ?? item.created_at,
+                        }).catch((e) => console.warn("[Jobs] Webhook hazard.created enqueue failed:", e));
+                    }
                     updatedRiskScore = riskScoreResult.overall_score;
                 }
                 else {
@@ -2247,8 +2295,34 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
             },
             ...clientMetadata,
         });
-        // Emit realtime event (push signal)
-        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
+        // Only emit webhooks when at least one persisted mutable column actually changed (not no-op PATCH)
+        const valueChanged = (a, b) => {
+            const na = a === undefined || a === null ? null : a;
+            const nb = b === undefined || b === null ? null : b;
+            if (na === null && nb === null)
+                return false;
+            if (na === null || nb === null)
+                return true;
+            return String(na) !== String(nb);
+        };
+        const hadJobFieldChange = Object.keys(jobUpdates).length > 0 &&
+            Object.keys(jobUpdates).some((k) => valueChanged(jobUpdates[k], existingJob[k]));
+        const hadActualChange = hadJobFieldChange;
+        if (hadActualChange) {
+            await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", {
+                id: jobId,
+                ...updatedJob,
+            }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
+            const didTransitionToCompleted = jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
+            if (didTransitionToCompleted) {
+                (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", {
+                    id: jobId,
+                    completed_at: updatedJob?.completed_at ?? new Date().toISOString(),
+                    status: "completed",
+                }).catch((e) => console.warn("[Jobs] Webhook job.completed enqueue failed:", e));
+            }
+        }
         // If risk score changed, log separate event
         if (riskScoreChanged) {
             await (0, audit_1.recordAuditLog)({
@@ -2307,7 +2381,7 @@ exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, 
             .update(updatePayload)
             .eq("id", mitigationId)
             .eq("job_id", jobId)
-            .select("id, title, description, done, is_completed, completed_at, created_at")
+            .select("id, title, description, done, is_completed, completed_at, created_at, hazard_id")
             .single();
         if (updateError) {
             if (updateError.code === "PGRST116") {
@@ -2332,6 +2406,18 @@ exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, 
                 done,
             },
         });
+        if (updatedItem.hazard_id == null) {
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.updated", {
+                id: updatedItem.id,
+                job_id: jobId,
+                title: updatedItem.title ?? "",
+                description: updatedItem.description ?? "",
+                done: updatedItem.done,
+                is_completed: updatedItem.is_completed,
+                completed_at: updatedItem.completed_at,
+                created_at: updatedItem.created_at,
+            }).catch((e) => console.warn("[Jobs] Webhook hazard.updated enqueue failed:", e));
+        }
         invalidateJobReportCache(organization_id, jobId);
         res.json({ data: updatedItem });
     }
@@ -2641,6 +2727,14 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitEvidenceEvent)(organization_id, "evidence.uploaded", inserted.id, jobId, userId);
+        (0, webhookDelivery_1.deliverEvent)(organization_id, "evidence.uploaded", {
+            id: inserted.id,
+            job_id: jobId,
+            name: inserted.name,
+            type: inserted.type,
+            file_path: inserted.file_path,
+            uploaded_by: userId,
+        }).catch((e) => console.warn("[Jobs] Webhook evidence.uploaded enqueue failed:", e));
         invalidateJobReportCache(organization_id, jobId);
         res.status(201).json({
             data: {
@@ -3237,10 +3331,16 @@ exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requ
             },
             ...clientMetadata,
         });
+        const deletedAt = new Date().toISOString();
+        (0, webhookDelivery_1.deliverEvent)(organization_id, "job.deleted", {
+            id: jobId,
+            deleted_at: deletedAt,
+            status: job.status,
+        }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
         res.json({
             data: {
                 id: jobId,
-                deleted_at: new Date().toISOString(),
+                deleted_at: deletedAt,
             },
         });
     }
@@ -3459,6 +3559,14 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
                 signer_role: signerRole,
             },
         });
+        (0, webhookDelivery_1.deliverEvent)(organization_id, "signature.added", {
+            id: data.id,
+            job_id: jobId,
+            signoff_type,
+            signer_id: userId,
+            signer_role: signerRole,
+            signed_at: data.signed_at,
+        }).catch((e) => console.warn("[Jobs] Webhook signature.added enqueue failed:", e));
         // After successful DB commit: trigger mention notifications when comments contain @mentions
         // (mentioned user id, signoff/comment id, org scoping, deep link riskmate://comments/{commentId})
         if (comments && typeof comments === "string" && comments.trim().length > 0) {

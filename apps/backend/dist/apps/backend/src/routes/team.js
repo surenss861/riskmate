@@ -12,6 +12,7 @@ const rbac_1 = require("../middleware/rbac");
 const planRules_1 = require("../auth/planRules");
 const audit_1 = require("../middleware/audit");
 const emailQueue_1 = require("../workers/emailQueue");
+const webhookDelivery_1 = require("../workers/webhookDelivery");
 exports.teamRouter = express_1.default.Router();
 const ALLOWED_ROLES = new Set(["owner", "admin", "safety_lead", "executive", "member"]);
 // Helper to log team events
@@ -251,6 +252,13 @@ exports.teamRouter.post("/invite", (0, rbac_1.requireRole)("safety_lead"), async
                 invite_id: inviteRow?.id || null,
             },
         });
+        (0, webhookDelivery_1.deliverEvent)(organizationId, "team.member_added", {
+            user_id: newUserId,
+            email: normalizedEmail,
+            role,
+            invited_by: authReq.user.id,
+            invite_id: inviteRow?.id ?? null,
+        }).catch((e) => console.warn("[Team] Webhook team.member_added enqueue failed:", e));
         try {
             const [{ data: inviter }, { data: organization }] = await Promise.all([
                 supabaseClient_1.supabase.from("users").select("full_name").eq("id", authReq.user.id).maybeSingle(),
