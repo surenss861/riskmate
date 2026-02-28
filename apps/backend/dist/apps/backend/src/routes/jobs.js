@@ -2024,9 +2024,11 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
                     risk_level: riskScoreResult.risk_level,
                 })
                     .eq("id", job.id);
-                // Generate mitigation items and emit hazard.created for each inserted item
+                // Generate mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
                 const insertedHazards = await (0, riskScoring_1.generateMitigationItems)(job.id, risk_factor_codes);
                 for (const item of insertedHazards) {
+                    if (item.hazard_id != null)
+                        continue;
                     (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
                         id: item.id,
                         job_id: job.id,
@@ -2229,9 +2231,11 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
                         risk_level: riskScoreResult.risk_level,
                     })
                         .eq("id", jobId);
-                    // Generate new mitigation items and emit hazard.created for each inserted item
+                    // Generate new mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL)
                     const insertedHazards = await (0, riskScoring_1.generateMitigationItems)(jobId, risk_factor_codes);
                     for (const item of insertedHazards) {
+                        if (item.hazard_id != null)
+                            continue;
                         (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
                             id: item.id,
                             job_id: jobId,

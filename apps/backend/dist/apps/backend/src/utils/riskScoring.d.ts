@@ -30,6 +30,7 @@ export interface InsertedMitigationItem {
     description: string | null;
     created_at: string;
     updated_at: string | null;
+    hazard_id: string | null;
 }
 /**
  * Generate mitigation items from triggered risk factors.

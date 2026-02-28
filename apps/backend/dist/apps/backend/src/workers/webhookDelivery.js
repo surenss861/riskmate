@@ -14,11 +14,13 @@ exports.validateWebhookEmitPayload = validateWebhookEmitPayload;
 exports.buildWebhookPayload = buildWebhookPayload;
 exports.deliverEvent = deliverEvent;
 exports.sendDelivery = sendDelivery;
+exports.wakeWebhookWorker = wakeWebhookWorker;
 exports.startWebhookDeliveryWorker = startWebhookDeliveryWorker;
 exports.stopWebhookDeliveryWorker = stopWebhookDeliveryWorker;
 const crypto_1 = __importDefault(require("crypto"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const webhookSigning_1 = require("../utils/webhookSigning");
+const secretEncryption_1 = require("../utils/secretEncryption");
 const webhookUrl_1 = require("../utils/webhookUrl");
 const email_1 = require("../utils/email");
 const webhookPayloads_1 = require("../utils/webhookPayloads");
@@ -32,6 +34,8 @@ const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
 const MAX_ATTEMPTS = 5;
 const CONSECUTIVE_FAILURES_BEFORE_ALERT = 5;
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h dedupe
+/** Debounce delay for wake-up: coalesce rapid enqueues into one immediate run. */
+const WAKE_DEBOUNCE_MS = 100;
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000; // 10 min
 /** Max number of sendDelivery() calls in flight at once; avoids one slow endpoint blocking the queue. */
@@ -146,6 +150,7 @@ async function deliverEvent(orgId, eventType, data) {
         console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError);
         throw new Error(`Webhook deliveries insert failed: ${insertError.message}`);
     }
+    wakeWebhookWorker();
 }
 /**
  * Record one send attempt in webhook_delivery_attempts for immutable per-attempt history.
@@ -177,7 +182,9 @@ async function sendDelivery(delivery) {
         .select('secret')
         .eq('endpoint_id', delivery.endpoint_id)
         .maybeSingle();
-    const secret = secretRow?.secret ?? null;
+    const rawSecret = secretRow?.secret ?? null;
+    const keyHex = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    const secret = rawSecret != null ? (0, secretEncryption_1.decryptWebhookSecret)(rawSecret, keyHex) : null;
     const endpointWithSecret = endpoint ? { ...endpoint, secret } : null;
     // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
     if (epError) {
@@ -255,7 +262,7 @@ async function sendDelivery(delivery) {
         return;
     }
     const payloadStr = JSON.stringify(delivery.payload);
-    const headers = (0, webhookSigning_1.buildSignatureHeaders)(payloadStr, endpointWithSecret.secret);
+    const headers = (0, webhookSigning_1.buildSignatureHeaders)(payloadStr, secret);
     const start = Date.now();
     let responseStatus = null;
     let responseBody = null;
@@ -311,6 +318,7 @@ async function updateDeliveryResult(deliveryId, endpointId, responseStatus, resp
  * When forceTerminal is true (e.g. blocked URL), no retries are scheduled.
  * terminalOutcomeReason: 'failed' for retry exhaustion or missing endpoint; 'cancelled_policy' for policy blocks (e.g. blocked URL).
  * countAsConsecutiveFailure: when false (e.g. secret fetch or endpoint fetch transient errors), do not increment consecutive_failures so infrastructure blips do not trigger admin alerts.
+ * attempt_count: when terminal (including retry exhaustion), we persist the attempt just executed (currentAttemptCount), not nextAttempt, so it never exceeds MAX_ATTEMPTS.
  */
 async function updateDeliveryFailure(deliveryId, endpointId, responseStatus, responseBody, durationMs, currentAttemptCount, forceTerminal = false, terminalOutcomeReason = 'failed', countAsConsecutiveFailure = true) {
     const nextAttempt = currentAttemptCount + 1;
@@ -319,12 +327,13 @@ async function updateDeliveryFailure(deliveryId, endpointId, responseStatus, res
         ? 0
         : (RETRY_DELAYS_AFTER_ATTEMPT_MS[nextAttempt - 2] ?? RETRY_DELAYS_AFTER_ATTEMPT_MS[RETRY_DELAYS_AFTER_ATTEMPT_MS.length - 1]);
     const nextRetryAt = terminal ? null : new Date(Date.now() + delayMs).toISOString();
+    const attemptCountToPersist = terminal ? currentAttemptCount : nextAttempt;
     const updatePayload = {
         response_status: responseStatus,
         response_body: responseBody,
         duration_ms: durationMs,
         delivered_at: null,
-        attempt_count: nextAttempt,
+        attempt_count: attemptCountToPersist,
         next_retry_at: nextRetryAt,
         processing_since: null,
     };
@@ -507,6 +516,7 @@ async function processPendingDeliveries() {
             .not('next_retry_at', 'is', null)
             .lte('next_retry_at', now)
             .lte('attempt_count', MAX_ATTEMPTS)
+            .is('terminal_outcome', null)
             .order('created_at', { ascending: true })
             .limit(50);
         if (error) {
@@ -531,6 +541,20 @@ async function processPendingDeliveries() {
     }
 }
 let workerInterval = null;
+let wakeDebounceTimer = null;
+/**
+ * Schedule an immediate, debounced run of the delivery worker so fresh enqueues are processed
+ * without waiting for the next interval tick. Safe to call from both deliverEvent() and from
+ * the internal wake endpoint (Next.js trigger path). Reuses processPendingDeliveriesRunning guard.
+ */
+function wakeWebhookWorker() {
+    if (wakeDebounceTimer)
+        clearTimeout(wakeDebounceTimer);
+    wakeDebounceTimer = setTimeout(() => {
+        wakeDebounceTimer = null;
+        processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Wake run error:', e));
+    }, WAKE_DEBOUNCE_MS);
+}
 function startWebhookDeliveryWorker() {
     if (workerInterval)
         return;
@@ -542,7 +566,8 @@ function startWebhookDeliveryWorker() {
     else {
         console.log('[WebhookDelivery] Supabase client: service role (secrets accessible)');
     }
-    const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '5000', 10));
+    // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback
+    const intervalMs = Math.max(2000, parseInt(process.env.WEBHOOK_WORKER_INTERVAL_MS || '2000', 10));
     workerInterval = setInterval(() => {
         processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker tick error:', e));
     }, intervalMs);

@@ -371,7 +371,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   }
 
   const payloadStr = JSON.stringify(delivery.payload)
-  const headers = buildSignatureHeaders(payloadStr, endpointWithSecret.secret)
+  const headers = buildSignatureHeaders(payloadStr, secret)
 
   const start = Date.now()
   let responseStatus: number | null = null

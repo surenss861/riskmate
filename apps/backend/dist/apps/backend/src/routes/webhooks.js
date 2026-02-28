@@ -9,6 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhooksRouter = void 0;
+const node_crypto_1 = __importDefault(require("node:crypto"));
 const express_1 = __importDefault(require("express"));
 const webhookDelivery_1 = require("../workers/webhookDelivery");
 exports.webhooksRouter = express_1.default.Router();
@@ -16,6 +17,7 @@ const ALLOWED_SET = new Set(webhookDelivery_1.ALLOWED_WEBHOOK_EVENT_TYPES);
 /**
  * Middleware: require internal service-to-service secret. Rejects standard JWT auth for /emit
  * so that only trusted server code (or callers with WEBHOOK_EMIT_SECRET) can trigger deliveries.
+ * Uses constant-time comparison (hash + timingSafeEqual) to avoid timing side-channels.
  */
 function requireWebhookEmitSecret(req, res, next) {
     const secret = process.env.WEBHOOK_EMIT_SECRET;
@@ -29,7 +31,9 @@ function requireWebhookEmitSecret(req, res, next) {
     const headerSecret = req.headers['x-webhook-internal-secret'] ?? (req.headers.authorization?.startsWith('Bearer ')
         ? req.headers.authorization.slice(7).trim()
         : null);
-    if (!headerSecret || headerSecret !== secret) {
+    const expected = node_crypto_1.default.createHash('sha256').update(secret, 'utf8').digest();
+    const received = node_crypto_1.default.createHash('sha256').update(String(headerSecret ?? ''), 'utf8').digest();
+    if (expected.length !== received.length || !node_crypto_1.default.timingSafeEqual(expected, received)) {
         res.status(403).json({
             message: 'Forbidden: invalid or missing internal credential',
             code: 'FORBIDDEN',

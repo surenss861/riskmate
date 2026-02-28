@@ -51,6 +51,12 @@ export declare function deliverEvent(orgId: string, eventType: string, data: Rec
  * If the endpoint is inactive (paused), does not send; terminalizes the delivery with a clear message.
  */
 export declare function sendDelivery(delivery: WebhookDeliveryRow): Promise<void>;
+/**
+ * Schedule an immediate, debounced run of the delivery worker so fresh enqueues are processed
+ * without waiting for the next interval tick. Safe to call from both deliverEvent() and from
+ * the internal wake endpoint (Next.js trigger path). Reuses processPendingDeliveriesRunning guard.
+ */
+export declare function wakeWebhookWorker(): void;
 export declare function startWebhookDeliveryWorker(): void;
 export declare function stopWebhookDeliveryWorker(): void;
 export {};

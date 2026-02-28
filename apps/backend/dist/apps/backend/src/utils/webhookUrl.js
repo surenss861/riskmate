@@ -190,6 +190,8 @@ function getIpv4MappedDottedDecimal(host) {
 }
 function isBlockedIpv6(host) {
     const normalized = host.toLowerCase();
+    if (normalized === '::')
+        return true;
     if (normalized === '::1')
         return true;
     if (normalized.startsWith('fe80:'))

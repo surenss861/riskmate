@@ -74,6 +74,7 @@ const comments_1 = require("./routes/comments");
 const tasks_1 = require("./routes/tasks");
 const resendWebhook_1 = require("./routes/resendWebhook");
 const webhooks_1 = require("./routes/webhooks");
+const internal_1 = require("./routes/internal");
 const exportWorker_1 = require("./services/exportWorker");
 const retentionWorker_1 = require("./services/retentionWorker");
 const ledgerRootWorker_1 = require("./services/ledgerRootWorker");
@@ -376,6 +377,7 @@ app.use("/api/tasks", tasks_1.tasksRouter);
 app.use("/api/task-templates", tasks_1.taskTemplatesRouter);
 app.use("/api/webhooks/resend", resendWebhook_1.resendWebhookRouter);
 app.use("/api/webhooks", webhooks_1.webhooksRouter);
+app.use("/api/internal", internal_1.internalRouter);
 // Mount all /api routes under /v1 as well (versioned API)
 v1Router.use("/risk", risk_1.riskRouter);
 v1Router.use("/subscriptions", subscriptions_1.subscriptionsRouter);
@@ -401,6 +403,7 @@ v1Router.use("/tasks", tasks_1.tasksRouter);
 v1Router.use("/task-templates", tasks_1.taskTemplatesRouter);
 v1Router.use("/webhooks/resend", resendWebhook_1.resendWebhookRouter);
 v1Router.use("/webhooks", webhooks_1.webhooksRouter);
+v1Router.use("/internal", internal_1.internalRouter);
 // Dev endpoints (only available when DEV_AUTH_SECRET is set)
 // MUST be mounted BEFORE app.use("/v1", v1Router) to ensure Express registers it
 if (process.env.DEV_AUTH_SECRET) {

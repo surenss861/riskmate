@@ -215,6 +215,7 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
                 mitigation_count: (reportData.mitigations ?? []).length,
             },
         });
+        // Webhook: report.generated — owned by Express route only. Mobile/backend use POST /api/reports/generate/:jobId. Do not also emit from Next.js report generate route for the same run to avoid duplicate deliveries.
         if (reportRecord) {
             (0, webhookDelivery_1.deliverEvent)(organization_id, "report.generated", {
                 id: reportRecord.id,

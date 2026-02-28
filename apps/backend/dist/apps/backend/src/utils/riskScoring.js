@@ -137,7 +137,7 @@ async function generateMitigationItems(jobId, riskFactorCodes) {
         const { data: inserted, error: insertError } = await supabaseClient_1.supabase
             .from('mitigation_items')
             .insert(mitigationItems)
-            .select('id, title, description, created_at, updated_at');
+            .select('id, title, description, created_at, updated_at, hazard_id');
         if (insertError) {
             console.error('Error creating mitigation items:', insertError);
             throw new Error('Failed to create mitigation items');
