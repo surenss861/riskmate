@@ -158,7 +158,7 @@ export function DeliveryLogsModal({
         const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
         const json = await res.json()
         setDeliveries(Array.isArray(json.data) ? json.data : [])
-        setRetriedDeliveryIds(new Set())
+        // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
       } catch (e) {
         console.warn('[DeliveryLogsModal] Re-fetch after retry failed:', e)
       }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Button,
   Input,
@@ -48,8 +48,11 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
   const [createdEndpoint, setCreatedEndpoint] = useState<WebhookEndpoint | null>(null)
 
   const effectiveOrganizationId = multiOrg ? selectedOrganizationId : defaultOrgId
+  const prevOpenRef = useRef(open)
 
   useEffect(() => {
+    if (prevOpenRef.current && !open) resetForm()
+    prevOpenRef.current = open
     if (!open) return
     const validIds = new Set(organizationOptions.map((o) => o.id))
     if (multiOrg && selectedOrganizationId && !validIds.has(selectedOrganizationId)) {

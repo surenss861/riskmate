@@ -8,6 +8,13 @@ import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
+/**
+ * Webhook ownership: This Next.js route owns webhook emission for web-client bulk status
+ * operations (job.updated, job.completed). The web client calls this route via nextApiRequest.
+ * Express bulk routes (POST /api/jobs/bulk/status) own emission for mobile/direct API clients.
+ * Do not proxy this route to Express for the same request — each path must emit from one stack only to avoid duplicate deliveries.
+ */
+
 export async function POST(request: NextRequest) {
   const auth = await getBulkAuth(request)
   if ('errorResponse' in auth) return auth.errorResponse

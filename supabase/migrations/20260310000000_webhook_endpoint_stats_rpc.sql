@@ -6,10 +6,8 @@
 -- Other terminal states (paused endpoint, blocked URL, etc.) have delivered_at IS NULL AND next_retry_at IS NULL
 -- but attempt_count < 5; they are not counted as failed. To expose them separately, consider adding a
 -- terminal_reason or is_terminal column to webhook_deliveries and a cancelled count here.
--- Drop first when changing return type (PostgreSQL does not allow changing OUT/rettype with CREATE OR REPLACE).
-DROP FUNCTION IF EXISTS get_webhook_endpoint_stats(uuid);
-
-CREATE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
+-- Use CREATE OR REPLACE for atomic idempotent updates when only the body changes (same return type and security).
+CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
   endpoint_id uuid,
   delivered bigint,

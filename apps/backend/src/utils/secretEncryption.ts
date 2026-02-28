@@ -51,12 +51,17 @@ export const WEBHOOK_SECRET_DECRYPTION_ERROR =
 
 /**
  * Decrypt a stored value. If it starts with "v1:", key is required and decryption must succeed (fail-closed).
- * Plaintext secrets (no "v1:" prefix) are returned as-is.
+ * Plaintext secrets (no "v1:" prefix) are returned as-is; when key is missing and value is plaintext, a structured warning is logged so operators can detect unencrypted secrets in production.
  * Throws when an encrypted payload is present but key is missing/invalid or decryption fails.
  */
 export function decryptWebhookSecret(ciphertext: string, keyHex: string | undefined): string {
   if (!ciphertext || typeof ciphertext !== 'string') return ''
-  if (!ciphertext.startsWith(PREFIX)) return ciphertext
+  if (!ciphertext.startsWith(PREFIX)) {
+    if (!keyHex || (typeof keyHex === 'string' && !keyHex.trim())) {
+      console.warn('[WebhookSecret] WEBHOOK_SECRET_ENCRYPTION_KEY is unset; using plaintext secret (encryption at rest not active). Set the key and re-save endpoint secrets to encrypt.', { hasPlaintext: true })
+    }
+    return ciphertext
+  }
   if (!keyHex || typeof keyHex !== 'string') {
     throw new Error(WEBHOOK_SECRET_DECRYPTION_ERROR)
   }

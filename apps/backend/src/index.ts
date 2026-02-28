@@ -490,7 +490,10 @@ if (process.env.NODE_ENV !== "test") {
         process.env.DISABLE_WEBHOOK_WORKER === 'true' ||
         process.env.DISABLE_WEBHOOK_WORKER === '1';
       if (!disableWebhookWorker) {
-        startWebhookDeliveryWorker();
+        startWebhookDeliveryWorker().catch((err) => {
+          console.error('[WebhookDelivery] Worker failed to start:', err?.message ?? err);
+          process.exit(1);
+        });
       }
     }
   });

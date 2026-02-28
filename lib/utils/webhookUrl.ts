@@ -85,6 +85,9 @@ function isBlockedHostname(host: string): boolean {
   if (host === 'localhost' || host === '0.0.0.0') return true
   if (host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
   if (host === 'metadata.google.internal' || host === 'metadata') return true
+  if (host === 'instance-data' || host === 'instance-data.ec2.internal') return true
+  if (host === 'metadata.azure.internal' || host === 'metadata.azure.com') return true
+  if (host.endsWith('.ec2.internal') || host.endsWith('.compute.internal')) return true
   return false
 }
 

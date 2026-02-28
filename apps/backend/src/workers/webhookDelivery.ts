@@ -676,26 +676,6 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 }
 
 /**
- * Atomically claim a pending delivery row so only one worker tick processes it.
- * Returns the updated row if claimed, null if already claimed or delivered.
- */
-async function claimDelivery(id: string): Promise<WebhookDeliveryRow | null> {
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('webhook_deliveries')
-    .update({ processing_since: now })
-    .eq('id', id)
-    .is('delivered_at', null)
-    .is('processing_since', null)
-    .is('terminal_outcome', null)
-    .select('*')
-    .maybeSingle()
-
-  if (error || !data) return null
-  return data as unknown as WebhookDeliveryRow
-}
-
-/**
  * Reset stale claims so rows stuck after a worker crash can be picked again.
  * Idempotent: only clears processing_since when it is older than STALE_CLAIM_MS; actively processing rows are untouched.
  */
@@ -752,30 +732,13 @@ async function processPendingDeliveries(): Promise<void> {
   processPendingDeliveriesRunning = true
   try {
     await recoverStaleClaims()
-    const now = new Date().toISOString()
-    const { data: pending, error } = await supabase
-      .from('webhook_deliveries')
-      .select('id')
-      .is('delivered_at', null)
-      .is('processing_since', null)
-      .not('next_retry_at', 'is', null)
-      .lte('next_retry_at', now)
-      .lte('attempt_count', MAX_ATTEMPTS)
-      .is('terminal_outcome', null)
-      .order('created_at', { ascending: true })
-      .limit(50)
-
+    const { data: claimed, error } = await supabase.rpc('claim_pending_webhook_deliveries', { p_limit: 50 })
     if (error) {
-      console.error('[WebhookDelivery] Fetch pending failed:', error)
+      console.error('[WebhookDelivery] Atomic claim failed:', error)
       return
     }
-
-    const claimed: WebhookDeliveryRow[] = []
-    for (const row of pending || []) {
-      const c = await claimDelivery(row.id)
-      if (c) claimed.push(c)
-    }
-    await runWithConcurrency(claimed, DELIVERY_CONCURRENCY, sendDelivery)
+    const rows = (claimed ?? []) as WebhookDeliveryRow[]
+    await runWithConcurrency(rows, DELIVERY_CONCURRENCY, sendDelivery)
   } finally {
     processPendingDeliveriesRunning = false
     if (pendingRunRequested) {
@@ -801,7 +764,7 @@ export function wakeWebhookWorker(): void {
   }, WAKE_DEBOUNCE_MS)
 }
 
-export function startWebhookDeliveryWorker(): void {
+export async function startWebhookDeliveryWorker(): Promise<void> {
   if (workerInterval) return
   // Backend supabase client must use SUPABASE_SERVICE_ROLE_KEY so webhook_endpoint_secrets (service-role only) is readable
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
@@ -812,6 +775,13 @@ export function startWebhookDeliveryWorker(): void {
   }
   const keyValidation = validateWebhookSecretEncryptionKey(process.env.WEBHOOK_SECRET_ENCRYPTION_KEY)
   if (!keyValidation.valid) {
+    const { data: rows } = await supabase.from('webhook_endpoint_secrets').select('secret').limit(100)
+    const hasEncrypted = (rows ?? []).some((r: { secret?: string }) => (r.secret ?? '').startsWith('v1:'))
+    if (hasEncrypted) {
+      throw new Error(
+        'WEBHOOK_SECRET_ENCRYPTION_KEY is missing or invalid but at least one endpoint has an encrypted (v1:) secret. Set the key and restart the worker.'
+      )
+    }
     console.error('[WebhookDelivery]', keyValidation.message, '- encrypted webhook secrets will fail to decrypt; ensure web and backend use the same key')
   }
   // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback

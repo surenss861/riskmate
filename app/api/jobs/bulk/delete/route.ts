@@ -11,6 +11,11 @@ export const runtime = 'nodejs'
  * Soft-delete multiple jobs (draft-only, no audit/risk/reports). Related documents and evidence
  * are cascade soft-deleted in the same transaction. Uses RPC bulk_soft_delete_jobs for atomic
  * updates. Returns { data: { succeeded, failed } }.
+ *
+ * Webhook ownership: This Next.js route owns webhook emission (job.deleted) for web-client bulk
+ * delete. The web client calls this route via nextApiRequest. Express bulk route (POST /api/jobs/bulk/delete)
+ * owns emission for mobile/direct API clients. Do not proxy this route to Express for the same
+ * request — each path must emit from one stack only to avoid duplicate deliveries.
  */
 export async function POST(request: NextRequest) {
   const auth = await getBulkAuth(request)

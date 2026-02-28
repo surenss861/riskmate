@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader, Badge } from '@/components/shared'
+import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { AddWebhookModal, type WebhookEndpoint } from '@/components/webhooks/AddWebhookModal'
 import { EditWebhookModal } from '@/components/webhooks/EditWebhookModal'
 import { DeliveryLogsModal } from '@/components/webhooks/DeliveryLogsModal'
@@ -31,33 +32,58 @@ export default function WebhooksPage() {
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingConfirmId, setDeletingConfirmId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const loadEndpoints = async () => {
-    try {
-      const res = await fetch('/api/webhooks', { credentials: 'include' })
-      const json = await res.json()
-      if (res.status === 403) {
-        setCanManage(false)
-        setEndpoints([])
-        return
-      }
-      setCanManage(true)
-      setEndpoints(Array.isArray(json.data) ? json.data : [])
-      setDefaultOrganizationId(json.default_organization_id ?? null)
-      setOrganizationOptions(Array.isArray(json.organization_options) ? json.organization_options : [])
-    } catch {
-      setEndpoints([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    loadEndpoints()
+    let cancelled = false
+    setLoading(true)
+    const endpointsPromise = fetch('/api/webhooks', { credentials: 'include' }).then(async (r) => ({ status: r.status, json: await r.json() }))
+    const statsPromise = fetch('/api/webhooks/stats', { credentials: 'include' }).then(async (r) => ({ status: r.status, json: await r.json() }))
+    Promise.all([endpointsPromise, statsPromise])
+      .then(([endpointsRes, statsRes]) => {
+        if (cancelled) return
+        const endpointsJson = endpointsRes.json
+        const statsJson = statsRes.json
+        if (endpointsRes.status === 403) {
+          setCanManage(false)
+          setEndpoints([])
+          setStats({})
+          return
+        }
+        const eps = Array.isArray(endpointsJson?.data) ? endpointsJson.data : []
+        setCanManage(true)
+        setEndpoints(eps)
+        setDefaultOrganizationId(endpointsJson?.default_organization_id ?? null)
+        setOrganizationOptions(Array.isArray(endpointsJson?.organization_options) ? endpointsJson.organization_options : [])
+        const data = statsJson?.data ?? {}
+        const next: Record<string, DeliveryStats> = {}
+        for (const ep of eps) {
+          const s = data[ep.id]
+          next[ep.id] = s
+            ? {
+                delivered: s.delivered ?? 0,
+                pending: s.pending ?? 0,
+                failed: s.failed ?? 0,
+                lastDelivery: s.lastDelivery ?? null,
+                lastSuccessAt: s.lastSuccessAt ?? null,
+                lastTerminalFailureAt: s.lastTerminalFailureAt ?? null,
+                lastFailureAt: s.lastFailureAt ?? null,
+              }
+            : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
+        }
+        setStats(next)
+      })
+      .catch(() => {
+        if (!cancelled) setEndpoints([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [])
 
-  const loadStats = async (endpointList: WebhookEndpoint[]) => {
+  const loadStatsOnly = async (endpointList: WebhookEndpoint[]) => {
     if (endpointList.length === 0) {
       setStats({})
       return
@@ -91,9 +117,25 @@ export default function WebhooksPage() {
     }
   }
 
-  useEffect(() => {
-    loadStats(endpoints)
-  }, [endpoints])
+  const loadEndpoints = async () => {
+    try {
+      const res = await fetch('/api/webhooks', { credentials: 'include' })
+      const json = await res.json()
+      if (res.status === 403) {
+        setCanManage(false)
+        setEndpoints([])
+        return
+      }
+      setCanManage(true)
+      const eps = Array.isArray(json.data) ? json.data : []
+      setEndpoints(eps)
+      setDefaultOrganizationId(json.default_organization_id ?? null)
+      setOrganizationOptions(Array.isArray(json.organization_options) ? json.organization_options : [])
+      await loadStatsOnly(eps)
+    } catch {
+      setEndpoints([])
+    }
+  }
 
   const handleCreated = (_endpoint: WebhookEndpoint & { secret?: string }) => {
     setAddOpen(false)
@@ -112,15 +154,20 @@ export default function WebhooksPage() {
         return
       }
       // Full stats refresh so all endpoints show up-to-date counts after test
-      await loadStats(endpoints)
+      await loadStatsOnly(endpoints)
     } finally {
       setTestingId(null)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this webhook endpoint? This cannot be undone.')) return
+  const handleDeleteClick = (id: string) => {
     setActionError(null)
+    setDeletingConfirmId(id)
+  }
+
+  const handleDeleteConfirm = async () => {
+    const id = deletingConfirmId
+    if (!id) return
     setDeletingId(id)
     try {
       const res = await fetch(`/api/webhooks/${id}`, { method: 'DELETE', credentials: 'include' })
@@ -133,6 +180,7 @@ export default function WebhooksPage() {
       await loadEndpoints()
     } finally {
       setDeletingId(null)
+      setDeletingConfirmId(null)
     }
   }
 
@@ -267,7 +315,7 @@ export default function WebhooksPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => handleDelete(ep.id)}
+                            onClick={() => handleDeleteClick(ep.id)}
                             disabled={!!deletingId}
                           >
                             Delete
@@ -309,6 +357,16 @@ export default function WebhooksPage() {
         endpoint={editingEndpoint}
         onClose={() => setEditingEndpoint(null)}
         onSaved={() => { setEditingEndpoint(null); loadEndpoints(); }}
+      />
+      <ConfirmModal
+        isOpen={deletingConfirmId !== null}
+        title="Delete webhook endpoint"
+        message="Remove this webhook endpoint? Events will no longer be sent to this URL."
+        consequence="This cannot be undone."
+        confirmLabel="Delete endpoint"
+        destructive
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeletingConfirmId(null)}
       />
     </ProtectedRoute>
   )

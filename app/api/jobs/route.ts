@@ -428,6 +428,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/jobs — create job.
+ * Web client does not call this route for job creation; it uses BACKEND_URL (Express) via lib/api.ts jobsApi.create().
+ * Webhook emission here is for any direct callers of the Next.js API. Do not proxy web-client job creation through this route and Express together, or webhooks may be doubled.
+ */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || getRequestId()
   try {

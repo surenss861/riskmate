@@ -96,11 +96,6 @@ CREATE TABLE IF NOT EXISTS api_keys (
   last_used_at TIMESTAMPTZ
 );
 
--- Ensure columns exist if table was created by an earlier run with a different schema
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT NOT NULL DEFAULT '';
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT NOT NULL DEFAULT '';
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
-
 CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys(organization_id);
 -- Non-unique index for lookup; key_hash is the unique credential (see 20260309000000_api_keys_epic_schema.sql).
 DROP INDEX IF EXISTS idx_api_keys_prefix;

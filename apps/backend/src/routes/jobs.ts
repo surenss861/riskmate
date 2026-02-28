@@ -1122,10 +1122,15 @@ const canonicalStatusToDb: Record<string, string> = {
   cancelled: "cancelled",
 };
 
+/** If set by Next.js when proxying bulk ops, Express must not emit webhooks (Next.js route owns emission) to avoid double delivery. */
+const NEXTJS_BULK_HEADER = "x-riskmate-internal-nextjs-bulk";
+
 // POST /api/jobs/bulk/status
 // Update status for multiple jobs (batched: single select + single update). Returns succeeded/failed per job.
+// Webhook ownership: Express owns emission for mobile/direct API; Next.js owns for web client. Skip emission when request is from Next.js (see NEXTJS_BULK_HEADER).
 jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
+  const skipWebhooks = req.get(NEXTJS_BULK_HEADER) === "1";
   try {
     const { organization_id, id: userId } = authReq.user;
     const { job_ids, status: statusParam } = req.body || {};
@@ -1230,17 +1235,19 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
     const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
-    for (const jobId of succeeded) {
-      const previousStatus = found.get(jobId)?.status;
-      const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
-      if (completedAt != null) payload.completed_at = completedAt;
-      deliverEvent(organization_id, "job.updated", payload).catch((e) =>
-        console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
-      );
-      if (dbStatus === "completed" && previousStatus !== "completed") {
-        deliverEvent(organization_id, "job.completed", payload).catch((e) =>
-          console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
+    if (!skipWebhooks) {
+      for (const jobId of succeeded) {
+        const previousStatus = found.get(jobId)?.status;
+        const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
+        if (completedAt != null) payload.completed_at = completedAt;
+        deliverEvent(organization_id, "job.updated", payload).catch((e) =>
+          console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
         );
+        if (dbStatus === "completed" && previousStatus !== "completed") {
+          deliverEvent(organization_id, "job.completed", payload).catch((e) =>
+            console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
+          );
+        }
       }
     }
     const total = succeeded.length + failed.length;
@@ -1420,8 +1427,10 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
 
 // POST /api/jobs/bulk/delete
 // Delete multiple jobs (batched: single select, batch eligibility checks, single update). Same eligibility as single delete.
+// Webhook ownership: Express owns emission for mobile/direct API; Next.js owns for web client. Skip emission when request is from Next.js (see NEXTJS_BULK_HEADER).
 jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
+  const skipWebhooks = req.get(NEXTJS_BULK_HEADER) === "1";
   try {
     const { organization_id, id: userId, role } = authReq.user;
     const { job_ids } = req.body || {};
@@ -1584,14 +1593,16 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       });
     });
     await Promise.allSettled(auditPromises);
-    for (const jobId of eligibleIds) {
-      const job = jobMap.get(jobId)!;
-      deliverEvent(organization_id, "job.deleted", {
-        id: jobId,
-        deleted_at: deletedAt,
-        status: job.status,
-        bulk: true,
-      }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
+    if (!skipWebhooks) {
+      for (const jobId of eligibleIds) {
+        const job = jobMap.get(jobId)!;
+        deliverEvent(organization_id, "job.deleted", {
+          id: jobId,
+          deleted_at: deletedAt,
+          status: job.status,
+          bulk: true,
+        }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
+      }
     }
     const total = eligibleIds.length + failed.length;
     res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed }, results: buildBulkResults(eligibleIds, failed) });
