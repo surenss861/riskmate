@@ -24,6 +24,7 @@ REVOKE ALL ON webhook_endpoint_secrets FROM authenticated;
 GRANT ALL ON webhook_endpoint_secrets TO service_role;
 
 COMMENT ON TABLE webhook_endpoint_secrets IS 'Signing secrets for webhook endpoints. Service-role only; never exposed to authenticated users after creation.';
+-- TODO: Encrypt secrets at rest (e.g. AES-256-GCM with WEBHOOK_SECRET_ENCRYPTION_KEY in env). create_webhook_endpoint_with_secret would encrypt before insert; sendDelivery would decrypt before use. See .env.example WEBHOOK_SECRET_ENCRYPTION_KEY.
 
 -- Migrate existing secrets from webhook_endpoints into the new table
 INSERT INTO webhook_endpoint_secrets (endpoint_id, secret)

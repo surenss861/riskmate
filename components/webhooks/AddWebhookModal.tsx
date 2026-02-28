@@ -6,20 +6,9 @@ import {
   Input,
   GlassCard,
 } from '@/components/shared'
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/trigger'
 
-const EVENT_TYPES = [
-  'job.created',
-  'job.updated',
-  'job.completed',
-  'job.deleted',
-  'hazard.created',
-  'hazard.updated',
-  'signature.added',
-  'report.generated',
-  'evidence.uploaded',
-  'team.member_added',
-]
-
+/** Static grouping for UI; event names must exist in WEBHOOK_EVENT_TYPES. */
 const EVENT_GROUPS: { label: string; events: string[] }[] = [
   { label: 'Jobs', events: ['job.created', 'job.updated', 'job.completed', 'job.deleted'] },
   { label: 'Hazards', events: ['hazard.created', 'hazard.updated'] },

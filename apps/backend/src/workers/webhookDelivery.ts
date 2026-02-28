@@ -12,12 +12,12 @@ import { validateWebhookUrl } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
 import { buildWebhookEventObject } from '../utils/webhookPayloads'
 
-const RETRY_DELAYS_MS = [
-  0,           // attempt 1: immediate
-  5 * 60 * 1000,   // 5 min
-  30 * 60 * 1000,  // 30 min
-  2 * 60 * 60 * 1000,  // 2 hr
-  24 * 60 * 60 * 1000, // 24 hr
+/** Delays after attempt N before attempt N+1: 1→2: 5min, 2→3: 30min, 3→4: 2hr, 4→5: 24hr. Index = nextAttempt - 2; guard for nextAttempt < 2 = immediate. */
+const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
+  5 * 60 * 1000,        // after attempt 1 → wait 5 min
+  30 * 60 * 1000,        // after attempt 2 → 30 min
+  2 * 60 * 60 * 1000,    // after attempt 3 → 2 hr
+  24 * 60 * 60 * 1000,   // after attempt 4 → 24 hr
 ]
 
 const MAX_ATTEMPTS = 5
@@ -39,6 +39,16 @@ export type WebhookEventType =
   | 'report.generated'
   | 'evidence.uploaded'
   | 'team.member_added'
+
+/** Escape HTML special characters to prevent injection when interpolating into HTML (e.g. admin alert email). */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 /** Strict allowlist for internal emit endpoint; do not accept arbitrary event_type from callers. */
 export const ALLOWED_WEBHOOK_EVENT_TYPES: readonly WebhookEventType[] = [
@@ -153,6 +163,7 @@ export function buildWebhookPayload(
 
 /**
  * Find active endpoints for org that subscribe to this event type; create one delivery row per endpoint.
+ * Used by Express backend only. Next.js uses triggerWebhookEvent (lib/webhooks/trigger.ts). Do not call both for the same logical operation — each request path must emit from one stack only to avoid duplicate deliveries.
  */
 export async function deliverEvent(
   orgId: string,
@@ -270,6 +281,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
         delivery.attempt_count,
         false,
         'failed',
+        false, // do not count infrastructure transient errors toward consecutive_failures
       )
     }
     return
@@ -288,6 +300,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       delivery.attempt_count,
       false,
       'failed',
+      false, // do not count infrastructure transient errors toward consecutive_failures
     )
     return
   }
@@ -438,6 +451,7 @@ async function updateDeliveryResult(
  * No intermediate write that clears processing_since alone, avoiding duplicate claims and resends.
  * When forceTerminal is true (e.g. blocked URL), no retries are scheduled.
  * terminalOutcomeReason: 'failed' for retry exhaustion or missing endpoint; 'cancelled_policy' for policy blocks (e.g. blocked URL).
+ * countAsConsecutiveFailure: when false (e.g. secret fetch or endpoint fetch transient errors), do not increment consecutive_failures so infrastructure blips do not trigger admin alerts.
  */
 async function updateDeliveryFailure(
   deliveryId: string,
@@ -448,14 +462,15 @@ async function updateDeliveryFailure(
   currentAttemptCount: number,
   forceTerminal = false,
   terminalOutcomeReason: 'failed' | 'cancelled_policy' = 'failed',
+  countAsConsecutiveFailure = true,
 ): Promise<void> {
   const nextAttempt = currentAttemptCount + 1
   const terminal = forceTerminal || nextAttempt > MAX_ATTEMPTS
-  const nextRetryAt = terminal
-    ? null
-    : new Date(
-        Date.now() + (RETRY_DELAYS_MS[nextAttempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]),
-      ).toISOString()
+  const delayMs =
+    nextAttempt < 2
+      ? 0
+      : (RETRY_DELAYS_AFTER_ATTEMPT_MS[nextAttempt - 2] ?? RETRY_DELAYS_AFTER_ATTEMPT_MS[RETRY_DELAYS_AFTER_ATTEMPT_MS.length - 1])
+  const nextRetryAt = terminal ? null : new Date(Date.now() + delayMs).toISOString()
 
   const updatePayload: Record<string, unknown> = {
     response_status: responseStatus,
@@ -475,8 +490,9 @@ async function updateDeliveryFailure(
     .update(updatePayload)
     .eq('id', deliveryId)
 
-  // Atomic increment on terminal failure; alert only when returned count reaches threshold.
-  if (terminal) {
+  // Atomic increment on terminal failure only when it counts as a real delivery failure (not infrastructure transient).
+  // Alert only when returned count reaches threshold.
+  if (terminal && countAsConsecutiveFailure) {
     const { data: newCount, error: rpcError } = await supabase.rpc(
       'increment_webhook_endpoint_consecutive_failures',
       { p_endpoint_id: endpointId }
@@ -560,7 +576,7 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
   const subject = 'Riskmate: Webhook delivery failures'
   const html = `
     <p>Your webhook endpoint has had ${CONSECUTIVE_FAILURES_BEFORE_ALERT} consecutive delivery failures.</p>
-    <p><strong>Endpoint URL:</strong> ${endpoint.url || '(not set)'}</p>
+    <p><strong>Endpoint URL:</strong> ${escapeHtml(endpoint.url || '(not set)')}</p>
     <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
   `
 

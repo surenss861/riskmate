@@ -1,6 +1,10 @@
 /**
  * Trigger webhook event from Next.js: enqueue one delivery per active endpoint.
  * Backend worker processes webhook_deliveries and sends with HMAC.
+ *
+ * Webhook emission paths: Next.js API routes call triggerWebhookEvent; Express backend routes call deliverEvent.
+ * These are mutually exclusive per request — a given client request is handled by one stack only (e.g. browser → Next.js, mobile → Express).
+ * Do not fire webhooks from both when one stack proxies to the other; centralize in the stack that performs the mutation.
  */
 
 import crypto from 'crypto'

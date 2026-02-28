@@ -24,11 +24,15 @@ export async function GET(request: NextRequest) {
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const admin = createSupabaseAdminClient()
-    const adminOrgIds: string[] = []
-    for (const orgId of organization_ids) {
-      const role = await getUserRole(admin, user_id, orgId)
-      if (role === 'owner' || role === 'admin') adminOrgIds.push(orgId)
-    }
+    const roleResults = await Promise.all(
+      organization_ids.map(async (orgId) => {
+        const role = await getUserRole(admin, user_id, orgId)
+        return { orgId, role } as const
+      })
+    )
+    const adminOrgIds = roleResults
+      .filter((r) => r.role === 'owner' || r.role === 'admin')
+      .map((r) => r.orgId)
     if (adminOrgIds.length === 0) {
       const { response, errorId } = createErrorResponse(
         'Forbidden: Only owners and admins can manage webhooks',
@@ -171,9 +175,8 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = generateSecret()
-    const adminClient = createSupabaseAdminClient()
 
-    const { data: rows, error } = await adminClient.rpc('create_webhook_endpoint_with_secret', {
+    const { data: rows, error } = await admin.rpc('create_webhook_endpoint_with_secret', {
       p_organization_id: organization_id,
       p_url: url,
       p_events: validEvents,

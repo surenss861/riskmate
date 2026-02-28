@@ -12,6 +12,7 @@ import { requireAdminOrOwner } from '@/lib/utils/adminAuth'
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]/deliveries'
+const MAX_ATTEMPTS_PER_DELIVERY = 5
 
 /** GET - List delivery logs with status, response, timing. Requires owner/admin. */
 export async function GET(
@@ -77,13 +78,13 @@ export async function GET(
     const attemptsByDelivery: Record<string, Array<{ id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
 
     if (deliveryIds.length > 0) {
+      const attemptsLimit = Math.min(limit * MAX_ATTEMPTS_PER_DELIVERY, 2000)
       const { data: attempts, error: attemptsError } = await supabase
         .from('webhook_delivery_attempts')
         .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)
-        .order('created_at', { ascending: true })
         .order('attempt_number', { ascending: true })
-        .limit(500)
+        .limit(attemptsLimit)
 
       if (attemptsError) {
         const { response, errorId } = createErrorResponse(
@@ -103,8 +104,8 @@ export async function GET(
         })
       }
 
-      for (const a of attempts ?? []) {
-        const row = a as { id: string; delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }
+      const attemptRows = (attempts ?? []) as Array<{ id: string; delivery_id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>
+      for (const row of attemptRows) {
         if (!attemptsByDelivery[row.delivery_id]) attemptsByDelivery[row.delivery_id] = []
         attemptsByDelivery[row.delivery_id].push({
           id: row.id,
@@ -114,6 +115,9 @@ export async function GET(
           duration_ms: row.duration_ms,
           created_at: row.created_at,
         })
+      }
+      for (const deliveryId of Object.keys(attemptsByDelivery)) {
+        attemptsByDelivery[deliveryId].sort((a, b) => a.attempt_number - b.attempt_number)
       }
     }
 

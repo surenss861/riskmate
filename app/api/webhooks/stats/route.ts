@@ -17,11 +17,15 @@ export async function GET(request: NextRequest) {
   try {
     const { organization_ids, user_id } = await getWebhookOrganizationContext(request)
     const admin = createSupabaseAdminClient()
-    const adminOrgIds: string[] = []
-    for (const orgId of organization_ids) {
-      const role = await getUserRole(admin, user_id, orgId)
-      if (role === 'owner' || role === 'admin') adminOrgIds.push(orgId)
-    }
+    const roleResults = await Promise.all(
+      organization_ids.map(async (orgId) => {
+        const role = await getUserRole(admin, user_id, orgId)
+        return { orgId, role } as const
+      })
+    )
+    const adminOrgIds = roleResults
+      .filter((r) => r.role === 'owner' || r.role === 'admin')
+      .map((r) => r.orgId)
     if (adminOrgIds.length === 0) {
       const { response, errorId } = createErrorResponse(
         'Forbidden: Only owners and admins can view webhook stats',
@@ -35,11 +39,15 @@ export async function GET(request: NextRequest) {
     }
     const supabase = await createSupabaseServerClient()
 
+    const results = await Promise.all(
+      adminOrgIds.map((orgId) =>
+        supabase.rpc('get_webhook_endpoint_stats', { p_org_id: orgId })
+      )
+    )
     const allRows: unknown[] = []
-    for (const orgId of adminOrgIds) {
-      const { data: rows, error } = await supabase.rpc('get_webhook_endpoint_stats', {
-        p_org_id: orgId,
-      })
+    for (let i = 0; i < results.length; i++) {
+      const { data: rows, error } = results[i]
+      const orgId = adminOrgIds[i]
       if (error) {
         const { response, errorId } = createErrorResponse(
           error.message,

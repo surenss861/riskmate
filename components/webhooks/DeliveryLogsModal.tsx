@@ -45,6 +45,7 @@ export function DeliveryLogsModal({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [retryErrors, setRetryErrors] = useState<Array<{ id: string; message: string }>>([])
+  const [retrySuccessMessage, setRetrySuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !endpointId) return
@@ -77,7 +78,9 @@ export function DeliveryLogsModal({
 
   const handleRetryFailed = async () => {
     setRetryErrors([])
+    setRetrySuccessMessage(null)
     const errors: Array<{ id: string; message: string }> = []
+    let successCount = 0
     for (const d of retryEligible) {
       setRetrying(d.id)
       try {
@@ -89,6 +92,8 @@ export function DeliveryLogsModal({
         if (!res.ok) {
           const msg = json?.message ?? json?.error ?? `HTTP ${res.status}`
           errors.push({ id: d.id, message: msg })
+        } else {
+          successCount += 1
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Request failed'
@@ -98,6 +103,9 @@ export function DeliveryLogsModal({
       }
     }
     setRetryErrors(errors)
+    if (successCount > 0) {
+      setRetrySuccessMessage('Retry scheduled — a new delivery has been queued.')
+    }
     if (endpointId) {
       try {
         const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
@@ -118,6 +126,7 @@ export function DeliveryLogsModal({
           <div>
             <h2 className="text-xl font-semibold text-white">Delivery logs</h2>
             <p className="text-sm text-white/60 truncate max-w-md mt-0.5">{endpointUrl}</p>
+            <p className="text-xs text-white/50 mt-0.5">Retried deliveries appear as new entries in the log; the original row stays as Failed.</p>
           </div>
           <div className="flex items-center gap-2">
             {retryEligible.length > 0 && (
@@ -141,6 +150,11 @@ export function DeliveryLogsModal({
             </button>
           </div>
         </div>
+        {retrySuccessMessage && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-sm text-emerald-200">
+            {retrySuccessMessage}
+          </div>
+        )}
         {retryErrors.length > 0 && (
           <div className="mb-4 p-3 rounded-lg bg-amber-500/20 border border-amber-500/40 text-sm text-amber-200">
             <p className="font-medium mb-1">Retry had errors:</p>
