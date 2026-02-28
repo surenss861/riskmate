@@ -296,7 +296,7 @@ async function updateDeliveryResult(
 
   const now = new Date().toISOString()
   await supabase.from('webhook_endpoint_alert_state').upsert(
-    { endpoint_id: endpointId, consecutive_failures: 0, last_alert_at: now, updated_at: now },
+    { endpoint_id: endpointId, consecutive_failures: 0, updated_at: now },
     { onConflict: 'endpoint_id' }
   )
 }
@@ -377,9 +377,12 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
     return
   }
 
-  const lastAlertAt = alertState?.last_alert_at ? new Date(alertState.last_alert_at).getTime() : 0
-  if (Date.now() - lastAlertAt < WEBHOOK_ALERT_COOLDOWN_MS) {
-    return
+  // Cooldown applies only when a real alert was sent (last_alert_at set after sendEmail succeeded).
+  if (alertState?.last_alert_at != null) {
+    const lastAlertAt = new Date(alertState.last_alert_at).getTime()
+    if (Date.now() - lastAlertAt < WEBHOOK_ALERT_COOLDOWN_MS) {
+      return
+    }
   }
 
   const { data: admins } = await supabase

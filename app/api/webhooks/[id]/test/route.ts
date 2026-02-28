@@ -206,7 +206,7 @@ export async function POST(
       id: `evt_test_${Date.now()}`,
       type: eventType,
       created: new Date().toISOString(),
-      organization_id,
+      organization_id: (endpoint as { organization_id: string }).organization_id,
       data: {
         object: buildTestObjectForEventType(eventType),
       },
