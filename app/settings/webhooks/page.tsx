@@ -64,6 +64,12 @@ export default function WebhooksPage() {
           setStats({})
           return
         }
+        if (endpointsRes.status < 200 || endpointsRes.status >= 300) {
+          setFetchError('Failed to load webhooks. Please refresh the page.')
+          setEndpoints([])
+          setStats({})
+          return
+        }
         const eps = Array.isArray(endpointsJson?.data) ? endpointsJson.data : []
         setCanManage(true)
         setEndpoints(eps)
@@ -153,6 +159,11 @@ export default function WebhooksPage() {
       const json = await res.json()
       if (res.status === 403) {
         setCanManage(false)
+        setEndpoints([])
+        return
+      }
+      if (res.status < 200 || res.status >= 300) {
+        setFetchError('Failed to load webhooks. Please refresh the page.')
         setEndpoints([])
         return
       }
@@ -287,7 +298,7 @@ export default function WebhooksPage() {
                 </button>
               </div>
             )}
-            {canManage && (
+            {canManage && !fetchError && (
               <div className="flex justify-end mb-6">
                 <Button onClick={() => setAddOpen(true)} disabled={refreshing}>Add endpoint</Button>
               </div>
@@ -301,10 +312,16 @@ export default function WebhooksPage() {
                 <p className="text-sm text-white/50">Ask an organization owner or admin to grant you access or to manage webhooks.</p>
               </GlassCard>
             ) : endpoints.length === 0 ? (
-              <GlassCard className="p-8 text-center text-white/70">
-                <p className="mb-4">No webhook endpoints yet.</p>
-                <Button onClick={() => setAddOpen(true)}>Add your first endpoint</Button>
-              </GlassCard>
+              fetchError ? (
+                <GlassCard className="p-8 text-center text-white/70">
+                  <p className="mb-4">Could not load webhooks. Use the Retry button above to try again.</p>
+                </GlassCard>
+              ) : (
+                <GlassCard className="p-8 text-center text-white/70">
+                  <p className="mb-4">No webhook endpoints yet.</p>
+                  <Button onClick={() => setAddOpen(true)}>Add your first endpoint</Button>
+                </GlassCard>
+              )
             ) : (
               <div className="space-y-4">
                 {endpoints.map((ep) => (
