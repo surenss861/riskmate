@@ -80,17 +80,7 @@ export default function WebhooksPage() {
           setStats({})
           return
         }
-        if (!statsRes.status || statsRes.status < 200 || statsRes.status >= 300) {
-          setStatsLoadFailed(true)
-          setStats({})
-          return
-        }
         const statsJson = statsRes.json
-        if (statsJson?.degraded === true) {
-          setStatsLoadFailed(true)
-          setStats({})
-          return
-        }
         const data = statsJson?.data ?? {}
         const next: Record<string, DeliveryStats> = {}
         for (const ep of eps) {
@@ -108,6 +98,10 @@ export default function WebhooksPage() {
             : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
         }
         setStats(next)
+        // Show warning banner when degraded or non-2xx, but keep partial stats
+        if (statsJson?.degraded === true || !statsRes.status || statsRes.status < 200 || statsRes.status >= 300) {
+          setStatsLoadFailed(true)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -122,11 +116,7 @@ export default function WebhooksPage() {
     }
     try {
       const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
-      if (!res.ok) {
-        setStatsLoadFailed(true)
-        return
-      }
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       const data = json.data ?? {}
       const next: Record<string, DeliveryStats> = {}
       for (const ep of endpointList) {
@@ -144,7 +134,7 @@ export default function WebhooksPage() {
           : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
       }
       setStats(next)
-      setStatsLoadFailed(false)
+      setStatsLoadFailed(!res.ok || json.degraded === true)
     } catch {
       setStatsLoadFailed(true)
     }

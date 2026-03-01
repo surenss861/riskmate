@@ -98,10 +98,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Return 200 with degraded flag so consumers can preserve partial data
     if (degraded) {
       return NextResponse.json(
         { data, degraded: true },
-        { status: 503, headers: { 'X-Request-ID': requestId } }
+        { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }
     return NextResponse.json({ data })

@@ -130,6 +130,44 @@ describe('validateWebhookUrl – IPv4-mapped IPv6 and reserved ranges', () => {
     })
   })
 
+  describe('IPv6 expanded / equivalent forms (normalized semantics, must be blocked)', () => {
+    it('blocks 0:0:0:0:0:0:0:1 (expanded loopback)', async () => {
+      const result = await validateWebhookUrl('https://[0:0:0:0:0:0:0:1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 0000:0000:0000:0000:0000:0000:0000:0001 (padded loopback)', async () => {
+      const result = await validateWebhookUrl('https://[0000:0000:0000:0000:0000:0000:0000:0001]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks 0:0:0:0:0:0:0:0 (expanded unspecified)', async () => {
+      const result = await validateWebhookUrl('https://[0:0:0:0:0:0:0:0]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks fe80:0:0:0:0:0:0:1 (expanded link-local)', async () => {
+      const result = await validateWebhookUrl('https://[fe80:0:0:0:0:0:0:1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks fd00:0:0:0:0:0:0:1 (expanded unique local)', async () => {
+      const result = await validateWebhookUrl('https://[fd00:0:0:0:0:0:0:1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+
+    it('blocks ff02::1 (multicast)', async () => {
+      const result = await validateWebhookUrl('https://[ff02::1]/callback')
+      expect(result.valid).toBe(false)
+      expect(result.valid === false && result.reason).toContain('public')
+    })
+  })
+
   describe('IPv4 reserved / special-use ranges (must be blocked)', () => {
     it('blocks 240.0.0.1 (240.0.0.0/4 Class E)', async () => {
       const result = await validateWebhookUrl('https://240.0.0.1/callback')

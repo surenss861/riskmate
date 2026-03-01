@@ -185,14 +185,46 @@ function getIpv4MappedDottedDecimal(host: string): string | null {
   return `${a}.${b}.${c}.${d}`
 }
 
+/**
+ * Block IPv6 by normalized address semantics (not string prefixes) so expanded
+ * forms like 0:0:0:0:0:0:0:1 cannot bypass loopback checks.
+ */
 function isBlockedIpv6(host: string): boolean {
+  const groups = expandIpv6ToGroups(host)
+  if (groups && groups.length === 8) {
+    // Unspecified ::/128
+    if (groups.every((g) => g === 0)) return true
+    // Loopback ::1/128 (any expansion: ::1, 0:0:0:0:0:0:0:1, etc.)
+    if (
+      groups[0] === 0 &&
+      groups[1] === 0 &&
+      groups[2] === 0 &&
+      groups[3] === 0 &&
+      groups[4] === 0 &&
+      groups[5] === 0 &&
+      groups[6] === 0 &&
+      groups[7] === 1
+    )
+      return true
+    // Link-local fe80::/10
+    if ((groups[0] & 0xffc0) === 0xfe80) return true
+    // Unique local fc00::/7
+    if ((groups[0] & 0xfe00) === 0xfc00) return true
+    // Multicast ff00::/8
+    if ((groups[0] & 0xff00) === 0xff00) return true
+    // IPv4-mapped: check embedded IPv4
+    const mappedV4 = getIpv4MappedDottedDecimal(host)
+    if (mappedV4 !== null) return isBlockedIpv4(mappedV4)
+    return false
+  }
+  // Fallback when expansion fails (edge-case invalid forms)
   const normalized = host.toLowerCase()
   if (normalized === '::') return true
   if (normalized === '::1') return true
   if (normalized.startsWith('fe80:')) return true
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
   if (normalized.startsWith('ff')) return true
-  const mappedV4 = getIpv4MappedDottedDecimal(host)
-  if (mappedV4 !== null) return isBlockedIpv4(mappedV4)
+  const mappedV4Fallback = getIpv4MappedDottedDecimal(host)
+  if (mappedV4Fallback !== null) return isBlockedIpv4(mappedV4Fallback)
   return false
 }
