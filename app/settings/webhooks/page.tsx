@@ -6,7 +6,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader, Badge } from '@/components/shared'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
-import { AddWebhookModal, type WebhookEndpoint } from '@/components/webhooks/AddWebhookModal'
+import { AddWebhookModal, type WebhookEndpoint, type WebhookEndpointWithSecret } from '@/components/webhooks/AddWebhookModal'
 import { EditWebhookModal } from '@/components/webhooks/EditWebhookModal'
 import { DeliveryLogsModal } from '@/components/webhooks/DeliveryLogsModal'
 
