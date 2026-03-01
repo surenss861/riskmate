@@ -96,7 +96,7 @@ export function DeliveryLogsModal({
     setPayloadShowFull({})
     setFetchError(null)
     setLoading(true)
-    fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
+    fetch(`/api/webhooks/${endpointId}/deliveries?limit=100`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) {
           let msg = `Request failed (${res.status})`
@@ -132,7 +132,7 @@ export function DeliveryLogsModal({
   const retryEligible = deliveries.filter((d) => {
     if (retriedDeliveryIds.has(d.id)) return false
     if (d.can_retry !== undefined) return d.can_retry === true
-    return !d.delivered_at && !d.next_retry_at && (d.attempt_count ?? 0) >= 1
+    return !d.delivered_at && !d.next_retry_at && !d.processing_since && (d.attempt_count ?? 0) >= 1
   })
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
@@ -180,7 +180,7 @@ export function DeliveryLogsModal({
       }
       if (endpointId) {
         try {
-          const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=50`, { credentials: 'include' })
+          const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=100`, { credentials: 'include' })
           if (!res.ok) {
             let msg = `Request failed (${res.status})`
             try {
@@ -218,7 +218,7 @@ export function DeliveryLogsModal({
           <div>
             <h2 className="text-xl font-semibold text-white">Delivery logs</h2>
             <p className="text-sm text-white/60 truncate max-w-md mt-0.5">{endpointUrl}</p>
-            <p className="text-xs text-white/50 mt-0.5">Retried deliveries appear as new entries in the log; the original row stays as Failed.</p>
+            <p className="text-xs text-white/50 mt-0.5">Showing the 100 most recent deliveries. Retried deliveries appear as new entries; the original row stays as Failed.</p>
           </div>
           <div className="flex items-center gap-2">
             {retryEligible.length > 0 && (

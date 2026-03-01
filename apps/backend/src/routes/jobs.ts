@@ -1122,15 +1122,13 @@ const canonicalStatusToDb: Record<string, string> = {
   cancelled: "cancelled",
 };
 
-/** If set by Next.js when proxying bulk ops, Express must not emit webhooks (Next.js route owns emission) to avoid double delivery. */
-const NEXTJS_BULK_HEADER = "x-riskmate-internal-nextjs-bulk";
-
 // POST /api/jobs/bulk/status
 // Update status for multiple jobs (batched: single select + single update). Returns succeeded/failed per job.
-// Webhook ownership: Express owns emission for mobile/direct API; Next.js owns for web client. Skip emission when request is from Next.js (see NEXTJS_BULK_HEADER).
+// Webhook ownership: This Express route always emits webhooks for callers (mobile/direct API). The Next.js bulk
+// routes (app/api/jobs/bulk/status and bulk/delete) call Supabase directly and do not proxy here; they emit
+// webhooks for web clients. If future proxying is introduced, deduplication (e.g. header or single emitter) should be re-evaluated.
 jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
-  const skipWebhooks = req.get(NEXTJS_BULK_HEADER) === "1";
   try {
     const { organization_id, id: userId } = authReq.user;
     const { job_ids, status: statusParam } = req.body || {};
@@ -1235,19 +1233,17 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
     const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
-    if (!skipWebhooks) {
-      for (const jobId of succeeded) {
-        const previousStatus = found.get(jobId)?.status;
-        const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
-        if (completedAt != null) payload.completed_at = completedAt;
-        deliverEvent(organization_id, "job.updated", payload).catch((e) =>
-          console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
+    for (const jobId of succeeded) {
+      const previousStatus = found.get(jobId)?.status;
+      const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
+      if (completedAt != null) payload.completed_at = completedAt;
+      deliverEvent(organization_id, "job.updated", payload).catch((e) =>
+        console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
+      );
+      if (dbStatus === "completed" && previousStatus !== "completed") {
+        deliverEvent(organization_id, "job.completed", payload).catch((e) =>
+          console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
         );
-        if (dbStatus === "completed" && previousStatus !== "completed") {
-          deliverEvent(organization_id, "job.completed", payload).catch((e) =>
-            console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
-          );
-        }
       }
     }
     const total = succeeded.length + failed.length;
@@ -1427,10 +1423,10 @@ jobsRouter.post("/bulk/assign", authenticate, requireWriteAccess, async (req: ex
 
 // POST /api/jobs/bulk/delete
 // Delete multiple jobs (batched: single select, batch eligibility checks, single update). Same eligibility as single delete.
-// Webhook ownership: Express owns emission for mobile/direct API; Next.js owns for web client. Skip emission when request is from Next.js (see NEXTJS_BULK_HEADER).
+// Webhook ownership: This Express route always emits webhooks for callers (mobile/direct API). The Next.js bulk
+// routes call Supabase directly and do not proxy here; they emit webhooks for web clients.
 jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
-  const skipWebhooks = req.get(NEXTJS_BULK_HEADER) === "1";
   try {
     const { organization_id, id: userId, role } = authReq.user;
     const { job_ids } = req.body || {};
@@ -1593,16 +1589,14 @@ jobsRouter.post("/bulk/delete", authenticate, requireWriteAccess, async (req: ex
       });
     });
     await Promise.allSettled(auditPromises);
-    if (!skipWebhooks) {
-      for (const jobId of eligibleIds) {
-        const job = jobMap.get(jobId)!;
-        deliverEvent(organization_id, "job.deleted", {
-          id: jobId,
-          deleted_at: deletedAt,
-          status: job.status,
-          bulk: true,
-        }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
-      }
+    for (const jobId of eligibleIds) {
+      const job = jobMap.get(jobId)!;
+      deliverEvent(organization_id, "job.deleted", {
+        id: jobId,
+        deleted_at: deletedAt,
+        status: job.status,
+        bulk: true,
+      }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
     }
     const total = eligibleIds.length + failed.length;
     res.json({ success: true, summary: { total, succeeded: eligibleIds.length, failed: failed.length }, data: { succeeded: eligibleIds, failed }, results: buildBulkResults(eligibleIds, failed) });
@@ -2240,6 +2234,8 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
     // Emit realtime event (push signal)
     await emitJobEvent(organization_id, "job.created", job.id, userId);
 
+    // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
+    // Risk scoring and mitigation item generation run after this. Subscribers needing full state should use GET /api/jobs/:id.
     deliverEvent(organization_id, "job.created", {
       id: job.id,
       client_name,
@@ -2601,7 +2597,7 @@ jobsRouter.patch("/:id", authenticate, requireWriteAccess, async (req: express.R
       }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
 
       const didTransitionToCompleted =
-        jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
+        jobUpdates.status === "completed" && existingJob.status !== "completed";
       if (didTransitionToCompleted) {
         deliverEvent(organization_id, "job.completed", {
           id: jobId,
@@ -2950,7 +2946,11 @@ function getDefaultPhotoCategory(jobStatus: string): PhotoCategory {
 }
 
 // POST /api/jobs/:id/documents
-// Persists document metadata after upload to storage
+// Persists document metadata after upload to storage (documents table). Used by mobile/direct API clients.
+// evidence.uploaded: This route owns emission for document-metadata uploads via this endpoint only. The Next.js
+// route (app/api/jobs/[id]/documents) owns emission for web client uploads. The Express evidence route
+// (POST /jobs/:id/evidence/upload) owns emission for multipart evidence-bucket uploads. Clients must use one path
+// per upload; calling both documents and evidence endpoints for the same file will result in two events.
 jobsRouter.post("/:id/documents", authenticate, requireWriteAccess, async (req: express.Request, res: express.Response) => {
   const authReq = req as AuthenticatedRequest;
   try {

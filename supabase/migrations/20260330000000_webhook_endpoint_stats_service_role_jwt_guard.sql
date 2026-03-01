@@ -2,6 +2,9 @@
 -- session_user/current_user may not equal 'service_role' when the service-role key is used due to
 -- authenticator/role switching; the JWT role claim is set correctly for service-role invocations.
 -- Defensive: if neither JWT role nor webhook_admin_org_ids() grants access, raise instead of returning empty.
+--
+-- This migration supersedes all previous versions of get_webhook_endpoint_stats (20260310, 20260312,
+-- 20260321, 20260324, 20260325, 20260327, 20260329). For future changes, prefer CREATE OR REPLACE FUNCTION.
 
 CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (

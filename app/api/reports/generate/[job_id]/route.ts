@@ -476,7 +476,9 @@ export async function POST(
         .eq('id', reportRun.id)
       console.log(`[reports][${requestId}][stage] update_report_run_ok`)
 
-      // Webhook: report.generated — owned by this route only. Web client uses Next.js POST /api/reports/generate/[job_id] exclusively (lib/api.ts, report page). Do not also emit from Express reports route for the same run to avoid duplicate deliveries.
+      // Webhook: report.generated — this route uses report_runs (packet-based flow). The Express route
+      // POST /api/reports/generate/:jobId uses risk_snapshot_reports. They are different flows/tables;
+      // each route owns emission for its own report type. Do not call both for the same job run.
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
       await triggerWebhookEvent(organization_id, 'report.generated', {
         report_run_id: reportRun.id,

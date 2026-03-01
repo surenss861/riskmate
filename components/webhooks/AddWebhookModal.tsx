@@ -6,14 +6,7 @@ import {
   Input,
   GlassCard,
 } from '@/components/shared'
-import { WEBHOOK_EVENT_TYPES } from '@/lib/webhooks/eventTypes'
-
-/** UI grouping derived from WEBHOOK_EVENT_TYPES so new event types appear automatically. */
-const EVENT_GROUPS: { label: string; events: string[] }[] = [
-  { label: 'Jobs', events: [...WEBHOOK_EVENT_TYPES.filter((e) => e.startsWith('job.'))] },
-  { label: 'Hazards', events: [...WEBHOOK_EVENT_TYPES.filter((e) => e.startsWith('hazard.'))] },
-  { label: 'Other', events: [...WEBHOOK_EVENT_TYPES.filter((e) => !e.startsWith('job.') && !e.startsWith('hazard.'))] },
-]
+import { EVENT_GROUPS } from '@/lib/webhooks/eventGroups'
 
 function CopySecretButton({ secret }: { secret: string }) {
   const [copied, setCopied] = useState(false)
@@ -37,13 +30,16 @@ export interface WebhookEndpoint {
   is_active: boolean
   description: string | null
   created_at: string
-  secret?: string
 }
+
+/** Endpoint with secret; only available at creation time from onCreated callback. */
+export type WebhookEndpointWithSecret = WebhookEndpoint & { secret: string }
 
 interface AddWebhookModalProps {
   open: boolean
   onClose: () => void
-  onCreated: (endpoint: WebhookEndpoint & { secret?: string }) => void
+  /** Called with endpoint; when secret was shown, includes secret (WebhookEndpointWithSecret). */
+  onCreated: (endpoint: WebhookEndpointWithSecret | WebhookEndpoint) => void
   /** Default organization (fallback when single org or no selection). */
   organizationId?: string | null
   /** Options for organization selector when user is admin in multiple orgs; when length > 1, user must choose. */

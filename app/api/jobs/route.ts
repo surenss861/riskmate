@@ -897,7 +897,8 @@ export async function POST(request: NextRequest) {
     // At this point, TypeScript knows job.id exists
     const jobId = job.id
 
-    // Webhook: job.created (await so serverless teardown does not drop the event)
+    // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
+    // Risk scoring and mitigation items run after this. Subscribers needing full state should use GET /api/jobs/:id.
     await triggerWebhookEvent(organization_id, 'job.created', {
       id: jobId,
       ...filteredJobRow,

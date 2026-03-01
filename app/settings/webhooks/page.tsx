@@ -181,7 +181,7 @@ export default function WebhooksPage() {
     }
   }
 
-  const handleCreated = (_endpoint: WebhookEndpoint & { secret?: string }) => {
+  const handleCreated = (_endpoint: WebhookEndpointWithSecret | WebhookEndpoint) => {
     setAddOpen(false)
     loadEndpoints()
   }
