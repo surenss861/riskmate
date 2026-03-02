@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { validateWebhookUrl } from '@/lib/utils/webhookUrl'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
@@ -124,6 +125,9 @@ export async function PATCH(
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, endpoint.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: '/api/webhooks/[id]',
+      })
       return NextResponse.json(response, {
         status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
@@ -201,6 +205,9 @@ export async function DELETE(
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, endpoint.organization_id, response.message, {
+        category: 'internal', severity: 'error', route: '/api/webhooks/[id]',
+      })
       return NextResponse.json(response, {
         status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },

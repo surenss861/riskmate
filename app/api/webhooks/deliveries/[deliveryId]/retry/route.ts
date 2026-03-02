@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getWebhookOrganizationContext } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
+import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getUserRole } from '@/lib/utils/adminAuth'
 import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
@@ -59,6 +60,18 @@ export async function POST(
     }
 
     if (delivery.delivered_at != null) {
+      const { response, errorId } = createErrorResponse(
+        'Delivery already succeeded; retry not allowed for successful deliveries',
+        'ALREADY_DELIVERED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (delivery.terminal_outcome === 'delivered') {
       const { response, errorId } = createErrorResponse(
         'Delivery already succeeded; retry not allowed for successful deliveries',
         'ALREADY_DELIVERED',
@@ -138,6 +151,9 @@ export async function POST(
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, endpointOrgId, response.message, {
+        category: 'internal', severity: 'error', route: '/api/webhooks/deliveries/[deliveryId]/retry',
+      })
       return NextResponse.json(response, {
         status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
@@ -149,6 +165,9 @@ export async function POST(
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, endpointOrgId, response.message, {
+        category: 'internal', severity: 'error', route: '/api/webhooks/deliveries/[deliveryId]/retry',
+      })
       return NextResponse.json(response, {
         status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },

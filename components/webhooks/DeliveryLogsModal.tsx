@@ -228,7 +228,9 @@ export function DeliveryLogsModal({
             setFetchError(msg)
           } else {
             const json = await res.json()
-            setDeliveries(Array.isArray(json.data) ? json.data : [])
+            const list = Array.isArray(json.data) ? json.data : []
+            setDeliveries(list)
+            setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
             setFetchError(null)
           }
           // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session

@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS webhook_endpoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
-  secret TEXT NOT NULL,
   events TEXT[] NOT NULL DEFAULT '{}',
   is_active BOOLEAN DEFAULT true,
   description TEXT,
