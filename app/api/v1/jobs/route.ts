@@ -110,7 +110,18 @@ export async function GET(request: NextRequest) {
     }
 
     const list = (rows || []) as Array<Record<string, unknown>>
-    const total = (list[0]?.total_count as number) ?? 0
+    let total = (list[0]?.total_count as number) ?? 0
+    if (list.length === 0) {
+      let countQuery = admin
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', context.organization_id)
+        .is('deleted_at', null)
+        .is('archived_at', null)
+      if (status) countQuery = countQuery.eq('status', status)
+      const { count, error: countError } = await countQuery
+      if (!countError && count != null) total = count
+    }
     const jobs = list.map(({ total_count: _t, ...j }) => j)
 
     const res = v1Json(jobs, {
