@@ -142,7 +142,6 @@ export function DeliveryLogsModal({
       .then(async (res) => {
         if (!res.ok) {
           setLoadMoreError('Failed to load more deliveries. Please try again.')
-          setHasMore(false)
           return
         }
         const json = await res.json()
