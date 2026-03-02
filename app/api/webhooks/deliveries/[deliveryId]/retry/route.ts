@@ -132,7 +132,7 @@ export async function POST(
       })
     }
 
-    // Re-fetch endpoint is_active immediately before insert to avoid TOCTOU: endpoint could have been paused between initial fetch and insert.
+    // Re-fetch endpoint is_active immediately before calling RPC to avoid TOCTOU: endpoint could have been paused between initial fetch and insert.
     const { data: endpointNow, error: epNowError } = await admin
       .from('webhook_endpoints')
       .select('is_active')
@@ -150,43 +150,13 @@ export async function POST(
       })
     }
 
-    // Prevent duplicate retry rows: if a pending delivery already exists for this endpoint+event, do not create another.
-    const { data: existingPending, error: pendingError } = await admin
-      .from('webhook_deliveries')
-      .select('id')
-      .eq('endpoint_id', delivery.endpoint_id)
-      .eq('event_type', delivery.event_type)
-      .is('delivered_at', null)
-      .not('next_retry_at', 'is', null)
-      .limit(1)
-    if (!pendingError && existingPending && existingPending.length > 0) {
-      const { response, errorId } = createErrorResponse(
-        'A delivery for this endpoint and event is already scheduled; wait for it to run or fail before rescheduling.',
-        'ALREADY_SCHEDULED',
-        { requestId, statusCode: 400 }
-      )
-      return NextResponse.json(response, {
-        status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
+    // Atomic retry creation: lock source delivery, verify eligibility, ensure no existing active retry for this source, insert one row. Idempotent per source delivery.
+    const { data: rpcRows, error: rpcError } = await admin
+      .rpc('create_webhook_delivery_retry', { p_source_delivery_id: deliveryId })
 
-    const now = new Date().toISOString()
-    const { data: inserted, error: insertError } = await admin
-      .from('webhook_deliveries')
-      .insert({
-        endpoint_id: delivery.endpoint_id,
-        event_type: delivery.event_type,
-        payload: delivery.payload,
-        attempt_count: 1,
-        next_retry_at: now,
-      })
-      .select('id')
-      .single()
-
-    if (insertError) {
+    if (rpcError) {
       const { response, errorId } = createErrorResponse(
-        insertError.message,
+        rpcError.message,
         'QUERY_ERROR',
         { requestId, statusCode: 500 }
       )
@@ -198,7 +168,47 @@ export async function POST(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (!inserted?.id) {
+
+    const result = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows
+    const outcome = result?.outcome
+    const retryId = result?.retry_id
+
+    if (outcome === 'already_scheduled') {
+      const { response, errorId } = createErrorResponse(
+        'This delivery already has a retry scheduled; wait for it to run or fail before rescheduling.',
+        'ALREADY_SCHEDULED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (outcome === 'not_found') {
+      const { response, errorId } = createErrorResponse(
+        'Delivery not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
+      )
+      return NextResponse.json(response, {
+        status: 404,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (outcome === 'ineligible') {
+      const { response, errorId } = createErrorResponse(
+        'Delivery is not eligible for retry',
+        'INELIGIBLE',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (outcome !== 'created' || !retryId) {
       const { response, errorId } = createErrorResponse(
         'Failed to create retry delivery',
         'QUERY_ERROR',
@@ -218,7 +228,7 @@ export async function POST(
     })
 
     return NextResponse.json(
-      { data: { message: 'Retry scheduled', delivery_id: inserted.id } },
+      { data: { message: 'Retry scheduled', delivery_id: retryId } },
       { status: 201 }
     )
   } catch (err: unknown) {
