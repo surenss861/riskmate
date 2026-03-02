@@ -36,12 +36,17 @@ export function getKeyPrefix(plainKey: string): string {
 }
 
 /**
- * Check if the request is using API key auth (Bearer rm_live_... or rm_test_...)
+ * Check if the request is using API key auth (Bearer rm_live_... or rm_test_...).
+ * Authorization scheme is parsed case-insensitively per HTTP semantics.
  */
 export function getBearerApiKey(request: NextRequest): string | null {
   const auth = request.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7).trim()
+  if (!auth) return null
+  const spaceIdx = auth.indexOf(' ')
+  if (spaceIdx === -1) return null
+  const scheme = auth.slice(0, spaceIdx)
+  if (scheme.toLowerCase() !== 'bearer') return null
+  const token = auth.slice(spaceIdx + 1).trim()
   if (token.startsWith(KEY_PREFIX_LIVE) || token.startsWith(KEY_PREFIX_TEST)) return token
   return null
 }

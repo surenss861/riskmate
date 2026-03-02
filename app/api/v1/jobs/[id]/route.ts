@@ -165,7 +165,21 @@ async function handler(
       )
     }
 
-    const body = await request.json().catch(() => ({}))
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid JSON body', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+    if (typeof body !== 'object' || body === null) {
+      body = {}
+    }
     const {
       client_name,
       client_type,

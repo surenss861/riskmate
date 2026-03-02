@@ -109,7 +109,23 @@ export async function PATCH(
       })
     }
 
-    const body = await request.json().catch(() => ({}))
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      const { response, errorId } = createErrorResponse(
+        'Invalid JSON body',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (typeof body !== 'object' || body === null) {
+      body = {}
+    }
     const { name, scopes, expires_at } = body
     const updateData: Record<string, unknown> = {}
     if (typeof name === 'string' && name.trim()) updateData.name = name.trim()
@@ -171,11 +187,23 @@ export async function PATCH(
 
     if (Object.keys(updateData).length === 0) {
       const admin = createSupabaseAdminClient()
-      const { data: current } = await admin
+      const { data: current, error: readError } = await admin
         .from('api_keys')
         .select('id, name, key_prefix, scopes, expires_at, last_used_at, created_at')
         .eq('id', id)
+        .eq('organization_id', result.organization_id!)
         .single()
+      if (readError) {
+        const { response, errorId } = createErrorResponse(
+          readError.message,
+          'QUERY_ERROR',
+          { requestId, statusCode: 500 }
+        )
+        return NextResponse.json(response, {
+          status: 500,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
       return NextResponse.json({ data: current })
     }
 
