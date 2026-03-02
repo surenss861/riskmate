@@ -1,16 +1,15 @@
 "use strict";
 /**
- * Canonical webhook payload schemas per event type.
- * Must stay in sync with app lib/webhooks/payloads.ts so consumers
- * receive a stable data.object contract regardless of producer (web vs backend).
+ * Canonical webhook payload normalization for backend (self-contained).
+ * Mirrors lib/webhooks/payloads.ts so the backend does not depend on repo-root lib at runtime
+ * (Node cannot resolve @/ in compiled output). Keep in sync with lib/webhooks/payloads.ts for
+ * report.generated, evidence.uploaded, and signature.added.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildWebhookEventObject = buildWebhookEventObject;
 const REPORT_GENERATED_REQUIRED = ['report_run_id', 'job_id', 'status', 'data_hash'];
-/**
- * Build canonical data.object for report.generated.
- * Throws if required fields are missing (no silent empty strings); enqueue only after validation.
- */
+const EVIDENCE_TYPE_KINDS = ['photo', 'document', 'other'];
+const EVIDENCE_UPLOADED_REQUIRED = ['id', 'job_id', 'name', 'file_path', 'uploaded_by', 'created_at'];
 function buildReportGeneratedObject(raw) {
     const report_run_id = raw.report_run_id ?? raw.id ?? '';
     const job_id = raw.job_id ?? '';
@@ -39,25 +38,55 @@ function buildReportGeneratedObject(raw) {
         id,
     };
 }
-/**
- * Build canonical data.object for evidence.uploaded.
- */
+function deriveEvidenceType(raw, mimeType) {
+    const rawType = raw.type?.toLowerCase().trim();
+    if (rawType === 'photo')
+        return 'photo';
+    if (rawType === 'evidence')
+        return 'document';
+    const rawEvidenceType = raw.evidence_type?.toLowerCase().trim();
+    if (rawEvidenceType && EVIDENCE_TYPE_KINDS.includes(rawEvidenceType))
+        return rawEvidenceType;
+    if (mimeType.toLowerCase().startsWith('image/'))
+        return 'photo';
+    if (mimeType.toLowerCase().startsWith('application/') ||
+        mimeType.toLowerCase().startsWith('video/'))
+        return 'document';
+    return 'other';
+}
 function buildEvidenceUploadedObject(raw) {
     const id = raw.id ?? raw.document_id ?? '';
     const job_id = raw.job_id ?? '';
     const name = raw.name ?? raw.file_name ?? '';
-    const type = raw.type ?? '';
     const file_path = raw.file_path ?? raw.storage_path ?? '';
     const uploaded_by = raw.uploaded_by ?? '';
     const created_at = raw.created_at ?? new Date().toISOString();
+    const mime_type = (typeof raw.mime_type === 'string' && raw.mime_type.trim()) || 'application/octet-stream';
+    const evidence_type = deriveEvidenceType(raw, mime_type);
+    const required = {
+        id,
+        job_id,
+        name,
+        file_path,
+        uploaded_by,
+        created_at,
+    };
+    for (const key of EVIDENCE_UPLOADED_REQUIRED) {
+        const value = required[key];
+        if (value === undefined || value === null || String(value).trim() === '') {
+            throw new Error(`evidence.uploaded missing required field: ${key}`);
+        }
+    }
     const out = {
         id,
         job_id,
         name,
-        type,
+        mime_type,
+        evidence_type,
         file_path,
         uploaded_by,
         created_at,
+        type: evidence_type,
     };
     if (raw.evidence_id != null)
         out.evidence_id = raw.evidence_id;
@@ -65,21 +94,14 @@ function buildEvidenceUploadedObject(raw) {
         out.file_sha256 = raw.file_sha256;
     if (raw.file_size != null)
         out.file_size = raw.file_size;
-    if (raw.mime_type != null)
-        out.mime_type = raw.mime_type;
     if (raw.phase != null)
         out.phase = raw.phase;
-    if (raw.evidence_type != null)
-        out.evidence_type = raw.evidence_type;
     if (raw.sealed_at != null)
         out.sealed_at = raw.sealed_at;
     if (raw.document_id && raw.document_id !== id)
         out.document_id = raw.document_id;
     return out;
 }
-/**
- * Build canonical data.object for signature.added.
- */
 function buildSignatureAddedObject(raw) {
     const signoff_id = raw.signoff_id ?? raw.id ?? '';
     const job_id = raw.job_id ?? '';

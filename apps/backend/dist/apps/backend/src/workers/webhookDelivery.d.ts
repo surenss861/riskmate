@@ -1,9 +1,15 @@
 /**
  * Webhook delivery: enqueue deliveries for events, send with HMAC signature, retry with backoff.
- * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin after 5 consecutive failures.
+ * Retry: 5min → 30min → 2hr → 24hr → fail. Alert org admin when a single delivery exhausts its retry attempts (with cooldown).
  * Secrets are read from webhook_endpoint_secrets (service-role only). Rotate SUPABASE_SERVICE_ROLE_KEY
  * regularly and restrict/audit service-role access.
  */
+/**
+ * Parse an env value as a finite integer within [min, max]; invalid or out-of-range yields default.
+ * Prevents NaN from non-numeric env (e.g. WEBHOOK_DELIVERY_CONCURRENCY=foo) from creating zero workers
+ * or WEBHOOK_WORKER_INTERVAL_MS from becoming 0ms and causing tight-loop polling.
+ */
+export declare function parseSafeBoundedInt(envValue: string | undefined, defaultVal: number, min: number, max: number): number;
 export type WebhookEventType = 'job.created' | 'job.updated' | 'job.completed' | 'job.deleted' | 'hazard.created' | 'hazard.updated' | 'signature.added' | 'report.generated' | 'evidence.uploaded' | 'team.member_added';
 /** Strict allowlist for internal emit endpoint; do not accept arbitrary event_type from callers. */
 export declare const ALLOWED_WEBHOOK_EVENT_TYPES: readonly WebhookEventType[];
@@ -57,7 +63,19 @@ export declare function sendDelivery(delivery: WebhookDeliveryRow): Promise<void
  * the internal wake endpoint (Next.js trigger path). Reuses processPendingDeliveriesRunning guard.
  */
 export declare function wakeWebhookWorker(): void;
-export declare function startWebhookDeliveryWorker(): void;
+/** Result of starting the webhook delivery worker; allows bootstrap to handle startup failure without exiting the process. */
+export type WebhookWorkerStartResult = {
+    started: true;
+} | {
+    started: false;
+    error: string;
+};
+/**
+ * In-memory guard (processPendingDeliveriesRunning) is process-local only. Cross-instance safety relies on
+ * claim_pending_webhook_deliveries RPC's FOR UPDATE SKIP LOCKED — multiple worker instances may run; each claims rows atomically.
+ * Returns a typed result so the caller can treat startup failure as degraded (log, telemetry) without exiting the process.
+ */
+export declare function startWebhookDeliveryWorker(): Promise<WebhookWorkerStartResult>;
 export declare function stopWebhookDeliveryWorker(): void;
 export {};
 //# sourceMappingURL=webhookDelivery.d.ts.map

@@ -42,7 +42,8 @@ async function validateWebhookUrl(urlString) {
         return { valid: true };
     }
     catch {
-        return { valid: false, reason: 'Invalid URL', terminal: false };
+        // Parse/format failure: malformed URL is not transient — fail fast, do not retry.
+        return { valid: false, reason: 'Invalid URL', terminal: true };
     }
 }
 /**
@@ -84,6 +85,12 @@ function isBlockedHostname(host) {
         return true;
     if (host === 'metadata.google.internal' || host === 'metadata')
         return true;
+    if (host === 'instance-data' || host === 'instance-data.ec2.internal')
+        return true;
+    if (host === 'metadata.azure.internal' || host === 'metadata.azure.com')
+        return true;
+    if (host.endsWith('.ec2.internal') || host.endsWith('.compute.internal'))
+        return true;
     return false;
 }
 function isBlockedIp(host) {
@@ -100,7 +107,7 @@ function isBlockedIpv4(host) {
     const octets = parts.map((p) => parseInt(p, 10));
     if (octets.some((n) => Number.isNaN(n) || n < 0 || n > 255))
         return false;
-    const [a, b] = octets;
+    const [a, b, c] = octets;
     if (a === 0)
         return true;
     if (a === 10)
@@ -117,11 +124,23 @@ function isBlockedIpv4(host) {
         return true;
     if (a >= 224 && a <= 239)
         return true;
+    if (a >= 240)
+        return true;
+    if (a === 198 && b >= 18 && b <= 19)
+        return true;
+    if (a === 192 && b === 0 && c === 0)
+        return true;
+    if (a === 192 && b === 0 && c === 2)
+        return true;
+    if (a === 198 && b === 51 && c === 100)
+        return true;
+    if (a === 203 && b === 0 && c === 113)
+        return true;
     return false;
 }
 /**
  * Expand IPv6 string to 8 x 16-bit groups (decimal). Returns null if not valid IPv6.
- * Handles :: compression; all non-empty segments must be valid hex (1–4 hex digits).
+ * Handles :: compression by splitting on :: once, expanding each half, and padding the middle with zeros.
  */
 function expandIpv6ToGroups(host) {
     const normalized = host.toLowerCase().trim();
@@ -129,23 +148,32 @@ function expandIpv6ToGroups(host) {
         return [0, 0, 0, 0, 0, 0, 0, 0];
     if (normalized.includes('.'))
         return null;
-    const parts = normalized.split(':');
-    if (parts.length < 2 || parts.length > 8)
+    const segments = normalized.split('::');
+    if (segments.length > 2)
         return null;
-    const firstNonEmpty = parts.findIndex((p) => p !== '');
-    const lastNonEmpty = parts.length -
-        1 -
-        [...parts].reverse().findIndex((p) => p !== '');
-    if (firstNonEmpty === -1 || lastNonEmpty < firstNonEmpty)
+    if (segments.length === 1) {
+        const parts = normalized.split(':');
+        if (parts.length !== 8)
+            return null;
+        const parsed = parts.map((p) => parseInt(p, 16));
+        if (parsed.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff))
+            return null;
+        return parsed;
+    }
+    const [leftStr, rightStr] = segments;
+    const leftParts = leftStr ? leftStr.split(':').filter(Boolean) : [];
+    const rightParts = rightStr ? rightStr.split(':').filter(Boolean) : [];
+    const left = leftParts.map((p) => parseInt(p, 16));
+    const right = rightParts.map((p) => parseInt(p, 16));
+    if (left.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff))
         return null;
-    const middle = parts.slice(firstNonEmpty, lastNonEmpty + 1);
-    const zerosNeeded = 8 - middle.length;
-    if (zerosNeeded < 0)
+    if (right.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff))
         return null;
-    const parsed = middle.map((p) => parseInt(p, 16));
-    if (parsed.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff))
+    const total = left.length + right.length;
+    if (total > 8)
         return null;
-    return [...Array(zerosNeeded).fill(0), ...parsed];
+    const zerosNeeded = 8 - total;
+    return [...left, ...Array(zerosNeeded).fill(0), ...right];
 }
 /**
  * If host is an IPv4-mapped IPv6 address (any form: dotted or hex), return the
@@ -188,7 +216,42 @@ function getIpv4MappedDottedDecimal(host) {
     const d = addr & 0xff;
     return `${a}.${b}.${c}.${d}`;
 }
+/**
+ * Block IPv6 by normalized address semantics (not string prefixes) so expanded
+ * forms like 0:0:0:0:0:0:0:1 cannot bypass loopback checks.
+ */
 function isBlockedIpv6(host) {
+    const groups = expandIpv6ToGroups(host);
+    if (groups && groups.length === 8) {
+        // Unspecified ::/128
+        if (groups.every((g) => g === 0))
+            return true;
+        // Loopback ::1/128 (any expansion: ::1, 0:0:0:0:0:0:0:1, etc.)
+        if (groups[0] === 0 &&
+            groups[1] === 0 &&
+            groups[2] === 0 &&
+            groups[3] === 0 &&
+            groups[4] === 0 &&
+            groups[5] === 0 &&
+            groups[6] === 0 &&
+            groups[7] === 1)
+            return true;
+        // Link-local fe80::/10
+        if ((groups[0] & 0xffc0) === 0xfe80)
+            return true;
+        // Unique local fc00::/7
+        if ((groups[0] & 0xfe00) === 0xfc00)
+            return true;
+        // Multicast ff00::/8
+        if ((groups[0] & 0xff00) === 0xff00)
+            return true;
+        // IPv4-mapped: check embedded IPv4
+        const mappedV4 = getIpv4MappedDottedDecimal(host);
+        if (mappedV4 !== null)
+            return isBlockedIpv4(mappedV4);
+        return false;
+    }
+    // Fallback when expansion fails (edge-case invalid forms)
     const normalized = host.toLowerCase();
     if (normalized === '::')
         return true;
@@ -200,9 +263,9 @@ function isBlockedIpv6(host) {
         return true;
     if (normalized.startsWith('ff'))
         return true;
-    const mappedV4 = getIpv4MappedDottedDecimal(host);
-    if (mappedV4 !== null)
-        return isBlockedIpv4(mappedV4);
+    const mappedV4Fallback = getIpv4MappedDottedDecimal(host);
+    if (mappedV4Fallback !== null)
+        return isBlockedIpv4(mappedV4Fallback);
     return false;
 }
 //# sourceMappingURL=webhookUrl.js.map

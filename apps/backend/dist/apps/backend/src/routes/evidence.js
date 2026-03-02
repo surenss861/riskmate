@@ -85,7 +85,10 @@ async function parseMultipartFormData(req) {
     });
 }
 // POST /api/jobs/:id/evidence/upload
-// Uploads evidence file with idempotency, SHA256, and ledger entry
+// Uploads evidence file to evidence bucket with idempotency, SHA256, and ledger entry (evidence table).
+// evidence.uploaded: This route owns emission for multipart evidence-bucket uploads (mobile/direct API).
+// The Next.js route (app/api/jobs/[id]/documents) owns emission for web document/photo metadata. The Express
+// route POST /api/jobs/:id/documents (jobs.ts) owns emission for mobile document metadata. One path per upload.
 exports.evidenceRouter.post('/jobs/:id/evidence/upload', auth_1.authenticate, rateLimiter_1.uploadRateLimiter, async (req, res) => {
     const authReq = req;
     const requestId = authReq.requestId || 'unknown';

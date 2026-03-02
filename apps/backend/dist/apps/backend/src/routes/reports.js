@@ -215,7 +215,10 @@ exports.reportsRouter.post("/generate/:jobId", auth_1.authenticate, (async (req,
                 mitigation_count: (reportData.mitigations ?? []).length,
             },
         });
-        // Webhook: report.generated — owned by Express route only. Mobile/backend use POST /api/reports/generate/:jobId. Do not also emit from Next.js report generate route for the same run to avoid duplicate deliveries.
+        // Webhook: report.generated — this route uses risk_snapshot_reports (legacy flow). The Next.js route
+        // (app/api/reports/generate/[job_id]) uses report_runs and emits for packet-based reports. These are
+        // two different report flows/tables; each route owns emission for its own run type. No client should
+        // call both endpoints for the same logical report to avoid duplicate events.
         if (reportRecord) {
             (0, webhookDelivery_1.deliverEvent)(organization_id, "report.generated", {
                 id: reportRecord.id,

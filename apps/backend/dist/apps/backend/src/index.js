@@ -88,6 +88,8 @@ const errorResponse_1 = require("./utils/errorResponse");
 const auth_1 = require("./middleware/auth");
 const devAuth_1 = __importDefault(require("./routes/devAuth"));
 const app = (0, express_1.default)();
+/** Set when webhook worker failed to start (e.g. invalid encryption key); API stays up but webhook delivery is degraded. */
+let webhookWorkerDegraded = false;
 // ✅ Debug: Log Railway's injected port
 console.log("[BOOT] raw PORT =", JSON.stringify(process.env.PORT));
 console.log("[BOOT] raw HOST =", JSON.stringify(process.env.HOST));
@@ -97,7 +99,10 @@ if (!Number.isFinite(PORT)) {
 }
 // Health check route - MUST be first (no Supabase dependency)
 app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    const body = { status: "ok", timestamp: new Date().toISOString() };
+    if (webhookWorkerDegraded)
+        body.webhook_worker = "degraded";
+    res.json(body);
 });
 // Routes debug endpoint - lists all registered routes
 app.get("/__routes", (_req, res) => {
@@ -166,7 +171,7 @@ app.get("/__version", async (_req, res) => {
         catch {
             dbStatus = "error";
         }
-        res.json({
+        const body = {
             status: "ok",
             timestamp: new Date().toISOString(),
             commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
@@ -176,7 +181,10 @@ app.get("/__version", async (_req, res) => {
             deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
             db: dbStatus,
             marker: "c638206 / 2D92D8D-LAZY-ADMIN-v3",
-        });
+        };
+        if (webhookWorkerDegraded)
+            body.webhook_worker = "degraded";
+        res.json(body);
     }
     catch (error) {
         res.status(500).json({
@@ -221,7 +229,7 @@ v1Router.get("/health", async (_req, res) => {
         else if (nodeEnv) {
             environment = nodeEnv;
         }
-        res.json({
+        const body = {
             status: "ok",
             timestamp: new Date().toISOString(),
             commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "dev",
@@ -230,7 +238,10 @@ v1Router.get("/health", async (_req, res) => {
             environment: environment,
             deployment: process.env.RAILWAY_DEPLOYMENT_ID || "local",
             db: dbStatus,
-        });
+        };
+        if (webhookWorkerDegraded)
+            body.webhook_worker = "degraded";
+        res.json(body);
     }
     catch (error) {
         res.status(500).json({
@@ -447,7 +458,7 @@ app.use((err, req, res, next) => {
 exports.default = app;
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== "test") {
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', async () => {
         console.log(`[BOOT] Listening on 0.0.0.0:${PORT} (raw PORT=${process.env.PORT})`);
         console.log(`🚀 Riskmate Backend API running on port ${PORT}`);
         console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
@@ -471,7 +482,11 @@ if (process.env.NODE_ENV !== "test") {
             const disableWebhookWorker = process.env.DISABLE_WEBHOOK_WORKER === 'true' ||
                 process.env.DISABLE_WEBHOOK_WORKER === '1';
             if (!disableWebhookWorker) {
-                (0, webhookDelivery_1.startWebhookDeliveryWorker)();
+                const workerResult = await (0, webhookDelivery_1.startWebhookDeliveryWorker)();
+                if (!workerResult.started) {
+                    webhookWorkerDegraded = true;
+                    console.error('[WebhookDelivery] Worker failed to start (webhook subsystem degraded; API remains up):', workerResult.error);
+                }
             }
         }
     });

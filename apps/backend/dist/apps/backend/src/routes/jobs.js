@@ -1028,6 +1028,9 @@ const canonicalStatusToDb = {
 };
 // POST /api/jobs/bulk/status
 // Update status for multiple jobs (batched: single select + single update). Returns succeeded/failed per job.
+// Webhook ownership: This Express route always emits webhooks for callers (mobile/direct API). The Next.js bulk
+// routes (app/api/jobs/bulk/status and bulk/delete) call Supabase directly and do not proxy here; they emit
+// webhooks for web clients. If future proxying is introduced, deduplication (e.g. header or single emitter) should be re-evaluated.
 exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
@@ -1122,6 +1125,17 @@ exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_
                 ...clientMetadata,
             });
             await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
+        }
+        const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
+        for (const jobId of succeeded) {
+            const previousStatus = found.get(jobId)?.status;
+            const payload = { id: jobId, status: dbStatus };
+            if (completedAt != null)
+                payload.completed_at = completedAt;
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", payload).catch((e) => console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e));
+            if (dbStatus === "completed" && previousStatus !== "completed") {
+                (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", payload).catch((e) => console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e));
+            }
         }
         const total = succeeded.length + failed.length;
         res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
@@ -1287,6 +1301,8 @@ exports.jobsRouter.post("/bulk/assign", auth_1.authenticate, requireWriteAccess_
 });
 // POST /api/jobs/bulk/delete
 // Delete multiple jobs (batched: single select, batch eligibility checks, single update). Same eligibility as single delete.
+// Webhook ownership: This Express route always emits webhooks for callers (mobile/direct API). The Next.js bulk
+// routes call Supabase directly and do not proxy here; they emit webhooks for web clients.
 exports.jobsRouter.post("/bulk/delete", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
@@ -1996,6 +2012,8 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.created", job.id, userId);
+        // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
+        // Risk scoring and mitigation item generation run after this. Subscribers needing full state should use GET /api/jobs/:id.
         (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
             id: job.id,
             client_name,
@@ -2312,13 +2330,14 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
         const hadJobFieldChange = Object.keys(jobUpdates).length > 0 &&
             Object.keys(jobUpdates).some((k) => valueChanged(jobUpdates[k], existingJob[k]));
         const hadActualChange = hadJobFieldChange;
+        // Realtime: emit on every PATCH so dashboard stays in sync (previously unconditional).
+        await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
         if (hadActualChange) {
-            await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
             (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", {
                 id: jobId,
                 ...updatedJob,
             }).catch((e) => console.warn("[Jobs] Webhook job.updated enqueue failed:", e));
-            const didTransitionToCompleted = jobUpdates.status === "completed" && (existingJob.completed_at ?? null) == null;
+            const didTransitionToCompleted = jobUpdates.status === "completed" && existingJob.status !== "completed";
             if (didTransitionToCompleted) {
                 (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", {
                     id: jobId,
@@ -2355,6 +2374,9 @@ exports.jobsRouter.patch("/:id", auth_1.authenticate, requireWriteAccess_1.requi
     }
 });
 // PATCH /api/jobs/:id/mitigations/:mitigationId
+// Webhook ownership: This Express route owns hazard.updated emission for mobile/direct API clients.
+// The Next.js route app/api/jobs/[id]/mitigations/[mitigationId]/route.ts owns emission for web-client
+// mitigation updates. The two paths are mutually exclusive; do not proxy web mitigation PATCH here.
 exports.jobsRouter.patch("/:id/mitigations/:mitigationId", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
@@ -2619,7 +2641,11 @@ function getDefaultPhotoCategory(jobStatus) {
     return "during";
 }
 // POST /api/jobs/:id/documents
-// Persists document metadata after upload to storage
+// Persists document metadata after upload to storage (documents table). Used by mobile/direct API clients.
+// evidence.uploaded: This route owns emission for document-metadata uploads via this endpoint only. The Next.js
+// route (app/api/jobs/[id]/documents) owns emission for web client uploads. The Express evidence route
+// (POST /jobs/:id/evidence/upload) owns emission for multipart evidence-bucket uploads. Clients must use one path
+// per upload; calling both documents and evidence endpoints for the same file will result in two events.
 exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAccess_1.requireWriteAccess, async (req, res) => {
     const authReq = req;
     try {
@@ -2736,8 +2762,10 @@ exports.jobsRouter.post("/:id/documents", auth_1.authenticate, requireWriteAcces
             job_id: jobId,
             name: inserted.name,
             type: inserted.type,
+            mime_type: inserted.mime_type ?? "application/octet-stream",
             file_path: inserted.file_path,
             uploaded_by: userId,
+            created_at: inserted.created_at,
         }).catch((e) => console.warn("[Jobs] Webhook evidence.uploaded enqueue failed:", e));
         invalidateJobReportCache(organization_id, jobId);
         res.status(201).json({
@@ -3564,12 +3592,13 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
             },
         });
         (0, webhookDelivery_1.deliverEvent)(organization_id, "signature.added", {
-            id: data.id,
+            signoff_id: data.id,
             job_id: jobId,
             signoff_type,
             signer_id: userId,
             signer_role: signerRole,
             signed_at: data.signed_at,
+            created_at: data.created_at,
         }).catch((e) => console.warn("[Jobs] Webhook signature.added enqueue failed:", e));
         // After successful DB commit: trigger mention notifications when comments contain @mentions
         // (mentioned user id, signoff/comment id, org scoping, deep link riskmate://comments/{commentId})

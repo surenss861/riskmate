@@ -20,7 +20,7 @@ function requireInternalSecret(req, res, next) {
         res.status(503).json((0, errorResponse_1.createErrorResponse)({
             message: 'Internal API not configured',
             code: 'SERVICE_UNAVAILABLE',
-            status: 503,
+            statusCode: 503,
         }).response);
         return;
     }
@@ -31,7 +31,7 @@ function requireInternalSecret(req, res, next) {
         res.status(401).json((0, errorResponse_1.createErrorResponse)({
             message: 'Unauthorized',
             code: 'AUTH_UNAUTHORIZED',
-            status: 401,
+            statusCode: 401,
         }).response);
         return;
     }
