@@ -9,6 +9,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import {
   withApiKeyAuth,
   finishApiKeyRequest,
+  withRateLimitHeaders,
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
@@ -39,9 +40,12 @@ export async function GET(
     .maybeSingle()
 
   if (runError || !reportRun) {
-    return NextResponse.json(
-      errorBody('NOT_FOUND', 'Report not found', requestId),
-      { status: 404, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('NOT_FOUND', 'Report not found', requestId),
+        { status: 404, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 

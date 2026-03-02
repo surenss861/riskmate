@@ -107,6 +107,18 @@ export async function finishApiKeyRequest(
   return addRateLimitHeaders(response, rateLimitResult)
 }
 
+/**
+ * Add rate limit headers to any response (success or error). Use for all
+ * responses produced after successful API-key authentication so clients
+ * can track remaining quota after 4xx/5xx as well as 2xx.
+ */
+export function withRateLimitHeaders(
+  response: NextResponse,
+  rateLimitResult: RateLimitResult
+): NextResponse {
+  return addRateLimitHeaders(response, rateLimitResult)
+}
+
 export function v1Json<T>(
   data: T,
   init?: { status?: number; headers?: HeadersInit; meta?: { page?: number; limit?: number; total?: number } }

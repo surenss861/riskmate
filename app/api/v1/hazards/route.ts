@@ -9,6 +9,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import {
   withApiKeyAuth,
   finishApiKeyRequest,
+  withRateLimitHeaders,
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
@@ -29,13 +30,44 @@ export async function GET(request: NextRequest) {
   const { context, rateLimitResult } = authResult
   const requestId = getRequestId(request)
 
-  const jobId = request.nextUrl.searchParams.get('job_id')
+  const { searchParams } = request.nextUrl
+  const jobId = searchParams.get('job_id')
   if (!jobId) {
-    return NextResponse.json(
-      errorBody('INVALID_FORMAT', 'Missing required query: job_id', requestId),
-      { status: 400, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Missing required query: job_id', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
+
+  const pageRaw = searchParams.get('page') ?? '1'
+  const limitRaw = searchParams.get('limit') ?? '20'
+  const pageParsed = parseInt(pageRaw, 10)
+  const limitParsed = parseInt(limitRaw, 10)
+  if (
+    !Number.isFinite(pageParsed) ||
+    !Number.isFinite(limitParsed) ||
+    pageParsed < 1 ||
+    limitParsed < 1 ||
+    limitParsed > 100
+  ) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Invalid pagination: page must be a positive integer, limit must be between 1 and 100',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+  const page = pageParsed
+  const limit = limitParsed
+  const offset = (page - 1) * limit
 
   const admin = createSupabaseAdminClient()
 
@@ -48,29 +80,38 @@ export async function GET(request: NextRequest) {
     .maybeSingle()
 
   if (!job) {
-    return NextResponse.json(
-      errorBody('NOT_FOUND', 'Job not found', requestId),
-      { status: 404, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('NOT_FOUND', 'Job not found', requestId),
+        { status: 404, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 
-  const { data: items, error } = await admin
+  const baseQuery = admin
     .from('mitigation_items')
-    .select('id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id')
+    .select('id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id', { count: 'exact' })
     .eq('job_id', jobId)
     .eq('organization_id', context.organization_id)
     .is('hazard_id', null)
     .order('created_at', { ascending: true })
 
+  const { data: items, error, count } = await baseQuery.range(offset, offset + limit - 1)
+
   if (error) {
     console.error('[v1/hazards] GET error:', error)
-    return NextResponse.json(
-      errorBody('QUERY_ERROR', 'Failed to list hazards', requestId),
-      { status: 500, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to list hazards', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 
-  const res = v1Json(items || [])
+  const total = count ?? (items?.length ?? 0)
+  const res = v1Json(items || [], { meta: { page, limit, total } })
   return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
 }
 
@@ -85,13 +126,16 @@ export async function POST(request: NextRequest) {
     const { job_id, title, description } = body
 
     if (!job_id || !title) {
-      return NextResponse.json(
-        errorBody(
-          'INVALID_FORMAT',
-          'Missing required fields: job_id, title',
-          requestId
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'INVALID_FORMAT',
+            'Missing required fields: job_id, title',
+            requestId
+          ),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
         ),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
+        rateLimitResult
       )
     }
 
@@ -106,9 +150,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (!job) {
-      return NextResponse.json(
-        errorBody('NOT_FOUND', 'Job not found', requestId),
-        { status: 404, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('NOT_FOUND', 'Job not found', requestId),
+          { status: 404, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -127,9 +174,12 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[v1/hazards] POST error:', error)
-      return NextResponse.json(
-        errorBody('QUERY_ERROR', 'Failed to create hazard', requestId),
-        { status: 500, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to create hazard', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -147,9 +197,12 @@ export async function POST(request: NextRequest) {
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   } catch (e) {
     console.error('[v1/hazards] POST error:', e)
-    return NextResponse.json(
-      errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
-      { status: 500, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 }

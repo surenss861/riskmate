@@ -9,6 +9,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import {
   withApiKeyAuth,
   finishApiKeyRequest,
+  withRateLimitHeaders,
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
@@ -27,9 +28,12 @@ export async function GET(request: NextRequest) {
 
   const jobId = request.nextUrl.searchParams.get('job_id')
   if (!jobId) {
-    return NextResponse.json(
-      errorBody('INVALID_FORMAT', 'Missing required query: job_id', requestId),
-      { status: 400, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Missing required query: job_id', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 
@@ -44,9 +48,12 @@ export async function GET(request: NextRequest) {
     .maybeSingle()
 
   if (!job) {
-    return NextResponse.json(
-      errorBody('NOT_FOUND', 'Job not found', requestId),
-      { status: 404, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('NOT_FOUND', 'Job not found', requestId),
+        { status: 404, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 
@@ -61,13 +68,16 @@ export async function GET(request: NextRequest) {
     limitParsed > 100 ||
     offsetParsed < 0
   ) {
-    return NextResponse.json(
-      errorBody(
-        'INVALID_FORMAT',
-        'Invalid pagination: limit must be between 1 and 100, offset must be a non-negative integer',
-        requestId
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Invalid pagination: limit must be between 1 and 100, offset must be a non-negative integer',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
       ),
-      { status: 400, headers: { 'X-Request-ID': requestId } }
+      rateLimitResult
     )
   }
   const limit = limitParsed
@@ -83,9 +93,12 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[v1/reports] GET error:', error)
-    return NextResponse.json(
-      errorBody('QUERY_ERROR', 'Failed to list reports', requestId),
-      { status: 500, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to list reports', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 

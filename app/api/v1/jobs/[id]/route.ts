@@ -9,6 +9,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import {
   withApiKeyAuth,
   finishApiKeyRequest,
+  withRateLimitHeaders,
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
@@ -45,18 +46,24 @@ async function handler(
     .maybeSingle()
 
   if (fetchError || !job) {
-    return NextResponse.json(
-      errorBody('NOT_FOUND', 'Job not found', requestId),
-      { status: 404, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('NOT_FOUND', 'Job not found', requestId),
+        { status: 404, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 
   if (method === 'GET') {
     const requireWrite = false
     if (requireWrite && !context.scopes.includes(V1_SCOPES.jobsWrite)) {
-      return NextResponse.json(
-        errorBody('FORBIDDEN', 'Insufficient scope', requestId),
-        { status: 403, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('FORBIDDEN', 'Insufficient scope', requestId),
+          { status: 403, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -66,25 +73,41 @@ async function handler(
       .eq('job_id', jobId)
       .maybeSingle()
 
-    const { data: mitigationItems } = await admin
+    const hazardsQuery = admin
       .from('mitigation_items')
       .select('id, title, description, done, is_completed, completed_at, created_at')
       .eq('job_id', jobId)
+      .is('hazard_id', null)
       .order('created_at', { ascending: true })
+    const controlsQuery = admin
+      .from('mitigation_items')
+      .select('id, hazard_id, title, description, done, is_completed, completed_at, created_at')
+      .eq('job_id', jobId)
+      .not('hazard_id', 'is', null)
+      .order('created_at', { ascending: true })
+
+    const [{ data: hazards }, { data: controls }] = await Promise.all([
+      hazardsQuery,
+      controlsQuery,
+    ])
 
     const res = v1Json({
       ...job,
       risk_score_detail: riskScore || null,
-      hazards: mitigationItems || [],
+      hazards: hazards || [],
+      controls: controls || [],
     })
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   }
 
   if (method === 'PATCH') {
     if (!context.scopes.includes(V1_SCOPES.jobsWrite)) {
-      return NextResponse.json(
-        errorBody('FORBIDDEN', 'Insufficient scope for updates', requestId),
-        { status: 403, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('FORBIDDEN', 'Insufficient scope for updates', requestId),
+          { status: 403, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -125,9 +148,12 @@ async function handler(
 
     if (updateError) {
       console.error('[v1/jobs/[id]] PATCH error:', updateError)
-      return NextResponse.json(
-        errorBody('QUERY_ERROR', 'Failed to update job', requestId),
-        { status: 500, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to update job', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -139,9 +165,12 @@ async function handler(
 
   if (method === 'DELETE') {
     if (!context.scopes.includes(V1_SCOPES.jobsWrite)) {
-      return NextResponse.json(
-        errorBody('FORBIDDEN', 'Insufficient scope for delete', requestId),
-        { status: 403, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('FORBIDDEN', 'Insufficient scope for delete', requestId),
+          { status: 403, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -153,9 +182,12 @@ async function handler(
 
     if (deleteError) {
       console.error('[v1/jobs/[id]] DELETE error:', deleteError)
-      return NextResponse.json(
-        errorBody('QUERY_ERROR', 'Failed to delete job', requestId),
-        { status: 500, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to delete job', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -165,9 +197,12 @@ async function handler(
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   }
 
-  return NextResponse.json(
-    errorBody('METHOD_NOT_ALLOWED', 'Method not allowed', requestId),
-    { status: 405, headers: { 'X-Request-ID': requestId } }
+  return withRateLimitHeaders(
+    NextResponse.json(
+      errorBody('METHOD_NOT_ALLOWED', 'Method not allowed', requestId),
+      { status: 405, headers: { 'X-Request-ID': requestId } }
+    ),
+    rateLimitResult
   )
 }
 

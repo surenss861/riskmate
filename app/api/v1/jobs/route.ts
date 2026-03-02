@@ -9,6 +9,7 @@ import { getRequestId } from '@/lib/utils/requestId'
 import {
   withApiKeyAuth,
   finishApiKeyRequest,
+  withRateLimitHeaders,
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
@@ -42,13 +43,16 @@ export async function GET(request: NextRequest) {
       limitParsed < 1 ||
       limitParsed > 100
     ) {
-      return NextResponse.json(
-        errorBody(
-          'INVALID_FORMAT',
-          'Invalid pagination: page must be a positive integer, limit must be between 1 and 100',
-          requestId
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'INVALID_FORMAT',
+            'Invalid pagination: page must be a positive integer, limit must be between 1 and 100',
+            requestId
+          ),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
         ),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
+        rateLimitResult
       )
     }
     const page = pageParsed
@@ -94,9 +98,12 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[v1/jobs] get_jobs_list error:', error)
-      return NextResponse.json(
-        errorBody('QUERY_ERROR', 'Failed to list jobs', requestId),
-        { status: 500, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to list jobs', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -110,9 +117,12 @@ export async function GET(request: NextRequest) {
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   } catch (e) {
     console.error('[v1/jobs] GET error:', e)
-    return NextResponse.json(
-      errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
-      { status: 500, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 }
@@ -137,13 +147,16 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!client_name || !client_type || !job_type || !location) {
-      return NextResponse.json(
-        errorBody(
-          'INVALID_FORMAT',
-          'Missing required fields: client_name, client_type, job_type, location',
-          requestId
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'INVALID_FORMAT',
+            'Missing required fields: client_name, client_type, job_type, location',
+            requestId
+          ),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
         ),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
+        rateLimitResult
       )
     }
 
@@ -155,9 +168,12 @@ export async function POST(request: NextRequest) {
     const ct = String(client_type).toLowerCase()
     const jt = String(job_type).toLowerCase()
     if (!validStatuses.includes(st) || !validClientTypes.includes(ct) || !validJobTypes.includes(jt)) {
-      return NextResponse.json(
-        errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -181,9 +197,12 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[v1/jobs] POST insert error:', error)
-      return NextResponse.json(
-        errorBody('QUERY_ERROR', 'Failed to create job', requestId),
-        { status: 500, headers: { 'X-Request-ID': requestId } }
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to create job', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
       )
     }
 
@@ -193,9 +212,12 @@ export async function POST(request: NextRequest) {
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   } catch (e) {
     console.error('[v1/jobs] POST error:', e)
-    return NextResponse.json(
-      errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
-      { status: 500, headers: { 'X-Request-ID': requestId } }
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
     )
   }
 }
