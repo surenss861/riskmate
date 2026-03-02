@@ -59,16 +59,28 @@ export function EditWebhookModal({ open, endpoint, onClose, onSaved }: EditWebho
     }
     setSubmitting(true)
     try {
+      const body: Record<string, unknown> = {}
+      if (url.trim() !== (endpoint.url ?? '')) body.url = url.trim()
+      if ((description.trim() || null) !== (endpoint.description ?? null)) body.description = description.trim() || null
+      const eventsArray = Array.from(selectedEvents)
+      const sameEvents =
+        eventsArray.length === (endpoint.events?.length ?? 0) &&
+        eventsArray.every((e) => (endpoint.events ?? []).includes(e)) &&
+        (endpoint.events ?? []).every((e) => eventsArray.includes(e))
+      if (!sameEvents) body.events = eventsArray
+      if (isActive !== (endpoint.is_active ?? true)) body.is_active = isActive
+
+      if (Object.keys(body).length === 0) {
+        onSaved()
+        onClose()
+        return
+      }
+
       const res = await fetch(`/api/webhooks/${endpoint.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          url: url.trim(),
-          description: description.trim() || null,
-          events: Array.from(selectedEvents),
-          is_active: isActive,
-        }),
+        body: JSON.stringify(body),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {

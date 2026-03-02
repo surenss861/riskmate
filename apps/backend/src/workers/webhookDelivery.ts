@@ -194,6 +194,10 @@ export async function deliverEvent(
   eventType: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  if (!(ALLOWED_WEBHOOK_EVENT_TYPES as readonly string[]).includes(eventType)) {
+    console.error('[WebhookDelivery] Rejected invalid event_type:', eventType)
+    throw new Error(`Invalid webhook event type: ${eventType}. Must be one of: ${ALLOWED_WEBHOOK_EVENT_TYPES.join(', ')}`)
+  }
   const normalized = buildWebhookEventObject(eventType, data)
   const payload = buildWebhookPayload(eventType, orgId, normalized)
 
@@ -607,12 +611,14 @@ async function updateDeliveryFailure(
     .update(updatePayload)
     .eq('id', deliveryId)
 
-  // On terminal failure (e.g. one delivery exhausting all 5 retry attempts), update endpoint stats and alert admin (cooldown in maybeAlertAdmin prevents spam).
+  // On terminal failure (e.g. one delivery exhausting all 5 retry attempts), update endpoint stats and alert admin when consecutive_failures reaches 5 (cooldown in maybeAlertAdmin prevents spam).
   if (terminal && countAsConsecutiveFailure) {
-    await supabase.rpc('increment_webhook_endpoint_consecutive_failures', {
+    const { data: newCount } = await supabase.rpc('increment_webhook_endpoint_consecutive_failures', {
       p_endpoint_id: endpointId,
     })
-    await maybeAlertAdmin(endpointId)
+    if ((newCount ?? 0) >= 5) {
+      await maybeAlertAdmin(endpointId)
+    }
   }
 }
 
@@ -631,9 +637,14 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
   const { data: alertState } = await supabase
     .from('webhook_endpoint_alert_state')
-    .select('last_alert_at')
+    .select('last_alert_at, consecutive_failures')
     .eq('endpoint_id', endpointId)
     .maybeSingle()
+
+  // Threshold: only alert when consecutive_failures has reached 5 (caller also gates on RPC return value; this is defense-in-depth).
+  if ((alertState?.consecutive_failures ?? 0) < 5) {
+    return
+  }
 
   // Cooldown: skip if we sent an alert recently for this endpoint.
   if (alertState?.last_alert_at != null) {
@@ -695,7 +706,6 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
         endpoint_id: endpointId,
         last_alert_at: now,
         updated_at: now,
-        consecutive_failures: 0,
       },
       { onConflict: 'endpoint_id' }
     )

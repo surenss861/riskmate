@@ -11,7 +11,6 @@ import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/ut
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/webhooks/[id]/deliveries'
-const MAX_ATTEMPTS_PER_DELIVERY = 5
 
 /** GET - List delivery logs with status, response, timing. Requires owner/admin. */
 export async function GET(
@@ -76,14 +75,13 @@ export async function GET(
     const attemptsByDelivery: Record<string, Array<{ id: string; attempt_number: number; response_status: number | null; response_body: string | null; duration_ms: number | null; created_at: string }>> = {}
 
     if (deliveryIds.length > 0) {
-      const attemptsLimit = limit * MAX_ATTEMPTS_PER_DELIVERY
+      // No limit: deliveryIds is already bounded by page size (max 100); each delivery has at most 5 attempts → safe upper bound 500 rows.
       const { data: attempts, error: attemptsError } = await admin
         .from('webhook_delivery_attempts')
         .select('id, delivery_id, attempt_number, response_status, response_body, duration_ms, created_at')
         .in('delivery_id', deliveryIds)
         .order('delivery_id', { ascending: true })
         .order('attempt_number', { ascending: true })
-        .limit(attemptsLimit)
 
       if (attemptsError) {
         const { response, errorId } = createErrorResponse(
@@ -128,9 +126,7 @@ export async function GET(
         !endpointPaused &&
         undelivered &&
         unscheduled &&
-        d.terminal_outcome !== 'cancelled_paused' &&
-        d.terminal_outcome !== 'cancelled_policy' &&
-        d.terminal_outcome !== 'delivered' &&
+        d.terminal_outcome === 'failed' &&
         d.processing_since == null
       return {
         ...d,

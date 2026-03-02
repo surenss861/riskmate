@@ -898,17 +898,6 @@ export async function POST(request: NextRequest) {
     // At this point, TypeScript knows job.id exists
     const jobId = job.id
 
-    // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
-    // Risk scoring and mitigation items run after this. Subscribers needing full state should use GET /api/jobs/:id.
-    await triggerWebhookEvent(organization_id, 'job.created', {
-      id: jobId,
-      ...filteredJobRow,
-      created_at: new Date().toISOString(),
-    }).catch((e) => {
-      // Webhook enqueue failures at this stage are not retried; deliveries are dropped. Monitor for [WebhookTrigger] Fetch endpoints failed / enqueue errors.
-      console.warn('[Webhook] job.created trigger failed:', e)
-    })
-
     // Upsert client into clients table for search
     if (client_name?.trim()) {
       await supabase.rpc('upsert_client', {
@@ -939,8 +928,9 @@ export async function POST(request: NextRequest) {
       logUsage: true,
     })
 
-    // Calculate risk score if risk factors provided
+    // Calculate risk score if risk factors provided; collect created hazard IDs for job.created payload.
     let riskScoreResult = null
+    let createdHazardIds: string[] = []
     if (risk_factor_codes && risk_factor_codes.length > 0) {
       try {
         riskScoreResult = await calculateRiskScore(risk_factor_codes)
@@ -964,6 +954,7 @@ export async function POST(request: NextRequest) {
 
         // Emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set.
         const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes)
+        createdHazardIds = insertedHazards.filter((item) => item.hazard_id == null).map((item) => item.id)
         for (const item of insertedHazards) {
           if (item.hazard_id != null) continue
           await triggerWebhookEvent(organization_id, 'hazard.created', {
@@ -1009,6 +1000,14 @@ export async function POST(request: NextRequest) {
       .from('mitigation_items')
       .select('id, title, description, done, is_completed')
       .eq('job_id', jobId)
+
+    // Webhook: job.created — emit after risk scoring and hazards so payload has full initial state.
+    await triggerWebhookEvent(organization_id, 'job.created', {
+      ...completeJob,
+      hazard_ids: createdHazardIds,
+    }).catch((e) => {
+      console.warn('[Webhook] job.created trigger failed:', e)
+    })
 
     return NextResponse.json(
       {

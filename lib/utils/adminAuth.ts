@@ -38,16 +38,18 @@ export function requireAdminOrOwner(role: string | null | undefined): void {
   }
 }
 
+const ROLE_RANK: Record<string, number> = { owner: 3, admin: 2, member: 1 }
+
 /**
- * Get user role from Supabase user record
- * Checks both users.role and organization_members.role
+ * Get user role from Supabase user record.
+ * Returns the highest role across users.role and organization_members.role (owner > admin > member).
  */
 export async function getUserRole(
   supabase: any,
   userId: string,
   organizationId?: string
 ): Promise<string | null> {
-  // First check organization_members (if org provided)
+  let memberRole: string | null = null
   if (organizationId) {
     const { data: member } = await supabase
       .from('organization_members')
@@ -55,18 +57,19 @@ export async function getUserRole(
       .eq('user_id', userId)
       .eq('organization_id', organizationId)
       .maybeSingle()
-    
-    if (member?.role) {
-      return member.role
-    }
+    memberRole = member?.role ?? null
   }
 
-  // Fallback to users.role
   const { data: user } = await supabase
     .from('users')
     .select('role')
     .eq('id', userId)
     .maybeSingle()
+  const userRole = user?.role ?? null
 
-  return user?.role || null
+  const a = ROLE_RANK[memberRole ?? ''] ?? 0
+  const b = ROLE_RANK[userRole ?? ''] ?? 0
+  if (a >= b && memberRole) return memberRole
+  if (b >= a && userRole) return userRole
+  return memberRole ?? userRole ?? null
 }

@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json(response, {
         status: 503,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        headers: { 'Cache-Control': 'no-store', 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        headers: { 'Cache-Control': 'no-store', 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 
@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
       )
       return NextResponse.json(response, {
         status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        headers: { 'Cache-Control': 'no-store', 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
 

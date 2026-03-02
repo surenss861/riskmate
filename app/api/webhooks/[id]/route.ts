@@ -110,7 +110,6 @@ export async function PATCH(
       }
       return NextResponse.json({ data: current })
     }
-    updates.updated_at = new Date().toISOString()
 
     const { data: updated, error } = await admin
       .from('webhook_endpoints')
