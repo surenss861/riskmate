@@ -56,17 +56,27 @@ export function requireScope(context: ApiKeyContext, allowed: string[]): boolean
   return false
 }
 
+/** Discriminated result of API key lookup: auth failure vs backend error vs success. */
+export type GetApiKeyContextResult =
+  | {
+      kind: 'ok'
+      context: ApiKeyContext
+      keyRow: { id: string; organization_id: string; scopes: string[] }
+    }
+  | { kind: 'auth_failure' }
+  | { kind: 'backend_error' }
+
 /**
  * Authenticate request via API key and return context.
- * Returns null if no API key, invalid key, revoked, or expired.
- * On success, caller should update last_used_at (e.g. in route handler after scope check).
+ * Returns auth_failure for no key, invalid key, revoked, or expired.
+ * Returns backend_error for query/runtime errors so callers can return 500.
+ * On success (kind: 'ok'), caller should update last_used_at (e.g. in route handler after scope check).
  */
-export async function getApiKeyContext(request: NextRequest): Promise<{
-  context: ApiKeyContext
-  keyRow: { id: string; organization_id: string; scopes: string[] }
-} | null> {
+export async function getApiKeyContext(
+  request: NextRequest
+): Promise<GetApiKeyContextResult> {
   const plainKey = getBearerApiKey(request)
-  if (!plainKey) return null
+  if (!plainKey) return { kind: 'auth_failure' }
 
   const keyHash = hashApiKey(plainKey)
   const admin = createSupabaseAdminClient()
@@ -77,11 +87,14 @@ export async function getApiKeyContext(request: NextRequest): Promise<{
     .eq('key_hash', keyHash)
     .maybeSingle()
 
-  if (error || !keyRow) return null
-  if (keyRow.revoked_at) return null
-  if (keyRow.expires_at && new Date(keyRow.expires_at) < new Date()) return null
+  if (error) return { kind: 'backend_error' }
+  if (!keyRow) return { kind: 'auth_failure' }
+  if (keyRow.revoked_at) return { kind: 'auth_failure' }
+  if (keyRow.expires_at && new Date(keyRow.expires_at) < new Date())
+    return { kind: 'auth_failure' }
 
   return {
+    kind: 'ok',
     context: {
       organization_id: keyRow.organization_id,
       api_key_id: keyRow.id,

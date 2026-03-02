@@ -33,7 +33,7 @@ function errorBody(code: string, message: string, requestId: string) {
 
 /**
  * Authenticate request with API key and apply rate limit.
- * Returns { context, rateLimitResult } or a NextResponse to return (401, 403, 429).
+ * Returns { context, rateLimitResult } or a NextResponse (401, 403, 429, or 500 for backend/auth infra failures).
  */
 export async function withApiKeyAuth(
   request: NextRequest,
@@ -44,8 +44,21 @@ export async function withApiKeyAuth(
 > {
   const requestId = getRequestId(request)
 
-  const auth = await getApiKeyContext(request)
-  if (!auth) {
+  const authResult = await getApiKeyContext(request)
+  if (authResult.kind === 'backend_error') {
+    return NextResponse.json(
+      errorBody(
+        'INTERNAL_ERROR',
+        'API key lookup temporarily unavailable. Please retry later.',
+        requestId
+      ),
+      {
+        status: 500,
+        headers: { 'X-Request-ID': requestId },
+      }
+    )
+  }
+  if (authResult.kind === 'auth_failure') {
     return NextResponse.json(
       errorBody('UNAUTHORIZED', 'Invalid or missing API key', requestId),
       {
@@ -54,12 +67,27 @@ export async function withApiKeyAuth(
       }
     )
   }
+  const auth = authResult
 
-  const rateLimitResult = await checkApiKeyRateLimit(
+  const rateLimitOutcome = await checkApiKeyRateLimit(
     request,
     auth.keyRow.id,
     RATE_LIMIT_CONFIGS.apiKey
   )
+  if (rateLimitOutcome.kind === 'infrastructure_error') {
+    return NextResponse.json(
+      errorBody(
+        'INTERNAL_ERROR',
+        'Rate limit check temporarily unavailable. Please retry later.',
+        requestId
+      ),
+      {
+        status: 500,
+        headers: { 'X-Request-ID': requestId },
+      }
+    )
+  }
+  const rateLimitResult = rateLimitOutcome.result
   if (!rateLimitResult.allowed) {
     return addRateLimitHeaders(
       NextResponse.json(

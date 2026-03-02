@@ -32,6 +32,14 @@ export interface RateLimitResult {
   windowMs: number
 }
 
+/**
+ * Outcome of API-key rate limit check. Distinguishes real quota exhaustion
+ * from backend/infrastructure failures so callers can return 429 vs 500.
+ */
+export type ApiKeyRateLimitOutcome =
+  | { kind: 'ok'; result: RateLimitResult }
+  | { kind: 'infrastructure_error' }
+
 interface RateLimitEntry {
   count: number
   resetAt: number
@@ -87,12 +95,14 @@ function buildKeyForApiKey(apiKeyId: string): string {
  * Check rate limit for a request authenticated by API key.
  * Uses shared Postgres storage (increment_api_key_rate_limit RPC) so all instances
  * enforce the same per-key window. Keeps X-RateLimit-* and Retry-After contract.
+ * Returns infrastructure_error on RPC/query failures so callers can return 500
+ * instead of 429; 429 is reserved for confirmed over-limit results.
  */
 export async function checkApiKeyRateLimit(
   _request: NextRequest,
   apiKeyId: string,
   config: RateLimitConfig
-): Promise<RateLimitResult> {
+): Promise<ApiKeyRateLimitOutcome> {
   const bucketKey = buildKeyForApiKey(apiKeyId)
   const admin = createSupabaseAdminClient()
   const { data, error } = await admin.rpc('increment_api_key_rate_limit', {
@@ -102,14 +112,7 @@ export async function checkApiKeyRateLimit(
   })
 
   if (error || !data || !Array.isArray(data) || data.length === 0) {
-    return {
-      allowed: false,
-      limit: config.maxRequests,
-      remaining: 0,
-      resetAt: Math.ceil(Date.now() / 1000) + Math.ceil(config.windowMs / 1000),
-      retryAfter: Math.ceil(config.windowMs / 1000),
-      windowMs: config.windowMs,
-    }
+    return { kind: 'infrastructure_error' }
   }
 
   const row = data[0] as {
@@ -120,12 +123,15 @@ export async function checkApiKeyRateLimit(
     retry_after_seconds: number
   }
   return {
-    allowed: row.allowed,
-    limit: config.maxRequests,
-    remaining: row.remaining,
-    resetAt: row.reset_at_epoch,
-    retryAfter: row.retry_after_seconds,
-    windowMs: config.windowMs,
+    kind: 'ok',
+    result: {
+      allowed: row.allowed,
+      limit: config.maxRequests,
+      remaining: row.remaining,
+      resetAt: row.reset_at_epoch,
+      retryAfter: row.retry_after_seconds,
+      windowMs: config.windowMs,
+    },
   }
 }
 
