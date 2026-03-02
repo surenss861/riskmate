@@ -1,6 +1,9 @@
 /**
- * GET /api/webhooks/stats returns stats using admin client with explicit org scoping
- * so Bearer and cookie auth behave identically.
+ * GET /api/webhooks/stats returns stats using admin client (service_role) with explicit org scoping
+ * so Bearer and cookie auth behave identically. The route calls get_webhook_endpoint_stats RPC;
+ * the final function definition is in migration 20260332000000_webhook_endpoint_stats_final.sql
+ * (JWT service_role guard allows admin client to succeed). This test verifies that with a valid
+ * admin/owner context, stats are returned (not empty when RPC returns rows).
  */
 
 import { NextRequest } from 'next/server'

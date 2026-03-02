@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Button,
   Input,
@@ -64,6 +64,16 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
   const effectiveOrganizationId = multiOrg ? selectedOrganizationId : defaultOrgId
   const prevOpenRef = useRef(open)
 
+  const resetForm = useCallback(() => {
+    setSelectedOrganizationId(multiOrg ? null : defaultOrgId)
+    setUrl('')
+    setDescription('')
+    setSelectedEvents(new Set())
+    setError(null)
+    setCreatedSecret(null)
+    setCreatedEndpoint(null)
+  }, [multiOrg, defaultOrgId])
+
   useEffect(() => {
     const wasOpen = prevOpenRef.current
     if (wasOpen && !open) resetForm()
@@ -75,7 +85,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     } else {
       setSelectedOrganizationId(defaultOrgId)
     }
-  }, [open, multiOrg, defaultOrgId])
+  }, [open, multiOrg, defaultOrgId, resetForm])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {
@@ -145,16 +155,6 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const resetForm = () => {
-    setSelectedOrganizationId(multiOrg ? null : defaultOrgId)
-    setUrl('')
-    setDescription('')
-    setSelectedEvents(new Set())
-    setError(null)
-    setCreatedSecret(null)
-    setCreatedEndpoint(null)
   }
 
   const handleCloseAfterSecret = () => {

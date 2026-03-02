@@ -124,7 +124,7 @@ export async function POST(
       insertedHazards = await generateMitigationItems(jobId, newFactorsForMitigation)
     }
 
-    // Emit hazard.created only for top-level hazards (hazard_id IS NULL)
+    // Emit hazard.created only for top-level hazards (hazard_id IS NULL). Enqueue failures are not retried; monitor [WebhookTrigger] Fetch endpoints failed.
     for (const item of insertedHazards) {
       if (item.hazard_id != null) continue
       await triggerWebhookEvent(organization_id, 'hazard.created', {

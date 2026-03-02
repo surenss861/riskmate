@@ -479,6 +479,7 @@ export async function POST(
       // Webhook: report.generated — this route uses report_runs (packet-based flow). The Express route
       // POST /api/reports/generate/:jobId uses risk_snapshot_reports. They are different flows/tables;
       // each route owns emission for its own report type. Do not call both for the same job run.
+      // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
       const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
       await triggerWebhookEvent(organization_id, 'report.generated', {
         report_run_id: reportRun.id,

@@ -116,7 +116,14 @@ export default function WebhooksPage() {
     }
     try {
       const res = await fetch('/api/webhooks/stats', { credentials: 'include' })
+      if (!res.ok) {
+        setStatsLoadFailed(true)
+        return
+      }
       const json = await res.json().catch(() => ({}))
+      if (json.degraded === true) {
+        setStatsLoadFailed(true)
+      }
       const data = json.data ?? {}
       const next: Record<string, DeliveryStats> = {}
       for (const ep of endpointList) {
@@ -134,7 +141,6 @@ export default function WebhooksPage() {
           : { delivered: 0, pending: 0, failed: 0, lastDelivery: null, lastSuccessAt: null, lastTerminalFailureAt: null, lastFailureAt: null }
       }
       setStats(next)
-      setStatsLoadFailed(!res.ok || json.degraded === true)
     } catch {
       setStatsLoadFailed(true)
     }

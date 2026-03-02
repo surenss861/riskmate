@@ -81,6 +81,20 @@ export async function triggerWebhookEvent(
   })
 }
 
+// One-time warning when wake is skipped due to missing env (avoid log spam on every trigger).
+let _wakeEnvWarned = false
+function warnWakeEnvOnce(): void {
+  if (_wakeEnvWarned) return
+  _wakeEnvWarned = true
+  const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  const secret = process.env.INTERNAL_API_KEY
+  if (!url || !secret) {
+    console.warn(
+      '[WebhookTrigger] BACKEND_URL (or NEXT_PUBLIC_BACKEND_URL) and INTERNAL_API_KEY are not set; worker wake-up is skipped. Deliveries will be processed on the next poll interval (~2s). Set these env vars for sub-second webhook delivery SLA.'
+    )
+  }
+}
+
 /**
  * Notify backend to run the delivery worker immediately so enqueued deliveries are processed
  * within SLA. Fire-and-forget; requires BACKEND_URL and INTERNAL_API_KEY to be set.
@@ -89,7 +103,10 @@ export async function triggerWebhookEvent(
 export function wakeBackendWebhookWorker(): Promise<void> {
   const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
   const secret = process.env.INTERNAL_API_KEY
-  if (!url || !secret) return Promise.resolve()
+  if (!url || !secret) {
+    warnWakeEnvOnce()
+    return Promise.resolve()
+  }
   const endpoint = `${url.replace(/\/$/, '')}/api/internal/wake-webhook-worker`
   return fetch(endpoint, {
     method: 'POST',

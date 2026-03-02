@@ -805,6 +805,9 @@ export async function startWebhookDeliveryWorker(): Promise<void> {
     }
     console.error('[WebhookDelivery]', keyValidation.message, '- encrypted webhook secrets will fail to decrypt; ensure web and backend use the same key')
   }
+  if (!(process.env.INTERNAL_API_KEY ?? '').trim()) {
+    console.warn('[WebhookDelivery] INTERNAL_API_KEY is not set; Next.js cannot wake this worker after enqueue. Deliveries will still be processed on the next poll interval.')
+  }
   // Default 2s gives headroom below 5s SLA; periodic poll remains as fallback
   const intervalMs = parseSafeBoundedInt(
     process.env.WEBHOOK_WORKER_INTERVAL_MS,

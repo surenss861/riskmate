@@ -213,7 +213,8 @@ export async function PATCH(
       .eq('job_id', jobId)
       .order('created_at', { ascending: true })
 
-    // Webhooks: only emit job.updated / job.completed when at least one persisted mutable column changed
+    // Webhooks: only emit job.updated / job.completed when at least one persisted mutable column changed.
+    // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed in logs.
     if (hadActualChange) {
       await triggerWebhookEvent(organization_id, 'job.updated', { ...updatedJob }).catch((e) =>
         console.warn('[Webhook] job.updated trigger failed:', e)

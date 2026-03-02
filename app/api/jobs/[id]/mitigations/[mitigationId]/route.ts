@@ -73,6 +73,7 @@ export async function PATCH(
     // Control completions (items with a non-null hazard_id) are excluded: we do not emit
     // hazard.updated for the parent hazard when a control is toggled, to avoid ambiguity
     // about which entity changed and to keep the webhook payload aligned with the updated row.
+    // Enqueue failures are not retried; monitor [WebhookTrigger] Fetch endpoints failed.
     if ((updatedItem as { hazard_id?: string | null }).hazard_id == null) {
       await triggerWebhookEvent(organization_id, 'hazard.updated', {
         id: updatedItem.id,

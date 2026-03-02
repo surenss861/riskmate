@@ -252,9 +252,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // WARNING: The `secret` field in the response must NEVER be logged (proxies, APM, middleware).
+    // One-time display only; do not persist or log response bodies that include it.
     return NextResponse.json(
       { data: { ...endpoint, secret } },
-      { status: 201 }
+      {
+        status: 201,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
     )
   } catch (err: unknown) {
     if (err instanceof ForbiddenError) {

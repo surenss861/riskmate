@@ -173,6 +173,7 @@ export async function POST(
       throw signoffError
     }
 
+    // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
     await triggerWebhookEvent(organizationId, 'signature.added', {
       signoff_id: signoff.id,
       job_id: jobId,

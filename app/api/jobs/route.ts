@@ -432,9 +432,11 @@ export async function GET(request: NextRequest) {
  * POST /api/jobs — create job.
  * Web client does not call this route for job creation; it uses BACKEND_URL (Express) via lib/api.ts jobsApi.create().
  * Webhook emission here is for any direct callers of the Next.js API. Do not proxy web-client job creation through this route and Express together, or webhooks may be doubled.
+ * Runtime guard: skip webhook emission when request is from internal proxy (Express sets X-Internal-Request when proxying) to avoid duplicate job.created / hazard.created.
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || getRequestId()
+  const isInternalRequest = request.headers.get('x-internal-request') === '1'
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -899,11 +901,17 @@ export async function POST(request: NextRequest) {
 
     // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
     // Risk scoring and mitigation items run after this. Subscribers needing full state should use GET /api/jobs/:id.
-    await triggerWebhookEvent(organization_id, 'job.created', {
-      id: jobId,
-      ...filteredJobRow,
-      created_at: new Date().toISOString(),
-    }).catch((e) => console.warn('[Webhook] job.created trigger failed:', e))
+    // Skip emission when request came from Express proxy to avoid duplicate job.created (Express also emits).
+    if (!isInternalRequest) {
+      await triggerWebhookEvent(organization_id, 'job.created', {
+        id: jobId,
+        ...filteredJobRow,
+        created_at: new Date().toISOString(),
+      }).catch((e) => {
+        // Webhook enqueue failures at this stage are not retried; deliveries are dropped. Monitor for [WebhookTrigger] Fetch endpoints failed / enqueue errors.
+        console.warn('[Webhook] job.created trigger failed:', e)
+      })
+    }
 
     // Upsert client into clients table for search
     if (client_name?.trim()) {
@@ -958,18 +966,24 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', jobId)
 
-        // Emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
+        // Emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set.
+        // Skip when isInternalRequest to avoid duplicate hazard.created (Express job creation path also emits).
         const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes)
-        for (const item of insertedHazards) {
-          if (item.hazard_id != null) continue
-          await triggerWebhookEvent(organization_id, 'hazard.created', {
-            id: item.id,
-            job_id: jobId,
-            title: item.title ?? '',
-            description: item.description ?? '',
-            created_at: item.created_at,
-            updated_at: item.updated_at ?? item.created_at,
-          }).catch((e) => console.warn('[Webhook] hazard.created trigger failed:', e))
+        if (!isInternalRequest) {
+          for (const item of insertedHazards) {
+            if (item.hazard_id != null) continue
+            await triggerWebhookEvent(organization_id, 'hazard.created', {
+              id: item.id,
+              job_id: jobId,
+              title: item.title ?? '',
+              description: item.description ?? '',
+              created_at: item.created_at,
+              updated_at: item.updated_at ?? item.created_at,
+            }).catch((e) => {
+              // Webhook enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
+              console.warn('[Webhook] hazard.created trigger failed:', e)
+            })
+          }
         }
       } catch (riskError: any) {
         console.error('Risk scoring failed:', riskError)

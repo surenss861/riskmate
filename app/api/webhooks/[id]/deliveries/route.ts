@@ -121,7 +121,7 @@ export async function GET(
     }
 
     const endpointPaused = endpoint.is_active === false
-    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; processing_since: string | null; [k: string]: unknown }) => {
+    const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; processing_since: string | null; attempt_count?: number | null; [k: string]: unknown }) => {
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
       const can_retry =
@@ -130,7 +130,8 @@ export async function GET(
         unscheduled &&
         d.terminal_outcome !== 'cancelled_paused' &&
         d.terminal_outcome !== 'cancelled_policy' &&
-        d.processing_since == null
+        d.processing_since == null &&
+        (d.attempt_count ?? 0) >= 1
       return {
         ...d,
         attempts: attemptsByDelivery[d.id] ?? [],

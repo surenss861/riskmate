@@ -283,7 +283,7 @@ export async function POST(
       }
     }
 
-    // Emit evidence.uploaded only for evidence/photo uploads (not generic documents).
+    // Emit evidence.uploaded only for evidence/photo uploads (not generic documents). Enqueue failures are not retried; monitor [WebhookTrigger] Fetch endpoints failed.
     const isEvidenceOrPhoto =
       inserted.type === 'photo' || inserted.type === 'evidence'
     if (isEvidenceOrPhoto) {

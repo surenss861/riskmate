@@ -24,11 +24,12 @@ AS $$
 DECLARE
   v_id uuid;
 BEGIN
-  -- In-function tenant guard: service_role (API admin client) or p_organization_id must be in webhook_admin_org_ids().
+  -- In-function tenant guard: service_role (API admin client) or p_organization_id must be in webhook_user_org_ids().
+  -- Uses webhook_user_org_ids (defined in 20260311) so this migration can run before webhook_admin_org_ids (20260322). API layer enforces owner/admin before calling.
   IF (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') IS DISTINCT FROM 'service_role'
-     AND NOT (p_organization_id IN (SELECT public.webhook_admin_org_ids()))
+     AND NOT (p_organization_id IN (SELECT public.webhook_user_org_ids()))
   THEN
-    RAISE EXCEPTION 'create_webhook_endpoint_with_secret: organization % is not accessible (not service_role and not in admin orgs)', p_organization_id;
+    RAISE EXCEPTION 'create_webhook_endpoint_with_secret: organization % is not accessible (not service_role and not in user orgs)', p_organization_id;
   END IF;
 
   INSERT INTO webhook_endpoints (organization_id, url, events, is_active, description, created_by)
@@ -46,7 +47,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION create_webhook_endpoint_with_secret(uuid, text, text[], text, uuid, text) IS
-  'Atomically creates a webhook endpoint and its signing secret. In-function tenant guard: service_role or p_organization_id in webhook_admin_org_ids(); API verifies admin/owner before calling.';
+  'Atomically creates a webhook endpoint and its signing secret. In-function tenant guard: service_role or p_organization_id in webhook_user_org_ids(); API verifies admin/owner before calling.';
 
 REVOKE EXECUTE ON FUNCTION create_webhook_endpoint_with_secret(uuid, text, text[], text, uuid, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION create_webhook_endpoint_with_secret(uuid, text, text[], text, uuid, text) FROM anon;

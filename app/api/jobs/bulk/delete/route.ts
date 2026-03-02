@@ -237,6 +237,7 @@ export async function POST(request: NextRequest) {
   })
   await Promise.allSettled(auditPromises)
 
+  // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
   const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
   for (const jobId of eligibleIds) {
     const job = jobMap.get(jobId)!

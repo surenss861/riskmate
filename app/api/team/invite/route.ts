@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       console.warn('Invite row insert failed:', inviteInsertError?.message)
     }
 
-    // Webhook team.member_added: emitted from this route when invite is created via Next.js. The Express invite route (apps/backend/src/routes/team.ts) emits for invites via that path. Each request is handled by one stack only, so no duplicate delivery per invite.
+    // Webhook team.member_added: emitted from this route when invite is created via Next.js. The Express invite route (apps/backend/src/routes/team.ts) emits for invites via that path. Each request is handled by one stack only, so no duplicate delivery per invite. Enqueue failures are not retried; monitor [WebhookTrigger] Fetch endpoints failed.
     await triggerWebhookEvent(organizationId, 'team.member_added', {
       user_id: newUserId,
       email: normalizedEmail,
