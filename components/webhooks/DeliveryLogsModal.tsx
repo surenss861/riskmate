@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
+import { WEBHOOK_MAX_ATTEMPTS } from '@/lib/webhooks/eventTypes'
 
 const PAYLOAD_TRUNCATE_LENGTH = 10000
 const DELIVERIES_PAGE_SIZE = 100
@@ -63,6 +64,7 @@ export interface DeliveryLogEntry {
   attempts?: DeliveryAttemptEntry[]
   /** Server-computed: true only when delivery is terminally failed and retry is allowed (excludes cancelled). */
   can_retry?: boolean
+  terminal_outcome?: string | null
 }
 
 interface DeliveryLogsModalProps {
@@ -164,14 +166,21 @@ export function DeliveryLogsModal({
   const retryEligible = deliveries.filter((d) => {
     if (retriedDeliveryIds.has(d.id)) return false
     if (d.can_retry !== undefined) return d.can_retry === true
-    return !d.delivered_at && !d.next_retry_at && !d.processing_since && (d.attempt_count ?? 0) >= 1
+    return (
+      !d.delivered_at &&
+      !d.next_retry_at &&
+      !d.processing_since &&
+      (d.terminal_outcome === 'failed' || (d.terminal_outcome == null && (d.attempt_count ?? 0) >= WEBHOOK_MAX_ATTEMPTS))
+    )
   })
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
     if (d.delivered_at) return 'success'
     if (d.processing_since) return 'pending'
     if (d.next_retry_at) return 'pending'
-    return (d.attempt_count ?? 0) >= 1 ? 'failed' : 'pending'
+    if (d.terminal_outcome === 'failed') return 'failed'
+    if ((d.attempt_count ?? 0) >= WEBHOOK_MAX_ATTEMPTS && !d.next_retry_at) return 'failed'
+    return 'pending'
   }
 
   const handleRetryFailed = async () => {

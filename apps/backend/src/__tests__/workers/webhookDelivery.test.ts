@@ -106,7 +106,7 @@ const validUrlResolution = {
 jest.mock('../../utils/email', () => ({ sendEmail: () => Promise.resolve() }))
 jest.mock('../../utils/webhookPayloads', () => ({ buildWebhookEventObject: (x: unknown) => x }))
 
-import { sendDelivery, parseSafeBoundedInt } from '../../workers/webhookDelivery'
+import { sendDelivery, parseSafeBoundedInt, MAX_ATTEMPTS } from '../../workers/webhookDelivery'
 
 describe('webhookDelivery – attempt persistence failure', () => {
   const deliveryRow = {
@@ -269,5 +269,11 @@ describe('webhookDelivery – env parser (parseSafeBoundedInt)', () => {
     const intervalMs = parseSafeBoundedInt('invalid', 2000, 2000, 86400000)
     expect(intervalMs).toBeGreaterThanOrEqual(2000)
     expect(Number.isFinite(intervalMs)).toBe(true)
+  })
+})
+
+describe('webhookDelivery – MAX_ATTEMPTS', () => {
+  it('exports MAX_ATTEMPTS equal to 5 so SQL claim RPC and tests stay in sync', () => {
+    expect(MAX_ATTEMPTS).toBe(5)
   })
 })

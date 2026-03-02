@@ -51,7 +51,7 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
   const multiOrg = organizationOptions.length > 1
   const defaultOrgId = useMemo(
     () => organizationId ?? organizationOptions[0]?.id ?? null,
-    [organizationId, organizationOptions[0]?.id]
+    [organizationId, organizationOptions]
   )
   // Multi-org: require explicit choice (no preselection). Single-org: use default.
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() =>

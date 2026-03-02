@@ -23,7 +23,7 @@ const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
   24 * 60 * 60 * 1000,   // after attempt 4 → 24 hr
 ]
 
-const MAX_ATTEMPTS = 5
+export const MAX_ATTEMPTS = 5
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 /** Debounce delay for wake-up: coalesce rapid enqueues into one immediate run. */
 const WAKE_DEBOUNCE_MS = 100

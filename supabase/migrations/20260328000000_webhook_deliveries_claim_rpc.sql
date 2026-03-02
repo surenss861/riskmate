@@ -14,7 +14,7 @@ AS $$
       AND processing_since IS NULL
       AND next_retry_at IS NOT NULL
       AND next_retry_at <= now()
-      AND attempt_count <= 5
+      AND attempt_count <= 5  -- must match MAX_ATTEMPTS in apps/backend/src/workers/webhookDelivery.ts
       AND terminal_outcome IS NULL
     ORDER BY attempt_count ASC, next_retry_at ASC
     LIMIT p_limit

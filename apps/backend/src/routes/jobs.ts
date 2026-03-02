@@ -1233,19 +1233,31 @@ jobsRouter.post("/bulk/status", authenticate, requireWriteAccess, async (req: ex
       await emitJobEvent(organization_id, "job.updated", jobId, userId);
     }
     const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
+    const webhookPromises: Array<{ jobId: string; event: "job.updated" | "job.completed"; promise: Promise<unknown> }> = [];
     for (const jobId of succeeded) {
       const previousStatus = found.get(jobId)?.status;
       const payload: { id: string; status: string; completed_at?: string } = { id: jobId, status: dbStatus };
       if (completedAt != null) payload.completed_at = completedAt;
-      deliverEvent(organization_id, "job.updated", payload).catch((e) =>
-        console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e)
-      );
+      webhookPromises.push({
+        jobId,
+        event: "job.updated",
+        promise: deliverEvent(organization_id, "job.updated", payload),
+      });
       if (dbStatus === "completed" && previousStatus !== "completed") {
-        deliverEvent(organization_id, "job.completed", payload).catch((e) =>
-          console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e)
-        );
+        webhookPromises.push({
+          jobId,
+          event: "job.completed",
+          promise: deliverEvent(organization_id, "job.completed", payload),
+        });
       }
     }
+    const webhookResults = await Promise.allSettled(webhookPromises.map((w) => w.promise));
+    webhookResults.forEach((result, i) => {
+      if (result.status === "rejected") {
+        const { jobId, event } = webhookPromises[i];
+        console.warn("[Webhook] bulk enqueue failed", { jobId, event, error: result.reason });
+      }
+    });
     const total = succeeded.length + failed.length;
     res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
   } catch (err: any) {
