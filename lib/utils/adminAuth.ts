@@ -42,7 +42,12 @@ const ROLE_RANK: Record<string, number> = { owner: 3, admin: 2, member: 1 }
 
 /**
  * Get user role from Supabase user record.
- * Returns the highest role across users.role and organization_members.role (owner > admin > member).
+ * When organizationId is provided: role resolution is strictly organization-scoped.
+ * Only organization_members.role for that org is considered; users.role is used as
+ * fallback only when users.organization_id matches the same organizationId (prevents
+ * global/admin in users.role from granting admin in other orgs).
+ * When organizationId is omitted: returns the highest role across users.role and
+ * organization_members (legacy/global context).
  */
 export async function getUserRole(
   supabase: any,
@@ -62,14 +67,21 @@ export async function getUserRole(
 
   const { data: user } = await supabase
     .from('users')
-    .select('role')
+    .select('role, organization_id')
     .eq('id', userId)
     .maybeSingle()
   const userRole = user?.role ?? null
+  const userOrgId = user?.organization_id ?? null
 
+  // When organizationId is provided: only use users.role if it applies to this org
+  const userRoleApplies =
+    !organizationId ||
+    userOrgId === organizationId
+
+  const effectiveUserRole = userRoleApplies ? userRole : null
   const a = ROLE_RANK[memberRole ?? ''] ?? 0
-  const b = ROLE_RANK[userRole ?? ''] ?? 0
+  const b = ROLE_RANK[effectiveUserRole ?? ''] ?? 0
   if (a >= b && memberRole) return memberRole
-  if (b >= a && userRole) return userRole
-  return memberRole ?? userRole ?? null
+  if (b >= a && effectiveUserRole) return effectiveUserRole
+  return memberRole ?? effectiveUserRole ?? null
 }
