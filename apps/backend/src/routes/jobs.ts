@@ -3756,6 +3756,7 @@ jobsRouter.delete("/:id", authenticate, requireWriteAccess, async (req: express.
       id: jobId,
       deleted_at: deletedAt,
       status: job.status,
+      bulk: false,
     }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
 
     res.json({
@@ -3949,6 +3950,25 @@ jobsRouter.post("/:id/signoffs", authenticate, requireWriteAccess, async (req: e
       });
       res.setHeader('X-Error-ID', errorId);
       return res.status(400).json(errorResponse);
+    }
+
+    // Defense-in-depth: verify job belongs to organization before inserting signoff
+    const { data: jobRow, error: jobErr } = await supabase
+      .from("jobs")
+      .select("id, organization_id")
+      .eq("id", jobId)
+      .eq("organization_id", organization_id)
+      .maybeSingle();
+    if (jobErr || !jobRow) {
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Job not found",
+        internalMessage: jobErr?.message || "Job not found or does not belong to organization",
+        code: "NOT_FOUND",
+        requestId,
+        statusCode: 404,
+      });
+      res.setHeader('X-Error-ID', errorId);
+      return res.status(404).json(errorResponse);
     }
 
     // Get user info

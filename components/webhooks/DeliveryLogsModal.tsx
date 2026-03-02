@@ -212,7 +212,7 @@ export function DeliveryLogsModal({
       }
       if (endpointId) {
         try {
-          const refreshLimit = DELIVERIES_PAGE_SIZE
+          const refreshLimit = Math.max(deliveries.length, DELIVERIES_PAGE_SIZE)
           const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=${refreshLimit}&offset=0`, { credentials: 'include' })
           if (!res.ok) {
             let msg = `Request failed (${res.status})`

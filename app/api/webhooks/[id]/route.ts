@@ -102,6 +102,7 @@ export async function PATCH(
         .from('webhook_endpoints')
         .select('id, url, events, is_active, description, updated_at')
         .eq('id', id)
+        .eq('organization_id', endpoint.organization_id)
         .single()
       if (current == null) {
         const { response: errResponse, errorId } = createErrorResponse(

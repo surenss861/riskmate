@@ -35,6 +35,7 @@ export default function WebhooksPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingConfirmId, setDeletingConfirmId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [statsLoadFailed, setStatsLoadFailed] = useState(false)
 
@@ -185,6 +186,7 @@ export default function WebhooksPage() {
 
   const handleTest = async (id: string) => {
     setActionError(null)
+    setActionSuccess(null)
     setTestingId(id)
     try {
       const res = await fetch(`/api/webhooks/${id}/test`, { method: 'POST', credentials: 'include' })
@@ -194,8 +196,8 @@ export default function WebhooksPage() {
         setActionError(msg)
         return
       }
-      // Full stats refresh so all endpoints show up-to-date counts after test
-      await loadStatsOnly(endpoints)
+      setActionError(null)
+      setActionSuccess('Test event queued — stats will update shortly.')
     } finally {
       setTestingId(null)
     }
@@ -258,6 +260,19 @@ export default function WebhooksPage() {
               title="Webhooks"
               subtitle="Send events to your own endpoints when jobs, hazards, and reports change."
             />
+            {actionSuccess && (
+              <div className="mb-4 p-4 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 flex items-center justify-between gap-2">
+                <span>{actionSuccess}</span>
+                <button
+                  type="button"
+                  onClick={() => setActionSuccess(null)}
+                  className="shrink-0 text-white/80 hover:text-white"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {actionError && (
               <div className="mb-4 p-4 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 flex items-center justify-between gap-2">
                 <span>{actionError}</span>
@@ -330,7 +345,7 @@ export default function WebhooksPage() {
                             {ep.url}
                           </span>
                           <Badge variant={statsLoadFailed ? 'neutral' : isFailing(ep.id) ? 'critical' : ep.is_active ? 'success' : 'neutral'}>
-                            {statsLoadFailed ? 'Unknown' : isFailing(ep.id) ? 'Failing' : ep.is_active ? 'Active' : 'Paused'}
+                            {statsLoadFailed ? (ep.is_active ? 'Active' : 'Paused') : isFailing(ep.id) ? 'Failing' : ep.is_active ? 'Active' : 'Paused'}
                           </Badge>
                         </div>
                         {ep.description && (

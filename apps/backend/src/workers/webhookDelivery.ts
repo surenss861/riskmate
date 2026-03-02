@@ -706,13 +706,13 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
     <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
   `
 
+  const now = new Date().toISOString()
   try {
     await sendEmail({
       to: toList,
       subject,
       html,
     })
-    const now = new Date().toISOString()
     await supabase.from('webhook_endpoint_alert_state').upsert(
       {
         endpoint_id: endpointId,
@@ -723,6 +723,15 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
     )
   } catch (err) {
     console.error('[WebhookDelivery] Admin alert email failed:', err)
+    // Update last_alert_at even when sendEmail fails so we don't retry on every terminal failure
+    await supabase.from('webhook_endpoint_alert_state').upsert(
+      {
+        endpoint_id: endpointId,
+        last_alert_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'endpoint_id' }
+    )
   }
 }
 

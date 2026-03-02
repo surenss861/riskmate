@@ -1,0 +1,53 @@
+name: Webhook Sync Check
+
+on:
+  pull_request:
+    paths:
+      - 'lib/utils/webhookSigning.ts'
+      - 'lib/utils/webhookUrl.ts'
+      - 'lib/webhooks/eventTypes.ts'
+      - 'lib/webhooks/payloads.ts'
+      - 'apps/backend/src/utils/webhookSigning.ts'
+      - 'apps/backend/src/utils/webhookUrl.ts'
+      - 'apps/backend/src/utils/webhookPayloads.ts'
+      - 'apps/backend/src/utils/webhookEventTypes.ts'
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/utils/webhookSigning.ts'
+      - 'lib/utils/webhookUrl.ts'
+      - 'lib/webhooks/eventTypes.ts'
+      - 'lib/webhooks/payloads.ts'
+      - 'apps/backend/src/utils/webhookSigning.ts'
+      - 'apps/backend/src/utils/webhookUrl.ts'
+      - 'apps/backend/src/utils/webhookPayloads.ts'
+      - 'apps/backend/src/utils/webhookEventTypes.ts'
+
+jobs:
+  webhook-sync:
+    name: Webhook lib/backend sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check webhook utils sync
+        run: pnpm run check:webhook-utils-sync
+
+      - name: Check webhook event types sync
+        run: pnpm run check:webhook-event-types-sync
