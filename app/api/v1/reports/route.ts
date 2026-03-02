@@ -67,22 +67,24 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Pagination: page + limit (v1 list contract); offset is optional legacy fallback (page takes precedence).
+  const pageRaw = request.nextUrl.searchParams.get('page')
   const limitRaw = request.nextUrl.searchParams.get('limit') ?? '20'
-  const offsetRaw = request.nextUrl.searchParams.get('offset') ?? '0'
+  const offsetRaw = request.nextUrl.searchParams.get('offset')
   const limitParsed = parseInt(limitRaw, 10)
-  const offsetParsed = parseInt(offsetRaw, 10)
+  const pageParsed = pageRaw != null ? parseInt(pageRaw, 10) : null
+  const offsetParsed = offsetRaw != null ? parseInt(offsetRaw, 10) : null
+
   if (
     !Number.isFinite(limitParsed) ||
-    !Number.isFinite(offsetParsed) ||
     limitParsed < 1 ||
-    limitParsed > 100 ||
-    offsetParsed < 0
+    limitParsed > 100
   ) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody(
           'INVALID_FORMAT',
-          'Invalid pagination: limit must be between 1 and 100, offset must be a non-negative integer',
+          'Invalid pagination: limit must be between 1 and 100',
           requestId
         ),
         { status: 400, headers: { 'X-Request-ID': requestId } }
@@ -91,7 +93,46 @@ export async function GET(request: NextRequest) {
     )
   }
   const limit = limitParsed
-  const offset = offsetParsed
+
+  let offset: number
+  let page: number
+  if (pageParsed != null && Number.isFinite(pageParsed) && pageParsed >= 1) {
+    page = pageParsed
+    offset = (page - 1) * limit
+  } else if (offsetParsed != null && Number.isFinite(offsetParsed) && offsetParsed >= 0) {
+    offset = offsetParsed
+    page = Math.floor(offset / limit) + 1
+  } else {
+    page = 1
+    offset = 0
+  }
+
+  if (pageRaw != null && (pageParsed == null || !Number.isFinite(pageParsed) || pageParsed < 1)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Invalid pagination: page must be a positive integer',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+  if (offsetRaw != null && (offsetParsed == null || !Number.isFinite(offsetParsed) || offsetParsed < 0)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Invalid pagination: offset must be a non-negative integer',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
 
   const { data: runs, error, count } = await admin
     .from('report_runs')
@@ -113,7 +154,6 @@ export async function GET(request: NextRequest) {
   }
 
   const total = count ?? (runs?.length ?? 0)
-  const page = Math.floor(offset / limit) + 1
   const res = v1Json(runs || [], { meta: { page, limit, total } })
   return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
 }

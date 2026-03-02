@@ -181,6 +181,22 @@ async function handler(
 
     if (updateError) {
       console.error('[v1/jobs/[id]] PATCH error:', updateError)
+      const pgCode = (updateError as { code?: string }).code
+      const isCheckOrEnumViolation =
+        pgCode === '23514' || pgCode === 'check_violation'
+      if (isCheckOrEnumViolation) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody(
+              'INVALID_FORMAT',
+              'Invalid status, client_type, or job_type; check allowed values',
+              requestId
+            ),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
       return withRateLimitHeaders(
         NextResponse.json(
           errorBody('QUERY_ERROR', 'Failed to update job', requestId),
