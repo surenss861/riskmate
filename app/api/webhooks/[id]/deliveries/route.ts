@@ -122,12 +122,15 @@ export async function GET(
     const data = list.map((d: { id: string; delivered_at: string | null; next_retry_at: string | null; terminal_outcome: string | null; processing_since: string | null; attempt_count?: number | null; [k: string]: unknown }) => {
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
+      const notProcessing = d.processing_since == null
+      // Align with retry route: retryable when undelivered, unscheduled, not processing, and either modern (terminal_outcome='failed') or legacy (terminal_outcome null) terminal rows. Excludes delivered/cancelled_*.
+      const retryableOutcome = d.terminal_outcome === 'failed' || d.terminal_outcome == null
       const can_retry =
         !endpointPaused &&
         undelivered &&
         unscheduled &&
-        d.terminal_outcome === 'failed' &&
-        d.processing_since == null
+        notProcessing &&
+        retryableOutcome
       return {
         ...d,
         attempts: attemptsByDelivery[d.id] ?? [],

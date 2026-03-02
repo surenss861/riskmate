@@ -73,8 +73,20 @@ export async function triggerWebhookEvent(
 
   const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
   if (insertError) {
-    console.error('[WebhookTrigger] Batched insert deliveries failed:', insertError)
-    throw new Error(`Webhook delivery enqueue failed: ${insertError.message}`)
+    // Batch failed (e.g. one endpoint deleted before insert → FK violation). Retry per-endpoint so valid endpoints still get queued.
+    console.warn('[WebhookTrigger] Batched insert failed, retrying per-endpoint:', insertError.message)
+    let queued = 0
+    for (const row of rows) {
+      const { error: oneError } = await supabase.from('webhook_deliveries').insert(row)
+      if (oneError) {
+        console.error('[WebhookTrigger] Per-endpoint enqueue failed (endpoint may be deleted):', row.endpoint_id, oneError.message)
+        continue
+      }
+      queued += 1
+    }
+    if (queued === 0) {
+      throw new Error(`Webhook delivery enqueue failed for all endpoints: ${insertError.message}`)
+    }
   }
   wakeBackendWebhookWorker().catch((err: unknown) => {
     console.warn('[WebhookTrigger] Wake worker call failed (delivery will be picked up on next poll):', err instanceof Error ? err.message : err)

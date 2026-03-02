@@ -229,8 +229,20 @@ export async function deliverEvent(
 
   const { error: insertError } = await supabase.from('webhook_deliveries').insert(rows)
   if (insertError) {
-    console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError)
-    throw new Error(`Webhook deliveries insert failed: ${insertError.message}`)
+    // Batch failed (e.g. one endpoint deleted before insert → FK violation). Retry per-endpoint so valid endpoints still get queued.
+    console.warn('[WebhookDelivery] Batched insert failed, retrying per-endpoint:', insertError.message)
+    let queued = 0
+    for (const row of rows) {
+      const { error: oneError } = await supabase.from('webhook_deliveries').insert(row)
+      if (oneError) {
+        console.error('[WebhookDelivery] Per-endpoint enqueue failed (endpoint may be deleted):', row.endpoint_id, oneError.message)
+        continue
+      }
+      queued += 1
+    }
+    if (queued === 0) {
+      throw new Error(`Webhook deliveries insert failed for all endpoints: ${insertError.message}`)
+    }
   }
   wakeWebhookWorker()
 }
