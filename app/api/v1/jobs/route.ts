@@ -239,12 +239,27 @@ export async function POST(request: NextRequest) {
       const pgCode = (error as { code?: string }).code
       const isCheckOrEnumViolation =
         pgCode === '23514' || pgCode === 'check_violation'
+      const isInvalidDateOrType =
+        pgCode === '22007' || pgCode === '22P02'
       if (isCheckOrEnumViolation) {
         return withRateLimitHeaders(
           NextResponse.json(
             errorBody(
               'INVALID_FORMAT',
               'Invalid status, client_type, or job_type; check allowed values',
+              requestId
+            ),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      if (isInvalidDateOrType) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody(
+              'INVALID_FORMAT',
+              'Invalid date or type format for start_date or end_date',
               requestId
             ),
             { status: 400, headers: { 'X-Request-ID': requestId } }
