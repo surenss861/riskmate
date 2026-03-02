@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Button, GlassCard } from '@/components/shared'
 
 const PAYLOAD_TRUNCATE_LENGTH = 10000
+const DELIVERIES_PAGE_SIZE = 100
 
 function PayloadDisplay({
   payload,
@@ -79,6 +80,8 @@ export function DeliveryLogsModal({
 }: DeliveryLogsModalProps) {
   const [deliveries, setDeliveries] = useState<DeliveryLogEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
@@ -95,8 +98,9 @@ export function DeliveryLogsModal({
     setRetriedDeliveryIds(new Set())
     setPayloadShowFull({})
     setFetchError(null)
+    setHasMore(true)
     setLoading(true)
-    fetch(`/api/webhooks/${endpointId}/deliveries?limit=100`, { credentials: 'include' })
+    fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=0`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) {
           let msg = `Request failed (${res.status})`
@@ -114,7 +118,9 @@ export function DeliveryLogsModal({
           return
         }
         const json = await res.json()
-        setDeliveries(Array.isArray(json.data) ? json.data : [])
+        const list = Array.isArray(json.data) ? json.data : []
+        setDeliveries(list)
+        setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
       })
       .catch(() => {
         setDeliveries([])
@@ -122,6 +128,21 @@ export function DeliveryLogsModal({
       })
       .finally(() => setLoading(false))
   }, [open, endpointId])
+
+  const loadMore = () => {
+    if (!endpointId || loadingMore || !hasMore) return
+    setLoadingMore(true)
+    const offset = deliveries.length
+    fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=${offset}`, { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) return
+        const json = await res.json()
+        const list = Array.isArray(json.data) ? json.data : []
+        setDeliveries((prev) => [...prev, ...list])
+        setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
+      })
+      .finally(() => setLoadingMore(false))
+  }
 
   const formatTime = (s: string | null) => {
     if (!s) return '—'
@@ -180,7 +201,7 @@ export function DeliveryLogsModal({
       }
       if (endpointId) {
         try {
-          const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=100`, { credentials: 'include' })
+          const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=0`, { credentials: 'include' })
           if (!res.ok) {
             let msg = `Request failed (${res.status})`
             try {
@@ -218,7 +239,7 @@ export function DeliveryLogsModal({
           <div>
             <h2 className="text-xl font-semibold text-white">Delivery logs</h2>
             <p className="text-sm text-white/60 truncate max-w-md mt-0.5">{endpointUrl}</p>
-            <p className="text-xs text-white/50 mt-0.5">Showing the 100 most recent deliveries. Retried deliveries appear as new entries; the original row stays as Failed.</p>
+            <p className="text-xs text-white/50 mt-0.5">Most recent first. Use “Load more” to see older deliveries. Retried deliveries appear as new entries; the original row stays as Failed.</p>
           </div>
           <div className="flex items-center gap-2">
             {retryEligible.length > 0 && (
@@ -375,6 +396,18 @@ export function DeliveryLogsModal({
             </table>
           )}
         </div>
+        {!loading && !fetchError && deliveries.length > 0 && hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </div>
+        )}
       </GlassCard>
     </div>
   )

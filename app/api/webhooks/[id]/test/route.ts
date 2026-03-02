@@ -144,46 +144,37 @@ export async function POST(
     const rawEvents = (endpoint as Record<string, unknown>).events
     const events = Array.isArray(rawEvents) ? (rawEvents as string[]) : []
 
-    // Optional: accept requested test event type in body; validate against subscribed events
+    // Optional: accept requested test event type in body; validate against subscribed events. Empty/malformed body uses default.
+    const body = await request.json().catch(() => ({}))
+    const requested = typeof (body as { event_type?: string }).event_type === 'string'
+      ? (body as { event_type: string }).event_type.trim()
+      : null
     let eventType: string
-    try {
-      const body = await request.json().catch(() => ({}))
-      const requested = typeof (body as { event_type?: string }).event_type === 'string'
-        ? (body as { event_type: string }).event_type.trim()
-        : null
-      if (requested) {
-        if (!WEBHOOK_EVENT_TYPES.includes(requested as (typeof WEBHOOK_EVENT_TYPES)[number])) {
-          const { response, errorId } = createErrorResponse(
-            'Invalid event_type for test',
-            'VALIDATION_ERROR',
-            { requestId, statusCode: 400 }
-          )
-          return NextResponse.json(response, {
-            status: 400,
-            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-          })
-        }
-        if (!events.includes(requested)) {
-          const { response, errorId } = createErrorResponse(
-            'Requested event_type is not subscribed for this endpoint',
-            'VALIDATION_ERROR',
-            { requestId, statusCode: 400 }
-          )
-          return NextResponse.json(response, {
-            status: 400,
-            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-          })
-        }
-        eventType = requested
-      } else {
-        eventType =
-          events.length > 0
-            ? events.includes('job.created')
-              ? 'job.created'
-              : events[0]
-            : 'job.created'
+    if (requested) {
+      if (!WEBHOOK_EVENT_TYPES.includes(requested as (typeof WEBHOOK_EVENT_TYPES)[number])) {
+        const { response, errorId } = createErrorResponse(
+          'Invalid event_type for test',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
       }
-    } catch {
+      if (!events.includes(requested)) {
+        const { response, errorId } = createErrorResponse(
+          'Requested event_type is not subscribed for this endpoint',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      eventType = requested
+    } else {
       eventType =
         events.length > 0
           ? events.includes('job.created')

@@ -376,7 +376,16 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   }
 
   if (!endpoint || !endpointWithSecret || !secret) {
-    const reason = 'Endpoint has no secret'
+    // TOCTOU: endpoint may have been deleted between endpoint fetch and secret fetch; re-check to avoid misleading "no secret" message.
+    let reason = 'Endpoint has no secret'
+    if (endpoint && !secret && !secretError) {
+      const { data: recheckEp } = await supabase
+        .from('webhook_endpoints')
+        .select('id')
+        .eq('id', delivery.endpoint_id)
+        .maybeSingle()
+      if (!recheckEp) reason = 'Endpoint not found (deleted)'
+    }
     console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
     const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
     if (!attemptOk) {
@@ -707,6 +716,7 @@ async function recoverStaleClaims(): Promise<void> {
     .from('webhook_deliveries')
     .update({ processing_since: null })
     .is('delivered_at', null)
+    .is('terminal_outcome', null)
     .not('processing_since', 'is', null)
     .lt('processing_since', staleBefore)
   if (error) {
@@ -785,6 +795,10 @@ export function wakeWebhookWorker(): void {
   }, WAKE_DEBOUNCE_MS)
 }
 
+/**
+ * In-memory guard (processPendingDeliveriesRunning) is process-local only. Cross-instance safety relies on
+ * claim_pending_webhook_deliveries RPC's FOR UPDATE SKIP LOCKED — multiple worker instances may run; each claims rows atomically.
+ */
 export async function startWebhookDeliveryWorker(): Promise<void> {
   if (workerInterval) return
   // Backend supabase client must use SUPABASE_SERVICE_ROLE_KEY so webhook_endpoint_secrets (service-role only) is readable
@@ -827,4 +841,6 @@ export function stopWebhookDeliveryWorker(): void {
     clearInterval(workerInterval)
     workerInterval = null
   }
+  processPendingDeliveriesRunning = false
+  pendingRunRequested = false
 }

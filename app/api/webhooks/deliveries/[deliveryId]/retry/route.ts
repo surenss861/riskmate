@@ -161,7 +161,7 @@ export async function POST(
 
     return NextResponse.json(
       { data: { message: 'Retry scheduled', delivery_id: inserted.id } },
-      { status: 200 }
+      { status: 201 }
     )
   } catch (err: unknown) {
     if (err instanceof ForbiddenError) {

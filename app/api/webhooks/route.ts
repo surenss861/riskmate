@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
         status: 201,
         headers: {
           'Cache-Control': 'no-store',
+          'X-Request-ID': requestId,
         },
       }
     )
