@@ -89,7 +89,13 @@ export async function PATCH(
       updates.events = valid
     }
     if (typeof body.is_active === 'boolean') updates.is_active = body.is_active
-    if (typeof body.description === 'string') updates.description = body.description.trim() || null
+    if (Object.prototype.hasOwnProperty.call(body, 'description')) {
+      if (body.description === null) {
+        updates.description = null
+      } else if (typeof body.description === 'string') {
+        updates.description = body.description.trim() || null
+      }
+    }
 
     if (Object.keys(updates).length === 0) {
       const { data: current } = await admin

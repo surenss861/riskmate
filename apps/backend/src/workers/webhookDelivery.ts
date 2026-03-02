@@ -836,8 +836,12 @@ export async function startWebhookDeliveryWorker(): Promise<WebhookWorkerStartRe
   }
   const keyValidation = validateWebhookSecretEncryptionKey(process.env.WEBHOOK_SECRET_ENCRYPTION_KEY)
   if (!keyValidation.valid) {
-    const { data: rows } = await supabase.from('webhook_endpoint_secrets').select('secret').limit(100)
-    const hasEncrypted = (rows ?? []).some((r: { secret?: string }) => (r.secret ?? '').startsWith('v1:'))
+    const { data: encryptedRows } = await supabase
+      .from('webhook_endpoint_secrets')
+      .select('secret')
+      .like('secret', 'v1:%')
+      .limit(1)
+    const hasEncrypted = (encryptedRows ?? []).length > 0
     if (hasEncrypted) {
       return {
         started: false,
