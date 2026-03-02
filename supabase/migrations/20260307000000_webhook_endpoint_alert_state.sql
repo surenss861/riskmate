@@ -13,6 +13,7 @@ COMMENT ON COLUMN webhook_endpoint_alert_state.last_alert_at IS 'Set only after 
 
 ALTER TABLE webhook_endpoint_alert_state ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS webhook_endpoint_alert_state_via_endpoint ON webhook_endpoint_alert_state;
 CREATE POLICY webhook_endpoint_alert_state_via_endpoint ON webhook_endpoint_alert_state
   FOR ALL
   USING (
@@ -28,6 +29,7 @@ CREATE POLICY webhook_endpoint_alert_state_via_endpoint ON webhook_endpoint_aler
     )
   );
 
+DROP POLICY IF EXISTS webhook_endpoint_alert_state_service ON webhook_endpoint_alert_state;
 CREATE POLICY webhook_endpoint_alert_state_service ON webhook_endpoint_alert_state
   FOR ALL
   TO service_role
