@@ -13,6 +13,7 @@ import {
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
+import { isValidUUID } from '@/lib/utils/uuid'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
@@ -35,6 +36,16 @@ async function handler(
   const requestId = getRequestId(request)
   const { id: jobId } = await params
 
+  if (!isValidUUID(jobId)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Invalid job id format', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+
   const admin = createSupabaseAdminClient()
 
   const { data: job, error: fetchError } = await admin
@@ -46,6 +57,16 @@ async function handler(
     .maybeSingle()
 
   if (fetchError) {
+    const pgCode = (fetchError as { code?: string }).code
+    if (pgCode === '22P02') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid job id format', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody('QUERY_ERROR', 'Failed to load job', requestId),

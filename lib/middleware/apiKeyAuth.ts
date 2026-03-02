@@ -96,7 +96,8 @@ export async function getApiKeyContext(request: NextRequest): Promise<{
 }
 
 /**
- * Update last_used_at for the API key (fire-and-forget).
+ * Update last_used_at for the API key. Callers should await this so updates
+ * complete before the request ends (e.g. in serverless lifecycles).
  */
 export async function touchApiKeyLastUsed(apiKeyId: string): Promise<void> {
   try {

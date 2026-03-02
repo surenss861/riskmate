@@ -13,6 +13,7 @@ import {
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
+import { isValidUUID } from '@/lib/utils/uuid'
 
 export const runtime = 'nodejs'
 
@@ -30,6 +31,16 @@ export async function GET(
   const requestId = getRequestId(request)
   const { id: reportId } = await ctx.params
 
+  if (!isValidUUID(reportId)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Invalid report id format', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+
   const admin = createSupabaseAdminClient()
 
   const { data: reportRun, error: runError } = await admin
@@ -40,6 +51,16 @@ export async function GET(
     .maybeSingle()
 
   if (runError) {
+    const pgCode = (runError as { code?: string }).code
+    if (pgCode === '22P02') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid report id format', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody('QUERY_ERROR', 'Failed to load report', requestId),

@@ -55,8 +55,6 @@ export async function withApiKeyAuth(
     )
   }
 
-  touchApiKeyLastUsed(auth.context.api_key_id).catch(() => {})
-
   const rateLimitResult = checkApiKeyRateLimit(
     request,
     auth.keyRow.id,
@@ -94,6 +92,8 @@ export async function withApiKeyAuth(
       rateLimitResult
     )
   }
+
+  await touchApiKeyLastUsed(auth.context.api_key_id).catch(() => {})
 
   return { context: auth.context, rateLimitResult }
 }

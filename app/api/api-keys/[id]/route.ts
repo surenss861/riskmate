@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
+import { isValidUUID } from '@/lib/utils/uuid'
 
 export const runtime = 'nodejs'
 
@@ -25,11 +26,15 @@ const API_KEY_SCOPES = [
 
 const ALLOWED_SCOPES_SET = new Set<string>(API_KEY_SCOPES)
 
-/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. */
-function validateAndNormalizeScopes(scopes: unknown): { valid: string[]; invalid: string[] } {
-  const arr = Array.isArray(scopes) ? (scopes as unknown[]).map((s) => String(s)) : []
-  const invalid = arr.filter((s) => !ALLOWED_SCOPES_SET.has(s))
-  const valid = [...new Set(arr.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
+/** Ensure scopes is an array of strings. Returns false if provided but malformed. */
+function isScopesArrayOfStrings(scopes: unknown): scopes is string[] {
+  return Array.isArray(scopes) && scopes.every((s) => typeof s === 'string')
+}
+
+/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. Call only when scopes is already an array of strings. */
+function validateAndNormalizeScopes(scopes: string[]): { valid: string[]; invalid: string[] } {
+  const invalid = scopes.filter((s) => !ALLOWED_SCOPES_SET.has(s))
+  const valid = [...new Set(scopes.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
   return { valid, invalid }
 }
 
@@ -55,6 +60,17 @@ export async function PATCH(
 ) {
   const requestId = getRequestId(request)
   const { id } = await ctx.params
+  if (!isValidUUID(id)) {
+    const { response, errorId } = createErrorResponse(
+      'Invalid API key id format',
+      'INVALID_FORMAT',
+      { requestId, statusCode: 400 }
+    )
+    return NextResponse.json(response, {
+      status: 400,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
   try {
     const result = await getKeyAndCheckAuth(request, id)
     if (result.queryError) {
@@ -96,7 +112,18 @@ export async function PATCH(
     const { name, scopes, expires_at } = body
     const updateData: Record<string, unknown> = {}
     if (typeof name === 'string' && name.trim()) updateData.name = name.trim()
-    if (Array.isArray(scopes)) {
+    if (scopes !== undefined) {
+      if (!isScopesArrayOfStrings(scopes)) {
+        const { response, errorId } = createErrorResponse(
+          'scopes must be an array of strings',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
       const { valid, invalid } = validateAndNormalizeScopes(scopes)
       if (invalid.length > 0) {
         const { response, errorId } = createErrorResponse(
@@ -206,6 +233,17 @@ export async function DELETE(
 ) {
   const requestId = getRequestId(request)
   const { id } = await ctx.params
+  if (!isValidUUID(id)) {
+    const { response, errorId } = createErrorResponse(
+      'Invalid API key id format',
+      'INVALID_FORMAT',
+      { requestId, statusCode: 400 }
+    )
+    return NextResponse.json(response, {
+      status: 400,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
   try {
     const result = await getKeyAndCheckAuth(request, id)
     if (result.queryError) {

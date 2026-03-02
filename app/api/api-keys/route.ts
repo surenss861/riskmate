@@ -27,11 +27,15 @@ const API_KEY_SCOPES = [
 
 const ALLOWED_SCOPES_SET = new Set<string>(API_KEY_SCOPES)
 
-/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. */
-function validateAndNormalizeScopes(scopes: unknown): { valid: string[]; invalid: string[] } {
-  const arr = Array.isArray(scopes) ? (scopes as unknown[]).map((s) => String(s)) : []
-  const invalid = arr.filter((s) => !ALLOWED_SCOPES_SET.has(s))
-  const valid = [...new Set(arr.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
+/** Ensure scopes is an array of strings. Returns false if provided but malformed. */
+function isScopesArrayOfStrings(scopes: unknown): scopes is string[] {
+  return Array.isArray(scopes) && scopes.every((s) => typeof s === 'string')
+}
+
+/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. Call only when scopes is already an array of strings. */
+function validateAndNormalizeScopes(scopes: string[]): { valid: string[]; invalid: string[] } {
+  const invalid = scopes.filter((s) => !ALLOWED_SCOPES_SET.has(s))
+  const valid = [...new Set(scopes.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
   return { valid, invalid }
 }
 
@@ -119,7 +123,7 @@ export async function POST(request: NextRequest) {
     requireOwnerOrAdmin(user_role)
 
     const body = await request.json().catch(() => ({}))
-    const { name, scopes = [], expires_at } = body
+    const { name, scopes, expires_at } = body
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       const { response, errorId } = createErrorResponse(
@@ -133,7 +137,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const { valid: validScopes, invalid: invalidScopes } = validateAndNormalizeScopes(scopes)
+    if (scopes !== undefined && !isScopesArrayOfStrings(scopes)) {
+      const { response, errorId } = createErrorResponse(
+        'scopes must be an array of strings',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const scopesToValidate = scopes !== undefined ? scopes : []
+    const { valid: validScopes, invalid: invalidScopes } = validateAndNormalizeScopes(scopesToValidate)
     if (invalidScopes.length > 0) {
       const { response, errorId } = createErrorResponse(
         `Invalid scope(s): ${invalidScopes.join(', ')}. Allowed: ${API_KEY_SCOPES.join(', ')}`,

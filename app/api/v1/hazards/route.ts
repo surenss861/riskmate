@@ -13,6 +13,7 @@ import {
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
+import { isValidUUID } from '@/lib/utils/uuid'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
@@ -36,6 +37,15 @@ export async function GET(request: NextRequest) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody('INVALID_FORMAT', 'Missing required query: job_id', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+  if (!isValidUUID(jobId)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Invalid job_id format', requestId),
         { status: 400, headers: { 'X-Request-ID': requestId } }
       ),
       rateLimitResult
@@ -80,6 +90,16 @@ export async function GET(request: NextRequest) {
     .maybeSingle()
 
   if (jobError) {
+    const pgCode = (jobError as { code?: string }).code
+    if (pgCode === '22P02') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid job_id format', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     console.error('[v1/hazards] job lookup error:', jobError)
     return withRateLimitHeaders(
       NextResponse.json(
@@ -149,6 +169,15 @@ export async function POST(request: NextRequest) {
         rateLimitResult
       )
     }
+    if (!isValidUUID(String(job_id))) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid job_id format', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
 
     const admin = createSupabaseAdminClient()
 
@@ -161,6 +190,16 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (jobError) {
+      const pgCode = (jobError as { code?: string }).code
+      if (pgCode === '22P02') {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('INVALID_FORMAT', 'Invalid job_id format', requestId),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
       console.error('[v1/hazards] job lookup error:', jobError)
       return withRateLimitHeaders(
         NextResponse.json(
