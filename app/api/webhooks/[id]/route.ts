@@ -122,8 +122,9 @@ export async function PATCH(
       .from('webhook_endpoints')
       .update(updates)
       .eq('id', id)
+      .eq('organization_id', endpoint.organization_id)
       .select('id, url, events, is_active, description, updated_at')
-      .single()
+      .maybeSingle()
 
     if (error) {
       const { response, errorId } = createErrorResponse(
@@ -136,6 +137,18 @@ export async function PATCH(
       })
       return NextResponse.json(response, {
         status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (updated == null) {
+      const { response: errResponse, errorId } = createErrorResponse(
+        'Webhook endpoint not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
+      )
+      return NextResponse.json(errResponse, {
+        status: 404,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
@@ -203,7 +216,12 @@ export async function DELETE(
     const role = await getUserRole(admin, user_id, endpoint.organization_id)
     requireAdminOrOwner(role)
 
-    const { error } = await admin.from('webhook_endpoints').delete().eq('id', id)
+    const { data: deleted, error } = await admin
+      .from('webhook_endpoints')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', endpoint.organization_id)
+      .select('id')
 
     if (error) {
       const { response, errorId } = createErrorResponse(
@@ -216,6 +234,18 @@ export async function DELETE(
       })
       return NextResponse.json(response, {
         status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
+    if (!deleted || deleted.length === 0) {
+      const { response: errResponse, errorId } = createErrorResponse(
+        'Webhook endpoint not found',
+        'NOT_FOUND',
+        { requestId, statusCode: 404 }
+      )
+      return NextResponse.json(errResponse, {
+        status: 404,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }

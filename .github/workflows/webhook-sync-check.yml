@@ -10,7 +10,7 @@ on:
       - 'apps/backend/src/utils/webhookSigning.ts'
       - 'apps/backend/src/utils/webhookUrl.ts'
       - 'apps/backend/src/utils/webhookPayloads.ts'
-      - 'apps/backend/src/utils/webhookEventTypes.ts'
+      - 'apps/backend/src/workers/webhookDelivery.ts'
   push:
     branches:
       - main
@@ -22,7 +22,7 @@ on:
       - 'apps/backend/src/utils/webhookSigning.ts'
       - 'apps/backend/src/utils/webhookUrl.ts'
       - 'apps/backend/src/utils/webhookPayloads.ts'
-      - 'apps/backend/src/utils/webhookEventTypes.ts'
+      - 'apps/backend/src/workers/webhookDelivery.ts'
 
 jobs:
   webhook-sync:
