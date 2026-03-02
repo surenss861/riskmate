@@ -45,7 +45,16 @@ async function handler(
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (fetchError || !job) {
+  if (fetchError) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to load job', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+  if (!job) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody('NOT_FOUND', 'Job not found', requestId),
@@ -87,13 +96,17 @@ async function handler(
       .from('mitigation_items')
       .select('id, title, description, done, is_completed, completed_at, created_at')
       .eq('job_id', jobId)
+      .eq('organization_id', context.organization_id)
       .is('hazard_id', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
     const controlsQuery = admin
       .from('mitigation_items')
       .select('id, hazard_id, title, description, done, is_completed, completed_at, created_at')
       .eq('job_id', jobId)
+      .eq('organization_id', context.organization_id)
       .not('hazard_id', 'is', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
 
     const [

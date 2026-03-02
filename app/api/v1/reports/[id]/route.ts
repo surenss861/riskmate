@@ -39,7 +39,16 @@ export async function GET(
     .eq('organization_id', context.organization_id)
     .maybeSingle()
 
-  if (runError || !reportRun) {
+  if (runError) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to load report', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+  if (!reportRun) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody('NOT_FOUND', 'Report not found', requestId),
