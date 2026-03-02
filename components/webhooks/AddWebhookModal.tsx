@@ -30,6 +30,7 @@ export interface WebhookEndpoint {
   is_active: boolean
   description: string | null
   created_at: string
+  organization_id?: string
 }
 
 /** Endpoint with secret; only available at creation time from onCreated callback. */

@@ -123,8 +123,10 @@ export async function GET(
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
       const notProcessing = d.processing_since == null
-      // Align with retry route: retryable when undelivered, unscheduled, not processing, and either modern (terminal_outcome='failed') or legacy (terminal_outcome null) terminal rows. Excludes delivered/cancelled_*.
-      const retryableOutcome = d.terminal_outcome === 'failed' || d.terminal_outcome == null
+      // Retryable only when terminally failed (exhausted retries) or legacy terminal (terminal_outcome null with at least one attempt). Excludes brand-new pending rows (attempt_count 0, terminal_outcome null).
+      const retryableOutcome =
+        d.terminal_outcome === 'failed' ||
+        (d.terminal_outcome == null && (d.attempt_count ?? 0) >= 1)
       const can_retry =
         !endpointPaused &&
         undelivered &&

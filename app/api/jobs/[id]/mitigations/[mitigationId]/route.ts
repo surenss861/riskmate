@@ -84,7 +84,7 @@ export async function PATCH(
         is_completed: updatedItem.is_completed,
         completed_at: updatedItem.completed_at,
         created_at: updatedItem.created_at,
-      }).catch((e) => console.warn('[Mitigations] Webhook hazard.updated enqueue failed:', e))
+      }).catch((e) => console.warn('[Webhook] hazard.updated trigger failed:', e))
     }
 
     return NextResponse.json({ data: updatedItem })

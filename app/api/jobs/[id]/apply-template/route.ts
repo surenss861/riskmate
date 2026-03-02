@@ -134,7 +134,7 @@ export async function POST(
         description: item.description ?? '',
         created_at: item.created_at,
         updated_at: item.updated_at ?? item.created_at,
-      }).catch((e) => console.warn('[ApplyTemplate] Webhook hazard.created enqueue failed:', e))
+      }).catch((e) => console.warn('[Webhook] hazard.created trigger failed:', e))
     }
 
     // Create audit log entry

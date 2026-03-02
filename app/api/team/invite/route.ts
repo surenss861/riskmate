@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
       role,
       invited_by: user.id,
       invite_id: inviteRow?.id ?? null,
-    }).catch((e) => console.warn('[Team invite] Webhook team.member_added enqueue failed:', e))
+    }).catch((e) => console.warn('[Webhook] team.member_added trigger failed:', e))
 
     return NextResponse.json({
       data: inviteRow,

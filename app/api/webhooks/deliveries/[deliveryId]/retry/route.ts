@@ -132,6 +132,24 @@ export async function POST(
       })
     }
 
+    // Re-fetch endpoint is_active immediately before insert to avoid TOCTOU: endpoint could have been paused between initial fetch and insert.
+    const { data: endpointNow, error: epNowError } = await admin
+      .from('webhook_endpoints')
+      .select('is_active')
+      .eq('id', delivery.endpoint_id)
+      .single()
+    if (epNowError || endpointNow?.is_active === false) {
+      const { response, errorId } = createErrorResponse(
+        'Endpoint is paused; resume the endpoint first, then retry.',
+        'ENDPOINT_PAUSED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     const now = new Date().toISOString()
     const { data: inserted, error: insertError } = await admin
       .from('webhook_deliveries')

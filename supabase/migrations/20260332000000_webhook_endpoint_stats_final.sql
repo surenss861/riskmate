@@ -71,6 +71,10 @@ BEGIN
   LEFT JOIN attempt_stats ast ON ast.endpoint_id = wd.endpoint_id
   LEFT JOIN terminal_failure_times tft ON tft.endpoint_id = wd.endpoint_id
   WHERE we.organization_id = p_org_id
+    AND (
+      (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') = 'service_role'
+      OR p_org_id IN (SELECT public.webhook_admin_org_ids())
+    )
   GROUP BY wd.endpoint_id, ast.last_attempt_at, ast.last_failure_at;
 END;
 $$;

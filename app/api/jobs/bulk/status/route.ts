@@ -155,13 +155,17 @@ export async function POST(request: NextRequest) {
     webhookPromises.push({
       jobId,
       event: 'job.updated',
-      promise: triggerWebhookEvent(organization_id, 'job.updated', payload),
+      promise: triggerWebhookEvent(organization_id, 'job.updated', payload).catch((e) =>
+        console.warn('[Webhook] job.updated trigger failed:', e)
+      ),
     })
     if (status === 'completed' && previousStatus !== 'completed') {
       webhookPromises.push({
         jobId,
         event: 'job.completed',
-        promise: triggerWebhookEvent(organization_id, 'job.completed', payload),
+        promise: triggerWebhookEvent(organization_id, 'job.completed', payload).catch((e) =>
+          console.warn('[Webhook] job.completed trigger failed:', e)
+        ),
       })
     }
   }

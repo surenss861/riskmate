@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
-import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader, Badge } from '@/components/shared'
+import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader } from '@/components/shared'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { AddWebhookModal, type WebhookEndpoint, type WebhookEndpointWithSecret } from '@/components/webhooks/AddWebhookModal'
 import { EditWebhookModal } from '@/components/webhooks/EditWebhookModal'
 import { DeliveryLogsModal } from '@/components/webhooks/DeliveryLogsModal'
+import { WebhookEndpointCard } from '@/components/webhooks/WebhookEndpointCard'
 
 interface DeliveryStats {
   delivered: number
@@ -337,81 +338,23 @@ export default function WebhooksPage() {
             ) : (
               <div className="space-y-4">
                 {endpoints.map((ep) => (
-                  <GlassCard key={ep.id} className="p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm text-white truncate max-w-md">
-                            {ep.url}
-                          </span>
-                          <Badge variant={statsLoadFailed ? 'neutral' : isFailing(ep.id) ? 'critical' : ep.is_active ? 'success' : 'neutral'}>
-                            {statsLoadFailed ? (ep.is_active ? 'Active' : 'Paused') : isFailing(ep.id) ? 'Failing' : ep.is_active ? 'Active' : 'Paused'}
-                          </Badge>
-                        </div>
-                        {ep.description && (
-                          <p className="text-sm text-white/60 mt-1">{ep.description}</p>
-                        )}
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {(ep.events || []).slice(0, 5).map((e) => (
-                            <span
-                              key={e}
-                              className="text-xs px-2 py-0.5 rounded bg-white/10 text-white/80 font-mono"
-                            >
-                              {e}
-                            </span>
-                          ))}
-                          {(ep.events?.length ?? 0) > 5 && (
-                            <span className="text-xs text-white/50">
-                              +{(ep.events?.length ?? 0) - 5} more
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-4 mt-3 text-xs text-white/60">
-                          <span>✓ {stats[ep.id]?.delivered ?? 0} delivered</span>
-                          <span>⋯ {stats[ep.id]?.pending ?? 0} pending</span>
-                          <span>✗ {stats[ep.id]?.failed ?? 0} failed</span>
-                          <span>Last: {formatLast(stats[ep.id]?.lastDelivery ?? null)}</span>
-                        </div>
-                      </div>
-                      {canManage && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setLogsEndpoint({ id: ep.id, url: ep.url })}
-                            disabled={refreshing}
-                          >
-                            View logs
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setEditingEndpoint(ep)}
-                            disabled={refreshing}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleTest(ep.id)}
-                            disabled={!!testingId || !ep.is_active || refreshing}
-                            title={!ep.is_active ? 'Resume the endpoint to send a test' : undefined}
-                          >
-                            {testingId === ep.id ? 'Sending…' : 'Send test'}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleDeleteClick(ep.id)}
-                            disabled={!!deletingId || refreshing}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </GlassCard>
+                  <WebhookEndpointCard
+                    key={ep.id}
+                    endpoint={ep}
+                    stats={stats[ep.id]}
+                    statsLoadFailed={statsLoadFailed}
+                    isFailing={isFailing}
+                    formatLast={formatLast}
+                    canManage={canManage}
+                    refreshing={refreshing}
+                    testingId={testingId}
+                    deletingId={deletingId}
+                    organizationOptions={organizationOptions}
+                    onViewLogs={(e) => setLogsEndpoint({ id: e.id, url: e.url })}
+                    onEdit={setEditingEndpoint}
+                    onTest={handleTest}
+                    onDeleteClick={handleDeleteClick}
+                  />
                 ))}
               </div>
             )}

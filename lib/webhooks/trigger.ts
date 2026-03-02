@@ -32,12 +32,18 @@ function buildPayload(
  * Enqueue webhook deliveries for the given event. One row per active endpoint subscribed to the event.
  * Backend worker will pick these up and send.
  * Uses canonical payload schema per event type so consumers get a stable contract.
+ *
+ * Call pattern: await triggerWebhookEvent(...).catch((e) => console.warn('[Webhook] <eventType> trigger failed:', e))
+ * — awaits so the worker is woken before the response is sent, but does not fail the request if enqueue fails.
  */
 export async function triggerWebhookEvent(
   organizationId: string,
   eventType: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+    throw new Error('triggerWebhookEvent: organizationId is required')
+  }
   if (!(WEBHOOK_EVENT_TYPES as readonly string[]).includes(eventType)) {
     throw new Error(`Invalid webhook event type: ${eventType}. Must be one of: ${WEBHOOK_EVENT_TYPES.join(', ')}`)
   }

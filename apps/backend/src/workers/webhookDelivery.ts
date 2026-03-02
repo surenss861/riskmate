@@ -239,6 +239,9 @@ export async function deliverEvent(
   eventType: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  if (!orgId || typeof orgId !== 'string' || !orgId.trim()) {
+    throw new Error('deliverEvent: organizationId is required')
+  }
   if (!(ALLOWED_WEBHOOK_EVENT_TYPES as readonly string[]).includes(eventType)) {
     console.error('[WebhookDelivery] Rejected invalid event_type:', eventType)
     throw new Error(`Invalid webhook event type: ${eventType}. Must be one of: ${ALLOWED_WEBHOOK_EVENT_TYPES.join(', ')}`)
@@ -327,23 +330,28 @@ async function recordAttempt(
   return true
 }
 
+/** Single fetch result: endpoint with optional nested secret (one-to-one). */
+interface EndpointWithSecretRow {
+  url: string
+  is_active: boolean
+  webhook_endpoint_secrets?: { secret: string } | { secret: string }[] | null
+}
+
 /**
  * Send one delivery: POST to endpoint URL with signed payload, update row, record attempt.
  * If the endpoint is inactive (paused), does not send; terminalizes the delivery with a clear message.
+ * Endpoint and secret are fetched in one atomic query to avoid TOCTOU.
  */
 export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> {
-  const { data: endpoint, error: epError } = await supabase
+  const { data: endpointRow, error: epError } = await supabase
     .from('webhook_endpoints')
-    .select('url, is_active')
+    .select('url, is_active, webhook_endpoint_secrets(secret)')
     .eq('id', delivery.endpoint_id)
     .single()
 
-  const { data: secretRow, error: secretError } = await supabase
-    .from('webhook_endpoint_secrets')
-    .select('secret')
-    .eq('endpoint_id', delivery.endpoint_id)
-    .maybeSingle()
-
+  const endpoint = endpointRow as EndpointWithSecretRow | null
+  const secretNested = endpoint?.webhook_endpoint_secrets
+  const secretRow = Array.isArray(secretNested) ? secretNested[0] : secretNested
   const rawSecret = secretRow?.secret ?? null
   let secret: string | null = null
   if (rawSecret != null) {
@@ -372,7 +380,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       return
     }
   }
-  const endpointWithSecret = endpoint ? { ...endpoint, secret } : null
+  const endpointResolved = endpoint ? { url: endpoint.url, is_active: endpoint.is_active, secret } : null
 
   // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
   if (epError) {
@@ -414,39 +422,8 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  if (secretError) {
-    const reason = `Secret fetch failed (transient): ${secretError.message}`
-    console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
-    const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
-    if (!attemptOk) {
-      await markDeliveryAttemptPersistenceFailed(delivery.id)
-      return
-    }
-    await updateDeliveryFailure(
-      delivery.id,
-      delivery.endpoint_id,
-      null,
-      reason,
-      0,
-      delivery.attempt_count,
-      false,
-      'failed',
-      false, // do not count infrastructure transient errors toward consecutive_failures
-    )
-    return
-  }
-
-  if (!endpoint || !endpointWithSecret || !secret) {
-    // TOCTOU: endpoint may have been deleted between endpoint fetch and secret fetch; re-check to avoid misleading "no secret" message.
-    let reason = 'Endpoint has no secret'
-    if (endpoint && !secret && !secretError) {
-      const { data: recheckEp } = await supabase
-        .from('webhook_endpoints')
-        .select('id')
-        .eq('id', delivery.endpoint_id)
-        .maybeSingle()
-      if (!recheckEp) reason = 'Endpoint not found (deleted)'
-    }
+  if (!endpoint || !endpointResolved || !secret) {
+    const reason = !endpoint ? 'Endpoint not found (deleted)' : 'Endpoint has no secret'
     console.error('[WebhookDelivery]', reason, delivery.endpoint_id)
     const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0)
     if (!attemptOk) {
@@ -467,7 +444,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  if (endpointWithSecret.is_active === false) {
+  if (endpointResolved.is_active === false) {
     const msg = 'Endpoint is paused; delivery cancelled'
     console.log('[WebhookDelivery] Endpoint paused, cancelling delivery:', delivery.id, delivery.endpoint_id)
     const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0)
@@ -489,7 +466,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
     return
   }
 
-  const urlCheck = await validateWebhookUrl(endpointWithSecret.url)
+  const urlCheck = await validateWebhookUrl(endpointResolved.url)
   if (!urlCheck.valid) {
     const forceTerminal = urlCheck.terminal // only true for explicit policy (SSRF/blocked) or invalid URL shape; DNS/transient → retry
     console.error(
@@ -784,8 +761,6 @@ async function recoverStaleClaims(): Promise<void> {
   const { error } = await supabase
     .from('webhook_deliveries')
     .update({ processing_since: null })
-    .is('delivered_at', null)
-    .is('terminal_outcome', null)
     .not('processing_since', 'is', null)
     .lt('processing_since', staleBefore)
   if (error) {

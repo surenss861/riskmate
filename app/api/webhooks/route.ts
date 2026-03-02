@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     // Use admin client with explicit org scoping so Bearer and cookie auth behave identically
     const { data: endpoints, error } = await admin
       .from('webhook_endpoints')
-      .select('id, url, events, is_active, description, created_at')
+      .select('id, url, events, is_active, description, created_at, organization_id')
       .in('organization_id', adminOrgIds)
       .order('created_at', { ascending: false })
 
