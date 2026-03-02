@@ -12,7 +12,10 @@ export type WebhookEventObjectEventType =
   | 'evidence.uploaded'
   | 'signature.added'
 
-/** Canonical report.generated data.object */
+/**
+ * Canonical report.generated data.object.
+ * packet_type, storage_path, generated_by, snapshot_id: optional; presence depends on flow (packet-based vs legacy risk_snapshot_reports).
+ */
 export interface ReportGeneratedObject {
   report_run_id: string
   job_id: string
@@ -21,7 +24,10 @@ export interface ReportGeneratedObject {
   data_hash: string
   storage_path?: string | null
   generated_at: string
+  /** Set by both flows when available. Packet-based flow sets from user.id; legacy Express flow sets from userId. */
   generated_by?: string | null
+  /** Legacy Express flow only (risk_snapshot_reports). Packet-based flow omits or sets null. */
+  snapshot_id?: string | null
   /** @deprecated Use report_run_id */
   id?: string
 }
@@ -53,11 +59,15 @@ export interface EvidenceUploadedObject {
   document_id?: string
 }
 
-/** Canonical signature.added data.object */
+/**
+ * Canonical signature.added data.object.
+ * signoff_type: Canonical role/classification of the signer for this signature (e.g. 'general', 'owner', 'approved_by', 'prepared_by'). Same semantic across job signoffs and report signatures flows.
+ */
 export interface SignatureAddedObject {
   signoff_id: string
   job_id: string
   signer_id: string
+  /** Role or classification of the signer (e.g. general, owner, approved_by, prepared_by). Consistent across all emitters. */
   signoff_type: string
   created_at: string
   signer_role?: string | null
@@ -87,6 +97,7 @@ export function buildReportGeneratedObject(raw: Record<string, unknown>): Report
   const generated_at =
     (raw.generated_at as string) ?? new Date().toISOString()
   const generated_by = (raw.generated_by as string | null) ?? null
+  const snapshot_id = (raw.snapshot_id as string | null) ?? null
   const id = (raw.id as string) ?? report_run_id
 
   for (const key of REPORT_GENERATED_REQUIRED) {
@@ -105,6 +116,7 @@ export function buildReportGeneratedObject(raw: Record<string, unknown>): Report
     ...(storage_path != null && { storage_path }),
     generated_at,
     ...(generated_by != null && { generated_by }),
+    ...(snapshot_id != null && { snapshot_id }),
     id,
   }
 }

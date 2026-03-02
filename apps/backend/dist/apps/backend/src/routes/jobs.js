@@ -2012,18 +2012,9 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
         });
         // Emit realtime event (push signal)
         await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.created", job.id, userId);
-        // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
-        // Risk scoring and mitigation item generation run after this. Subscribers needing full state should use GET /api/jobs/:id.
-        (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
-            id: job.id,
-            client_name,
-            job_type,
-            location,
-            status: job.status,
-            created_by: userId,
-        }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
         // Calculate risk score if risk factors provided
         let riskScoreResult = null;
+        let createdHazardIds = [];
         if (risk_factor_codes && risk_factor_codes.length > 0) {
             try {
                 riskScoreResult = await (0, riskScoring_1.calculateRiskScore)(risk_factor_codes);
@@ -2044,6 +2035,7 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
                     .eq("id", job.id);
                 // Generate mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
                 const insertedHazards = await (0, riskScoring_1.generateMitigationItems)(job.id, risk_factor_codes);
+                createdHazardIds = insertedHazards.filter((item) => item.hazard_id == null).map((item) => item.id);
                 for (const item of insertedHazards) {
                     if (item.hazard_id != null)
                         continue;
@@ -2074,6 +2066,13 @@ exports.jobsRouter.post("/", auth_1.authenticate, requireWriteAccess_1.requireWr
             .select("*")
             .eq("id", job.id)
             .single();
+        // Webhook: job.created — emit after risk scoring and hazards so payload has full initial state (risk_score, risk_level, hazard_ids).
+        if (completeJob) {
+            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
+                ...completeJob,
+                hazard_ids: createdHazardIds,
+            }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
+        }
         const { data: mitigationItems } = await supabaseClient_1.supabase
             .from("mitigation_items")
             .select("id, title, description, done, is_completed")
@@ -3368,6 +3367,7 @@ exports.jobsRouter.delete("/:id", auth_1.authenticate, requireWriteAccess_1.requ
             id: jobId,
             deleted_at: deletedAt,
             status: job.status,
+            bulk: false,
         }).catch((e) => console.warn("[Jobs] Webhook job.deleted enqueue failed:", e));
         res.json({
             data: {
@@ -3535,6 +3535,24 @@ exports.jobsRouter.post("/:id/signoffs", auth_1.authenticate, requireWriteAccess
             });
             res.setHeader('X-Error-ID', errorId);
             return res.status(400).json(errorResponse);
+        }
+        // Defense-in-depth: verify job belongs to organization before inserting signoff
+        const { data: jobRow, error: jobErr } = await supabaseClient_1.supabase
+            .from("jobs")
+            .select("id, organization_id")
+            .eq("id", jobId)
+            .eq("organization_id", organization_id)
+            .maybeSingle();
+        if (jobErr || !jobRow) {
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: "Job not found",
+                internalMessage: jobErr?.message || "Job not found or does not belong to organization",
+                code: "NOT_FOUND",
+                requestId,
+                statusCode: 404,
+            });
+            res.setHeader('X-Error-ID', errorId);
+            return res.status(404).json(errorResponse);
         }
         // Get user info
         const { data: userData } = await supabaseClient_1.supabase

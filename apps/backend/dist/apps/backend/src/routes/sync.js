@@ -517,7 +517,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
                             .eq("organization_id", organization_id)
-                            .select("id, job_id, title, description, done, is_completed, completed_at, created_at")
+                            .select("id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id")
                             .single();
                         if (updateErr) {
                             baseResult.status = "error";
@@ -535,7 +535,8 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
-                            if (updatedItem) {
+                            const itemWithHazardId = updatedItem;
+                            if (itemWithHazardId != null && itemWithHazardId.hazard_id != null) {
                                 (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.updated", {
                                     id: updatedItem.id,
                                     job_id: updatedItem.job_id ?? jobId,

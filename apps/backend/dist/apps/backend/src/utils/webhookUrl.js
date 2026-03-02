@@ -15,6 +15,7 @@ const node_net_1 = require("node:net");
 /**
  * Returns whether the URL is allowed for webhook endpoints.
  * Resolves hostnames and rejects if any resolved IP is private/loopback/link-local/CGNAT/multicast.
+ * When valid, returns resolution details so the caller can pin the outbound connection to the vetted IP.
  */
 async function validateWebhookUrl(urlString) {
     try {
@@ -39,7 +40,21 @@ async function validateWebhookUrl(urlString) {
         if (resolution === 'transient') {
             return { valid: false, reason: 'Webhook URL must point to a public destination', terminal: false };
         }
-        return { valid: true };
+        const addresses = resolution.addresses;
+        const resolvedAddress = addresses[0];
+        const protocol = u.protocol === 'https:' ? 'https' : 'http';
+        const port = u.port ? parseInt(u.port, 10) : (protocol === 'https' ? 443 : 80);
+        const path = u.pathname + u.search;
+        const hostHeader = u.port ? `${hostname}:${u.port}` : hostname;
+        return {
+            valid: true,
+            hostname,
+            resolvedAddress,
+            port,
+            protocol,
+            path,
+            hostHeader,
+        };
     }
     catch {
         // Parse/format failure: malformed URL is not transient — fail fast, do not retry.
@@ -50,12 +65,15 @@ async function validateWebhookUrl(urlString) {
  * If hostname is a literal IP (or IPv4-mapped IPv6), check it; otherwise resolve A/AAAA and check all addresses.
  * Returns 'policy' when destination is explicitly blocked (private/loopback/reserved) — terminal, no retry.
  * Returns 'transient' when DNS resolution fails or no addresses returned — allow retries.
+ * Returns { allowed: true, addresses } with the list of allowed resolved IPs for pinning.
  */
 async function resolveAndCheckAddresses(hostname) {
-    if (getIpv4MappedDottedDecimal(hostname) !== null)
-        return isBlockedIp(hostname) ? 'policy' : 'allowed';
+    const mappedV4 = getIpv4MappedDottedDecimal(hostname);
+    if (mappedV4 !== null) {
+        return isBlockedIp(hostname) ? 'policy' : { allowed: true, addresses: [mappedV4] };
+    }
     if (isLiteralIpv4(hostname) || isLiteralIpv6(hostname)) {
-        return isBlockedIp(hostname) ? 'policy' : 'allowed';
+        return isBlockedIp(hostname) ? 'policy' : { allowed: true, addresses: [hostname] };
     }
     const addresses = [];
     try {
@@ -70,7 +88,9 @@ async function resolveAndCheckAddresses(hostname) {
     }
     if (addresses.length === 0)
         return 'transient';
-    return addresses.some((addr) => isBlockedIp(addr)) ? 'policy' : 'allowed';
+    if (addresses.some((addr) => isBlockedIp(addr)))
+        return 'policy';
+    return { allowed: true, addresses };
 }
 function isLiteralIpv4(host) {
     return (0, node_net_1.isIP)(host) === 4;

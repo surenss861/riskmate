@@ -303,7 +303,7 @@ teamRouter.post("/invite", requireRole("safety_lead"), async (req: express.Reque
       },
     });
 
-    // Webhook team.member_added: emitted from this route when invite is created via Express. Next.js app/api/team/invite emits for invites via that path. Each request is handled by one stack only, so no duplicate delivery per invite.
+    // Webhook team.member_added: emitted from this route when invite is created via Express. Next.js app/api/team/invite also emits for invites via that path. Each request must be handled by one stack only — do not proxy invite creation to the other stack or duplicate webhook deliveries will occur.
     deliverEvent(organizationId, "team.member_added", {
       user_id: newUserId,
       email: normalizedEmail,

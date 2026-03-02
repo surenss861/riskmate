@@ -19,6 +19,8 @@ exports.wakeWebhookWorker = wakeWebhookWorker;
 exports.startWebhookDeliveryWorker = startWebhookDeliveryWorker;
 exports.stopWebhookDeliveryWorker = stopWebhookDeliveryWorker;
 const crypto_1 = __importDefault(require("crypto"));
+const http_1 = __importDefault(require("http"));
+const https_1 = __importDefault(require("https"));
 const supabaseClient_1 = require("../lib/supabaseClient");
 const webhookSigning_1 = require("../utils/webhookSigning");
 const secretEncryption_1 = require("../utils/secretEncryption");
@@ -38,6 +40,43 @@ const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h dedupe
 const WAKE_DEBOUNCE_MS = 100;
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000; // 10 min
+/**
+ * Send a POST request pinned to the validated IP to prevent DNS rebinding.
+ * Uses the vetted resolvedAddress so a second DNS lookup cannot redirect to an internal host.
+ * Host header and TLS SNI use the original hostname so certificate verification remains correct.
+ */
+function fetchPinnedToResolvedAddress(resolved, body, headers, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const opts = {
+            hostname: resolved.resolvedAddress,
+            port: resolved.port,
+            path: resolved.path || '/',
+            method: 'POST',
+            headers: { ...headers, Host: resolved.hostHeader },
+            timeout: timeoutMs,
+        };
+        if (resolved.protocol === 'https') {
+            opts.servername = resolved.hostname;
+        }
+        const mod = resolved.protocol === 'https' ? https_1.default : http_1.default;
+        const req = mod.request(opts, (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const bodyStr = Buffer.concat(chunks).toString('utf8');
+                resolve({ statusCode: res.statusCode ?? 0, body: bodyStr });
+            });
+            res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+        });
+        req.write(body);
+        req.end();
+    });
+}
 /**
  * Parse an env value as a finite integer within [min, max]; invalid or out-of-range yields default.
  * Prevents NaN from non-numeric env (e.g. WEBHOOK_DELIVERY_CONCURRENCY=foo) from creating zero workers
@@ -134,6 +173,9 @@ function buildWebhookPayload(eventType, organizationId, data) {
  * Used by Express backend only. Next.js uses triggerWebhookEvent (lib/webhooks/trigger.ts). Do not call both for the same logical operation — each request path must emit from one stack only to avoid duplicate deliveries.
  */
 async function deliverEvent(orgId, eventType, data) {
+    if (!orgId || typeof orgId !== 'string' || !orgId.trim()) {
+        throw new Error('deliverEvent: organizationId is required');
+    }
     if (!exports.ALLOWED_WEBHOOK_EVENT_TYPES.includes(eventType)) {
         console.error('[WebhookDelivery] Rejected invalid event_type:', eventType);
         throw new Error(`Invalid webhook event type: ${eventType}. Must be one of: ${exports.ALLOWED_WEBHOOK_EVENT_TYPES.join(', ')}`);
@@ -162,8 +204,20 @@ async function deliverEvent(orgId, eventType, data) {
     }));
     const { error: insertError } = await supabaseClient_1.supabase.from('webhook_deliveries').insert(rows);
     if (insertError) {
-        console.error('[WebhookDelivery] Batched insert deliveries failed:', insertError);
-        throw new Error(`Webhook deliveries insert failed: ${insertError.message}`);
+        // Batch failed (e.g. one endpoint deleted before insert → FK violation). Retry per-endpoint so valid endpoints still get queued.
+        console.warn('[WebhookDelivery] Batched insert failed, retrying per-endpoint:', insertError.message);
+        let queued = 0;
+        for (const row of rows) {
+            const { error: oneError } = await supabaseClient_1.supabase.from('webhook_deliveries').insert(row);
+            if (oneError) {
+                console.error('[WebhookDelivery] Per-endpoint enqueue failed (endpoint may be deleted):', row.endpoint_id, oneError.message);
+                continue;
+            }
+            queued += 1;
+        }
+        if (queued === 0) {
+            throw new Error(`Webhook deliveries insert failed for all endpoints: ${insertError.message}`);
+        }
     }
     wakeWebhookWorker();
 }
@@ -192,18 +246,17 @@ async function recordAttempt(deliveryId, attemptNumber, responseStatus, response
 /**
  * Send one delivery: POST to endpoint URL with signed payload, update row, record attempt.
  * If the endpoint is inactive (paused), does not send; terminalizes the delivery with a clear message.
+ * Endpoint and secret are fetched in one atomic query to avoid TOCTOU.
  */
 async function sendDelivery(delivery) {
-    const { data: endpoint, error: epError } = await supabaseClient_1.supabase
+    const { data: endpointRow, error: epError } = await supabaseClient_1.supabase
         .from('webhook_endpoints')
-        .select('url, is_active')
+        .select('url, is_active, webhook_endpoint_secrets(secret)')
         .eq('id', delivery.endpoint_id)
         .single();
-    const { data: secretRow, error: secretError } = await supabaseClient_1.supabase
-        .from('webhook_endpoint_secrets')
-        .select('secret')
-        .eq('endpoint_id', delivery.endpoint_id)
-        .maybeSingle();
+    const endpoint = endpointRow;
+    const secretNested = endpoint?.webhook_endpoint_secrets;
+    const secretRow = Array.isArray(secretNested) ? secretNested[0] : secretNested;
     const rawSecret = secretRow?.secret ?? null;
     let secret = null;
     if (rawSecret != null) {
@@ -233,7 +286,7 @@ async function sendDelivery(delivery) {
             return;
         }
     }
-    const endpointWithSecret = endpoint ? { ...endpoint, secret } : null;
+    const endpointResolved = endpoint ? { url: endpoint.url, is_active: endpoint.is_active, secret } : null;
     // Query failures (endpoint or secret fetch error) → retryable. Permanent states → terminal.
     if (epError) {
         const isEndpointMissing = epError.code === 'PGRST116';
@@ -264,29 +317,8 @@ async function sendDelivery(delivery) {
         }
         return;
     }
-    if (secretError) {
-        const reason = `Secret fetch failed (transient): ${secretError.message}`;
-        console.error('[WebhookDelivery]', reason, delivery.endpoint_id);
-        const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0);
-        if (!attemptOk) {
-            await markDeliveryAttemptPersistenceFailed(delivery.id);
-            return;
-        }
-        await updateDeliveryFailure(delivery.id, delivery.endpoint_id, null, reason, 0, delivery.attempt_count, false, 'failed', false);
-        return;
-    }
-    if (!endpoint || !endpointWithSecret || !secret) {
-        // TOCTOU: endpoint may have been deleted between endpoint fetch and secret fetch; re-check to avoid misleading "no secret" message.
-        let reason = 'Endpoint has no secret';
-        if (endpoint && !secret && !secretError) {
-            const { data: recheckEp } = await supabaseClient_1.supabase
-                .from('webhook_endpoints')
-                .select('id')
-                .eq('id', delivery.endpoint_id)
-                .maybeSingle();
-            if (!recheckEp)
-                reason = 'Endpoint not found (deleted)';
-        }
+    if (!endpoint || !endpointResolved || !secret) {
+        const reason = !endpoint ? 'Endpoint not found (deleted)' : 'Endpoint has no secret';
         console.error('[WebhookDelivery]', reason, delivery.endpoint_id);
         const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, reason, 0);
         if (!attemptOk) {
@@ -306,7 +338,7 @@ async function sendDelivery(delivery) {
             .eq('id', delivery.id);
         return;
     }
-    if (endpointWithSecret.is_active === false) {
+    if (endpointResolved.is_active === false) {
         const msg = 'Endpoint is paused; delivery cancelled';
         console.log('[WebhookDelivery] Endpoint paused, cancelling delivery:', delivery.id, delivery.endpoint_id);
         const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, null, msg, 0);
@@ -327,7 +359,7 @@ async function sendDelivery(delivery) {
             .eq('id', delivery.id);
         return;
     }
-    const urlCheck = await (0, webhookUrl_1.validateWebhookUrl)(endpointWithSecret.url);
+    const urlCheck = await (0, webhookUrl_1.validateWebhookUrl)(endpointResolved.url);
     if (!urlCheck.valid) {
         const forceTerminal = urlCheck.terminal; // only true for explicit policy (SSRF/blocked) or invalid URL shape; DNS/transient → retry
         console.error('[WebhookDelivery]', forceTerminal ? 'Blocked unsafe URL' : 'URL validation failed (transient)', delivery.endpoint_id, urlCheck.reason);
@@ -344,23 +376,18 @@ async function sendDelivery(delivery) {
     const start = Date.now();
     let responseStatus = null;
     let responseBody = null;
+    const timeoutMs = 30000;
     try {
-        const res = await fetch(endpoint.url, {
-            method: 'POST',
-            headers,
-            body: payloadStr,
-            signal: AbortSignal.timeout(30000),
-            redirect: 'manual',
-        });
-        responseStatus = res.status;
-        responseBody = await res.text().catch(() => null);
+        const res = await fetchPinnedToResolvedAddress(urlCheck, payloadStr, headers, timeoutMs);
+        responseStatus = res.statusCode;
+        responseBody = res.body;
         const durationMs = Date.now() - start;
         const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs);
         if (!attemptOk) {
             await markDeliveryAttemptPersistenceFailed(delivery.id);
             return;
         }
-        const success = res.ok;
+        const success = responseStatus >= 200 && responseStatus < 300;
         if (success) {
             await updateDeliveryResult(delivery.id, delivery.endpoint_id, responseStatus, responseBody, durationMs);
         }
@@ -520,13 +547,13 @@ async function maybeAlertAdmin(endpointId) {
     <p><strong>Endpoint URL:</strong> ${escapeHtml(endpoint.url || '(not set)')}</p>
     <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
   `;
+    const now = new Date().toISOString();
     try {
         await (0, email_1.sendEmail)({
             to: toList,
             subject,
             html,
         });
-        const now = new Date().toISOString();
         await supabaseClient_1.supabase.from('webhook_endpoint_alert_state').upsert({
             endpoint_id: endpointId,
             last_alert_at: now,
@@ -535,21 +562,28 @@ async function maybeAlertAdmin(endpointId) {
     }
     catch (err) {
         console.error('[WebhookDelivery] Admin alert email failed:', err);
+        // Update last_alert_at even when sendEmail fails so we don't retry on every terminal failure
+        await supabaseClient_1.supabase.from('webhook_endpoint_alert_state').upsert({
+            endpoint_id: endpointId,
+            last_alert_at: now,
+            updated_at: now,
+        }, { onConflict: 'endpoint_id' });
     }
 }
 /**
  * Reset stale claims so rows stuck after a worker crash can be picked again.
- * Idempotent: only clears processing_since when it is older than STALE_CLAIM_MS; actively processing rows are untouched.
+ * Only touches non-terminal, in-progress rows; sets next_retry_at to now so rows with next_retry_at = null become reclaimable.
  */
 async function recoverStaleClaims() {
     const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+    const now = new Date().toISOString();
     const { error } = await supabaseClient_1.supabase
         .from('webhook_deliveries')
-        .update({ processing_since: null })
-        .is('delivered_at', null)
-        .is('terminal_outcome', null)
+        .update({ processing_since: null, next_retry_at: now })
         .not('processing_since', 'is', null)
-        .lt('processing_since', staleBefore);
+        .lt('processing_since', staleBefore)
+        .is('terminal_outcome', null)
+        .is('delivered_at', null);
     if (error) {
         console.error('[WebhookDelivery] Stale claim recovery failed:', error);
     }
@@ -638,8 +672,12 @@ async function startWebhookDeliveryWorker() {
     }
     const keyValidation = (0, secretEncryption_1.validateWebhookSecretEncryptionKey)(process.env.WEBHOOK_SECRET_ENCRYPTION_KEY);
     if (!keyValidation.valid) {
-        const { data: rows } = await supabaseClient_1.supabase.from('webhook_endpoint_secrets').select('secret').limit(100);
-        const hasEncrypted = (rows ?? []).some((r) => (r.secret ?? '').startsWith('v1:'));
+        const { data: encryptedRows } = await supabaseClient_1.supabase
+            .from('webhook_endpoint_secrets')
+            .select('secret')
+            .like('secret', 'v1:%')
+            .limit(1);
+        const hasEncrypted = (encryptedRows ?? []).length > 0;
         if (hasEncrypted) {
             return {
                 started: false,

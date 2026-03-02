@@ -754,15 +754,18 @@ async function maybeAlertAdmin(endpointId: string): Promise<void> {
 
 /**
  * Reset stale claims so rows stuck after a worker crash can be picked again.
- * Idempotent: only clears processing_since when it is older than STALE_CLAIM_MS; actively processing rows are untouched.
+ * Only touches non-terminal, in-progress rows; sets next_retry_at to now so rows with next_retry_at = null become reclaimable.
  */
 async function recoverStaleClaims(): Promise<void> {
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString()
+  const now = new Date().toISOString()
   const { error } = await supabase
     .from('webhook_deliveries')
-    .update({ processing_since: null })
+    .update({ processing_since: null, next_retry_at: now })
     .not('processing_since', 'is', null)
     .lt('processing_since', staleBefore)
+    .is('terminal_outcome', null)
+    .is('delivered_at', null)
   if (error) {
     console.error('[WebhookDelivery] Stale claim recovery failed:', error)
   }

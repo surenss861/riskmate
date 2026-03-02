@@ -489,6 +489,9 @@ export async function POST(
         data_hash: reportRun.data_hash,
         generated_at: pdfGeneratedAt,
         storage_path: storagePath,
+        generated_by: user.id,
+        // Packet-based flow does not use risk_snapshot_reports; omit snapshot_id (Express flow sets it).
+        snapshot_id: null,
       }).catch((e) => console.warn('[Webhook] report.generated trigger failed:', e))
     } catch (uploadError: any) {
       const errorMessage = uploadError?.message || 'Unknown upload error'

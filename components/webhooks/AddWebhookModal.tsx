@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Button,
   Input,
@@ -49,7 +49,10 @@ interface AddWebhookModalProps {
 
 export function AddWebhookModal({ open, onClose, onCreated, organizationId, organizationOptions = [] }: AddWebhookModalProps) {
   const multiOrg = organizationOptions.length > 1
-  const defaultOrgId = organizationId ?? organizationOptions[0]?.id ?? null
+  const defaultOrgId = useMemo(
+    () => organizationId ?? organizationOptions[0]?.id ?? null,
+    [organizationId, organizationOptions[0]?.id]
+  )
   // Multi-org: require explicit choice (no preselection). Single-org: use default.
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() =>
     multiOrg ? null : defaultOrgId

@@ -150,6 +150,27 @@ export async function POST(
       })
     }
 
+    // Prevent duplicate retry rows: if a pending delivery already exists for this endpoint+event, do not create another.
+    const { data: existingPending, error: pendingError } = await admin
+      .from('webhook_deliveries')
+      .select('id')
+      .eq('endpoint_id', delivery.endpoint_id)
+      .eq('event_type', delivery.event_type)
+      .is('delivered_at', null)
+      .not('next_retry_at', 'is', null)
+      .limit(1)
+    if (!pendingError && existingPending && existingPending.length > 0) {
+      const { response, errorId } = createErrorResponse(
+        'A delivery for this endpoint and event is already scheduled; wait for it to run or fail before rescheduling.',
+        'ALREADY_SCHEDULED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     const now = new Date().toISOString()
     const { data: inserted, error: insertError } = await admin
       .from('webhook_deliveries')

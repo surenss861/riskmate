@@ -7,9 +7,7 @@
  *
  * Canonical source: lib/utils/webhookUrl.ts. Keep in sync with that file (CI checks identity).
  */
-export type WebhookUrlResult = {
-    valid: true;
-} | {
+export type WebhookUrlResult = WebhookUrlValidationSuccess | {
     valid: false;
     reason: string;
     terminal: true;
@@ -18,9 +16,24 @@ export type WebhookUrlResult = {
     reason: string;
     terminal: false;
 };
+/** When valid: true, contains resolution details so the caller can pin the outbound connection to the vetted IP (prevents DNS rebinding). */
+export type WebhookUrlValidationSuccess = {
+    valid: true;
+    /** Original hostname (for Host header and TLS SNI / certificate verification). */
+    hostname: string;
+    /** Resolved IP to connect to; request must be sent to this address only. */
+    resolvedAddress: string;
+    port: number;
+    protocol: 'http' | 'https';
+    /** pathname + search for the request. */
+    path: string;
+    /** Value for the Host header (e.g. "example.com" or "example.com:8443"). */
+    hostHeader: string;
+};
 /**
  * Returns whether the URL is allowed for webhook endpoints.
  * Resolves hostnames and rejects if any resolved IP is private/loopback/link-local/CGNAT/multicast.
+ * When valid, returns resolution details so the caller can pin the outbound connection to the vetted IP.
  */
 export declare function validateWebhookUrl(urlString: string): Promise<WebhookUrlResult>;
 //# sourceMappingURL=webhookUrl.d.ts.map

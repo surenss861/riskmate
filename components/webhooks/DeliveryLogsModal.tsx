@@ -164,7 +164,7 @@ export function DeliveryLogsModal({
   const retryEligible = deliveries.filter((d) => {
     if (retriedDeliveryIds.has(d.id)) return false
     if (d.can_retry !== undefined) return d.can_retry === true
-    return !d.delivered_at && !d.next_retry_at && !d.processing_since
+    return !d.delivered_at && !d.next_retry_at && !d.processing_since && (d.attempt_count ?? 0) >= 1
   })
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {
@@ -210,7 +210,9 @@ export function DeliveryLogsModal({
       if (successCount > 0) {
         setRetrySuccessMessage('Retry scheduled — a new delivery has been queued.')
       }
-      if (endpointId) {
+      // Only refresh list when at least one retry succeeded; when all failed, avoid truncating the list without benefit.
+      if (endpointId && successCount > 0) {
+        const hadMoreThanOnePage = deliveries.length > DELIVERIES_PAGE_SIZE
         try {
           const refreshLimit = DELIVERIES_PAGE_SIZE
           const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=${refreshLimit}&offset=0`, { credentials: 'include' })
@@ -232,7 +234,7 @@ export function DeliveryLogsModal({
             setDeliveries(list)
             setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
             setFetchError(null)
-            if (deliveries.length > DELIVERIES_PAGE_SIZE) {
+            if (hadMoreThanOnePage) {
               setRetrySuccessMessage((prev) => (prev ? `${prev} List refreshed to first page.` : 'List refreshed to first page.'))
             }
           }

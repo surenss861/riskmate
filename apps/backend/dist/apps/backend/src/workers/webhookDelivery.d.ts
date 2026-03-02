@@ -55,6 +55,7 @@ export declare function deliverEvent(orgId: string, eventType: string, data: Rec
 /**
  * Send one delivery: POST to endpoint URL with signed payload, update row, record attempt.
  * If the endpoint is inactive (paused), does not send; terminalizes the delivery with a clear message.
+ * Endpoint and secret are fetched in one atomic query to avoid TOCTOU.
  */
 export declare function sendDelivery(delivery: WebhookDeliveryRow): Promise<void>;
 /**

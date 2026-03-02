@@ -557,7 +557,7 @@ syncRouter.post(
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
                 .eq("organization_id", organization_id)
-                .select("id, job_id, title, description, done, is_completed, completed_at, created_at")
+                .select("id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id")
                 .single();
               if (updateErr) {
                 baseResult.status = "error";
@@ -574,16 +574,17 @@ syncRouter.post(
                   metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                if (updatedItem) {
+                const itemWithHazardId = updatedItem as { hazard_id?: string | null } | null;
+                if (itemWithHazardId != null && itemWithHazardId.hazard_id != null) {
                   deliverEvent(organization_id, "hazard.updated", {
-                    id: updatedItem.id,
-                    job_id: updatedItem.job_id ?? jobId,
-                    title: updatedItem.title ?? "",
-                    description: updatedItem.description ?? "",
-                    done: updatedItem.done,
-                    is_completed: updatedItem.is_completed,
-                    completed_at: updatedItem.completed_at,
-                    created_at: updatedItem.created_at,
+                    id: (updatedItem as { id: string }).id,
+                    job_id: (updatedItem as { job_id: string }).job_id ?? jobId,
+                    title: (updatedItem as { title?: string }).title ?? "",
+                    description: (updatedItem as { description?: string }).description ?? "",
+                    done: (updatedItem as { done: boolean }).done,
+                    is_completed: (updatedItem as { is_completed: boolean }).is_completed,
+                    completed_at: (updatedItem as { completed_at?: string | null }).completed_at,
+                    created_at: (updatedItem as { created_at: string }).created_at,
                   }).catch((e) => console.warn("[Sync] Webhook hazard.updated enqueue failed:", e));
                 }
               }

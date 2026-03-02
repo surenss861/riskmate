@@ -174,11 +174,13 @@ export async function POST(
     }
 
     // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
+    // Use role when available so signoff_type matches report flow semantics (role/classification string).
+    const signoffTypeForPayload = role ?? signoff.signoff_type ?? 'general'
     await triggerWebhookEvent(organizationId, 'signature.added', {
       signoff_id: signoff.id,
       job_id: jobId,
       signer_id: user.id,
-      signoff_type: signoff.signoff_type,
+      signoff_type: signoffTypeForPayload,
       created_at: signoff.created_at,
     }).catch((e) => console.warn('[Webhook] signature.added trigger failed:', e))
 

@@ -5,6 +5,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getEndpointAndCheckOrg } from '@/lib/webhooks/endpointGuard'
+import { WEBHOOK_MAX_ATTEMPTS } from '@/lib/webhooks/eventTypes'
 import { getUserRole } from '@/lib/utils/adminAuth'
 import { requireAdminOrOwner, ForbiddenError, UnauthorizedError } from '@/lib/utils/adminAuth'
 
@@ -123,10 +124,10 @@ export async function GET(
       const undelivered = d.delivered_at == null
       const unscheduled = d.next_retry_at == null
       const notProcessing = d.processing_since == null
-      // Retryable only when terminally failed (exhausted retries) or legacy terminal (terminal_outcome null with at least one attempt). Excludes brand-new pending rows (attempt_count 0, terminal_outcome null).
+      // Retryable only when terminally failed (modern path) or legacy exhausted (terminal_outcome null with attempt_count >= MAX_ATTEMPTS). Excludes in-retry-queue rows.
       const retryableOutcome =
         d.terminal_outcome === 'failed' ||
-        (d.terminal_outcome == null && (d.attempt_count ?? 0) >= 1)
+        (d.terminal_outcome == null && (d.attempt_count ?? 0) >= WEBHOOK_MAX_ATTEMPTS)
       const can_retry =
         !endpointPaused &&
         undelivered &&

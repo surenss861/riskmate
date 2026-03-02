@@ -20,9 +20,20 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  caller_sub uuid;
+  admin_org_ids uuid[];
 BEGIN
+  caller_sub := (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'sub')::uuid;
+  admin_org_ids := ARRAY(
+    SELECT organization_id FROM organization_members
+    WHERE user_id = caller_sub AND role IN ('owner', 'admin')
+    UNION
+    SELECT organization_id FROM users
+    WHERE id = caller_sub AND role IN ('owner', 'admin')
+  );
   IF (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') IS DISTINCT FROM 'service_role'
-     AND NOT (p_org_id IN (SELECT public.webhook_admin_org_ids()))
+     AND NOT (p_org_id = ANY(admin_org_ids))
   THEN
     RAISE EXCEPTION 'get_webhook_endpoint_stats: access denied for org % (neither service_role nor admin)', p_org_id;
   END IF;
@@ -73,11 +84,11 @@ BEGIN
   WHERE we.organization_id = p_org_id
     AND (
       (coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') = 'service_role'
-      OR p_org_id IN (SELECT public.webhook_admin_org_ids())
+      OR p_org_id = ANY(admin_org_ids)
     )
   GROUP BY wd.endpoint_id, ast.last_attempt_at, ast.last_failure_at;
 END;
 $$;
 
 COMMENT ON FUNCTION get_webhook_endpoint_stats(uuid) IS
-  'Returns per-endpoint delivery counts and last delivery time for org. Excludes in-progress (processing_since set) from failed count. In-function tenant guard: JWT role = service_role (PostgREST) or p_org_id in webhook_admin_org_ids(); raises if neither (avoids silent empty result). API uses admin client. Canonical definition: see migration 20260332000000_webhook_endpoint_stats_final.sql.';
+  'Returns per-endpoint delivery counts and last delivery time for org. Excludes in-progress (processing_since set) from failed count. In-function tenant guard: JWT role = service_role (PostgREST) or p_org_id in caller admin orgs (JWT sub -> organization_members/users owner/admin); raises if neither (avoids silent empty result). Does not call webhook_admin_org_ids() so SECURITY DEFINER context does not break auth.uid(). API uses admin client. Canonical definition: see migration 20260332000000_webhook_endpoint_stats_final.sql.';

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { GlassCard, Button, Badge } from '@/components/shared'
 import type { WebhookEndpoint } from '@/components/webhooks/AddWebhookModal'
 
@@ -30,7 +31,7 @@ export interface WebhookEndpointCardProps {
   onDeleteClick: (endpointId: string) => void
 }
 
-export function WebhookEndpointCard({
+function WebhookEndpointCardInner({
   endpoint: ep,
   stats,
   statsLoadFailed,
@@ -129,3 +130,5 @@ export function WebhookEndpointCard({
     </GlassCard>
   )
 }
+
+export const WebhookEndpointCard = React.memo(WebhookEndpointCardInner)

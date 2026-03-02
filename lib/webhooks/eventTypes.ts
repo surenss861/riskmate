@@ -3,6 +3,9 @@
  * No server-only imports — safe for client bundles.
  */
 
+/** Max delivery attempts per row; shared with worker and API for can_retry / claim logic. */
+export const WEBHOOK_MAX_ATTEMPTS = 5
+
 export const WEBHOOK_EVENT_TYPES = [
   'job.created',
   'job.updated',

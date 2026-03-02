@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
@@ -243,13 +243,13 @@ export default function WebhooksPage() {
 
   // Show Failing only when there are terminal failures (no more retries) after last success.
   // Stats exclude intentional cancellations (cancelled_paused, cancelled_policy), so paused endpoints do not show as Failing.
-  const isFailing = (epId: string) => {
+  const isFailing = useCallback((epId: string) => {
     const s = stats[epId]
     const lastTerminal = s?.lastTerminalFailureAt ?? null
     if (!s || !lastTerminal) return false
     if (!s.lastSuccessAt) return true
     return new Date(lastTerminal) > new Date(s.lastSuccessAt)
-  }
+  }, [stats])
 
   return (
     <ProtectedRoute>
