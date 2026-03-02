@@ -130,8 +130,8 @@ export async function GET(
         unscheduled &&
         d.terminal_outcome !== 'cancelled_paused' &&
         d.terminal_outcome !== 'cancelled_policy' &&
-        d.processing_since == null &&
-        (d.attempt_count ?? 0) >= 1
+        d.terminal_outcome !== 'delivered' &&
+        d.processing_since == null
       return {
         ...d,
         attempts: attemptsByDelivery[d.id] ?? [],

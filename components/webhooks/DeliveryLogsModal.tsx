@@ -135,7 +135,11 @@ export function DeliveryLogsModal({
     const offset = deliveries.length
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=${offset}`, { credentials: 'include' })
       .then(async (res) => {
-        if (!res.ok) return
+        if (!res.ok) {
+          setFetchError('Failed to load more deliveries. Please try again.')
+          setHasMore(false)
+          return
+        }
         const json = await res.json()
         const list = Array.isArray(json.data) ? json.data : []
         setDeliveries((prev) => [...prev, ...list])
@@ -153,7 +157,7 @@ export function DeliveryLogsModal({
   const retryEligible = deliveries.filter((d) => {
     if (retriedDeliveryIds.has(d.id)) return false
     if (d.can_retry !== undefined) return d.can_retry === true
-    return !d.delivered_at && !d.next_retry_at && !d.processing_since && (d.attempt_count ?? 0) >= 1
+    return !d.delivered_at && !d.next_retry_at && !d.processing_since
   })
 
   const deliveryStatus = (d: DeliveryLogEntry): 'success' | 'pending' | 'failed' => {

@@ -110,6 +110,7 @@ export default function WebhooksPage() {
   }, [])
 
   const loadStatsOnly = async (endpointList: WebhookEndpoint[]) => {
+    setStatsLoadFailed(false)
     if (endpointList.length === 0) {
       setStats({})
       return

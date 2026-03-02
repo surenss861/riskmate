@@ -122,26 +122,32 @@ function isBlockedIpv4(host: string): boolean {
 
 /**
  * Expand IPv6 string to 8 x 16-bit groups (decimal). Returns null if not valid IPv6.
- * Handles :: compression; all non-empty segments must be valid hex (1–4 hex digits).
+ * Handles :: compression by splitting on :: once, expanding each half, and padding the middle with zeros.
  */
 function expandIpv6ToGroups(host: string): number[] | null {
   const normalized = host.toLowerCase().trim()
   if (normalized === '::') return [0, 0, 0, 0, 0, 0, 0, 0]
   if (normalized.includes('.')) return null
-  const parts = normalized.split(':')
-  if (parts.length < 2 || parts.length > 8) return null
-  const firstNonEmpty = parts.findIndex((p) => p !== '')
-  const lastNonEmpty =
-    parts.length -
-    1 -
-    [...parts].reverse().findIndex((p) => p !== '')
-  if (firstNonEmpty === -1 || lastNonEmpty < firstNonEmpty) return null
-  const middle = parts.slice(firstNonEmpty, lastNonEmpty + 1)
-  const zerosNeeded = 8 - middle.length
-  if (zerosNeeded < 0) return null
-  const parsed = middle.map((p) => parseInt(p, 16))
-  if (parsed.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null
-  return [...Array(zerosNeeded).fill(0), ...parsed]
+  const segments = normalized.split('::')
+  if (segments.length > 2) return null
+  if (segments.length === 1) {
+    const parts = normalized.split(':')
+    if (parts.length !== 8) return null
+    const parsed = parts.map((p) => parseInt(p, 16))
+    if (parsed.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null
+    return parsed
+  }
+  const [leftStr, rightStr] = segments
+  const leftParts = leftStr ? leftStr.split(':').filter(Boolean) : []
+  const rightParts = rightStr ? rightStr.split(':').filter(Boolean) : []
+  const left = leftParts.map((p) => parseInt(p, 16))
+  const right = rightParts.map((p) => parseInt(p, 16))
+  if (left.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null
+  if (right.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null
+  const total = left.length + right.length
+  if (total > 8) return null
+  const zerosNeeded = 8 - total
+  return [...left, ...Array(zerosNeeded).fill(0), ...right]
 }
 
 /**

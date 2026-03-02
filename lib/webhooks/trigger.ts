@@ -86,11 +86,11 @@ let _wakeEnvWarned = false
 function warnWakeEnvOnce(): void {
   if (_wakeEnvWarned) return
   _wakeEnvWarned = true
-  const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  const url = process.env.BACKEND_URL
   const secret = process.env.INTERNAL_API_KEY
   if (!url || !secret) {
     console.warn(
-      '[WebhookTrigger] BACKEND_URL (or NEXT_PUBLIC_BACKEND_URL) and INTERNAL_API_KEY are not set; worker wake-up is skipped. Deliveries will be processed on the next poll interval (~2s). Set these env vars for sub-second webhook delivery SLA.'
+      '[WebhookTrigger] BACKEND_URL and INTERNAL_API_KEY are not set; worker wake-up is skipped. Deliveries will be processed on the next poll interval (~2s). Set these env vars for sub-second webhook delivery SLA.'
     )
   }
 }
@@ -101,7 +101,7 @@ function warnWakeEnvOnce(): void {
  * Exported for use by manual webhook flows (test, retry) that enqueue deliveries without going through triggerWebhookEvent.
  */
 export function wakeBackendWebhookWorker(): Promise<void> {
-  const url = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL
+  const url = process.env.BACKEND_URL
   const secret = process.env.INTERNAL_API_KEY
   if (!url || !secret) {
     warnWakeEnvOnce()

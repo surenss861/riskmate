@@ -96,7 +96,18 @@ export async function PATCH(
         .select('id, url, events, is_active, description, updated_at')
         .eq('id', id)
         .single()
-      return NextResponse.json({ data: current ?? endpoint })
+      if (current == null) {
+        const { response: errResponse, errorId } = createErrorResponse(
+          'Webhook endpoint not found',
+          'NOT_FOUND',
+          { requestId, statusCode: 404 }
+        )
+        return NextResponse.json(errResponse, {
+          status: 404,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      return NextResponse.json({ data: current })
     }
     updates.updated_at = new Date().toISOString()
 

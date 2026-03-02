@@ -94,7 +94,7 @@ describe('POST /api/webhooks/deliveries/[deliveryId]/retry', () => {
     })
     const body = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(body.data?.message).toBe('Retry scheduled')
     expect(body.data?.delivery_id).toBe(NEW_DELIVERY_ID)
 

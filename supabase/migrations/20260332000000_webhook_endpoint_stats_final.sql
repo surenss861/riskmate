@@ -1,6 +1,8 @@
 -- Canonical definition of get_webhook_endpoint_stats. Supersedes the chain of migrations
 -- 20260310, 20260312, 20260321, 20260324, 20260325, 20260327, 20260329, 20260330.
--- For future changes, edit this file and use CREATE OR REPLACE FUNCTION only.
+-- This file is the canonical definition. For future changes, edit this file only and use
+-- CREATE OR REPLACE FUNCTION (never DROP FUNCTION + CREATE FUNCTION) to ensure atomicity
+-- and avoid leaving the database without the function if a migration fails mid-way.
 
 CREATE OR REPLACE FUNCTION get_webhook_endpoint_stats(p_org_id uuid)
 RETURNS TABLE (
