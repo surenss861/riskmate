@@ -25,6 +25,16 @@ const API_KEY_SCOPES = [
   'webhooks:manage',
 ] as const
 
+const ALLOWED_SCOPES_SET = new Set<string>(API_KEY_SCOPES)
+
+/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. */
+function validateAndNormalizeScopes(scopes: unknown): { valid: string[]; invalid: string[] } {
+  const arr = Array.isArray(scopes) ? (scopes as unknown[]).map((s) => String(s)) : []
+  const invalid = arr.filter((s) => !ALLOWED_SCOPES_SET.has(s))
+  const valid = [...new Set(arr.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
+  return { valid, invalid }
+}
+
 /** 32 random hex characters (16 bytes) after prefix to match documented format. */
 function generateSecureKey(prefix: string): string {
   const bytes = randomBytes(16)
@@ -123,9 +133,18 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const validScopes = Array.isArray(scopes)
-      ? (scopes as string[]).filter((s) => API_KEY_SCOPES.includes(s as any))
-      : []
+    const { valid: validScopes, invalid: invalidScopes } = validateAndNormalizeScopes(scopes)
+    if (invalidScopes.length > 0) {
+      const { response, errorId } = createErrorResponse(
+        `Invalid scope(s): ${invalidScopes.join(', ')}. Allowed: ${API_KEY_SCOPES.join(', ')}`,
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400, details: { invalid_scopes: invalidScopes } }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     let expiresAt: string | null = null
     if (expires_at !== undefined && expires_at !== null && expires_at !== '') {
       const parsed = typeof expires_at === 'string' ? Date.parse(expires_at) : Number.NaN

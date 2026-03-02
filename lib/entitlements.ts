@@ -6,6 +6,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export type PlanTier = 'starter' | 'pro' | 'business'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'none'
@@ -127,6 +128,65 @@ export async function getOrgSubscription(
     }
   }
 
+  return null
+}
+
+/**
+ * Get organization subscription using admin client (no cookies).
+ * Use for API-key and other server-side contexts where session is not available.
+ */
+export async function getOrgSubscriptionWithAdmin(
+  organizationId: string
+): Promise<OrgSubscription | null> {
+  const supabase = createSupabaseAdminClient()
+
+  const { data: orgSubscription, error: orgSubError } = await supabase
+    .from('org_subscriptions')
+    .select('plan_code, status, current_period_start, current_period_end, stripe_subscription_id, stripe_customer_id')
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  const { data: subscription, error: subError } = await supabase
+    .from('subscriptions')
+    .select('tier, status, current_period_start, current_period_end, organization_id, stripe_subscription_id, stripe_customer_id')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (orgSubError && orgSubError.code !== 'PGRST116') {
+    console.error('Failed to fetch org_subscriptions (admin):', orgSubError)
+  }
+  if (subError && subError.code !== 'PGRST116') {
+    console.error('Failed to fetch subscriptions (admin):', subError)
+  }
+
+  const tier = (orgSubscription?.plan_code as PlanTier) ||
+               (subscription?.tier as PlanTier) ||
+               'starter'
+
+  let status: SubscriptionStatus = (subscription?.status as SubscriptionStatus) ||
+                                   (orgSubscription?.status as SubscriptionStatus) ||
+                                   null
+  if (!status && tier !== 'starter') status = 'active'
+  if (!status) status = 'none'
+
+  const current_period_start = subscription?.current_period_start || orgSubscription?.current_period_start || null
+  const current_period_end = subscription?.current_period_end || orgSubscription?.current_period_end || null
+  const stripe_subscription_id = subscription?.stripe_subscription_id || orgSubscription?.stripe_subscription_id || null
+  const stripe_customer_id = subscription?.stripe_customer_id || orgSubscription?.stripe_customer_id || null
+
+  if (tier !== 'starter' || orgSubscription || subscription) {
+    return {
+      tier,
+      status,
+      current_period_start,
+      current_period_end,
+      organization_id: organizationId,
+      stripe_subscription_id,
+      stripe_customer_id,
+    }
+  }
   return null
 }
 
@@ -266,12 +326,25 @@ export function hasEntitlement(
 /**
  * Get entitlements for an organization (convenience function)
  * 
- * Combines getOrgSubscription + getEntitlements
+ * Combines getOrgSubscription + getEntitlements.
+ * Uses cookie-bound session client; use getOrgEntitlementsForApiKey for API-key routes.
  */
 export async function getOrgEntitlements(
   organizationId: string
 ): Promise<Entitlements> {
   const subscription = await getOrgSubscription(organizationId)
+  return getEntitlements(subscription)
+}
+
+/**
+ * Get entitlements for an organization using admin client (no cookies).
+ * Use in API-key routes so limits are computed from org subscription state
+ * independent of user session.
+ */
+export async function getOrgEntitlementsForApiKey(
+  organizationId: string
+): Promise<Entitlements> {
+  const subscription = await getOrgSubscriptionWithAdmin(organizationId)
   return getEntitlements(subscription)
 }
 

@@ -14,7 +14,7 @@ import {
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
-import { getOrgEntitlements } from '@/lib/entitlements'
+import { getOrgEntitlementsForApiKey } from '@/lib/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const entitlements = await getOrgEntitlements(context.organization_id)
+    const entitlements = await getOrgEntitlementsForApiKey(context.organization_id)
     if (entitlements.jobs_monthly_limit !== null) {
       const periodStart = entitlements.period_end
         ? new Date(new Date(entitlements.period_end).getTime() - 30 * 24 * 60 * 60 * 1000)
