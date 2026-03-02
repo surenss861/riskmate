@@ -607,14 +607,12 @@ async function updateDeliveryFailure(
     .update(updatePayload)
     .eq('id', deliveryId)
 
-  // On terminal failure (e.g. retry exhaustion after attempt 5), increment consecutive_failures and alert admin only when count reaches threshold (e.g. 5).
+  // On terminal failure (e.g. one delivery exhausting all 5 retry attempts), update endpoint stats and alert admin (cooldown in maybeAlertAdmin prevents spam).
   if (terminal && countAsConsecutiveFailure) {
-    const { data: newCount } = await supabase.rpc('increment_webhook_endpoint_consecutive_failures', {
+    await supabase.rpc('increment_webhook_endpoint_consecutive_failures', {
       p_endpoint_id: endpointId,
     })
-    if (newCount != null && newCount >= 5) {
-      await maybeAlertAdmin(endpointId)
-    }
+    await maybeAlertAdmin(endpointId)
   }
 }
 
@@ -795,12 +793,18 @@ export function wakeWebhookWorker(): void {
   }, WAKE_DEBOUNCE_MS)
 }
 
+/** Result of starting the webhook delivery worker; allows bootstrap to handle startup failure without exiting the process. */
+export type WebhookWorkerStartResult =
+  | { started: true }
+  | { started: false; error: string }
+
 /**
  * In-memory guard (processPendingDeliveriesRunning) is process-local only. Cross-instance safety relies on
  * claim_pending_webhook_deliveries RPC's FOR UPDATE SKIP LOCKED — multiple worker instances may run; each claims rows atomically.
+ * Returns a typed result so the caller can treat startup failure as degraded (log, telemetry) without exiting the process.
  */
-export async function startWebhookDeliveryWorker(): Promise<void> {
-  if (workerInterval) return
+export async function startWebhookDeliveryWorker(): Promise<WebhookWorkerStartResult> {
+  if (workerInterval) return { started: true }
   // Backend supabase client must use SUPABASE_SERVICE_ROLE_KEY so webhook_endpoint_secrets (service-role only) is readable
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
   if (!key) {
@@ -813,9 +817,11 @@ export async function startWebhookDeliveryWorker(): Promise<void> {
     const { data: rows } = await supabase.from('webhook_endpoint_secrets').select('secret').limit(100)
     const hasEncrypted = (rows ?? []).some((r: { secret?: string }) => (r.secret ?? '').startsWith('v1:'))
     if (hasEncrypted) {
-      throw new Error(
-        'WEBHOOK_SECRET_ENCRYPTION_KEY is missing or invalid but at least one endpoint has an encrypted (v1:) secret. Set the key and restart the worker.'
-      )
+      return {
+        started: false,
+        error:
+          'WEBHOOK_SECRET_ENCRYPTION_KEY is missing or invalid but at least one endpoint has an encrypted (v1:) secret. Set the key and restart the worker.',
+      }
     }
     console.error('[WebhookDelivery]', keyValidation.message, '- encrypted webhook secrets will fail to decrypt; ensure web and backend use the same key')
   }
@@ -834,6 +840,7 @@ export async function startWebhookDeliveryWorker(): Promise<void> {
   }, intervalMs)
   processPendingDeliveries().catch((e) => console.error('[WebhookDelivery] Worker initial run:', e))
   console.log('[WebhookDelivery] Worker started, interval=%dms', intervalMs)
+  return { started: true }
 }
 
 export function stopWebhookDeliveryWorker(): void {
