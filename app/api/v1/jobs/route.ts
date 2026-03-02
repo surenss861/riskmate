@@ -1,0 +1,184 @@
+/**
+ * Public API v1: GET /api/v1/jobs (list), POST /api/v1/jobs (create).
+ * Requires API key with jobs:read (GET) or jobs:write (POST).
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { getRequestId } from '@/lib/utils/requestId'
+import {
+  withApiKeyAuth,
+  finishApiKeyRequest,
+  v1Json,
+  V1_SCOPES,
+} from '@/lib/api/v1Helpers'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
+
+export const runtime = 'nodejs'
+
+function errorBody(code: string, message: string, requestId: string) {
+  return { error: { code, message, request_id: requestId } }
+}
+
+export async function GET(request: NextRequest) {
+  const authResult = await withApiKeyAuth(request, [
+    V1_SCOPES.jobsRead,
+    V1_SCOPES.jobsWrite,
+  ])
+  if (authResult instanceof NextResponse) return authResult
+  const { context, rateLimitResult } = authResult
+  const requestId = getRequestId(request)
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get('limit') || '20', 10))
+    )
+    const status = searchParams.get('status') || null
+    const offset = (page - 1) * limit
+
+    const admin = createSupabaseAdminClient()
+    const { data: rows, error } = await admin.rpc('get_jobs_list', {
+      p_org_id: context.organization_id,
+      p_limit: limit,
+      p_offset: offset,
+      p_include_archived: false,
+      p_sort_column: 'created_at',
+      p_sort_order: 'desc',
+      p_status: status,
+      p_risk_level: null,
+      p_assigned_to_id: null,
+      p_risk_score_min: null,
+      p_risk_score_max: null,
+      p_job_type: null,
+      p_client_ilike: null,
+      p_required_ids: null,
+      p_excluded_ids: null,
+      p_overdue: null,
+      p_unassigned: null,
+      p_recent_days: null,
+      p_has_photos: null,
+      p_has_signatures: null,
+      p_needs_signatures: null,
+      p_template_source: null,
+      p_template_id: null,
+      p_due_soon: null,
+      p_reference_date: null,
+      p_insight_deadline_risk: null,
+      p_insight_pending_signatures_near_deadline: null,
+      p_insight_overdue: null,
+      p_created_after: null,
+      p_created_before: null,
+      p_completed_after: null,
+      p_completed_before: null,
+    })
+
+    if (error) {
+      console.error('[v1/jobs] get_jobs_list error:', error)
+      return NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to list jobs', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    const list = (rows || []) as Array<Record<string, unknown>>
+    const total = (list[0]?.total_count as number) ?? 0
+    const jobs = list.map(({ total_count: _t, ...j }) => j)
+
+    const res = v1Json(jobs, {
+      meta: { page, limit, total },
+    })
+    return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
+  } catch (e) {
+    console.error('[v1/jobs] GET error:', e)
+    return NextResponse.json(
+      errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
+      { status: 500, headers: { 'X-Request-ID': requestId } }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const authResult = await withApiKeyAuth(request, [V1_SCOPES.jobsWrite])
+  if (authResult instanceof NextResponse) return authResult
+  const { context, rateLimitResult } = authResult
+  const requestId = getRequestId(request)
+
+  try {
+    const body = await request.json().catch(() => ({}))
+    const {
+      client_name,
+      client_type,
+      job_type,
+      location,
+      description,
+      start_date,
+      end_date,
+      status = 'draft',
+    } = body
+
+    if (!client_name || !client_type || !job_type || !location) {
+      return NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Missing required fields: client_name, client_type, job_type, location',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    const validStatuses = ['draft', 'in_progress', 'completed', 'archived']
+    const validClientTypes = ['residential', 'commercial', 'industrial', 'government', 'mixed']
+    const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction', 'remodel', 'other']
+
+    const st = String(status).toLowerCase()
+    const ct = String(client_type).toLowerCase()
+    const jt = String(job_type).toLowerCase()
+    if (!validStatuses.includes(st) || !validClientTypes.includes(ct) || !validJobTypes.includes(jt)) {
+      return NextResponse.json(
+        errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    const admin = createSupabaseAdminClient()
+    const { data: job, error } = await admin
+      .from('jobs')
+      .insert({
+        organization_id: context.organization_id,
+        title: [client_name, job_type, location].filter(Boolean).join(' – ') || 'Untitled Job',
+        client_name: String(client_name).trim(),
+        client_type: ct,
+        job_type: jt,
+        location: String(location).trim(),
+        description: description != null ? String(description) : null,
+        start_date: start_date || null,
+        end_date: end_date || null,
+        status: st,
+      })
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('[v1/jobs] POST insert error:', error)
+      return NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to create job', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    await triggerWebhookEvent(context.organization_id, 'job.created', { ...job }).catch(() => {})
+
+    const res = v1Json(job)
+    return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
+  } catch (e) {
+    console.error('[v1/jobs] POST error:', e)
+    return NextResponse.json(
+      errorBody('INTERNAL_ERROR', 'Internal server error', requestId),
+      { status: 500, headers: { 'X-Request-ID': requestId } }
+    )
+  }
+}

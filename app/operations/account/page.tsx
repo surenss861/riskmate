@@ -337,6 +337,12 @@ export default function AccountPage() {
                   >
                     Webhooks
                   </Link>
+                  <Link
+                    href="/settings/api-keys"
+                    className="block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    API keys
+                  </Link>
                 </nav>
             </div>
             </aside>

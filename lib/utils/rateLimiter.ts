@@ -76,6 +76,80 @@ function buildKey(
 }
 
 /**
+ * Build rate limit key for API key (per-key limit, no path)
+ */
+function buildKeyForApiKey(apiKeyId: string): string {
+  return `apikey:${apiKeyId}`
+}
+
+/**
+ * Check rate limit for a request authenticated by API key.
+ * Uses in-memory store keyed by api_key_id. Returns result with allowed, limit, remaining, resetAt, retryAfter.
+ * When allowed is false, return 429 with Retry-After header and body per ticket.
+ */
+export function checkApiKeyRateLimit(
+  request: NextRequest,
+  apiKeyId: string,
+  config: RateLimitConfig
+): RateLimitResult {
+  scheduleCleanup()
+
+  const key = buildKeyForApiKey(apiKeyId)
+  const now = Date.now()
+  let entry = rateLimitStore[key]
+
+  if (!entry || entry.resetAt < now) {
+    entry = {
+      count: 1,
+      resetAt: now + config.windowMs,
+    }
+    rateLimitStore[key] = entry
+    return {
+      allowed: true,
+      limit: config.maxRequests,
+      remaining: config.maxRequests - 1,
+      resetAt: Math.ceil(entry.resetAt / 1000),
+      retryAfter: Math.ceil(config.windowMs / 1000),
+      windowMs: config.windowMs,
+    }
+  }
+
+  if (entry.count >= config.maxRequests) {
+    return {
+      allowed: false,
+      limit: config.maxRequests,
+      remaining: 0,
+      resetAt: Math.ceil(entry.resetAt / 1000),
+      retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+      windowMs: config.windowMs,
+    }
+  }
+
+  entry.count++
+  return {
+    allowed: true,
+    limit: config.maxRequests,
+    remaining: config.maxRequests - entry.count,
+    resetAt: Math.ceil(entry.resetAt / 1000),
+    retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+    windowMs: config.windowMs,
+  }
+}
+
+/**
+ * Add standard rate limit headers to a NextResponse.
+ */
+export function addRateLimitHeaders(
+  res: NextResponse,
+  result: RateLimitResult
+): NextResponse {
+  res.headers.set('X-RateLimit-Limit', String(result.limit))
+  res.headers.set('X-RateLimit-Remaining', String(result.remaining))
+  res.headers.set('X-RateLimit-Reset', String(result.resetAt))
+  return res
+}
+
+/**
  * Check rate limit for a request. Resolves organization and user from the request
  * via getOrganizationContext, then applies the rate limit.
  *
@@ -162,6 +236,13 @@ export function checkRateLimitWithContext(
  * Pre-configured rate limit configs for API routes.
  * Use with checkRateLimit(request, { ...RATE_LIMIT_CONFIGS.export }).
  */
+/** 1000 requests per hour per API key (Public API) */
+export const API_KEY_RATE_LIMIT = {
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 1000,
+  keyPrefix: 'apikey',
+} as const
+
 export const RATE_LIMIT_CONFIGS = {
   export: {
     windowMs: 60 * 60 * 1000,
@@ -183,6 +264,7 @@ export const RATE_LIMIT_CONFIGS = {
     maxRequests: 120,
     keyPrefix: 'mutation',
   },
+  apiKey: API_KEY_RATE_LIMIT,
 } as const
 
 /**
