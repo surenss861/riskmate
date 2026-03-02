@@ -23,6 +23,7 @@ function buildReportGeneratedObject(raw: Record<string, unknown>): Record<string
   const generated_at =
     (raw.generated_at as string) ?? new Date().toISOString()
   const generated_by = (raw.generated_by as string | null) ?? null
+  const snapshot_id = (raw.snapshot_id as string | null) ?? null
   const id = (raw.id as string) ?? report_run_id
 
   for (const key of REPORT_GENERATED_REQUIRED) {
@@ -41,6 +42,7 @@ function buildReportGeneratedObject(raw: Record<string, unknown>): Record<string
     ...(storage_path != null && { storage_path }),
     generated_at,
     ...(generated_by != null && { generated_by }),
+    ...(snapshot_id != null && { snapshot_id }),
     id,
   }
 }
