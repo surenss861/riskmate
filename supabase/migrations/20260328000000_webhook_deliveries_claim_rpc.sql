@@ -16,7 +16,7 @@ AS $$
       AND next_retry_at <= now()
       AND attempt_count <= 5
       AND terminal_outcome IS NULL
-    ORDER BY created_at ASC
+    ORDER BY attempt_count ASC, next_retry_at ASC
     LIMIT p_limit
     FOR UPDATE SKIP LOCKED
   ),
@@ -30,7 +30,7 @@ AS $$
   SELECT * FROM claimed;
 $$;
 
-COMMENT ON FUNCTION claim_pending_webhook_deliveries(int) IS 'Claims up to p_limit pending delivery rows for the webhook worker; single atomic operation. Service-role only.';
+COMMENT ON FUNCTION claim_pending_webhook_deliveries(int) IS 'Claims up to p_limit pending delivery rows for the webhook worker; orders by attempt_count ASC then next_retry_at ASC to prioritize first attempts and readiness. Service-role only.';
 
 REVOKE EXECUTE ON FUNCTION claim_pending_webhook_deliveries(int) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION claim_pending_webhook_deliveries(int) FROM anon;

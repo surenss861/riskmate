@@ -97,6 +97,11 @@ const DELIVERY_CONCURRENCY = parseSafeBoundedInt(
   10
 )
 
+/** Claim this many rows per round so we re-claim between chunks and pick up fresh events promptly (avoids batch starvation). */
+const CLAIM_CHUNK_SIZE = Math.max(DELIVERY_CONCURRENCY * 2, 10)
+/** Max claim rounds per run so one run does not hold the worker indefinitely; total cap = CLAIM_CHUNK_SIZE * MAX_CLAIM_ROUNDS. */
+const MAX_CLAIM_ROUNDS = 5
+
 export type WebhookEventType =
   | 'job.created'
   | 'job.updated'
@@ -795,8 +800,8 @@ async function runWithConcurrency<T>(
 /**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
  * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
- * Claims rows first (one-by-one to preserve claim semantics), then dispatches sendDelivery() with bounded concurrency so one slow
- * endpoint does not block others. Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
+ * Claims in chunks and re-claims between chunks so newly enqueued rows are picked promptly (avoids starvation under backlog/slow endpoints).
+ * Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
  */
 let processPendingDeliveriesRunning = false
 /** Set when wake/timer fires during an active run; triggers an immediate claim cycle after current batch completes so new rows are not delayed by long send timeouts. */
@@ -810,13 +815,18 @@ async function processPendingDeliveries(): Promise<void> {
   processPendingDeliveriesRunning = true
   try {
     await recoverStaleClaims()
-    const { data: claimed, error } = await supabase.rpc('claim_pending_webhook_deliveries', { p_limit: 50 })
-    if (error) {
-      console.error('[WebhookDelivery] Atomic claim failed:', error)
-      return
+    for (let round = 0; round < MAX_CLAIM_ROUNDS; round++) {
+      const { data: claimed, error } = await supabase.rpc('claim_pending_webhook_deliveries', {
+        p_limit: CLAIM_CHUNK_SIZE,
+      })
+      if (error) {
+        console.error('[WebhookDelivery] Atomic claim failed:', error)
+        break
+      }
+      const rows = (claimed ?? []) as WebhookDeliveryRow[]
+      if (rows.length === 0) break
+      await runWithConcurrency(rows, DELIVERY_CONCURRENCY, sendDelivery)
     }
-    const rows = (claimed ?? []) as WebhookDeliveryRow[]
-    await runWithConcurrency(rows, DELIVERY_CONCURRENCY, sendDelivery)
   } finally {
     processPendingDeliveriesRunning = false
     if (pendingRunRequested) {

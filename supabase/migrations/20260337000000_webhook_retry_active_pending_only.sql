@@ -57,6 +57,14 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Endpoint must be active so the retry is not immediately cancelled by the worker (atomic with insert).
+  IF NOT (SELECT COALESCE(is_active, false) FROM webhook_endpoints WHERE id = v_src.endpoint_id) THEN
+    outcome := 'endpoint_paused';
+    retry_id := NULL;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
   -- Check for existing active retry (pending or in-progress only; terminal retries do not block).
   IF EXISTS (
     SELECT 1 FROM webhook_deliveries
@@ -85,4 +93,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION create_webhook_delivery_retry(uuid) IS
-  'Atomically creates a manual retry for a terminally failed delivery. Locks source, verifies eligibility (delivered_at IS NULL; terminal_outcome = failed OR legacy: terminal_outcome IS NULL AND attempt_count >= 5), ensures no existing active (pending/in-progress) retry for that source, inserts one row. Returns outcome: created | already_scheduled | ineligible | not_found. Service-role only.';
+  'Atomically creates a manual retry for a terminally failed delivery. Locks source, verifies eligibility (delivered_at IS NULL; terminal_outcome = failed OR legacy: terminal_outcome IS NULL AND attempt_count >= 5), checks endpoint is_active (returns endpoint_paused if paused), ensures no existing active (pending/in-progress) retry for that source, inserts one row. Returns outcome: created | already_scheduled | ineligible | endpoint_paused | not_found. Service-role only.';

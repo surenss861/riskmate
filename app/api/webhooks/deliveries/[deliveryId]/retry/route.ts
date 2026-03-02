@@ -208,6 +208,18 @@ export async function POST(
       })
     }
 
+    if (outcome === 'endpoint_paused') {
+      const { response, errorId } = createErrorResponse(
+        'Endpoint is paused; resume the endpoint first, then retry.',
+        'ENDPOINT_PAUSED',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+
     if (outcome !== 'created' || !retryId) {
       const { response, errorId } = createErrorResponse(
         'Failed to create retry delivery',
