@@ -67,11 +67,21 @@ async function handler(
       )
     }
 
-    const { data: riskScore } = await admin
+    const { data: riskScore, error: riskScoreError } = await admin
       .from('job_risk_scores')
       .select('*')
       .eq('job_id', jobId)
       .maybeSingle()
+
+    if (riskScoreError) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to load job details', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
 
     const hazardsQuery = admin
       .from('mitigation_items')
@@ -86,10 +96,20 @@ async function handler(
       .not('hazard_id', 'is', null)
       .order('created_at', { ascending: true })
 
-    const [{ data: hazards }, { data: controls }] = await Promise.all([
-      hazardsQuery,
-      controlsQuery,
-    ])
+    const [
+      { data: hazards, error: hazardsError },
+      { data: controls, error: controlsError },
+    ] = await Promise.all([hazardsQuery, controlsQuery])
+
+    if (hazardsError || controlsError) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to load job details', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
 
     const res = v1Json({
       ...job,

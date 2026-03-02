@@ -49,12 +49,22 @@ export async function GET(
     )
   }
 
-  const { data: signatures } = await admin
+  const { data: signatures, error: signaturesError } = await admin
     .from('report_signatures')
     .select('id, signer_name, signer_title, signature_role, signed_at, created_at')
     .eq('report_run_id', reportId)
     .is('revoked_at', null)
     .order('signed_at', { ascending: true })
+
+  if (signaturesError) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to load report details', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
 
   const res = v1Json({
     ...reportRun,

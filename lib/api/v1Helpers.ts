@@ -83,12 +83,15 @@ export async function withApiKeyAuth(
   }
 
   if (!requireScope(auth.context, requiredScopes)) {
-    return NextResponse.json(
-      errorBody('FORBIDDEN', 'Insufficient scope for this endpoint', requestId),
-      {
-        status: 403,
-        headers: { 'X-Request-ID': requestId },
-      }
+    return addRateLimitHeaders(
+      NextResponse.json(
+        errorBody('FORBIDDEN', 'Insufficient scope for this endpoint', requestId),
+        {
+          status: 403,
+          headers: { 'X-Request-ID': requestId },
+        }
+      ),
+      rateLimitResult
     )
   }
 
