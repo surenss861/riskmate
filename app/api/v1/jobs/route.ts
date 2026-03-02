@@ -31,11 +31,28 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-    const limit = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get('limit') || '20', 10))
-    )
+    const pageRaw = searchParams.get('page') ?? '1'
+    const limitRaw = searchParams.get('limit') ?? '20'
+    const pageParsed = parseInt(pageRaw, 10)
+    const limitParsed = parseInt(limitRaw, 10)
+    if (
+      !Number.isFinite(pageParsed) ||
+      !Number.isFinite(limitParsed) ||
+      pageParsed < 1 ||
+      limitParsed < 1 ||
+      limitParsed > 100
+    ) {
+      return NextResponse.json(
+        errorBody(
+          'INVALID_FORMAT',
+          'Invalid pagination: page must be a positive integer, limit must be between 1 and 100',
+          requestId
+        ),
+        { status: 400, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+    const page = pageParsed
+    const limit = limitParsed
     const status = searchParams.get('status') || null
     const offset = (page - 1) * limit
 

@@ -55,6 +55,8 @@ export async function withApiKeyAuth(
     )
   }
 
+  touchApiKeyLastUsed(auth.context.api_key_id).catch(() => {})
+
   const rateLimitResult = checkApiKeyRateLimit(
     request,
     auth.keyRow.id,
@@ -94,14 +96,14 @@ export async function withApiKeyAuth(
 }
 
 /**
- * Call after successful handler to update last_used_at and add rate limit headers to response.
+ * Call after successful handler to add rate limit headers to response.
+ * last_used_at is updated in the auth path (withApiKeyAuth).
  */
 export async function finishApiKeyRequest(
   apiKeyId: string,
   response: NextResponse,
   rateLimitResult: RateLimitResult
 ): Promise<NextResponse> {
-  touchApiKeyLastUsed(apiKeyId).catch(() => {})
   return addRateLimitHeaders(response, rateLimitResult)
 }
 

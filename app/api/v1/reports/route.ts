@@ -50,11 +50,28 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const limit = Math.min(
-    100,
-    Math.max(1, parseInt(request.nextUrl.searchParams.get('limit') || '20', 10))
-  )
-  const offset = Math.max(0, parseInt(request.nextUrl.searchParams.get('offset') || '0', 10))
+  const limitRaw = request.nextUrl.searchParams.get('limit') ?? '20'
+  const offsetRaw = request.nextUrl.searchParams.get('offset') ?? '0'
+  const limitParsed = parseInt(limitRaw, 10)
+  const offsetParsed = parseInt(offsetRaw, 10)
+  if (
+    !Number.isFinite(limitParsed) ||
+    !Number.isFinite(offsetParsed) ||
+    limitParsed < 1 ||
+    limitParsed > 100 ||
+    offsetParsed < 0
+  ) {
+    return NextResponse.json(
+      errorBody(
+        'INVALID_FORMAT',
+        'Invalid pagination: limit must be between 1 and 100, offset must be a non-negative integer',
+        requestId
+      ),
+      { status: 400, headers: { 'X-Request-ID': requestId } }
+    )
+  }
+  const limit = limitParsed
+  const offset = offsetParsed
 
   const { data: runs, error, count } = await admin
     .from('report_runs')

@@ -25,10 +25,15 @@ const API_KEY_SCOPES = [
   'webhooks:manage',
 ] as const
 
+/** 32 random hex characters (16 bytes) after prefix to match documented format. */
 function generateSecureKey(prefix: string): string {
-  const bytes = randomBytes(32)
+  const bytes = randomBytes(16)
   const hex = bytes.toString('hex')
   return `${prefix}${hex}`
+}
+
+function getApiKeyPrefix(): string {
+  return process.env.NODE_ENV === 'production' ? 'rm_live_' : 'rm_test_'
 }
 
 /** GET - List API keys for the org (prefix, scopes, last_used, never full key) */
@@ -126,7 +131,8 @@ export async function POST(request: NextRequest) {
         ? new Date(expires_at).toISOString()
         : null
 
-    const plainKey = generateSecureKey('rm_live_')
+    const prefix = getApiKeyPrefix()
+    const plainKey = generateSecureKey(prefix)
     const keyHash = hashApiKey(plainKey)
     const keyPrefix = getKeyPrefix(plainKey)
 

@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     .select('id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id')
     .eq('job_id', jobId)
     .eq('organization_id', context.organization_id)
+    .is('hazard_id', null)
     .order('created_at', { ascending: true })
 
   if (error) {
