@@ -246,13 +246,13 @@ export default function ApiKeysPage() {
       />
 
       <ConfirmModal
-        open={!!revokeConfirmId}
+        isOpen={!!revokeConfirmId}
         title="Revoke API key?"
         message="This key will stop working immediately. This cannot be undone."
         confirmLabel="Revoke"
         onConfirm={handleRevokeConfirm}
         onCancel={() => setRevokeConfirmId(null)}
-        variant="danger"
+        destructive
       />
     </ProtectedRoute>
   )
