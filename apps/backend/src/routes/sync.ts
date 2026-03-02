@@ -11,7 +11,13 @@ import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { requireWriteAccess } from "../middleware/requireWriteAccess";
 import { extractClientMetadata } from "../middleware/audit";
 import { recordAuditLog } from "../middleware/audit";
-import { deliverEvent } from "../workers/webhookDelivery";
+import {
+  emitSyncJobCreated,
+  emitSyncJobUpdated,
+  emitSyncJobDeleted,
+  emitSyncHazardCreated,
+  emitSyncHazardUpdated,
+} from "./syncWebhookEvents";
 
 export const syncRouter: ExpressRouter = express.Router();
 
@@ -149,14 +155,12 @@ syncRouter.post(
                   metadata: { sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                deliverEvent(organization_id, "job.created", {
-                  id: job.id,
+                emitSyncJobCreated(organization_id, userId, job, {
                   client_name,
                   job_type,
                   location,
                   status: data.status ?? "draft",
-                  created_by: userId,
-                }).catch((e) => console.warn("[Sync] Webhook job.created enqueue failed:", e));
+                });
               }
               results.push(baseResult);
               break;
@@ -260,31 +264,14 @@ syncRouter.post(
                   metadata: { sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                // Only emit webhooks when at least one persisted mutable column actually changed
-                const valueChanged = (a: unknown, b: unknown): boolean => {
-                  const na = a === undefined || a === null ? null : a;
-                  const nb = b === undefined || b === null ? null : b;
-                  if (na === null && nb === null) return false;
-                  if (na === null || nb === null) return true;
-                  return String(na) !== String(nb);
-                };
-                const hadActualChange = Object.keys(updates).some((k) =>
-                  valueChanged(updates[k], (existing as Record<string, unknown>)[k])
-                );
-                if (updatedJobRow && hadActualChange) {
-                  deliverEvent(organization_id, "job.updated", {
-                    id: jobId,
-                    ...updatedJobRow,
-                  }).catch((e) => console.warn("[Sync] Webhook job.updated enqueue failed:", e));
-                  const didTransitionToCompleted =
-                    updates.status === "completed" && (existing.completed_at ?? null) == null;
-                  if (didTransitionToCompleted) {
-                    deliverEvent(organization_id, "job.completed", {
-                      id: jobId,
-                      completed_at: updatedJobRow.completed_at ?? new Date().toISOString(),
-                      status: "completed",
-                    }).catch((e) => console.warn("[Sync] Webhook job.completed enqueue failed:", e));
-                  }
+                if (updatedJobRow) {
+                  emitSyncJobUpdated(
+                    organization_id,
+                    jobId,
+                    updatedJobRow as Record<string, unknown>,
+                    existing as Record<string, unknown> & { completed_at?: string | null },
+                    updates
+                  );
                 }
               }
               results.push(baseResult);
@@ -344,11 +331,7 @@ syncRouter.post(
                   metadata: { sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                deliverEvent(organization_id, "job.deleted", {
-                  id: jobId,
-                  deleted_at: deletedAt,
-                  status: existing.status,
-                }).catch((e) => console.warn("[Sync] Webhook job.deleted enqueue failed:", e));
+                emitSyncJobDeleted(organization_id, jobId, deletedAt, existing.status);
               }
               results.push(baseResult);
               break;
@@ -412,16 +395,13 @@ syncRouter.post(
                   metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
-                deliverEvent(organization_id, "hazard.created", {
-                  id: inserted.id,
-                  job_id: jobId,
+                emitSyncHazardCreated(
+                  organization_id,
+                  inserted,
+                  jobId,
                   title,
-                  description: description ?? "",
-                  severity: "medium",
-                  status: "open",
-                  created_at: inserted.created_at ?? new Date().toISOString(),
-                  updated_at: inserted.updated_at ?? inserted.created_at ?? new Date().toISOString(),
-                }).catch((e) => console.warn("[Sync] Webhook hazard.created enqueue failed:", e));
+                  description ?? ""
+                );
               }
               results.push(baseResult);
               break;
@@ -556,6 +536,7 @@ syncRouter.post(
                 .update(updates)
                 .eq("id", mitigationId)
                 .eq("job_id", jobId)
+                .is("hazard_id", null)
                 .eq("organization_id", organization_id)
                 .select("id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id")
                 .single();
@@ -574,9 +555,10 @@ syncRouter.post(
                   metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                   ...clientMetadata,
                 });
+                // Emit hazard.updated only for top-level hazards (hazard_id is null); controls have hazard_id set
                 const itemWithHazardId = updatedItem as { hazard_id?: string | null } | null;
-                if (itemWithHazardId != null && itemWithHazardId.hazard_id != null) {
-                  deliverEvent(organization_id, "hazard.updated", {
+                if (itemWithHazardId != null && itemWithHazardId.hazard_id == null) {
+                  emitSyncHazardUpdated(organization_id, {
                     id: (updatedItem as { id: string }).id,
                     job_id: (updatedItem as { job_id: string }).job_id ?? jobId,
                     title: (updatedItem as { title?: string }).title ?? "",
@@ -585,7 +567,7 @@ syncRouter.post(
                     is_completed: (updatedItem as { is_completed: boolean }).is_completed,
                     completed_at: (updatedItem as { completed_at?: string | null }).completed_at,
                     created_at: (updatedItem as { created_at: string }).created_at,
-                  }).catch((e) => console.warn("[Sync] Webhook hazard.updated enqueue failed:", e));
+                  });
                 }
               }
               results.push(baseResult);
@@ -1115,6 +1097,12 @@ syncRouter.post(
             metadata: { sync_resolve_conflict: true, operation_id: operation_id },
             ...clientMetadataJob,
           });
+          emitSyncJobCreated(organization_id, userId, job, {
+            client_name,
+            job_type,
+            location,
+            status: data.status ?? "draft",
+          });
         } else if (opType === "create_hazard") {
           const jobId = data.job_id ?? data.jobId;
           if (!jobId) {
@@ -1186,6 +1174,7 @@ syncRouter.post(
               metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id, reconciled: true },
               ...clientMetadata,
             });
+            emitSyncHazardUpdated(organization_id, updated);
           } else {
             const insertPayload: Record<string, any> = {
               job_id: jobId,
@@ -1215,6 +1204,7 @@ syncRouter.post(
               metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id },
               ...clientMetadata,
             });
+            emitSyncHazardCreated(organization_id, inserted, jobId, title, description ?? "");
           }
         } else if (opType === "create_control") {
           const jobId = data.job_id ?? data.jobId;
@@ -1364,6 +1354,12 @@ syncRouter.post(
             if (data[src] !== undefined) updates[dest] = data[src];
           }
           if (Object.keys(updates).length > 0) {
+            const { data: existingJob } = await supabase
+              .from("jobs")
+              .select("id, client_name, job_type, location, status, completed_at, created_at, updated_at, created_by")
+              .eq("id", targetId)
+              .eq("organization_id", organization_id)
+              .single();
             const { data: job, error } = await supabase
               .from("jobs")
               .update(updates)
@@ -1371,7 +1367,18 @@ syncRouter.post(
               .eq("organization_id", organization_id)
               .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
               .single();
-            if (!error) updatedJob = job;
+            if (!error) {
+              updatedJob = job;
+              if (existingJob) {
+                emitSyncJobUpdated(
+                  organization_id,
+                  targetId,
+                  job as Record<string, unknown>,
+                  existingJob as Record<string, unknown> & { completed_at?: string | null },
+                  updates
+                );
+              }
+            }
           }
         } else if (opType === "update_hazard") {
           const jobId = data.job_id ?? data.jobId;
@@ -1401,7 +1408,10 @@ syncRouter.post(
             .eq("organization_id", organization_id)
             .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
             .single();
-          if (!error) updatedMitigationItem = mit;
+          if (!error) {
+            updatedMitigationItem = mit;
+            if (mit) emitSyncHazardUpdated(organization_id, mit);
+          }
         } else if (opType === "update_control") {
           const jobId = data.job_id ?? data.jobId;
           const hazardId = data.hazard_id ?? data.hazardId;
@@ -1447,14 +1457,16 @@ syncRouter.post(
               deletion_performed: false,
             });
           }
+          const deletedAt = new Date().toISOString();
           const { error: deleteErr } = await supabase
             .from("jobs")
-            .update({ deleted_at: new Date().toISOString() })
+            .update({ deleted_at: deletedAt })
             .eq("id", targetId)
             .eq("organization_id", organization_id);
           if (deleteErr) {
             return res.status(500).json({ message: deleteErr.message });
           }
+          emitSyncJobDeleted(organization_id, targetId, deletedAt, existing.status);
         } else if (opType === "delete_hazard" || opType === "delete_control") {
           const jobId = data.job_id ?? data.jobId;
           const hazardId = opType === "delete_control" ? (data.hazard_id ?? data.hazardId) : null;
