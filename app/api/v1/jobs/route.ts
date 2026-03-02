@@ -236,6 +236,22 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[v1/jobs] POST insert error:', error)
+      const pgCode = (error as { code?: string }).code
+      const isCheckOrEnumViolation =
+        pgCode === '23514' || pgCode === 'check_violation'
+      if (isCheckOrEnumViolation) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody(
+              'INVALID_FORMAT',
+              'Invalid status, client_type, or job_type; check allowed values',
+              requestId
+            ),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
       return withRateLimitHeaders(
         NextResponse.json(
           errorBody('QUERY_ERROR', 'Failed to create job', requestId),

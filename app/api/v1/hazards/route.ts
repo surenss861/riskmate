@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
     .eq('job_id', jobId)
     .eq('organization_id', context.organization_id)
     .is('hazard_id', null)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
   const { data: items, error, count } = await baseQuery.range(offset, offset + limit - 1)
