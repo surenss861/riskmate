@@ -61,14 +61,14 @@ BEGIN
       AND wd.delivered_at IS NULL
       AND wd.next_retry_at IS NULL
       AND wd.processing_since IS NULL
-      AND (wd.terminal_outcome IS NULL OR wd.terminal_outcome = 'failed')
+      AND (wd.terminal_outcome = 'failed' OR (wd.terminal_outcome IS NULL AND wd.attempt_count >= 5))
     GROUP BY wd.endpoint_id
   )
   SELECT
     wd.endpoint_id,
     count(*) FILTER (WHERE wd.delivered_at IS NOT NULL)::bigint AS delivered,
     count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NOT NULL)::bigint AS pending,
-    count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.processing_since IS NULL AND (wd.terminal_outcome IS NULL OR wd.terminal_outcome = 'failed'))::bigint AS failed,
+    count(*) FILTER (WHERE wd.delivered_at IS NULL AND wd.next_retry_at IS NULL AND wd.processing_since IS NULL AND (wd.terminal_outcome = 'failed' OR (wd.terminal_outcome IS NULL AND wd.attempt_count >= 5)))::bigint AS failed,
     NULLIF(GREATEST(
       COALESCE(ast.last_attempt_at, '1970-01-01'::timestamptz),
       COALESCE(max(wd.delivered_at), '1970-01-01'::timestamptz),
