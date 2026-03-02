@@ -19,6 +19,7 @@
     "type-check": "tsc --noEmit",
     "check:error-codes": "ts-node scripts/check-error-codes.ts",
     "check:webhook-utils-sync": "node scripts/check-webhook-utils-sync.js",
+    "check:webhook-event-types-sync": "node scripts/check-webhook-event-types-sync.js",
     "test:pdf-smoke": "tsx apps/backend/scripts/pdf-smoke-test.ts",
     "test:executive-closeout": "tsx scripts/test-executive-brief-closeout.ts",
     "test:golden": "jest lib/pdf/reports/executiveBrief/__tests__/golden-assertions.test.ts",

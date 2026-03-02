@@ -212,7 +212,7 @@ export function DeliveryLogsModal({
       }
       if (endpointId) {
         try {
-          const refreshLimit = Math.max(DELIVERIES_PAGE_SIZE, deliveries.length)
+          const refreshLimit = DELIVERIES_PAGE_SIZE
           const res = await fetch(`/api/webhooks/${endpointId}/deliveries?limit=${refreshLimit}&offset=0`, { credentials: 'include' })
           if (!res.ok) {
             let msg = `Request failed (${res.status})`
@@ -232,6 +232,9 @@ export function DeliveryLogsModal({
             setDeliveries(list)
             setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
             setFetchError(null)
+            if (successCount > 0 && deliveries.length > DELIVERIES_PAGE_SIZE) {
+              setRetrySuccessMessage((prev) => (prev ? `${prev} List refreshed to first page.` : 'List refreshed to first page.'))
+            }
           }
           // Do not reset retriedDeliveryIds so already-retried deliveries stay excluded for the modal session
         } catch (e) {

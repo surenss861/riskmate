@@ -1,7 +1,7 @@
 -- Deduplicate admin alerts for webhook delivery failures (one alert per endpoint per cooldown).
 CREATE TABLE IF NOT EXISTS webhook_endpoint_alert_state (
   endpoint_id UUID NOT NULL PRIMARY KEY REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
-  last_alert_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_alert_at TIMESTAMPTZ NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -9,6 +9,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_endpoint_alert_state_last_alert
   ON webhook_endpoint_alert_state(last_alert_at);
 
 COMMENT ON TABLE webhook_endpoint_alert_state IS 'Tracks last admin alert per endpoint to avoid spamming on repeated delivery failures';
+COMMENT ON COLUMN webhook_endpoint_alert_state.last_alert_at IS 'Set only after an admin alert email is successfully sent; NULL means never alerted. Cooldown applies only when this is non-null.';
 
 ALTER TABLE webhook_endpoint_alert_state ENABLE ROW LEVEL SECURITY;
 

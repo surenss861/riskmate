@@ -37,6 +37,7 @@ BEGIN
     JOIN webhook_deliveries wd ON wd.id = wda.delivery_id
     JOIN webhook_endpoints we ON we.id = wd.endpoint_id
     WHERE we.organization_id = p_org_id
+      AND ((coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') = 'service_role' OR p_org_id IN (SELECT public.webhook_admin_org_ids()))
     GROUP BY wd.endpoint_id
   ),
   terminal_failure_times AS (
@@ -47,6 +48,7 @@ BEGIN
     JOIN webhook_delivery_attempts wda ON wda.delivery_id = wd.id
     JOIN webhook_endpoints we ON we.id = wd.endpoint_id
     WHERE we.organization_id = p_org_id
+      AND ((coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') = 'service_role' OR p_org_id IN (SELECT public.webhook_admin_org_ids()))
       AND wd.delivered_at IS NULL
       AND wd.next_retry_at IS NULL
       AND wd.processing_since IS NULL
@@ -71,6 +73,7 @@ BEGIN
   LEFT JOIN attempt_stats ast ON ast.endpoint_id = wd.endpoint_id
   LEFT JOIN terminal_failure_times tft ON tft.endpoint_id = wd.endpoint_id
   WHERE we.organization_id = p_org_id
+    AND ((coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::json->>'role') = 'service_role' OR p_org_id IN (SELECT public.webhook_admin_org_ids()))
   GROUP BY wd.endpoint_id, ast.last_attempt_at, ast.last_failure_at;
 END;
 $$;

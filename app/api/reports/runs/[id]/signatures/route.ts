@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { computeSignatureHash } from '@/lib/utils/signatureHash'
 import { validateSignatureSvg } from '@/lib/utils/signatureValidation'
+import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
 
@@ -81,7 +82,7 @@ export async function POST(
     // Get report run and verify access
     const { data: reportRun, error: runError } = await supabase
       .from('report_runs')
-      .select('organization_id, status, data_hash')
+      .select('organization_id, status, data_hash, job_id')
       .eq('id', reportRunId)
       .single()
 
@@ -290,6 +291,16 @@ export async function POST(
     console.log(
       `[reports/runs/signatures] Signature created | run: ${reportRunId} | role: ${signature_role} | signer: ${signer_name} (${signer_user_id || 'external'})`
     )
+
+    await triggerWebhookEvent(reportRun.organization_id, 'signature.added', {
+      signoff_id: signature.id,
+      job_id: reportRun.job_id ?? '',
+      signer_id: finalSignerUserId,
+      signoff_type: signature_role,
+      created_at: signature.created_at,
+      signer_role: signature_role ?? null,
+      signed_at: signature.signed_at ?? null,
+    }).catch((e) => console.warn('[Webhook] signature.added trigger failed:', e))
 
     return NextResponse.json({ data: signatureWithEmail })
   } catch (error: any) {

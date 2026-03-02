@@ -2234,19 +2234,9 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
     // Emit realtime event (push signal)
     await emitJobEvent(organization_id, "job.created", job.id, userId);
 
-    // Webhook: job.created — payload is the initial job state only (no risk_score, risk_level, or mitigation_items).
-    // Risk scoring and mitigation item generation run after this. Subscribers needing full state should use GET /api/jobs/:id.
-    deliverEvent(organization_id, "job.created", {
-      id: job.id,
-      client_name,
-      job_type,
-      location,
-      status: job.status,
-      created_by: userId,
-    }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
-
     // Calculate risk score if risk factors provided
     let riskScoreResult = null;
+    let createdHazardIds: string[] = [];
     if (risk_factor_codes && risk_factor_codes.length > 0) {
       try {
         riskScoreResult = await calculateRiskScore(risk_factor_codes);
@@ -2270,6 +2260,7 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
 
         // Generate mitigation items and emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set
         const insertedHazards = await generateMitigationItems(job.id, risk_factor_codes);
+        createdHazardIds = insertedHazards.filter((item) => item.hazard_id == null).map((item) => item.id);
         for (const item of insertedHazards) {
           if (item.hazard_id != null) continue;
           deliverEvent(organization_id, "hazard.created", {
@@ -2300,6 +2291,14 @@ jobsRouter.post("/", authenticate, requireWriteAccess, enforceJobLimit, async (r
       .select("*")
       .eq("id", job.id)
       .single();
+
+    // Webhook: job.created — emit after risk scoring and hazards so payload has full initial state (risk_score, risk_level, hazard_ids).
+    if (completeJob) {
+      deliverEvent(organization_id, "job.created", {
+        ...completeJob,
+        hazard_ids: createdHazardIds,
+      }).catch((e) => console.warn("[Jobs] Webhook job.created enqueue failed:", e));
+    }
 
     const { data: mitigationItems } = await supabase
       .from("mitigation_items")
