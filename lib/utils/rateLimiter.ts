@@ -2,13 +2,14 @@
  * Rate Limiting Utility for Next.js API Routes
  *
  * Protects expensive operations (exports, PDF generation) from abuse.
- * Uses in-memory store - suitable for single instance. For horizontal scaling,
- * replace with Redis-based store.
+ * API-key rate limiting uses shared Postgres storage so all instances enforce
+ * the same per-key window (1000 req/hour). Session-based limits still use in-memory store.
  *
  * @see apps/backend/src/middleware/rateLimiter.ts - Express backend reference
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 
 export interface RateLimitConfig {
@@ -84,54 +85,46 @@ function buildKeyForApiKey(apiKeyId: string): string {
 
 /**
  * Check rate limit for a request authenticated by API key.
- * Uses in-memory store keyed by api_key_id. Returns result with allowed, limit, remaining, resetAt, retryAfter.
- * When allowed is false, return 429 with Retry-After header and body per ticket.
+ * Uses shared Postgres storage (increment_api_key_rate_limit RPC) so all instances
+ * enforce the same per-key window. Keeps X-RateLimit-* and Retry-After contract.
  */
-export function checkApiKeyRateLimit(
-  request: NextRequest,
+export async function checkApiKeyRateLimit(
+  _request: NextRequest,
   apiKeyId: string,
   config: RateLimitConfig
-): RateLimitResult {
-  scheduleCleanup()
+): Promise<RateLimitResult> {
+  const bucketKey = buildKeyForApiKey(apiKeyId)
+  const admin = createSupabaseAdminClient()
+  const { data, error } = await admin.rpc('increment_api_key_rate_limit', {
+    p_bucket_key: bucketKey,
+    p_window_ms: config.windowMs,
+    p_max_requests: config.maxRequests,
+  })
 
-  const key = buildKeyForApiKey(apiKeyId)
-  const now = Date.now()
-  let entry = rateLimitStore[key]
-
-  if (!entry || entry.resetAt < now) {
-    entry = {
-      count: 1,
-      resetAt: now + config.windowMs,
-    }
-    rateLimitStore[key] = entry
+  if (error || !data || !Array.isArray(data) || data.length === 0) {
     return {
-      allowed: true,
+      allowed: false,
       limit: config.maxRequests,
-      remaining: config.maxRequests - 1,
-      resetAt: Math.ceil(entry.resetAt / 1000),
+      remaining: 0,
+      resetAt: Math.ceil(Date.now() / 1000) + Math.ceil(config.windowMs / 1000),
       retryAfter: Math.ceil(config.windowMs / 1000),
       windowMs: config.windowMs,
     }
   }
 
-  if (entry.count >= config.maxRequests) {
-    return {
-      allowed: false,
-      limit: config.maxRequests,
-      remaining: 0,
-      resetAt: Math.ceil(entry.resetAt / 1000),
-      retryAfter: Math.ceil((entry.resetAt - now) / 1000),
-      windowMs: config.windowMs,
-    }
+  const row = data[0] as {
+    allowed: boolean
+    count: number
+    remaining: number
+    reset_at_epoch: number
+    retry_after_seconds: number
   }
-
-  entry.count++
   return {
-    allowed: true,
+    allowed: row.allowed,
     limit: config.maxRequests,
-    remaining: config.maxRequests - entry.count,
-    resetAt: Math.ceil(entry.resetAt / 1000),
-    retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+    remaining: row.remaining,
+    resetAt: row.reset_at_epoch,
+    retryAfter: row.retry_after_seconds,
     windowMs: config.windowMs,
   }
 }

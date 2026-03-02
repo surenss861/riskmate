@@ -83,6 +83,7 @@ export async function GET(
     .from('report_signatures')
     .select('id, signer_name, signer_title, signature_role, signed_at, created_at')
     .eq('report_run_id', reportId)
+    .eq('organization_id', context.organization_id)
     .is('revoked_at', null)
     .order('signed_at', { ascending: true })
 

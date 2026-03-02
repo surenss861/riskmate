@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
+import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
 import { isValidUUID } from '@/lib/utils/uuid'
 
 export const runtime = 'nodejs'
@@ -142,10 +143,10 @@ export async function PATCH(
       if (expires_at === null || expires_at === '') {
         updateData.expires_at = null
       } else if (typeof expires_at === 'string') {
-        const parsed = Date.parse(expires_at)
-        if (Number.isNaN(parsed)) {
+        const normalized = normalizeExpiresAt(expires_at)
+        if (!normalized) {
           const { response, errorId } = createErrorResponse(
-            'expires_at must be a valid ISO 8601 date string or null',
+            'expires_at must be a valid ISO 8601 date/datetime or date-only (YYYY-MM-DD). Date-only values are interpreted as end of that day UTC.',
             'INVALID_FORMAT',
             { requestId, statusCode: 400 }
           )
@@ -154,7 +155,7 @@ export async function PATCH(
             headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
           })
         }
-        updateData.expires_at = new Date(parsed).toISOString()
+        updateData.expires_at = normalized
       } else {
         const { response, errorId } = createErrorResponse(
           'expires_at must be a valid ISO 8601 date string or null',

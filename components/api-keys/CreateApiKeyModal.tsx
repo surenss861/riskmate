@@ -91,7 +91,10 @@ export function CreateApiKeyModal({ open, onClose, onCreated }: CreateApiKeyModa
         body: JSON.stringify({
           name: name.trim(),
           scopes: Array.from(scopes),
-          expires_at: expiresAt.trim() || null,
+          // Send end-of-day UTC for the selected date so the key is valid for the full day (avoids midnight-UTC expiry).
+          expires_at: expiresAt.trim()
+            ? `${expiresAt.trim()}T23:59:59.999Z`
+            : null,
         }),
       })
       const json = await res.json().catch(() => ({}))

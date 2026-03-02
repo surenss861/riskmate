@@ -55,7 +55,7 @@ export async function withApiKeyAuth(
     )
   }
 
-  const rateLimitResult = checkApiKeyRateLimit(
+  const rateLimitResult = await checkApiKeyRateLimit(
     request,
     auth.keyRow.id,
     RATE_LIMIT_CONFIGS.apiKey

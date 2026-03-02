@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
+import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
 import { hashApiKey, getKeyPrefix } from '@/lib/middleware/apiKeyAuth'
 import { randomBytes } from 'crypto'
 
@@ -163,10 +164,10 @@ export async function POST(request: NextRequest) {
     }
     let expiresAt: string | null = null
     if (expires_at !== undefined && expires_at !== null && expires_at !== '') {
-      const parsed = typeof expires_at === 'string' ? Date.parse(expires_at) : Number.NaN
-      if (Number.isNaN(parsed)) {
+      const normalized = normalizeExpiresAt(expires_at)
+      if (!normalized) {
         const { response, errorId } = createErrorResponse(
-          'expires_at must be a valid ISO 8601 date string or null',
+          'expires_at must be a valid ISO 8601 date/datetime or date-only (YYYY-MM-DD). Date-only values are interpreted as end of that day UTC.',
           'INVALID_FORMAT',
           { requestId, statusCode: 400 }
         )
@@ -175,7 +176,7 @@ export async function POST(request: NextRequest) {
           headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
         })
       }
-      expiresAt = new Date(parsed).toISOString()
+      expiresAt = normalized
     }
 
     const prefix = getApiKeyPrefix()
