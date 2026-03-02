@@ -80,10 +80,27 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
     organization_id = memberRows[0].organization_id
   }
 
+  // Resolve effective role for this org: align with RLS (webhook_admin_org_ids) so
+  // owner/admin from organization_members is respected, not only users.role.
+  const { data: memberRow } = await serviceSupabase
+    .from('organization_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('organization_id', organization_id)
+    .maybeSingle()
+  const memberRole = (memberRow?.role as string) ?? null
+  const userRole = userData?.role ?? 'member'
+  const user_role =
+    memberRole === 'owner' || userRole === 'owner'
+      ? 'owner'
+      : memberRole === 'admin' || userRole === 'admin'
+        ? 'admin'
+        : userRole
+
   return {
     organization_id,
     user_id: user.id,
-    user_role: userData?.role ?? 'member',
+    user_role,
   }
 }
 

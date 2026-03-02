@@ -47,6 +47,17 @@ async function handler(
     )
   }
 
+  // Enforce write scope before resource lookup so missing scope returns 403, not 404.
+  if ((method === 'PATCH' || method === 'DELETE') && !context.scopes.includes(V1_SCOPES.jobsWrite)) {
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('FORBIDDEN', 'Insufficient scope', requestId),
+        { status: 403, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
+
   const admin = createSupabaseAdminClient()
 
   const { data: job, error: fetchError } = await admin
@@ -156,16 +167,6 @@ async function handler(
   }
 
   if (method === 'PATCH') {
-    if (!context.scopes.includes(V1_SCOPES.jobsWrite)) {
-      return withRateLimitHeaders(
-        NextResponse.json(
-          errorBody('FORBIDDEN', 'Insufficient scope for updates', requestId),
-          { status: 403, headers: { 'X-Request-ID': requestId } }
-        ),
-        rateLimitResult
-      )
-    }
-
     let body: Record<string, unknown>
     try {
       body = await request.json()
@@ -283,16 +284,6 @@ async function handler(
   }
 
   if (method === 'DELETE') {
-    if (!context.scopes.includes(V1_SCOPES.jobsWrite)) {
-      return withRateLimitHeaders(
-        NextResponse.json(
-          errorBody('FORBIDDEN', 'Insufficient scope for delete', requestId),
-          { status: 403, headers: { 'X-Request-ID': requestId } }
-        ),
-        rateLimitResult
-      )
-    }
-
     const { error: deleteError } = await admin
       .from('jobs')
       .update({ deleted_at: new Date().toISOString() })
