@@ -15,6 +15,7 @@ import {
 } from '@/lib/api/v1Helpers'
 import { isValidUUID } from '@/lib/utils/uuid'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
+import { VALID_JOB_STATUSES_SET } from '@/lib/api/v1JobsConstants'
 
 export const runtime = 'nodejs'
 
@@ -199,7 +200,19 @@ async function handler(
     if (description !== undefined) updateData.description = description
     if (start_date !== undefined) updateData.start_date = start_date || null
     if (end_date !== undefined) updateData.end_date = end_date || null
-    if (status !== undefined) updateData.status = status
+    if (status !== undefined) {
+      const st = String(status).toLowerCase()
+      if (!VALID_JOB_STATUSES_SET.has(st)) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      updateData.status = st
+    }
 
     if (Object.keys(updateData).length === 0) {
       const res = v1Json(job)

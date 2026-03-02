@@ -15,6 +15,7 @@ import {
 } from '@/lib/api/v1Helpers'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 import { getOrgEntitlementsForApiKey } from '@/lib/entitlements'
+import { VALID_JOB_STATUSES_SET } from '@/lib/api/v1JobsConstants'
 
 export const runtime = 'nodejs'
 
@@ -161,14 +162,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validStatuses = ['draft', 'in_progress', 'completed', 'archived']
     const validClientTypes = ['residential', 'commercial', 'industrial', 'government', 'mixed']
     const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction', 'remodel', 'other']
 
     const st = String(status).toLowerCase()
     const ct = String(client_type).toLowerCase()
     const jt = String(job_type).toLowerCase()
-    if (!validStatuses.includes(st) || !validClientTypes.includes(ct) || !validJobTypes.includes(jt)) {
+    if (!VALID_JOB_STATUSES_SET.has(st) || !validClientTypes.includes(ct) || !validJobTypes.includes(jt)) {
       return withRateLimitHeaders(
         NextResponse.json(
           errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
