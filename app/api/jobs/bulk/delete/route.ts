@@ -238,16 +238,20 @@ export async function POST(request: NextRequest) {
   await Promise.allSettled(auditPromises)
 
   // Enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
-  const { triggerWebhookEvent } = await import('@/lib/webhooks/trigger')
-  for (const jobId of eligibleIds) {
+  const { triggerWebhookEventsBatched } = await import('@/lib/webhooks/trigger')
+  const deleteEvents = eligibleIds.map((jobId) => {
     const job = jobMap.get(jobId)!
-    await triggerWebhookEvent(organization_id, 'job.deleted', {
-      id: jobId,
-      deleted_at: deletedAt,
-      status: job.status,
-      bulk: true,
-    }).catch((e) => console.warn('[BulkDelete] Webhook job.deleted enqueue failed:', e))
-  }
+    return {
+      eventType: 'job.deleted' as const,
+      data: {
+        id: jobId,
+        deleted_at: deletedAt,
+        status: job.status,
+        bulk: true,
+      },
+    }
+  })
+  await triggerWebhookEventsBatched(organization_id, deleteEvents)
 
   const total = eligibleIds.length + failed.length
   return NextResponse.json({

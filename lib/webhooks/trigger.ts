@@ -93,6 +93,33 @@ export async function triggerWebhookEvent(
   })
 }
 
+export type WebhookEventItem = {
+  eventType: string
+  data: Record<string, unknown>
+}
+
+/**
+ * Enqueue multiple webhook events concurrently (bounded by Promise.allSettled).
+ * Use this instead of awaiting triggerWebhookEvent in a loop to avoid serial latency.
+ * Logs each failed enqueue with event type and resource id for correlation.
+ */
+export async function triggerWebhookEventsBatched(
+  organizationId: string,
+  events: WebhookEventItem[]
+): Promise<void> {
+  if (events.length === 0) return
+  const results = await Promise.allSettled(
+    events.map(({ eventType, data }) => triggerWebhookEvent(organizationId, eventType, data))
+  )
+  results.forEach((outcome, i) => {
+    if (outcome.status === 'rejected') {
+      const { eventType, data } = events[i]
+      const resourceId = (data?.id ?? data?.job_id ?? data?.signoff_id ?? data?.report_run_id ?? data?.document_id ?? data?.user_id) ?? 'unknown'
+      console.warn('[WebhookTrigger] Batched enqueue failed:', { eventType, resourceId, error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason) })
+    }
+  })
+}
+
 // One-time warning when wake is skipped due to missing env (avoid log spam on every trigger).
 let _wakeEnvWarned = false
 function warnWakeEnvOnce(): void {

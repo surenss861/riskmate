@@ -16,7 +16,7 @@ import {
   normalizeFilterConfig as normalizeFilterConfigLib,
   getMatchingJobIdsFromFilterGroup,
 } from '@/lib/jobs/filterConfig'
-import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
+import { triggerWebhookEvent, triggerWebhookEventsBatched } from '@/lib/webhooks/trigger'
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/
 function isDateOnly(value: string): boolean {
@@ -955,20 +955,20 @@ export async function POST(request: NextRequest) {
         // Emit hazard.created only for top-level hazards (hazard_id IS NULL); controls have hazard_id set.
         const insertedHazards = await generateMitigationItems(jobId, risk_factor_codes)
         createdHazardIds = insertedHazards.filter((item) => item.hazard_id == null).map((item) => item.id)
-        for (const item of insertedHazards) {
-          if (item.hazard_id != null) continue
-          await triggerWebhookEvent(organization_id, 'hazard.created', {
-            id: item.id,
-            job_id: jobId,
-            title: item.title ?? '',
-            description: item.description ?? '',
-            created_at: item.created_at,
-            updated_at: item.updated_at ?? item.created_at,
-          }).catch((e) => {
-            // Webhook enqueue failures are not retried; monitor for [WebhookTrigger] Fetch endpoints failed.
-            console.warn('[Webhook] hazard.created trigger failed:', e)
-          })
-        }
+        const hazardEvents = insertedHazards
+          .filter((item) => item.hazard_id == null)
+          .map((item) => ({
+            eventType: 'hazard.created' as const,
+            data: {
+              id: item.id,
+              job_id: jobId,
+              title: item.title ?? '',
+              description: item.description ?? '',
+              created_at: item.created_at,
+              updated_at: item.updated_at ?? item.created_at,
+            },
+          }))
+        await triggerWebhookEventsBatched(organization_id, hazardEvents)
       } catch (riskError: any) {
         console.error('Risk scoring failed:', riskError)
         // Continue without risk score - job is still created

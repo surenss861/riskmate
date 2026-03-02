@@ -92,6 +92,17 @@ jest.mock('../../utils/secretEncryption', () => ({
 }))
 const mockValidateWebhookUrl = jest.fn()
 jest.mock('../../utils/webhookUrl', () => ({ validateWebhookUrl: (...args: unknown[]) => mockValidateWebhookUrl(...args) }))
+
+/** Success shape for URL validation when tests need the fetch path (IP pinning). */
+const validUrlResolution = {
+  valid: true as const,
+  hostname: 'example.com',
+  resolvedAddress: '93.184.216.34',
+  port: 443,
+  protocol: 'https' as const,
+  path: '/webhook',
+  hostHeader: 'example.com',
+}
 jest.mock('../../utils/email', () => ({ sendEmail: () => Promise.resolve() }))
 jest.mock('../../utils/webhookPayloads', () => ({ buildWebhookEventObject: (x: unknown) => x }))
 
@@ -116,7 +127,7 @@ describe('webhookDelivery – attempt persistence failure', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     deliveryUpdatePayload = undefined
-    mockValidateWebhookUrl.mockResolvedValue({ valid: true })
+    mockValidateWebhookUrl.mockResolvedValue(validUrlResolution)
     // Default: endpoint missing so we hit recordAttempt immediately without fetch
     endpointsSingle = {
       data: null,
@@ -172,7 +183,7 @@ describe('webhookDelivery – malformed URL is terminal (no retries)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     deliveryUpdatePayload = undefined
-    mockValidateWebhookUrl.mockResolvedValue({ valid: true })
+    mockValidateWebhookUrl.mockResolvedValue(validUrlResolution)
     endpointsSingle = { data: { url: 'https://not-a-valid-url', is_active: true }, error: null }
     secretsMaybeSingle = { data: { secret: 'encrypted' }, error: null }
     attemptsUpsertResult = { error: null }

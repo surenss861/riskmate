@@ -6,10 +6,12 @@
  */
 
 import crypto from 'crypto'
+import http from 'http'
+import https from 'https'
 import { supabase } from '../lib/supabaseClient'
 import { buildSignatureHeaders } from '../utils/webhookSigning'
 import { decryptWebhookSecret, validateWebhookSecretEncryptionKey } from '../utils/secretEncryption'
-import { validateWebhookUrl } from '../utils/webhookUrl'
+import { validateWebhookUrl, type WebhookUrlValidationSuccess } from '../utils/webhookUrl'
 import { sendEmail } from '../utils/email'
 import { buildWebhookEventObject } from '../utils/webhookPayloads'
 
@@ -27,6 +29,49 @@ const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 24h dedupe
 const WAKE_DEBOUNCE_MS = 100
 /** Claims older than this are considered stale (worker crashed); recovery will clear them so the row can be reclaimed. */
 const STALE_CLAIM_MS = 10 * 60 * 1000 // 10 min
+
+/**
+ * Send a POST request pinned to the validated IP to prevent DNS rebinding.
+ * Uses the vetted resolvedAddress so a second DNS lookup cannot redirect to an internal host.
+ * Host header and TLS SNI use the original hostname so certificate verification remains correct.
+ */
+function fetchPinnedToResolvedAddress(
+  resolved: WebhookUrlValidationSuccess,
+  body: string,
+  headers: Record<string, string>,
+  timeoutMs: number
+): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const opts: https.RequestOptions = {
+      hostname: resolved.resolvedAddress,
+      port: resolved.port,
+      path: resolved.path || '/',
+      method: 'POST',
+      headers: { ...headers, Host: resolved.hostHeader },
+      timeout: timeoutMs,
+    }
+    if (resolved.protocol === 'https') {
+      opts.servername = resolved.hostname
+    }
+    const mod = resolved.protocol === 'https' ? https : http
+    const req = mod.request(opts, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => chunks.push(chunk))
+      res.on('end', () => {
+        const bodyStr = Buffer.concat(chunks).toString('utf8')
+        resolve({ statusCode: res.statusCode ?? 0, body: bodyStr })
+      })
+      res.on('error', reject)
+    })
+    req.on('error', reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('Request timeout'))
+    })
+    req.write(body)
+    req.end()
+  })
+}
 
 /**
  * Parse an env value as a finite integer within [min, max]; invalid or out-of-range yields default.
@@ -478,17 +523,12 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
   const start = Date.now()
   let responseStatus: number | null = null
   let responseBody: string | null = null
+  const timeoutMs = 30000
 
   try {
-    const res = await fetch(endpoint.url, {
-      method: 'POST',
-      headers,
-      body: payloadStr,
-      signal: AbortSignal.timeout(30000),
-      redirect: 'manual',
-    })
-    responseStatus = res.status
-    responseBody = await res.text().catch(() => null)
+    const res = await fetchPinnedToResolvedAddress(urlCheck, payloadStr, headers, timeoutMs)
+    responseStatus = res.statusCode
+    responseBody = res.body
     const durationMs = Date.now() - start
 
     const attemptOk = await recordAttempt(delivery.id, delivery.attempt_count, responseStatus, responseBody, durationMs)
@@ -496,7 +536,7 @@ export async function sendDelivery(delivery: WebhookDeliveryRow): Promise<void> 
       await markDeliveryAttemptPersistenceFailed(delivery.id)
       return
     }
-    const success = res.ok
+    const success = responseStatus >= 200 && responseStatus < 300
     if (success) {
       await updateDeliveryResult(delivery.id, delivery.endpoint_id, responseStatus, responseBody, durationMs)
     } else {
