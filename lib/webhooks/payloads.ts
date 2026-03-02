@@ -2,7 +2,10 @@
  * Canonical webhook payload schemas per event type.
  * All emitters (app/api and backend) must use these builders so consumers
  * receive a stable data.object contract regardless of producer.
+ * Required-field validation ensures no malformed payloads are emitted.
  */
+
+const REPORT_GENERATED_REQUIRED = ['report_run_id', 'job_id', 'status', 'data_hash'] as const
 
 export type WebhookEventObjectEventType =
   | 'report.generated'
@@ -71,6 +74,7 @@ export type WebhookEventObject =
 /**
  * Build canonical data.object for report.generated.
  * Accepts app shape (report_run_id, ...) or backend shape (id, storage_path, hash, ...).
+ * Throws if required fields are missing (no silent empty strings).
  */
 export function buildReportGeneratedObject(raw: Record<string, unknown>): ReportGeneratedObject {
   const report_run_id =
@@ -84,6 +88,13 @@ export function buildReportGeneratedObject(raw: Record<string, unknown>): Report
     (raw.generated_at as string) ?? new Date().toISOString()
   const generated_by = (raw.generated_by as string | null) ?? null
   const id = (raw.id as string) ?? report_run_id
+
+  for (const key of REPORT_GENERATED_REQUIRED) {
+    const value = key === 'report_run_id' ? report_run_id : key === 'job_id' ? job_id : key === 'status' ? status : data_hash
+    if (value === undefined || value === null || String(value).trim() === '') {
+      throw new Error(`report.generated missing required field: ${key}`)
+    }
+  }
 
   return {
     report_run_id,
@@ -99,6 +110,7 @@ export function buildReportGeneratedObject(raw: Record<string, unknown>): Report
 }
 
 const EVIDENCE_TYPE_KINDS: EvidenceTypeKind[] = ['photo', 'document', 'other']
+const EVIDENCE_UPLOADED_REQUIRED = ['id', 'job_id', 'name', 'file_path', 'uploaded_by', 'created_at'] as const
 
 function deriveEvidenceType(raw: Record<string, unknown>, mimeType: string): EvidenceTypeKind {
   const rawType = (raw.type as string)?.toLowerCase().trim()
@@ -120,6 +132,7 @@ function deriveEvidenceType(raw: Record<string, unknown>, mimeType: string): Evi
  * Build canonical data.object for evidence.uploaded.
  * Accepts app shape (document_id, type: photo|evidence) or backend shape (id, evidence_id, file_name, storage_path, mime_type).
  * Ensures mime_type and evidence_type are always set; missing mime_type defaults to application/octet-stream; evidence_type is derived from type or mime_type.
+ * Throws if required fields are missing (no silent empty strings).
  */
 export function buildEvidenceUploadedObject(raw: Record<string, unknown>): EvidenceUploadedObject {
   const id = (raw.id as string) ?? (raw.document_id as string) ?? ''
@@ -132,6 +145,21 @@ export function buildEvidenceUploadedObject(raw: Record<string, unknown>): Evide
   const mime_type =
     (typeof raw.mime_type === 'string' && raw.mime_type.trim()) || 'application/octet-stream'
   const evidence_type = deriveEvidenceType(raw, mime_type)
+
+  const required: Record<string, string> = {
+    id,
+    job_id,
+    name,
+    file_path,
+    uploaded_by,
+    created_at,
+  }
+  for (const key of EVIDENCE_UPLOADED_REQUIRED) {
+    const value = required[key]
+    if (value === undefined || value === null || String(value).trim() === '') {
+      throw new Error(`evidence.uploaded missing required field: ${key}`)
+    }
+  }
 
   const out: EvidenceUploadedObject = {
     id,

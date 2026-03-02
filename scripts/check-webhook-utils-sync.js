@@ -3,6 +3,7 @@
  * CI check: verify lib/utils/webhookSigning.ts and lib/utils/webhookUrl.ts stay in sync
  * with apps/backend/src/utils/webhookSigning.ts and apps/backend/src/utils/webhookUrl.ts.
  * Only the "Canonical source" comment line may differ between each pair.
+ * Payload normalization: backend must re-export from lib/webhooks/payloads.ts (single source of truth).
  */
 const fs = require('fs')
 const path = require('path')
@@ -32,5 +33,17 @@ for (const [a, b] of pairs) {
     failed = true
   }
 }
+
+// Payload normalization: backend must re-export from lib (single source of truth)
+const backendPayloadPath = path.join(root, 'apps/backend/src/utils/webhookPayloads.ts')
+const backendPayloadContent = fs.readFileSync(backendPayloadPath, 'utf8')
+const reExportPattern = /from\s+['"]@\/lib\/webhooks\/payloads['"]/
+if (!reExportPattern.test(backendPayloadContent)) {
+  console.error(
+    'apps/backend/src/utils/webhookPayloads.ts must re-export from @/lib/webhooks/payloads (single source of truth for payload normalization)'
+  )
+  failed = true
+}
+
 if (failed) process.exit(1)
 console.log('Webhook utils in sync (lib vs backend)')

@@ -82,7 +82,10 @@ export function DeliveryLogsModal({
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
+  /** Initial load failure: hide list and show full-screen error */
   const [fetchError, setFetchError] = useState<string | null>(null)
+  /** Pagination (Load more) failure: keep existing deliveries visible, show non-blocking message */
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [retryErrors, setRetryErrors] = useState<Array<{ id: string; message: string }>>([])
@@ -98,6 +101,7 @@ export function DeliveryLogsModal({
     setRetriedDeliveryIds(new Set())
     setPayloadShowFull({})
     setFetchError(null)
+    setLoadMoreError(null)
     setHasMore(true)
     setLoading(true)
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=0`, { credentials: 'include' })
@@ -131,12 +135,13 @@ export function DeliveryLogsModal({
 
   const loadMore = () => {
     if (!endpointId || loadingMore || !hasMore) return
+    setLoadMoreError(null)
     setLoadingMore(true)
     const offset = deliveries.length
     fetch(`/api/webhooks/${endpointId}/deliveries?limit=${DELIVERIES_PAGE_SIZE}&offset=${offset}`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) {
-          setFetchError('Failed to load more deliveries. Please try again.')
+          setLoadMoreError('Failed to load more deliveries. Please try again.')
           setHasMore(false)
           return
         }
@@ -144,6 +149,9 @@ export function DeliveryLogsModal({
         const list = Array.isArray(json.data) ? json.data : []
         setDeliveries((prev) => [...prev, ...list])
         setHasMore(list.length >= DELIVERIES_PAGE_SIZE)
+      })
+      .catch(() => {
+        setLoadMoreError('Failed to load more deliveries. Please try again.')
       })
       .finally(() => setLoadingMore(false))
   }
@@ -400,16 +408,21 @@ export function DeliveryLogsModal({
             </table>
           )}
         </div>
-        {!loading && !fetchError && deliveries.length > 0 && hasMore && (
-          <div className="mt-4 flex justify-center">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={loadMore}
-              disabled={loadingMore}
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </Button>
+        {!loading && !fetchError && deliveries.length > 0 && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            {loadMoreError && (
+              <p className="text-sm text-amber-200">{loadMoreError}</p>
+            )}
+            {hasMore && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            )}
           </div>
         )}
       </GlassCard>
