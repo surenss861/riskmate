@@ -24,7 +24,7 @@ DECLARE
   v_new_id uuid;
 BEGIN
   -- Lock the source delivery row so eligibility and duplicate check are atomic with insert.
-  SELECT id, endpoint_id, event_type, payload, delivered_at, terminal_outcome
+  SELECT id, endpoint_id, event_type, payload, delivered_at, terminal_outcome, attempt_count
   INTO v_src
   FROM webhook_deliveries
   WHERE id = p_source_delivery_id
@@ -37,7 +37,20 @@ BEGIN
     RETURN;
   END IF;
 
-  IF v_src.delivered_at IS NOT NULL OR v_src.terminal_outcome IS DISTINCT FROM 'failed' THEN
+  -- Eligible: undelivered and (modern terminal failed, or legacy exhausted: terminal_outcome IS NULL with attempt_count >= 5).
+  IF v_src.delivered_at IS NOT NULL THEN
+    outcome := 'ineligible';
+    retry_id := NULL;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+  IF v_src.terminal_outcome IS NOT NULL AND v_src.terminal_outcome <> 'failed' THEN
+    outcome := 'ineligible';
+    retry_id := NULL;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+  IF v_src.terminal_outcome IS NULL AND COALESCE(v_src.attempt_count, 0) < 5 THEN
     outcome := 'ineligible';
     retry_id := NULL;
     RETURN NEXT;
@@ -72,4 +85,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION create_webhook_delivery_retry(uuid) IS
-  'Atomically creates a manual retry for a terminally failed delivery. Locks source, verifies eligibility (delivered_at IS NULL, terminal_outcome = failed), ensures no existing active (pending/in-progress) retry for that source, inserts one row. Returns outcome: created | already_scheduled | ineligible | not_found. Service-role only.';
+  'Atomically creates a manual retry for a terminally failed delivery. Locks source, verifies eligibility (delivered_at IS NULL; terminal_outcome = failed OR legacy: terminal_outcome IS NULL AND attempt_count >= 5), ensures no existing active (pending/in-progress) retry for that source, inserts one row. Returns outcome: created | already_scheduled | ineligible | not_found. Service-role only.';
