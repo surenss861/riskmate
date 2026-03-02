@@ -8,7 +8,7 @@
  * @see apps/backend/src/middleware/rateLimiter.ts - Express backend reference
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
 
 export interface RateLimitConfig {
