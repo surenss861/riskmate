@@ -177,7 +177,14 @@ async function handler(
       )
     }
 
+    const previousStatus = (job as { status?: string }).status
+    const transitionedToCompleted =
+      updated?.status === 'completed' && previousStatus !== 'completed'
+
     await triggerWebhookEvent(context.organization_id, 'job.updated', { ...updated }).catch(() => {})
+    if (transitionedToCompleted) {
+      await triggerWebhookEvent(context.organization_id, 'job.completed', { ...updated }).catch(() => {})
+    }
 
     const res = v1Json(updated)
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)

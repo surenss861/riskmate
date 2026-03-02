@@ -14,6 +14,7 @@ import {
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
+import { getOrgEntitlements } from '@/lib/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -175,6 +176,44 @@ export async function POST(request: NextRequest) {
         ),
         rateLimitResult
       )
+    }
+
+    const entitlements = await getOrgEntitlements(context.organization_id)
+    if (entitlements.jobs_monthly_limit !== null) {
+      const periodStart = entitlements.period_end
+        ? new Date(new Date(entitlements.period_end).getTime() - 30 * 24 * 60 * 60 * 1000)
+        : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+
+      const adminForCount = createSupabaseAdminClient()
+      const { count, error: countError } = await adminForCount
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', context.organization_id)
+        .gte('created_at', periodStart.toISOString())
+
+      if (countError) {
+        console.error('[v1/jobs] entitlement count error:', countError)
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('QUERY_ERROR', 'Failed to check job limit', requestId),
+            { status: 500, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      if ((count ?? 0) >= entitlements.jobs_monthly_limit) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody(
+              'ENTITLEMENTS_JOB_LIMIT_REACHED',
+              `${entitlements.tier === 'starter' ? 'Starter' : 'Plan'} limit reached (${entitlements.jobs_monthly_limit} jobs/month). Upgrade to Pro for unlimited jobs.`,
+              requestId
+            ),
+            { status: 403, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
     }
 
     const admin = createSupabaseAdminClient()

@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
   const admin = createSupabaseAdminClient()
 
-  const { data: job } = await admin
+  const { data: job, error: jobError } = await admin
     .from('jobs')
     .select('id')
     .eq('id', jobId)
@@ -79,6 +79,16 @@ export async function GET(request: NextRequest) {
     .is('deleted_at', null)
     .maybeSingle()
 
+  if (jobError) {
+    console.error('[v1/hazards] job lookup error:', jobError)
+    return withRateLimitHeaders(
+      NextResponse.json(
+        errorBody('QUERY_ERROR', 'Failed to look up job', requestId),
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      ),
+      rateLimitResult
+    )
+  }
   if (!job) {
     return withRateLimitHeaders(
       NextResponse.json(
@@ -141,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createSupabaseAdminClient()
 
-    const { data: job } = await admin
+    const { data: job, error: jobError } = await admin
       .from('jobs')
       .select('id')
       .eq('id', job_id)
@@ -149,6 +159,16 @@ export async function POST(request: NextRequest) {
       .is('deleted_at', null)
       .maybeSingle()
 
+    if (jobError) {
+      console.error('[v1/hazards] job lookup error:', jobError)
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to look up job', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     if (!job) {
       return withRateLimitHeaders(
         NextResponse.json(

@@ -126,10 +126,22 @@ export async function POST(request: NextRequest) {
     const validScopes = Array.isArray(scopes)
       ? (scopes as string[]).filter((s) => API_KEY_SCOPES.includes(s as any))
       : []
-    const expiresAt =
-      expires_at && typeof expires_at === 'string' && !Number.isNaN(Date.parse(expires_at))
-        ? new Date(expires_at).toISOString()
-        : null
+    let expiresAt: string | null = null
+    if (expires_at !== undefined && expires_at !== null && expires_at !== '') {
+      const parsed = typeof expires_at === 'string' ? Date.parse(expires_at) : Number.NaN
+      if (Number.isNaN(parsed)) {
+        const { response, errorId } = createErrorResponse(
+          'expires_at must be a valid ISO 8601 date string or null',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      expiresAt = new Date(parsed).toISOString()
+    }
 
     const prefix = getApiKeyPrefix()
     const plainKey = generateSecureKey(prefix)

@@ -33,8 +33,9 @@ async function getKeyAndCheckAuth(request: NextRequest, id: string) {
     .eq('id', id)
     .eq('organization_id', organization_id)
     .maybeSingle()
-  if (error || !key) return { error: true, key: null, organization_id: null }
-  return { error: false, key, organization_id }
+  if (error) return { queryError: true, notFound: false, key: null, organization_id: null }
+  if (!key) return { queryError: false, notFound: true, key: null, organization_id: null }
+  return { queryError: false, notFound: false, key, organization_id }
 }
 
 /** PATCH - Update name, scopes, expiry */
@@ -46,7 +47,18 @@ export async function PATCH(
   const { id } = await ctx.params
   try {
     const result = await getKeyAndCheckAuth(request, id)
-    if (result.error || !result.key) {
+    if (result.queryError) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to look up API key',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (result.notFound || !result.key) {
       const { response, errorId } = createErrorResponse(
         'API key not found',
         'NOT_FOUND',
@@ -80,10 +92,33 @@ export async function PATCH(
       )
     }
     if (expires_at !== undefined) {
-      updateData.expires_at =
-        expires_at && !Number.isNaN(Date.parse(expires_at))
-          ? new Date(expires_at).toISOString()
-          : null
+      if (expires_at === null || expires_at === '') {
+        updateData.expires_at = null
+      } else if (typeof expires_at === 'string') {
+        const parsed = Date.parse(expires_at)
+        if (Number.isNaN(parsed)) {
+          const { response, errorId } = createErrorResponse(
+            'expires_at must be a valid ISO 8601 date string or null',
+            'INVALID_FORMAT',
+            { requestId, statusCode: 400 }
+          )
+          return NextResponse.json(response, {
+            status: 400,
+            headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+          })
+        }
+        updateData.expires_at = new Date(parsed).toISOString()
+      } else {
+        const { response, errorId } = createErrorResponse(
+          'expires_at must be a valid ISO 8601 date string or null',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -153,7 +188,18 @@ export async function DELETE(
   const { id } = await ctx.params
   try {
     const result = await getKeyAndCheckAuth(request, id)
-    if (result.error || !result.key) {
+    if (result.queryError) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to look up API key',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (result.notFound || !result.key) {
       const { response, errorId } = createErrorResponse(
         'API key not found',
         'NOT_FOUND',
