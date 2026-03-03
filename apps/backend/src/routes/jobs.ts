@@ -73,6 +73,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       risk_level, 
       include_archived, 
       sort,
+      order: orderParam,
       q, // Search query
       time_range,
       missing_evidence,
@@ -139,7 +140,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       }
     }
     
-    // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc", "blockers_desc", "readiness_asc")
+    // Parse sort parameter: supports (1) legacy combined tokens (e.g. "risk_desc", "created_desc")
+    // and (2) spec format: sort=field&order=asc|desc (e.g. sort=due_date&order=asc, sort=created_at&order=desc).
+    // Alias: due_date (client) -> end_date (DB column).
     let sortField = 'created_at';
     let sortDirection: 'asc' | 'desc' = 'desc';
     let useStatusOrdering = false;
@@ -148,8 +151,12 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     let sortMode: string = 'created_desc';
     
     if (sort) {
-      const sortStr = String(sort);
+      const sortStr = String(sort).trim();
+      const orderStr = (orderParam != null && orderParam !== '') ? String(orderParam).trim().toLowerCase() : '';
+      const directionFromOrder = orderStr === 'asc' ? 'asc' : 'desc';
+
       if (sortStr.includes('_')) {
+        // Legacy: combined token (e.g. created_desc, risk_asc)
         const [field, dir] = sortStr.split('_');
         sortMode = `${field}_${dir}`;
         if (field === 'status') {
@@ -158,12 +165,10 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         } else if (field === 'blockers') {
           useBlockersOrdering = true;
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
-          // Pre-sort by created_at for consistency, then sort by blockers in memory
           sortField = 'created_at';
         } else if (field === 'readiness') {
           useReadinessOrdering = true;
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
-          // Pre-sort by created_at for consistency, then sort by readiness in memory
           sortField = 'created_at';
         } else if (field === 'newest') {
           sortField = 'created_at';
@@ -174,6 +179,35 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
         } else {
           sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : 'created_at';
           sortDirection = dir === 'asc' ? 'asc' : 'desc';
+        }
+      } else {
+        // Spec format: sort=field & order=asc|desc (order defaults to desc when omitted)
+        const field = sortStr;
+        sortDirection = directionFromOrder;
+        if (field === 'status') {
+          useStatusOrdering = true;
+          sortMode = `status_${sortDirection}`;
+        } else if (field === 'blockers') {
+          useBlockersOrdering = true;
+          sortField = 'created_at';
+          sortMode = `blockers_${sortDirection}`;
+        } else if (field === 'readiness') {
+          useReadinessOrdering = true;
+          sortField = 'created_at';
+          sortMode = `readiness_${sortDirection}`;
+        } else if (field === 'due_date') {
+          sortField = 'end_date'; // API alias: due_date -> end_date (DB column)
+          sortMode = `due_date_${sortDirection}`;
+        } else if (field === 'created_at' || field === 'created') {
+          sortField = 'created_at';
+          sortMode = `created_at_${sortDirection}`;
+        } else if (field === 'risk_score' || field === 'risk') {
+          sortField = 'risk_score';
+          sortMode = `risk_${sortDirection}`;
+        } else {
+          sortField = 'created_at';
+          sortDirection = 'desc';
+          sortMode = 'created_desc';
         }
       }
     }
@@ -282,6 +316,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     const baseColumns = "id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
     // Optional columns (may not exist if migration hasn't run)
     const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
+    const selectColumns = sortField === 'end_date'
+      ? `${baseColumns}, ${optionalColumns}, end_date`
+      : `${baseColumns}, ${optionalColumns}`;
 
     // Resolve hazard / insight / due_soon / pending_signatures filters (need job ID sets from related tables)
     let hazardJobIds: string[] = [];
@@ -344,7 +381,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
 
     let query = supabase
       .from("jobs")
-      .select(`${baseColumns}, ${optionalColumns}`)
+      .select(selectColumns)
       .eq("organization_id", organization_id)
       .is("deleted_at", null); // Always exclude deleted
 
@@ -446,16 +483,24 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
             const cursorRiskNum = parseFloat(cursorRisk);
             if (!isNaN(cursorRiskNum) && cursorTimestamp && cursorId) {
               if (sortDirection === 'desc') {
-                // risk_desc: risk < cursor OR (risk = cursor AND created < cursor) OR (risk = cursor AND created = cursor AND id < cursorId)
                 query = query.or(
                   `risk_score.lt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.lt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.lt.${cursorId})`
                 );
               } else {
-                // risk_asc: risk > cursor OR (risk = cursor AND created > cursor) OR (risk = cursor AND created = cursor AND id > cursorId)
                 query = query.or(
                   `risk_score.gt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.gt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.gt.${cursorId})`
                 );
               }
+            }
+          }
+        } else if (sortField === 'end_date') {
+          // due_date/end_date: cursor = "end_date|id"
+          const [cursorEndDate, cursorId] = cursorStr.split('|');
+          if (cursorEndDate && cursorId) {
+            if (sortDirection === 'desc') {
+              query = query.or(`end_date.lt.${cursorEndDate},and(end_date.eq.${cursorEndDate},id.lt.${cursorId})`);
+            } else {
+              query = query.or(`end_date.gt.${cursorEndDate},and(end_date.eq.${cursorEndDate},id.gt.${cursorId})`);
             }
           }
         }
@@ -471,14 +516,15 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       // Cursor pagination is disabled for status_asc to prevent drift
       query = query.order("created_at", { ascending: false }); // Pre-sort by created_at DESC for consistency
     } else {
-      // For created_at and risk_score, use SQL ordering (cursor-compatible)
+      // For created_at, risk_score, end_date use SQL ordering (cursor-compatible)
       if (sortField === 'risk_score') {
-        // Multi-column sort: risk_score, then created_at, then id (for deterministic cursor)
         query = query.order(sortField, { ascending: sortDirection === 'asc' });
         query = query.order("created_at", { ascending: sortDirection === 'asc' });
         query = query.order("id", { ascending: sortDirection === 'asc' });
+      } else if (sortField === 'end_date') {
+        query = query.order("end_date", { ascending: sortDirection === 'asc' });
+        query = query.order("id", { ascending: sortDirection === 'asc' });
       } else {
-        // Single-column sort: created_at, then id (for deterministic cursor)
         query = query.order(sortField, { ascending: sortDirection === 'asc' });
         query = query.order("id", { ascending: sortDirection === 'asc' });
       }
@@ -536,10 +582,11 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       error.message?.includes('assigned_to_id') ||
       error.message?.includes('assigned_to_name') ||
       error.message?.includes('assigned_to_email') ||
+      error.message?.includes('end_date') ||
       (error as any).code === 'PGRST116'
     )) {
       console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
-      // Fallback: only select columns that definitely exist (core columns only)
+      // Minimal columns only (no end_date) so fallback works when migrations are partial
       let fallbackQuery = supabase
         .from("jobs")
         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
@@ -604,6 +651,7 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
               }
             }
           }
+          // end_date cursor skipped in fallback (minimal select has no end_date)
         } catch (e) {
           // Invalid cursor, fall back to offset
         }
@@ -614,6 +662,10 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       } else {
         if (sortField === 'risk_score') {
           fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
+          fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
+          fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
+        } else if (sortField === 'end_date') {
+          // Fallback select has no end_date; order by created_at so query succeeds
           fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
           fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
         } else {
@@ -856,12 +908,13 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       const lastJob = jobs[jobs.length - 1];
       
       if (sortField === 'created_at') {
-        // created_desc/created_asc: cursor = "created_at|id"
         nextCursor = `${lastJob.created_at}|${lastJob.id}`;
       } else if (sortField === 'risk_score') {
-        // risk_desc/risk_asc: cursor = "risk_score|created_at|id"
         const riskScore = lastJob.risk_score ?? 0;
         nextCursor = `${riskScore}|${lastJob.created_at}|${lastJob.id}`;
+      } else if (sortField === 'end_date') {
+        const endDate = (lastJob as { end_date?: string | null }).end_date ?? '';
+        nextCursor = `${endDate}|${lastJob.id}`;
       }
     }
 

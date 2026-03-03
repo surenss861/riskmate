@@ -162,6 +162,53 @@ describe('GET /api/jobs', () => {
         expect(currentOrder).toBeLessThanOrEqual(nextOrder)
       }
     })
+
+    it('should sort by sort=due_date&order=asc (spec format with due_date alias)', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=due_date&order=asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.ok).toBe(true)
+      expect(data.data).toBeDefined()
+      const jobs = data.data as Array<{ end_date?: string | null; id: string }>
+      for (let i = 0; i < jobs.length - 1; i++) {
+        const a = jobs[i].end_date ? new Date(jobs[i].end_date!).getTime() : Number.MAX_SAFE_INTEGER
+        const b = jobs[i + 1].end_date ? new Date(jobs[i + 1].end_date!).getTime() : Number.MAX_SAFE_INTEGER
+        expect(a).toBeLessThanOrEqual(b)
+      }
+    })
+
+    it('should sort by sort=created_at&order=desc (spec format)', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=created_at&order=desc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.ok).toBe(true)
+      for (let i = 0; i < data.data.length - 1; i++) {
+        const current = new Date(data.data[i].created_at).getTime()
+        const next = new Date(data.data[i + 1].created_at).getTime()
+        expect(current).toBeGreaterThanOrEqual(next)
+      }
+    })
+
+    it('should accept legacy sort token sort=created_desc', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=created_desc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.ok).toBe(true)
+      for (let i = 0; i < data.data.length - 1; i++) {
+        const current = new Date(data.data[i].created_at).getTime()
+        const next = new Date(data.data[i + 1].created_at).getTime()
+        expect(current).toBeGreaterThanOrEqual(next)
+      }
+    })
   })
 
   describe('Template field shape', () => {

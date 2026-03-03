@@ -116,7 +116,7 @@ const JobsPageContent = () => {
         insight: insightParam as 'deadline_risk' | 'pending_signatures_near_deadline' | 'overdue' | undefined,
         reference_date: referenceDateParam || undefined,
         sort: state.sort || undefined,
-        order: state.order !== 'desc' ? state.order : undefined,
+        order: state.sort ? state.order : undefined,
       })
 
       if (process.env.NODE_ENV === 'development' && response._meta) {
