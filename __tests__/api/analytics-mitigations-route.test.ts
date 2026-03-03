@@ -130,4 +130,32 @@ describe('GET /api/analytics/mitigations', () => {
       p_crew_id: null,
     }))
   })
+
+  it('returns 400 VALIDATION_ERROR when since or until has invalid format', async () => {
+    const res = await GET(mitigationsRequest({ since: 'notadate', until: '2025-01-15' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid date format for since or until',
+    })
+    expect(res.headers.get('X-Request-ID')).toBe(REQUEST_ID)
+    expect(res.headers.get('X-Error-ID')).toBeDefined()
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 VALIDATION_ERROR when since is after until (reversed range)', async () => {
+    const res = await GET(mitigationsRequest({ since: '2025-01-15', until: '2025-01-01' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid date range: since must be before or equal to until',
+    })
+    expect(res.headers.get('X-Request-ID')).toBe(REQUEST_ID)
+    expect(res.headers.get('X-Error-ID')).toBeDefined()
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
 })

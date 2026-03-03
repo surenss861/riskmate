@@ -3,6 +3,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
+import { parseSinceUntil, effectiveDaysFromRange } from '@/lib/utils/analyticsDateRange'
 
 export const runtime = 'nodejs'
 
@@ -84,18 +85,50 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const sinceParam = searchParams.get('since')?.trim()
-    const untilParam = searchParams.get('until')?.trim()
+    const sinceParam = searchParams.get('since')
+    const untilParam = searchParams.get('until')
+    const customRange = parseSinceUntil(sinceParam, untilParam)
+    if (customRange && 'error' in customRange) {
+      if (customRange.error === 'invalid_order') {
+        const { response, errorId } = createErrorResponse(
+          'Invalid date range: since must be before or equal to until',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      if (customRange.error === 'invalid_format') {
+        const { response, errorId } = createErrorResponse(
+          'Invalid date format for since or until',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+    }
+    const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const rangeParam = searchParams.get('range')?.trim()?.toLowerCase()
 
     let sinceIso: string
     let untilIso: string
     let rangeDays: number
 
-    if (sinceParam && untilParam && !Number.isNaN(Date.parse(sinceParam)) && !Number.isNaN(Date.parse(untilParam))) {
-      sinceIso = new Date(sinceParam).toISOString()
-      untilIso = new Date(untilParam).toISOString()
-      rangeDays = Math.ceil((new Date(untilIso).getTime() - new Date(sinceIso).getTime()) / (24 * 60 * 60 * 1000)) + 1
+    if (customRangeValid) {
+      sinceIso = customRangeValid.since
+      untilIso = customRangeValid.until
+      rangeDays = effectiveDaysFromRange(sinceIso, untilIso)
     } else if (rangeParam === '1y' || rangeParam === '365d') {
       const bounds = calendarYearBounds()
       sinceIso = bounds.since
