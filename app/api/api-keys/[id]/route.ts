@@ -249,7 +249,16 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    throw e
+    console.error('[api-keys/[id]] PATCH error:', e)
+    const { response, errorId } = createErrorResponse(
+      'An unexpected error occurred',
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 
@@ -340,6 +349,15 @@ export async function DELETE(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    throw e
+    console.error('[api-keys/[id]] DELETE error:', e)
+    const { response, errorId } = createErrorResponse(
+      'An unexpected error occurred',
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }

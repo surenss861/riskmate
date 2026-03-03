@@ -86,7 +86,16 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    throw e
+    console.error('[api-keys] GET error:', e)
+    const { response, errorId } = createErrorResponse(
+      'An unexpected error occurred',
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }
 
@@ -98,6 +107,17 @@ export async function POST(request: NextRequest) {
     requireOwnerOrAdmin(user_role)
 
     const body = await request.json().catch(() => ({}))
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      const { response, errorId } = createErrorResponse(
+        'Request body must be a JSON object',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     const { name, scopes, expires_at } = body
 
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -215,6 +235,15 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    throw e
+    console.error('[api-keys] POST error:', e)
+    const { response, errorId } = createErrorResponse(
+      'An unexpected error occurred',
+      'INTERNAL_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
   }
 }

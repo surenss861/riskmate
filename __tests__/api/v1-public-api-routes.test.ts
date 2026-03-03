@@ -262,6 +262,33 @@ describe('Public API v1 routes', () => {
       expect(res.status).toBe(403)
     })
 
+    it('returns 400 INVALID_FORMAT when body is null', async () => {
+      const { POST } = await import('@/app/api/v1/jobs/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', body: null }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
+    })
+
+    it('returns 400 INVALID_FORMAT when body is an array', async () => {
+      const { POST } = await import('@/app/api/v1/jobs/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', body: [] }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
+    })
+
+    it('returns 400 INVALID_FORMAT when body is a primitive', async () => {
+      const { POST } = await import('@/app/api/v1/jobs/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', body: 'not an object' }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
+    })
+
     it('returns 200 with job when key has jobs:write and body valid', async () => {
       const insertedJob = { id: 'new-job-id', title: 'Acme – inspection – NYC', ...validBody }
       fromMock = jest.fn((table: string) => {
@@ -353,6 +380,35 @@ describe('Public API v1 routes', () => {
       expect(body.data).toBeDefined()
       expect(body.meta).toEqual({ page: 1, limit: 20, total: expect.any(Number) })
       expect(res.headers.get('X-RateLimit-Limit')).toBe('1000')
+    })
+  })
+
+  describe('POST /api/v1/hazards', () => {
+    it('returns 400 INVALID_FORMAT when body is null', async () => {
+      const { POST } = await import('@/app/api/v1/hazards/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', url: 'http://localhost/api/v1/hazards', body: null }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
+    })
+
+    it('returns 400 INVALID_FORMAT when body is an array', async () => {
+      const { POST } = await import('@/app/api/v1/hazards/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', url: 'http://localhost/api/v1/hazards', body: [] }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
+    })
+
+    it('returns 400 INVALID_FORMAT when body is a primitive', async () => {
+      const { POST } = await import('@/app/api/v1/hazards/route')
+      const res = await POST(requestWithAuth(VALID_KEY, { method: 'POST', url: 'http://localhost/api/v1/hazards', body: 42 }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error?.code).toBe('INVALID_FORMAT')
+      expect(res.headers.get('X-Request-ID')).toBeTruthy()
     })
   })
 

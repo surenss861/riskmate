@@ -147,6 +147,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}))
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Request body must be a JSON object', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     const { job_id, title: rawTitle, description } = body
 
     const title = rawTitle != null ? String(rawTitle).trim() : ''
