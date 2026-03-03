@@ -87,6 +87,27 @@ describe('API Key Management routes', () => {
       expect(res.status).toBe(401)
       expect(body.code || body.error?.code).toBeTruthy()
     })
+
+    it('returns 403 when user has member role in active org (e.g. elevated users.role in another org)', async () => {
+      const { getOrganizationContext, requireOwnerOrAdmin } = require('@/lib/utils/organizationGuard')
+      getOrganizationContext.mockResolvedValue({
+        organization_id: ORG_ID,
+        user_id: USER_ID,
+        user_role: 'member',
+      })
+      requireOwnerOrAdmin.mockImplementation((role: string) => {
+        if (role !== 'owner' && role !== 'admin') {
+          throw new Error('Requires one of: owner, admin')
+        }
+      })
+
+      const { GET } = await import('@/app/api/api-keys/route')
+      const res = await GET(request())
+      const body = await res.json()
+
+      expect(res.status).toBe(403)
+      expect(body.code === 'FORBIDDEN' || body.error?.code === 'FORBIDDEN').toBe(true)
+    })
   })
 
   describe('POST /api/api-keys', () => {
