@@ -17,6 +17,7 @@ import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 import { getOrgEntitlementsForApiKey } from '@/lib/entitlements'
 import { VALID_JOB_STATUSES_SET } from '@/lib/api/v1JobsConstants'
 import { parseStrictInt } from '@/lib/utils/parseStrictInt'
+import { JOB_PUBLIC_FIELDS, mapJobRowToDto, mapJobListItemRowToDto } from '@/lib/api/v1Dtos'
 
 export const runtime = 'nodejs'
 
@@ -103,8 +104,13 @@ export async function GET(request: NextRequest) {
     }
 
     const list = (rows || []) as Array<Record<string, unknown>>
-    let total = (list[0]?.total_count as number) ?? 0
-    if (list.length === 0) {
+    const rawTotal = list[0]?.total_count
+    const hasValidTotal =
+      typeof rawTotal === 'number' && Number.isFinite(rawTotal) && rawTotal >= 0
+    let total: number
+    if (hasValidTotal) {
+      total = rawTotal
+    } else {
       let countQuery = admin
         .from('jobs')
         .select('*', { count: 'exact', head: true })
@@ -113,9 +119,9 @@ export async function GET(request: NextRequest) {
         .is('archived_at', null)
       if (status) countQuery = countQuery.eq('status', status)
       const { count, error: countError } = await countQuery
-      if (!countError && count != null) total = count
+      total = !countError && count != null ? count : 0
     }
-    const jobs = list.map(({ total_count: _t, ...j }) => j)
+    const jobs = list.map((row) => mapJobListItemRowToDto(row))
 
     const res = v1Json(jobs, {
       meta: { page, limit, total },
@@ -252,7 +258,7 @@ export async function POST(request: NextRequest) {
         end_date: end_date || null,
         status: st,
       })
-      .select('*')
+      .select(JOB_PUBLIC_FIELDS)
       .single()
 
     if (error) {
@@ -299,7 +305,7 @@ export async function POST(request: NextRequest) {
 
     await triggerWebhookEvent(context.organization_id, 'job.created', { ...job }).catch(() => {})
 
-    const res = v1Json(job)
+    const res = v1Json(mapJobRowToDto(job as Record<string, unknown>))
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   } catch (e) {
     console.error('[v1/jobs] POST error:', e)

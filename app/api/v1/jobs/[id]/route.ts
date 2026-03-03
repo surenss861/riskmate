@@ -20,6 +20,12 @@ import {
   VALID_CLIENT_TYPES_SET,
   VALID_JOB_TYPES_SET,
 } from '@/lib/api/v1JobsConstants'
+import {
+  JOB_PUBLIC_FIELDS,
+  JOB_RISK_SCORE_PUBLIC_FIELDS,
+  mapJobRowToDto,
+  mapJobRiskScoreRowToDto,
+} from '@/lib/api/v1Dtos'
 
 export const runtime = 'nodejs'
 
@@ -66,7 +72,7 @@ async function handler(
 
   const { data: job, error: fetchError } = await admin
     .from('jobs')
-    .select('*')
+    .select(JOB_PUBLIC_FIELDS)
     .eq('id', jobId)
     .eq('organization_id', context.organization_id)
     .is('deleted_at', null)
@@ -115,7 +121,7 @@ async function handler(
 
     const { data: riskScore, error: riskScoreError } = await admin
       .from('job_risk_scores')
-      .select('*')
+      .select(JOB_RISK_SCORE_PUBLIC_FIELDS)
       .eq('job_id', jobId)
       .maybeSingle()
 
@@ -161,9 +167,10 @@ async function handler(
       )
     }
 
+    const jobDto = mapJobRowToDto(job as Record<string, unknown>)
     const res = v1Json({
-      ...job,
-      risk_score_detail: riskScore || null,
+      ...jobDto,
+      risk_score_detail: mapJobRiskScoreRowToDto(riskScore as Record<string, unknown> | null),
       hazards: hazards || [],
       controls: controls || [],
     })
@@ -263,7 +270,7 @@ async function handler(
     if (status !== undefined) updateData.status = String(status).toLowerCase()
 
     if (Object.keys(updateData).length === 0) {
-      const res = v1Json(job)
+      const res = v1Json(mapJobRowToDto(job as Record<string, unknown>))
       return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
     }
 
@@ -272,7 +279,7 @@ async function handler(
       .update(updateData)
       .eq('id', jobId)
       .eq('organization_id', context.organization_id)
-      .select('*')
+      .select(JOB_PUBLIC_FIELDS)
       .single()
 
     if (updateError) {
@@ -340,7 +347,7 @@ async function handler(
       await triggerWebhookEvent(context.organization_id, 'job.completed', { ...updated }).catch(() => {})
     }
 
-    const res = v1Json(updated)
+    const res = v1Json(mapJobRowToDto(updated as Record<string, unknown>))
     return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
   }
 

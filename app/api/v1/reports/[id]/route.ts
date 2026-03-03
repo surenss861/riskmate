@@ -14,6 +14,10 @@ import {
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
 import { isValidUUID } from '@/lib/utils/uuid'
+import {
+  REPORT_RUN_PUBLIC_FIELDS,
+  mapReportRunRowToDto,
+} from '@/lib/api/v1Dtos'
 
 export const runtime = 'nodejs'
 
@@ -45,7 +49,7 @@ export async function GET(
 
   const { data: reportRun, error: runError } = await admin
     .from('report_runs')
-    .select('*')
+    .select(REPORT_RUN_PUBLIC_FIELDS)
     .eq('id', reportId)
     .eq('organization_id', context.organization_id)
     .maybeSingle()
@@ -97,8 +101,9 @@ export async function GET(
     )
   }
 
+  const reportDto = mapReportRunRowToDto(reportRun as Record<string, unknown>)
   const res = v1Json({
-    ...reportRun,
+    ...reportDto,
     signatures: signatures || [],
   })
   return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
