@@ -21,11 +21,17 @@ function parseSinceUntilQuery(query: { since?: string | string[]; until?: string
   return parseSinceUntil(since || null, until || null);
 }
 
-/** If parse result is invalid_order, send 400 and return true; otherwise return false. */
-function rejectInvalidOrder(res: express.Response, parseResult: ParseSinceUntilResult): boolean {
-  if (parseResult && "error" in parseResult && parseResult.error === "invalid_order") {
-    res.status(400).json({ message: "Invalid date range: since must be before or equal to until", code: "VALIDATION_ERROR" });
-    return true;
+/** If parse result is invalid_order or invalid_format, send 400 and return true; otherwise return false. */
+function rejectInvalidDateRange(res: express.Response, parseResult: ParseSinceUntilResult): boolean {
+  if (parseResult && "error" in parseResult) {
+    if (parseResult.error === "invalid_order") {
+      res.status(400).json({ message: "Invalid date range: since must be before or equal to until", code: "VALIDATION_ERROR" });
+      return true;
+    }
+    if (parseResult.error === "invalid_format") {
+      res.status(400).json({ message: "Invalid date format for since or until", code: "VALIDATION_ERROR" });
+      return true;
+    }
   }
   return false;
 }
@@ -129,7 +135,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(parsed.days);
@@ -513,7 +519,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
@@ -571,7 +577,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(parsed.days);
@@ -615,7 +621,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(parsed.days);
@@ -695,7 +701,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
@@ -757,7 +763,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
@@ -828,7 +834,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
@@ -902,7 +908,7 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days, key: periodKey } = parsePeriodQuery(authReq.query.period);
       const { since, until } =
@@ -967,7 +973,7 @@ analyticsRouter.get(
 
       const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
       const explicitRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, explicitRangeRaw)) return;
+      if (rejectInvalidDateRange(res, explicitRangeRaw)) return;
       const explicitRange = explicitRangeRaw && !("error" in explicitRangeRaw) ? explicitRangeRaw : null;
       const rangeParam = authReq.query.range as string | undefined;
       const rangeDays = parseRangeDays(rangeParam);
@@ -1100,7 +1106,7 @@ analyticsRouter.get(
       }
 
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      if (rejectInvalidOrder(res, customRangeRaw)) return;
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
       const { since, until } = customRange ?? dateRangeForDays(rangeDays);

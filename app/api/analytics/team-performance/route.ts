@@ -24,19 +24,35 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
-    if (customRange && 'error' in customRange && customRange.error === 'invalid_order') {
-      const { response, errorId } = createErrorResponse(
-        'Invalid date range: since must be before or equal to until',
-        'VALIDATION_ERROR',
-        { requestId, statusCode: 400 }
-      )
-      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
-        category: 'validation', severity: 'warn', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 400,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
+    if (customRange && 'error' in customRange) {
+      if (customRange.error === 'invalid_order') {
+        const { response, errorId } = createErrorResponse(
+          'Invalid date range: since must be before or equal to until',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      if (customRange.error === 'invalid_format') {
+        const { response, errorId } = createErrorResponse(
+          'Invalid date format for since or until',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const parsed = parsePeriod(searchParams.get('period'))

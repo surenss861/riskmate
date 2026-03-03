@@ -14,6 +14,7 @@ export function parsePeriod(value?: string | null): { days: number; key: PeriodK
 export type ParseSinceUntilResult =
   | { since: string; until: string }
   | { error: 'invalid_order' }
+  | { error: 'invalid_format' }
   | null
 
 export function parseSinceUntil(
@@ -25,7 +26,7 @@ export function parseSinceUntil(
   if (!since || !until) return null
   const sinceDate = new Date(since)
   const untilDate = new Date(until)
-  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return null
+  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return { error: 'invalid_format' }
   if (sinceDate.getTime() > untilDate.getTime()) return { error: 'invalid_order' }
   return { since: sinceDate.toISOString(), until: untilDate.toISOString() }
 }
@@ -42,14 +43,18 @@ export function dateRangeForDays(days: number): { since: string; until: string }
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
- * Derive effective span in days from explicit since/until (covers full calendar days in range).
+ * Derive effective span in days from explicit since/until (inclusive calendar-day span).
+ * Normalizes both timestamps to UTC day boundaries; minimum 1 day when since <= until.
  * Used for period metadata and MV eligibility when callers send explicit range instead of period.
  */
 export function effectiveDaysFromRange(since: string, until: string): number {
   const sinceMs = new Date(since).getTime()
   const untilMs = new Date(until).getTime()
   if (Number.isNaN(sinceMs) || Number.isNaN(untilMs) || untilMs < sinceMs) return 30
-  return Math.ceil((untilMs - sinceMs) / MS_PER_DAY)
+  const sinceDayIndex = Math.floor(sinceMs / MS_PER_DAY)
+  const untilDayIndex = Math.floor(untilMs / MS_PER_DAY)
+  const inclusiveDays = untilDayIndex - sinceDayIndex + 1
+  return Math.max(1, inclusiveDays)
 }
 
 /**
