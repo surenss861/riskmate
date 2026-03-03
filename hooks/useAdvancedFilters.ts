@@ -59,6 +59,10 @@ export interface AdvancedFiltersState {
   insight: string
   /** Reference date for insight drill-down (ISO string). */
   reference_date: string
+  /** Sort column (e.g. due_date, created_at, risk_score). */
+  sort: string
+  /** Sort order: asc | desc. */
+  order: 'asc' | 'desc'
 }
 
 const DEFAULT_STATE: AdvancedFiltersState = {
@@ -89,6 +93,8 @@ const DEFAULT_STATE: AdvancedFiltersState = {
   filterTemplateId: '',
   insight: '',
   reference_date: '',
+  sort: '',
+  order: 'desc',
 }
 
 function parseBoolParam(value: string | null): boolean | undefined {
@@ -165,6 +171,8 @@ function parseStateFromSearchParams(searchParams: URLSearchParams | null): Advan
     filterTemplateId: searchParams.get('template_id') ?? '',
     insight: searchParams.get('insight') ?? '',
     reference_date: searchParams.get('reference_date') ?? '',
+    sort: searchParams.get('sort') ?? '',
+    order: (searchParams.get('order') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc',
   }
 }
 
@@ -201,6 +209,8 @@ function buildParams(state: AdvancedFiltersState): URLSearchParams {
   if (state.filterTemplateId) params.set('template_id', state.filterTemplateId)
   if (state.insight) params.set('insight', state.insight)
   if (state.reference_date) params.set('reference_date', state.reference_date)
+  if (state.sort) params.set('sort', state.sort)
+  if (state.order && state.order !== 'desc') params.set('order', state.order)
   return params
 }
 
@@ -338,6 +348,14 @@ export function useAdvancedFilters() {
     (value: string) => replaceUrl({ ...state, filterTemplateId: value, page: 1 }),
     [state, replaceUrl]
   )
+  const setSort = useCallback(
+    (value: string) => replaceUrl({ ...state, sort: value, page: 1 }),
+    [state, replaceUrl]
+  )
+  const setOrder = useCallback(
+    (value: 'asc' | 'desc') => replaceUrl({ ...state, order: value, page: 1 }),
+    [state, replaceUrl]
+  )
 
   const clearAllFilters = useCallback(() => replaceUrl(DEFAULT_STATE), [replaceUrl])
 
@@ -375,6 +393,8 @@ export function useAdvancedFilters() {
     setReferenceDate,
     setFilterTemplateSource,
     setFilterTemplateId,
+    setSort,
+    setOrder,
     clearAllFilters,
     getShareUrl,
   }

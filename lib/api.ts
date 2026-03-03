@@ -352,6 +352,7 @@ export const jobsApi = {
     risk_level?: string;
     include_archived?: boolean;
     sort?: string;
+    order?: 'asc' | 'desc';
     cursor?: string;
     q?: string;
     time_range?: string;
@@ -392,6 +393,7 @@ export const jobsApi = {
     if (params?.risk_level) queryParams.set('risk_level', params.risk_level);
     if (params?.include_archived) queryParams.set('include_archived', 'true');
     if (params?.sort) queryParams.set('sort', params.sort);
+    if (params?.order) queryParams.set('order', params.order);
     if (params?.cursor) queryParams.set('cursor', params.cursor);
     if (params?.q) queryParams.set('q', params.q);
     if (params?.time_range) queryParams.set('time_range', params.time_range);

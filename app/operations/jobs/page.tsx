@@ -115,6 +115,8 @@ const JobsPageContent = () => {
         hazard: state.hazard || undefined,
         insight: insightParam as 'deadline_risk' | 'pending_signatures_near_deadline' | 'overdue' | undefined,
         reference_date: referenceDateParam || undefined,
+        sort: state.sort || undefined,
+        order: state.order !== 'desc' ? state.order : undefined,
       })
 
       if (process.env.NODE_ENV === 'development' && response._meta) {
@@ -152,11 +154,13 @@ const JobsPageContent = () => {
       state.hazard,
       insightParam,
       referenceDateParam,
+      state.sort,
+      state.order,
     ]
   )
 
   // Use debouncedSearchQuery (not state.searchQuery) so key and fetcher use the same value and results don't lag a keystroke
-  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.dueSoon}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}-${state.insight}-${state.reference_date}`
+  const swrKey = `jobs-list-${state.page}-${state.filterStatus}-${state.filterRiskLevel}-${state.filterTemplateSource}-${state.filterTemplateId}-${debouncedSearchQuery}-${state.filterTimeRange}-${state.includeArchived}-${state.hasPhotos}-${state.hasSignatures}-${state.needsSignatures}-${state.filterConfig ? JSON.stringify(state.filterConfig) : ''}-${state.savedFilterId}-${state.myJobs}-${state.highRisk}-${state.overdue}-${state.dueSoon}-${state.unassigned}-${state.recent}-${state.createdAfter}-${state.createdBefore}-${state.completedAfter}-${state.completedBefore}-${state.hazard}-${state.insight}-${state.reference_date}-${state.sort}-${state.order}`
 
   const { data: response, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: true,
