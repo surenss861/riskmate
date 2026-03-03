@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
-import { UnauthorizedError } from '@/lib/utils/adminAuth'
+import { UnauthorizedError, ForbiddenError } from '@/lib/utils/adminAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
@@ -23,7 +23,7 @@ async function getKeyAndCheckAuth(request: NextRequest, id: string) {
   const admin = createSupabaseAdminClient()
   const { data: key, error } = await admin
     .from('api_keys')
-    .select('id, organization_id, name, scopes, expires_at, revoked_at')
+    .select('id, organization_id, name, key_prefix, scopes, expires_at, revoked_at')
     .eq('id', id)
     .eq('organization_id', organization_id)
     .maybeSingle()
@@ -239,9 +239,9 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (e.message?.includes('Requires one of')) {
+    if (e instanceof ForbiddenError || e.message?.includes('Requires one of') || e.message?.includes('no organization') || e.message?.includes('organization membership')) {
       const { response, errorId } = createErrorResponse(
-        'Only owners and admins can manage API keys',
+        e instanceof ForbiddenError ? e.message : 'Only owners and admins can manage API keys',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -306,12 +306,25 @@ export async function DELETE(
       })
     }
 
+    // Idempotent revoke: if already revoked, return existing state without overwriting revoked_at
+    if (result.key.revoked_at) {
+      return NextResponse.json({
+        data: {
+          id: result.key.id,
+          name: result.key.name,
+          key_prefix: result.key.key_prefix,
+          revoked_at: result.key.revoked_at,
+        },
+      })
+    }
+
     const admin = createSupabaseAdminClient()
     const { data: updated, error } = await admin
       .from('api_keys')
       .update({ revoked_at: new Date().toISOString() })
       .eq('id', id)
       .eq('organization_id', result.organization_id!)
+      .is('revoked_at', null)
       .select('id, name, key_prefix, revoked_at')
       .single()
 
@@ -339,9 +352,9 @@ export async function DELETE(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (e.message?.includes('Requires one of')) {
+    if (e instanceof ForbiddenError || e.message?.includes('Requires one of') || e.message?.includes('no organization') || e.message?.includes('organization membership')) {
       const { response, errorId } = createErrorResponse(
-        'Only owners and admins can manage API keys',
+        e instanceof ForbiddenError ? e.message : 'Only owners and admins can manage API keys',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )

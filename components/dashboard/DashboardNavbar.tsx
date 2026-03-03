@@ -19,6 +19,7 @@ const ALL_NAV_ITEMS = [
   { label: 'Work Records', href: '/operations/jobs', roles: ['owner', 'admin', 'member', 'safety_lead'] },
   { label: 'Risk Posture', href: '/operations/executive', roles: ['owner', 'admin', 'executive'] },
   { label: 'Account', href: '/operations/account', roles: ['owner', 'admin'] },
+  { label: 'API Keys', href: '/settings/api-keys', roles: ['owner', 'admin'] },
   { label: 'Team', href: '/operations/team', roles: ['owner', 'admin'] },
 ]
 

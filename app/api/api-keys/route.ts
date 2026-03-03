@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
-import { UnauthorizedError } from '@/lib/utils/adminAuth'
+import { UnauthorizedError, ForbiddenError } from '@/lib/utils/adminAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
@@ -76,9 +76,9 @@ export async function GET(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (e.message?.includes('Requires one of')) {
+    if (e instanceof ForbiddenError || e.message?.includes('Requires one of') || e.message?.includes('no organization') || e.message?.includes('organization membership')) {
       const { response, errorId } = createErrorResponse(
-        'Only owners and admins can manage API keys',
+        e instanceof ForbiddenError ? e.message : 'Only owners and admins can manage API keys',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )
@@ -225,9 +225,9 @@ export async function POST(request: NextRequest) {
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (e.message?.includes('Requires one of')) {
+    if (e instanceof ForbiddenError || e.message?.includes('Requires one of') || e.message?.includes('no organization') || e.message?.includes('organization membership')) {
       const { response, errorId } = createErrorResponse(
-        'Only owners and admins can manage API keys',
+        e instanceof ForbiddenError ? e.message : 'Only owners and admins can manage API keys',
         'FORBIDDEN',
         { requestId, statusCode: 403 }
       )

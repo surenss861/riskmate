@@ -6,7 +6,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { UnauthorizedError } from '@/lib/utils/adminAuth'
+import { UnauthorizedError, ForbiddenError } from '@/lib/utils/adminAuth'
 
 export interface OrganizationContext {
   organization_id: string
@@ -75,7 +75,7 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
       .order('organization_id', { ascending: true })
       .limit(1)
     if (memberError || !memberRows?.length) {
-      throw new Error('Failed to get organization ID: User has no organization')
+      throw new ForbiddenError('User has no organization membership')
     }
     organization_id = memberRows[0].organization_id
   }
