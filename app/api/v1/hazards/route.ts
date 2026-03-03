@@ -182,6 +182,15 @@ export async function POST(request: NextRequest) {
         rateLimitResult
       )
     }
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'description must be a string or null', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
 
     const admin = createSupabaseAdminClient()
 
@@ -229,7 +238,7 @@ export async function POST(request: NextRequest) {
         job_id,
         organization_id: context.organization_id,
         title,
-        description: description != null ? String(description) : '',
+        description: description != null && description !== '' ? description : '',
         done: false,
         is_completed: false,
       })

@@ -212,6 +212,40 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Strict type validation for optional fields (reject coercion of invalid types).
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'description must be a string or null', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+    const validDate = (v: unknown): boolean =>
+      v === null ||
+      v === undefined ||
+      v === '' ||
+      (typeof v === 'string' && isFinite(Date.parse(v)))
+    if (start_date !== undefined && start_date !== null && start_date !== '' && !validDate(start_date)) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'start_date must be a date string or null', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+    if (end_date !== undefined && end_date !== null && end_date !== '' && !validDate(end_date)) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'end_date must be a date string or null', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+
     let entitlements
     try {
       entitlements = await getOrgEntitlementsForApiKey(context.organization_id)
@@ -272,9 +306,9 @@ export async function POST(request: NextRequest) {
         client_type: ct,
         job_type: jt,
         location,
-        description: description != null ? String(description) : null,
-        start_date: start_date || null,
-        end_date: end_date || null,
+        description: description != null && description !== '' ? (description as string) : null,
+        start_date: start_date === null || start_date === undefined || start_date === '' ? null : (start_date as string),
+        end_date: end_date === null || end_date === undefined || end_date === '' ? null : (end_date as string),
         status: st,
       })
       .select(JOB_PUBLIC_FIELDS)
