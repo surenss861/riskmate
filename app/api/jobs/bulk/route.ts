@@ -147,10 +147,19 @@ export async function PATCH(request: NextRequest) {
 
   let canonicalAction: 'status' | 'assign' | null = null
   const action = body?.action
+
   if (typeof action === 'string') {
     const normalized = normalizeBulkAction(action)
     if (normalized === 'status' || normalized === 'assign') {
       canonicalAction = normalized
+    } else {
+      return NextResponse.json(
+        {
+          message: `PATCH action must be one of: status, update_status, assign. Received: "${action}".`,
+          allowed_actions: ['status', 'update_status', 'assign'],
+        },
+        { status: 400 }
+      )
     }
   }
 

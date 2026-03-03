@@ -41,10 +41,13 @@ export async function getAnalyticsContext(
   let authError: Awaited<ReturnType<typeof supabase.auth.getUser>>['error'] = null
 
   const authHeader = request.headers.get('authorization')
-  const hasBearer = authHeader != null && authHeader.startsWith('Bearer ')
+  const bearerMatch = authHeader != null && /^\s*bearer\s+(.+)$/i.test(authHeader)
+  const token = bearerMatch
+    ? authHeader!.replace(/^\s*bearer\s+/i, '').trim()
+    : null
+  const hasBearer = token != null && token.length > 0
 
   if (hasBearer) {
-    const token = authHeader!.substring(7)
     const result = await supabase.auth.getUser(token)
     user = result.data.user
     authError = result.error
