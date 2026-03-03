@@ -48,6 +48,21 @@ function calendarYearBounds(): { since: string; until: string } {
 const PAGE_SIZE = 500
 const MV_COVERAGE_DAYS = 730
 
+/** Cooldown for MV refresh (align with backend ensureAnalyticsMvRefreshed): at most once per hour. */
+const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000
+let lastAnalyticsMvRefreshAt = 0
+
+/** Refresh analytics MVs at most once per bounded interval; skip when within cooldown. */
+async function ensureAnalyticsMvRefreshed(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<void> {
+  const now = Date.now()
+  if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return
+  lastAnalyticsMvRefreshAt = now
+  const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
+  if (error) {
+    console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+  }
+}
+
 async function fetchAllPages<T>(
   fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: unknown }>
 ): Promise<{ data: T[]; error: unknown }> {
@@ -265,10 +280,7 @@ export async function GET(request: NextRequest) {
       (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')
 
     if (useMv) {
-      const refreshRes = await supabase.rpc('refresh_analytics_weekly_job_stats')
-      if (refreshRes.error) {
-        console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', refreshRes.error)
-      }
+      await ensureAnalyticsMvRefreshed(supabase)
       const sinceWeek = weekStart(new Date(since))
       const untilWeek = weekStart(new Date(until))
       const points: Point[] = []

@@ -15,6 +15,25 @@ function normalizeBulkAction(action: string): BulkAction | null {
   return null
 }
 
+/** Headers we allow when forwarding to the bulk sub-route. Excludes hop-by-hop and framing headers (e.g. content-length, host, connection). */
+const BULK_FORWARD_ALLOWED_HEADERS = [
+  'authorization',
+  'cookie',
+  'x-request-id',
+  'x-correlation-id',
+  'x-trace-id',
+] as const
+
+function buildForwardHeaders(request: NextRequest): Headers {
+  const out = new Headers()
+  out.set('Content-Type', 'application/json')
+  for (const name of BULK_FORWARD_ALLOWED_HEADERS) {
+    const value = request.headers.get(name)
+    if (value != null) out.set(name, value)
+  }
+  return out
+}
+
 /** Forward to the bulk sub-route (POST) and return the response. */
 async function forwardToBulkAction(
   request: NextRequest,
@@ -23,11 +42,10 @@ async function forwardToBulkAction(
 ): Promise<NextResponse> {
   const origin = new URL(request.url).origin
   const targetUrl = `${origin}/api/jobs/bulk/${canonicalAction}`
-  const forwardedHeaders = new Headers(request.headers)
-  forwardedHeaders.set('Content-Type', 'application/json')
+  const headers = buildForwardHeaders(request)
   const res = await fetch(targetUrl, {
     method: 'POST',
-    headers: forwardedHeaders,
+    headers,
     body: JSON.stringify(rest),
   })
   const responseBody = await res.text()
