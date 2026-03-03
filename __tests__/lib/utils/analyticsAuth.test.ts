@@ -135,4 +135,44 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       }
     })
   })
+
+  describe('malformed Authorization header (no cookie fallback)', () => {
+    it('returns 401 for Authorization: Bearer with no token and does not call cookie auth', async () => {
+      serverGetUserMock.mockImplementation(() =>
+        Promise.resolve({
+          data: { user: { id: USER_ID } },
+          error: null,
+        })
+      )
+
+      const req = requestWithHeaders({ Authorization: 'Bearer' })
+      const result = await getAnalyticsContext(req, ROUTE)
+
+      expect(serverGetUserMock).not.toHaveBeenCalled()
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(401)
+      const body = await res.json()
+      expect(body.code).toBe('UNAUTHORIZED')
+    })
+
+    it('returns 401 for Authorization: Basic ... and does not call cookie auth', async () => {
+      serverGetUserMock.mockImplementation(() =>
+        Promise.resolve({
+          data: { user: { id: USER_ID } },
+          error: null,
+        })
+      )
+
+      const req = requestWithHeaders({ Authorization: 'Basic dXNlcjpwYXNz' })
+      const result = await getAnalyticsContext(req, ROUTE)
+
+      expect(serverGetUserMock).not.toHaveBeenCalled()
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(401)
+      const body = await res.json()
+      expect(body.code).toBe('UNAUTHORIZED')
+    })
+  })
 })

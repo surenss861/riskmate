@@ -560,6 +560,17 @@ describe('GET /api/analytics/trends', () => {
       expect(body.period).toBe('10d')
       expect(Array.isArray(body.data)).toBe(true)
     })
+
+    it('returns 400 when since is after until (invalid custom range)', async () => {
+      const since = '2025-02-01T00:00:00.000Z'
+      const until = '2025-01-01T00:00:00.000Z'
+      const res = await GET(trendsRequest({ since, until, groupBy: 'day', metric: 'jobs' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(body.message).toMatch(/since must be before or equal to until/i)
+    })
   })
 
   describe('RPC fallback for week/month', () => {

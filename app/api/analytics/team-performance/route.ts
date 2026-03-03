@@ -24,9 +24,24 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
+    if (customRange && 'error' in customRange && customRange.error === 'invalid_order') {
+      const { response, errorId } = createErrorResponse(
+        'Invalid date range: since must be before or equal to until',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const parsed = parsePeriod(searchParams.get('period'))
-    const { since, until } = customRange ?? dateRangeForDays(parsed.days)
-    const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
+    const { since, until } = customRangeValid ?? dateRangeForDays(parsed.days)
+    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
 
     const { data: kpiRows, error: rpcError } = await supabase.rpc('get_team_performance_kpis', {
       p_org_id: orgId,

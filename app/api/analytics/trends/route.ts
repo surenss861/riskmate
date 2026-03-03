@@ -62,12 +62,27 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
+    if (customRange && 'error' in customRange && customRange.error === 'invalid_order') {
+      const { response, errorId } = createErrorResponse(
+        'Invalid date range: since must be before or equal to until',
+        'VALIDATION_ERROR',
+        { requestId, statusCode: 400 }
+      )
+      logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'validation', severity: 'warn', route: ROUTE,
+      })
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const parsed = parsePeriod(searchParams.get('period'))
     const { since, until } =
-      customRange ??
+      customRangeValid ??
       (parsed.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsed.days))
-    const effectiveDays = customRange ? effectiveDaysFromRange(since, until) : parsed.days
-    const periodLabel = customRange ? periodLabelFromDays(effectiveDays) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
+    const effectiveDays = customRangeValid ? effectiveDaysFromRange(since, until) : parsed.days
+    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDays) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
 
     const groupByRaw = searchParams.get('groupBy') || 'day'
     const groupBy = groupByRaw === 'month' ? 'month' : groupByRaw === 'week' ? 'week' : 'day'

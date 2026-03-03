@@ -11,16 +11,22 @@ export function parsePeriod(value?: string | null): { days: number; key: PeriodK
   return { days: PERIOD_DAYS[key], key }
 }
 
+export type ParseSinceUntilResult =
+  | { since: string; until: string }
+  | { error: 'invalid_order' }
+  | null
+
 export function parseSinceUntil(
   sinceParam?: string | null,
   untilParam?: string | null
-): { since: string; until: string } | null {
+): ParseSinceUntilResult {
   const since = sinceParam?.trim() ?? ''
   const until = untilParam?.trim() ?? ''
   if (!since || !until) return null
   const sinceDate = new Date(since)
   const untilDate = new Date(until)
   if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return null
+  if (sinceDate.getTime() > untilDate.getTime()) return { error: 'invalid_order' }
   return { since: sinceDate.toISOString(), until: untilDate.toISOString() }
 }
 

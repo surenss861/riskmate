@@ -101,4 +101,14 @@ describe('GET /api/analytics/risk-heatmap', () => {
     expect(body.period).toBe('1y')
     expect(Array.isArray(body.buckets)).toBe(true)
   })
+
+  it('returns 400 when since is after until (invalid custom range)', async () => {
+    const since = '2025-02-01T00:00:00.000Z'
+    const until = '2025-01-01T00:00:00.000Z'
+    const res = await GET(riskHeatmapRequest({ since, until }))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.message).toMatch(/since must be before or equal to until/i)
+  })
 })

@@ -41,17 +41,30 @@ export async function getAnalyticsContext(
   let authError: Awaited<ReturnType<typeof supabase.auth.getUser>>['error'] = null
 
   const authHeader = request.headers.get('authorization')
-  const bearerMatch = authHeader != null && /^\s*bearer\s+(.+)$/i.test(authHeader)
-  const token = bearerMatch
-    ? authHeader!.replace(/^\s*bearer\s+/i, '').trim()
-    : null
-  const hasBearer = token != null && token.length > 0
+  const hasAuthHeader = authHeader != null && authHeader.trim().length > 0
 
-  if (hasBearer) {
+  if (hasAuthHeader) {
+    // Any present Authorization header is bearer-intent: never fall back to cookie.
+    const bearerMatch = /^\s*bearer\s+(.+)$/i.test(authHeader!)
+    const token = bearerMatch ? authHeader!.replace(/^\s*bearer\s+/i, '').trim() : null
+    const hasValidBearer = token != null && token.length > 0
+    if (!hasValidBearer) {
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to access analytics',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
     const result = await supabase.auth.getUser(token)
     user = result.data.user
     authError = result.error
-    // Strict bearer semantics: if caller sent Authorization, do not fall back to cookie
     if (authError || !user) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in to access analytics',
