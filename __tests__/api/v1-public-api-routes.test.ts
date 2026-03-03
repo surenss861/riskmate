@@ -386,6 +386,37 @@ describe('Public API v1 routes', () => {
       expect(body.meta).toEqual({ page: 1, limit: 20, total: expect.any(Number) })
       expect(res.headers.get('X-RateLimit-Limit')).toBe('1000')
     })
+
+    it('returns list response with only documented v1 report run fields', async () => {
+      const reportRunPublicFields = [
+        'id', 'job_id', 'status', 'packet_type', 'generated_at', 'data_hash',
+        'pdf_path', 'pdf_signed_url', 'pdf_generated_at', 'created_at', 'updated_at',
+      ].sort()
+      setupSupabaseMocks({
+        jobSingle: { id: '11111111-2222-4333-8444-555555555555', organization_id: ORG_ID },
+        reportRuns: [
+          {
+            id: 'r1',
+            job_id: '11111111-2222-4333-8444-555555555555',
+            organization_id: ORG_ID,
+            status: 'completed',
+            generated_at: '2025-01-01T00:00:00Z',
+            data_hash: 'abc',
+            created_at: '2025-01-01T00:00:00Z',
+            updated_at: '2025-01-01T00:00:00Z',
+          },
+        ],
+      })
+      const { GET } = await import('@/app/api/v1/reports/route')
+      const res = await GET(requestWithAuth(VALID_KEY, { url: 'http://localhost/api/v1/reports?job_id=11111111-2222-4333-8444-555555555555' }))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(Array.isArray(body.data)).toBe(true)
+      for (const item of body.data) {
+        const keys = Object.keys(item).sort()
+        expect(keys).toEqual(reportRunPublicFields)
+      }
+    })
   })
 
   describe('GET /api/v1/reports/[id]', () => {

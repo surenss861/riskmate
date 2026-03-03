@@ -119,7 +119,17 @@ export async function GET(request: NextRequest) {
         .is('archived_at', null)
       if (status) countQuery = countQuery.eq('status', status)
       const { count, error: countError } = await countQuery
-      total = !countError && count != null ? count : 0
+      if (countError) {
+        console.error('[v1/jobs] fallback count error:', countError)
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('QUERY_ERROR', 'Failed to list jobs', requestId),
+            { status: 500, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      total = count ?? 0
     }
     const jobs = list.map((row) => mapJobListItemRowToDto(row))
 

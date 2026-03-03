@@ -13,6 +13,7 @@ import {
   v1Json,
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
+import { REPORT_RUN_PUBLIC_FIELDS, mapReportRunRowToDto } from '@/lib/api/v1Dtos'
 import { isValidUUID } from '@/lib/utils/uuid'
 import { parseStrictInt } from '@/lib/utils/parseStrictInt'
 
@@ -151,7 +152,7 @@ export async function GET(request: NextRequest) {
 
   const { data: runs, error, count } = await admin
     .from('report_runs')
-    .select('*', { count: 'exact' })
+    .select(REPORT_RUN_PUBLIC_FIELDS, { count: 'exact' })
     .eq('job_id', jobId)
     .eq('organization_id', context.organization_id)
     .order('generated_at', { ascending: false })
@@ -169,6 +170,7 @@ export async function GET(request: NextRequest) {
   }
 
   const total = count ?? (runs?.length ?? 0)
-  const res = v1Json(runs || [], { meta: { page, limit, total } })
+  const dtos = (runs || []).map((row) => mapReportRunRowToDto(row as Record<string, unknown>)).filter((dto): dto is NonNullable<typeof dto> => dto != null)
+  const res = v1Json(dtos, { meta: { page, limit, total } })
   return finishApiKeyRequest(context.api_key_id, res, rateLimitResult)
 }
