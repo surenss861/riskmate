@@ -195,6 +195,36 @@ describe('GET /api/jobs', () => {
       }
     })
 
+    it('should sort by sort=created_at&order=asc (spec format, order direction honored)', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=created_at&order=asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.ok).toBe(true)
+      for (let i = 0; i < data.data.length - 1; i++) {
+        const current = new Date(data.data[i].created_at).getTime()
+        const next = new Date(data.data[i + 1].created_at).getTime()
+        expect(current).toBeLessThanOrEqual(next)
+      }
+    })
+
+    it('should sort by sort=risk_score&order=asc (spec format, order direction and field mapping)', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=risk_score&order=asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.ok).toBe(true)
+      for (let i = 0; i < data.data.length - 1; i++) {
+        const current = data.data[i].risk_score ?? 0
+        const next = data.data[i + 1].risk_score ?? 0
+        expect(current).toBeLessThanOrEqual(next)
+      }
+    })
+
     it('should accept legacy sort token sort=created_desc', async () => {
       const response = await fetch(`${API_URL}/api/jobs?sort=created_desc`, {
         headers: {
@@ -327,6 +357,65 @@ describe('GET /api/jobs', () => {
       
       // Should use offset pagination instead
       expect(firstData.pagination?.page).toBeDefined()
+    })
+
+    it('should NOT use cursor pagination for sort=due_date (uses offset only; null end_date safe)', async () => {
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=10&sort=due_date&order=asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      expect(firstPage.ok).toBe(true)
+      expect(firstData.pagination?.cursor).toBeUndefined()
+      expect(firstData.pagination?.page).toBeDefined()
+    })
+
+    it('should reject cursor param when sort=due_date', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?limit=10&sort=due_date&order=asc&cursor=test`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      expect(response.status).toBe(400)
+      expect(['PAGINATION_CURSOR_NOT_SUPPORTED', 'CURSOR_NOT_SUPPORTED_FOR_SORT']).toContain(data.code)
+      expect(data.message).toContain('due date')
+      expect(data.allowed_pagination_modes).toEqual(['offset'])
+    })
+
+    it('should paginate sort=due_date with offset: no duplicates, no missing rows, stable pages', async () => {
+      const pageSize = 5
+      const firstPage = await fetch(`${API_URL}/api/jobs?limit=${pageSize}&sort=due_date&order=asc&page=1`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const firstData = await firstPage.json()
+      expect(firstPage.ok).toBe(true)
+      const secondPage = await fetch(`${API_URL}/api/jobs?limit=${pageSize}&sort=due_date&order=asc&page=2`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const secondData = await secondPage.json()
+      expect(secondPage.ok).toBe(true)
+      const firstIds = new Set((firstData.data || []).map((j: any) => j.id))
+      const secondIds = new Set((secondData.data || []).map((j: any) => j.id))
+      const intersection = [...firstIds].filter(id => secondIds.has(id))
+      expect(intersection.length).toBe(0)
+      const allIds = [...firstData.data, ...secondData.data].map((j: any) => j.id)
+      const uniqueIds = new Set(allIds)
+      expect(uniqueIds.size).toBe(allIds.length)
+      if (firstData.data?.length > 0 && secondData.data?.length > 0) {
+        const a = (firstData.data as Array<{ end_date?: string | null }>)[firstData.data.length - 1].end_date
+          ? new Date((firstData.data as Array<{ end_date?: string | null }>)[firstData.data.length - 1].end_date!).getTime()
+          : Number.MAX_SAFE_INTEGER
+        const b = (secondData.data as Array<{ end_date?: string | null }>)[0].end_date
+          ? new Date((secondData.data as Array<{ end_date?: string | null }>)[0].end_date!).getTime()
+          : Number.MAX_SAFE_INTEGER
+        expect(a).toBeLessThanOrEqual(b)
+      }
     })
 
     it('should reject cursor param when sort=status_asc', async () => {

@@ -155,9 +155,14 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       const orderStr = (orderParam != null && orderParam !== '') ? String(orderParam).trim().toLowerCase() : '';
       const directionFromOrder = orderStr === 'asc' ? 'asc' : 'desc';
 
-      if (sortStr.includes('_')) {
+      // Legacy only when value ends in _asc or _desc (e.g. created_desc, risk_asc, status_desc).
+      // Spec-format fields with underscores (due_date, created_at, risk_score) use the separate order param.
+      const isLegacyToken = /_(asc|desc)$/.test(sortStr);
+      if (isLegacyToken) {
         // Legacy: combined token (e.g. created_desc, risk_asc)
-        const [field, dir] = sortStr.split('_');
+        const lastUnderscore = sortStr.lastIndexOf('_');
+        const field = sortStr.slice(0, lastUnderscore);
+        const dir = sortStr.slice(lastUnderscore + 1);
         sortMode = `${field}_${dir}`;
         if (field === 'status') {
           useStatusOrdering = true;
@@ -253,9 +258,9 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       });
     }
     
-    // Cursor pagination is only safe for sorts that match SQL ordering
-    // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
-    const supportsCursorPagination = !useStatusOrdering;
+    // Cursor pagination is only safe for sorts that match SQL ordering.
+    // status_asc uses in-memory sorting; end_date has null boundary issues so we force offset.
+    const supportsCursorPagination = !useStatusOrdering && sortField !== 'end_date';
     
     // Hardening: Explicitly reject cursor param when sort=status_* (prevents misuse)
     if (cursor && useStatusOrdering) {
@@ -281,6 +286,29 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       
       logErrorForSupport(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
       
+      return res.status(400).json(errorResponse);
+    }
+    
+    // Reject cursor when sort=due_date (end_date); null end_date causes page boundary issues
+    if (cursor && sortField === 'end_date') {
+      const lastLogged = logCursorMisuse(organization_id, sortMode);
+      const retryAfterSeconds = lastLogged ? Math.ceil((CURSOR_MISUSE_LOG_TTL_MS - (Date.now() - lastLogged)) / 1000) : 0;
+      
+      const { response: errorResponse, errorId } = createErrorResponse({
+        message: "Cursor pagination is not supported for due date sorting. Use offset pagination (page parameter) instead.",
+        internalMessage: `Cursor pagination attempted with sort=${sortMode} (end_date null boundary incompatible with cursor)`,
+        code: "PAGINATION_CURSOR_NOT_SUPPORTED",
+        requestId,
+        statusCode: 400,
+        sort: sortMode,
+        reason: "Due date sorting has null end_date values which make cursor pagination inconsistent",
+        documentation_url: "/docs/pagination#due-date-sorting",
+        allowed_pagination_modes: ["offset"],
+        ...(retryAfterSeconds > 0 && { retry_after_seconds: retryAfterSeconds }),
+      });
+      
+      res.setHeader('X-Error-ID', errorId);
+      logErrorForSupport(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
       return res.status(400).json(errorResponse);
     }
     
