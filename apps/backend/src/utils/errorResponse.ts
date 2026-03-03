@@ -46,7 +46,8 @@ export const ERROR_CLASSIFICATIONS = {
 export const SUPPORT_HINTS: Record<string, string | null> = {
   // Pagination errors
   PAGINATION_CURSOR_NOT_SUPPORTED: "Remove cursor param or switch to page-based pagination",
-  
+  SORT_DUE_DATE_UNAVAILABLE: "Apply required database migrations for end_date column, or use a different sort (e.g. sort=created_at)",
+
   // Entitlement errors
   ENTITLEMENTS_JOB_LIMIT_REACHED: "Upgrade plan or wait for monthly limit reset",
   ENTITLEMENTS_PLAN_PAST_DUE: "Update payment method in billing settings",
@@ -82,7 +83,8 @@ export const SUPPORT_HINTS: Record<string, string | null> = {
 export const SUPPORT_URLS: Record<string, string> = {
   // Pagination errors
   PAGINATION_CURSOR_NOT_SUPPORTED: "/support/runbooks/pagination#cursor-not-supported",
-  
+  SORT_DUE_DATE_UNAVAILABLE: "/support/runbooks/pagination#due-date-sort-unavailable",
+
   // Entitlement errors
   ENTITLEMENTS_JOB_LIMIT_REACHED: "/support/runbooks/entitlements#job-limit-reached",
   ENTITLEMENTS_PLAN_PAST_DUE: "/support/runbooks/entitlements#plan-past-due",
@@ -124,6 +126,7 @@ const ERROR_CLASSIFICATION_MAP: Record<string, string> = {
   // Developer bug (client misconfiguration)
   PAGINATION_CURSOR_NOT_SUPPORTED: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
   CURSOR_NOT_SUPPORTED_FOR_SORT: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
+  SORT_DUE_DATE_UNAVAILABLE: ERROR_CLASSIFICATIONS.SYSTEM_TRANSIENT,
   CORS_FORBIDDEN: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
   BACKEND_CONFIG_ERROR: ERROR_CLASSIFICATIONS.DEVELOPER_BUG,
   
@@ -139,7 +142,8 @@ const ERROR_CATEGORY_MAP: Record<string, string> = {
   // Pagination
   PAGINATION_CURSOR_NOT_SUPPORTED: ERROR_CATEGORIES.PAGINATION,
   CURSOR_NOT_SUPPORTED_FOR_SORT: ERROR_CATEGORIES.PAGINATION,
-  
+  SORT_DUE_DATE_UNAVAILABLE: ERROR_CATEGORIES.INTERNAL,
+
   // Entitlements
   ENTITLEMENTS_JOB_LIMIT_REACHED: ERROR_CATEGORIES.ENTITLEMENTS,
   ENTITLEMENTS_PLAN_PAST_DUE: ERROR_CATEGORIES.ENTITLEMENTS,

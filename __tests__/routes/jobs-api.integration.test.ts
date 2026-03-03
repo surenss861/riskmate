@@ -180,6 +180,32 @@ describe('GET /api/jobs', () => {
       }
     })
 
+    it('when end_date is unavailable and sort=due_date is requested, returns 503 with SORT_DUE_DATE_UNAVAILABLE (no silent created_at fallback)', async () => {
+      const response = await fetch(`${API_URL}/api/jobs?sort=due_date&order=asc`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      })
+      const data = await response.json()
+      // Contract: if server cannot fulfill due_date sort (e.g. migration not applied), it must return 503
+      // and must NOT return 200 with created_at ordering.
+      if (response.status === 503) {
+        expect(data.code).toBe('SORT_DUE_DATE_UNAVAILABLE')
+        expect(data.message).toMatch(/unavailable|migration|due-date/i)
+        expect(data.request_id).toBeDefined()
+        expect(data.error_id).toBeDefined()
+        return
+      }
+      // If 200, ordering must be by end_date (ensures we never silently return created_at order)
+      expect(response.ok).toBe(true)
+      const jobs = (data.data || []) as Array<{ end_date?: string | null }>
+      for (let i = 0; i < jobs.length - 1; i++) {
+        const a = jobs[i].end_date ? new Date(jobs[i].end_date).getTime() : Number.MAX_SAFE_INTEGER
+        const b = jobs[i + 1].end_date ? new Date(jobs[i + 1].end_date).getTime() : Number.MAX_SAFE_INTEGER
+        expect(a).toBeLessThanOrEqual(b)
+      }
+    })
+
     it('should sort by sort=created_at&order=desc (spec format)', async () => {
       const response = await fetch(`${API_URL}/api/jobs?sort=created_at&order=desc`, {
         headers: {

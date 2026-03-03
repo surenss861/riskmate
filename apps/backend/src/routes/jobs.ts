@@ -613,6 +613,22 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
       error.message?.includes('end_date') ||
       (error as any).code === 'PGRST116'
     )) {
+      // Due-date sort must not silently degrade to created_at: return error when end_date is unavailable
+      if (sortField === 'end_date') {
+        const { response: errorResponse, errorId } = createErrorResponse({
+          message: "Due-date sorting is unavailable until required database migrations are applied.",
+          internalMessage: `Jobs list failed with missing column (e.g. end_date); sort=${sortMode} requested but cannot be fulfilled without end_date.`,
+          code: "SORT_DUE_DATE_UNAVAILABLE",
+          requestId,
+          statusCode: 503,
+          sort: sortMode,
+          reason: "The end_date column is not available; apply migrations that add end_date to jobs.",
+          documentation_url: "/docs/pagination#due-date-sorting",
+        });
+        res.setHeader('X-Error-ID', errorId);
+        logErrorForSupport(503, "SORT_DUE_DATE_UNAVAILABLE", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
+        return res.status(503).json(errorResponse);
+      }
       console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
       // Minimal columns only (no end_date) so fallback works when migrations are partial
       let fallbackQuery = supabase
@@ -692,11 +708,8 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
           fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
           fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
           fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
-        } else if (sortField === 'end_date') {
-          // Fallback select has no end_date; order by created_at so query succeeds
-          fallbackQuery = fallbackQuery.order("created_at", { ascending: sortDirection === 'asc' });
-          fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
         } else {
+          // sortField === 'end_date' is not possible here: we return 503 above when end_date is unavailable
           fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
           fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
         }
