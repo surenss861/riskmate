@@ -4,7 +4,16 @@
  */
 
 import { NextRequest } from 'next/server'
-import { checkRateLimitWithContext, runCleanup } from '../rateLimiter'
+import {
+  checkRateLimitWithContext,
+  runCleanup,
+  runApiKeyRateLimitsCleanup,
+} from '../rateLimiter'
+
+const mockRpc = jest.fn()
+jest.mock('@/lib/supabase/admin', () => ({
+  createSupabaseAdminClient: jest.fn(() => ({ rpc: mockRpc })),
+}))
 
 function createMockRequest(pathname: string): NextRequest {
   return new NextRequest(`http://localhost${pathname}`)
@@ -122,6 +131,25 @@ describe('rateLimiter', () => {
       // Path2 should still have full limit
       const allowed2 = checkRateLimitWithContext(req2, config, ctxA)
       expect(allowed2.allowed).toBe(true)
+    })
+  })
+
+  describe('API key rate limits cleanup', () => {
+    it('runApiKeyRateLimitsCleanup calls RPC and returns deleted count', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 3, error: null })
+
+      const result = await runApiKeyRateLimitsCleanup()
+
+      expect(mockRpc).toHaveBeenCalledWith('cleanup_expired_api_key_rate_limits')
+      expect(result).toBe(3)
+    })
+
+    it('runApiKeyRateLimitsCleanup returns null on RPC error', async () => {
+      mockRpc.mockResolvedValueOnce({ data: null, error: new Error('db') })
+
+      const result = await runApiKeyRateLimitsCleanup()
+
+      expect(result).toBeNull()
     })
   })
 

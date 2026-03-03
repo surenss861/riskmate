@@ -92,6 +92,19 @@ function buildKeyForApiKey(apiKeyId: string): string {
 }
 
 /**
+ * Run cleanup of expired api_key_rate_limits buckets (rows where reset_at is in the past).
+ * Intended for observability or manual runs; production relies on pg_cron (hourly) per
+ * migration 20260346000000_api_key_rate_limits_cleanup.sql.
+ * Returns deleted row count, or null on RPC/query failure.
+ */
+export async function runApiKeyRateLimitsCleanup(): Promise<number | null> {
+  const admin = createSupabaseAdminClient()
+  const { data, error } = await admin.rpc('cleanup_expired_api_key_rate_limits')
+  if (error || data === undefined || data === null) return null
+  return typeof data === 'number' ? data : null
+}
+
+/**
  * Check rate limit for a request authenticated by API key.
  * Uses shared Postgres storage (increment_api_key_rate_limit RPC) so all instances
  * enforce the same per-key window. Keeps X-RateLimit-* and Retry-After contract.
