@@ -22,6 +22,9 @@ const BULK_FORWARD_ALLOWED_HEADERS = [
   'x-request-id',
   'x-correlation-id',
   'x-trace-id',
+  'x-client',
+  'x-app-version',
+  'x-device-id',
 ] as const
 
 function buildForwardHeaders(request: NextRequest): Headers {

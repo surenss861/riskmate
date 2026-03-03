@@ -66,6 +66,7 @@ describe('GET /api/analytics/trends', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks()
+    jest.resetModules()
     const mod = await import('@/app/api/analytics/trends/route')
     GET = mod.GET
     rpcMock = jest.fn((name: string) => {
@@ -116,19 +117,6 @@ describe('GET /api/analytics/trends', () => {
     expect(body).toHaveProperty('data')
     expect(Array.isArray(body.data)).toBe(true)
   })
-
-  it('request URL preserves groupBy=week for route', () => {
-    const req = trendsRequest({ period: '30d', groupBy: 'week', metric: 'jobs' })
-    const groupBy = new URL(req.url).searchParams.get('groupBy')
-    expect(groupBy).toBe('week')
-  })
-
-  it('mocked NextRequest preserves full URL including query', () => {
-    const req = trendsRequest({ period: '30d', groupBy: 'week', metric: 'jobs' })
-    expect(req.url).toContain('groupBy=week')
-    expect(new URL(req.url).searchParams.get('groupBy')).toBe('week')
-  })
-
 
   describe('locked-plan', () => {
     it('returns 200 with data [] and locked true when subscription has no analytics', async () => {

@@ -1,6 +1,6 @@
 /**
- * Next.js API: POST /api/sync/batch
- * Proxies to the backend sync batch endpoint for offline-first iOS and web clients.
+ * Next.js API: POST /api/sync/resolve-conflict
+ * Proxies to the backend sync resolve-conflict endpoint for offline-first iOS and web clients.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { proxyToBackend } from '@/lib/api/proxy-helpers'
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
-  return proxyToBackend(request, '/api/sync/batch', {
+  return proxyToBackend(request, '/api/sync/resolve-conflict', {
     method: 'POST',
     body,
   })

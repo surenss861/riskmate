@@ -3,6 +3,29 @@ import { supabase } from "../lib/supabaseClient";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth";
 import { requireFeature } from "../middleware/limits";
 import { generateInsights } from "../services/insights";
+import {
+  PAGE_SIZE,
+  MV_COVERAGE_DAYS,
+  calendarYearBounds,
+  weekStart,
+  monthStart,
+  toDateKey,
+  fetchAllPages,
+} from "@/lib/utils/analyticsTrends";
+import { parsePeriod, parseSinceUntil, dateRangeForDays } from "@/lib/utils/analyticsDateRange";
+
+/** Normalize Express query (string | string[]) to the shape expected by shared parseSinceUntil. */
+function parseSinceUntilQuery(query: { since?: string | string[]; until?: string | string[] }): { since: string; until: string } | null {
+  const since = query.since ? (Array.isArray(query.since) ? query.since[0] : query.since) : "";
+  const until = query.until ? (Array.isArray(query.until) ? query.until[0] : query.until) : "";
+  return parseSinceUntil(since || null, until || null);
+}
+
+function parsePeriodQuery(period: unknown): { days: number; key: "7d" | "30d" | "90d" | "1y" } {
+  const value =
+    period == null ? undefined : Array.isArray(period) ? (typeof period[0] === "string" ? period[0] : undefined) : typeof period === "string" ? period : undefined;
+  return parsePeriod(value ?? null);
+}
 
 export const analyticsRouter: ExpressRouter = express.Router();
 
@@ -48,28 +71,6 @@ export function getAnalyticsObservability(): {
   };
 }
 
-const PAGE_SIZE = 500;
-
-/** Fetch all rows by paginating; no cap. */
-async function fetchAllPages<T>(
-  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: any }>
-): Promise<{ data: T[]; error: any }> {
-  const out: T[] = [];
-  let offset = 0;
-  let hasMore = true;
-  let lastError: any = null;
-  while (hasMore) {
-    const { data, error } = await fetchPage(offset, PAGE_SIZE);
-    if (error) return { data: out, error };
-    lastError = error;
-    const chunkData = data ?? [];
-    out.push(...chunkData);
-    hasMore = chunkData.length === PAGE_SIZE;
-    offset += chunkData.length;
-  }
-  return { data: out, error: lastError };
-}
-
 /** Chunk array into batches of at most size. */
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -88,52 +89,6 @@ const parseRangeDays = (value?: string | string[]) => {
   return Math.min(days, 180);
 };
 
-/** Calendar-year bounds (Jan 1 00:00 to today 23:59:59 UTC). */
-function calendarYearBounds(): { since: string; until: string } {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
-  const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
-  return { since: since.toISOString(), until: until.toISOString() }
-}
-
-const toDateKey = (value: string) => value.slice(0, 10);
-
-// --- Period parsing for analytics (7d, 30d, 90d, 1y) ---
-const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 } as const;
-type PeriodKey = keyof typeof PERIOD_DAYS;
-
-const parsePeriod = (value?: string | string[]): { days: number; key: PeriodKey } => {
-  const str = value ? (Array.isArray(value) ? value[0] : value) : "30d";
-  const key = (str === "7d" || str === "30d" || str === "90d" || str === "1y" ? str : "30d") as PeriodKey;
-  return { days: PERIOD_DAYS[key], key };
-};
-
-const dateRangeForDays = (days: number): { since: string; until: string } => {
-  const until = new Date();
-  until.setHours(23, 59, 59, 999);
-  const since = new Date(until.getTime());
-  since.setDate(since.getDate() - (days - 1));
-  since.setHours(0, 0, 0, 0);
-  return { since: since.toISOString(), until: until.toISOString() };
-};
-
-/** Optional since/until (ISO) for prior-period requests. If both valid, use them; else return null. */
-function parseSinceUntil(query: { since?: string | string[]; until?: string | string[] }): { since: string; until: string } | null {
-  const sinceRaw = query.since;
-  const untilRaw = query.until;
-  const since = sinceRaw ? (Array.isArray(sinceRaw) ? sinceRaw[0] : sinceRaw) : "";
-  const until = untilRaw ? (Array.isArray(untilRaw) ? untilRaw[0] : untilRaw) : "";
-  if (!since || !until) return null;
-  const sinceDate = new Date(since);
-  const untilDate = new Date(until);
-  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return null;
-  return { since: sinceDate.toISOString(), until: untilDate.toISOString() };
-}
-
-// MV covers last 2 years; use for week/month bucketed analytics when in range
-const MV_COVERAGE_DAYS = 730;
-
 // Fallback refresh when pg_cron is unavailable: refresh MV at most once per hour before serving week/month trends
 const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
 let lastAnalyticsMvRefreshAt = 0;
@@ -147,22 +102,6 @@ async function ensureAnalyticsMvRefreshed(): Promise<void> {
     console.warn("Analytics MV refresh failed (pg_cron may be unavailable):", error);
   }
 }
-
-// Helpers for trends: bucket keys and labels
-const weekStart = (d: Date): string => {
-  const x = new Date(d);
-  const day = x.getDay();
-  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-  x.setDate(diff);
-  x.setHours(0, 0, 0, 0);
-  return x.toISOString().slice(0, 10);
-};
-const monthStart = (d: Date): string => {
-  const x = new Date(d);
-  x.setDate(1);
-  x.setHours(0, 0, 0, 0);
-  return x.toISOString().slice(0, 10);
-};
 
 // GET /api/analytics/trends — metric (jobs|risk|compliance|completion), period (7d|30d|90d|1y), groupBy (day|week|month)
 // Response: { period, groupBy, metric, data: Array<{ period, value, label }> }
@@ -180,8 +119,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days, key: periodKey } = parsePeriodQuery(authReq.query.period);
       const groupByRaw = (authReq.query.groupBy as string) || "day";
       const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
       const metricRaw = (authReq.query.metric as string) || "jobs";
@@ -560,8 +499,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
       const groupByRaw = (authReq.query.groupBy as string) || "week";
       const groupBy = groupByRaw === "day" ? "day" : "week";
@@ -616,8 +555,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: rows, error } = await supabase.rpc("get_risk_heatmap_buckets", {
@@ -657,8 +596,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_team_performance_kpis", {
@@ -734,8 +673,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
       const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
@@ -794,8 +733,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_compliance_rate_kpis", {
@@ -863,8 +802,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_job_completion_kpis", {
@@ -935,8 +874,8 @@ analyticsRouter.get(
     try {
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days, key: periodKey } = parsePeriod(authReq.query.period as string);
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const { days, key: periodKey } = parsePeriodQuery(authReq.query.period);
       const { since, until } =
         customRange ??
         (periodKey === "1y" ? calendarYearBounds() : dateRangeForDays(days));
@@ -998,7 +937,7 @@ analyticsRouter.get(
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
 
       const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
-      const explicitRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const explicitRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
       const rangeParam = authReq.query.range as string | undefined;
       const rangeDays = parseRangeDays(rangeParam);
 
@@ -1129,7 +1068,7 @@ analyticsRouter.get(
         return res.status(400).json({ message: "Missing organization id" });
       }
 
-      const customRange = parseSinceUntil(authReq.query as { since?: string | string[]; until?: string | string[] });
+      const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
       const rangeDays = parseRangeDays(authReq.query.range as string | undefined);
       const { since, until } = customRange ?? dateRangeForDays(rangeDays);
 

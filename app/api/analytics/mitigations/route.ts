@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
+import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
 
 export const runtime = 'nodejs'
 
@@ -48,78 +48,10 @@ function toDateKey(date: Date | string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const requestId = getRequestId(request)
-
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      const { response, errorId } = createErrorResponse(
-        'Unauthorized: Please log in to access analytics',
-        'UNAUTHORIZED',
-        { requestId, statusCode: 401 }
-      )
-      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
-        category: 'auth', severity: 'warn', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 401,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.organization_id) {
-      const { response, errorId } = createErrorResponse(
-        'Failed to get organization ID',
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
-      )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, userData?.organization_id, response.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const orgId = userData.organization_id
-
-    const { data: orgSub, error: orgSubError } = await supabase
-      .from('org_subscriptions')
-      .select('plan_code, status')
-      .eq('organization_id', orgId)
-      .maybeSingle()
-
-    if (orgSubError && orgSubError.code !== 'PGRST116') {
-      const { response, errorId } = createErrorResponse(
-        'Failed to get subscription',
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
-      )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const planCode: PlanCode =
-      orgSub?.plan_code && orgSub.plan_code !== 'none' ? (orgSub.plan_code as PlanCode) : 'none'
-    const status = orgSub?.status ?? (planCode === 'none' ? 'none' : 'inactive')
-    const isActive = ['active', 'trialing', 'free'].includes(status)
-    const features = isActive ? planFeatures(planCode) : []
-    const hasAnalytics = features.includes('analytics')
-
+    const ctx = await getAnalyticsContext(request, ROUTE)
+    if (ctx instanceof NextResponse) return ctx
+    const { orgId, requestId, hasAnalytics, isActive, status } = ctx
     if (!isActive || !hasAnalytics) {
       const rangeDays = parseRangeDays(new URL(request.url).searchParams.get('range') || undefined)
       return NextResponse.json(

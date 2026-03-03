@@ -3,178 +3,55 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
-import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
+import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
+import { parsePeriod, parseSinceUntil, dateRangeForDays } from '@/lib/utils/analyticsDateRange'
+import {
+  calendarYearBounds,
+  PAGE_SIZE,
+  MV_COVERAGE_DAYS,
+  fetchAllPages,
+  weekStart,
+  monthStart,
+  toDateKey,
+} from '@/lib/utils/analyticsTrends'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/analytics/trends'
 
-const PERIOD_DAYS = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 } as const
-type PeriodKey = keyof typeof PERIOD_DAYS
-
-function parsePeriod(value?: string | null): { days: number; key: PeriodKey } {
-  const str = value ? String(value).trim() : '30d'
-  const key = (str === '7d' || str === '30d' || str === '90d' || str === '1y' ? str : '30d') as PeriodKey
-  return { days: PERIOD_DAYS[key], key }
-}
-
-function parseSinceUntil(sinceParam?: string | null, untilParam?: string | null): { since: string; until: string } | null {
-  const since = sinceParam?.trim() ?? ''
-  const until = untilParam?.trim() ?? ''
-  if (!since || !until) return null
-  const sinceDate = new Date(since)
-  const untilDate = new Date(until)
-  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return null
-  return { since: sinceDate.toISOString(), until: untilDate.toISOString() }
-}
-
-function dateRangeForDays(days: number): { since: string; until: string } {
-  const until = new Date()
-  until.setHours(23, 59, 59, 999)
-  const since = new Date(until.getTime())
-  since.setDate(since.getDate() - (days - 1))
-  since.setHours(0, 0, 0, 0)
-  return { since: since.toISOString(), until: until.toISOString() }
-}
-
-function calendarYearBounds(): { since: string; until: string } {
-  const now = new Date()
-  const y = now.getUTCFullYear()
-  const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0))
-  const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999))
-  return { since: since.toISOString(), until: until.toISOString() }
-}
-
-const PAGE_SIZE = 500
-const MV_COVERAGE_DAYS = 730
-
 /** Cooldown for MV refresh (align with backend ensureAnalyticsMvRefreshed): at most once per hour. */
 const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000
 let lastAnalyticsMvRefreshAt = 0
+/** In-flight guard to prevent concurrent refreshes within the same process (avoids race when multiple requests hit simultaneously). */
+let refreshInFlight = false
 
-/** Refresh analytics MVs at most once per bounded interval; skip when within cooldown. */
+/**
+ * Refresh analytics MVs at most once per bounded interval; skip when within cooldown or when a refresh is already in flight.
+ * This is a best-effort fallback for environments without pg_cron. The primary refresh path is the backend's
+ * ensureAnalyticsMvRefreshed in apps/backend/src/routes/analytics.ts; this Next.js route's refresh is only needed
+ * when the dashboard is served directly without going through the Express backend.
+ */
 async function ensureAnalyticsMvRefreshed(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<void> {
   const now = Date.now()
   if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return
+  if (refreshInFlight) return
+  refreshInFlight = true
   lastAnalyticsMvRefreshAt = now
-  const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
-  if (error) {
-    console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+  try {
+    const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
+    if (error) {
+      console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+    }
+  } finally {
+    refreshInFlight = false
   }
-}
-
-async function fetchAllPages<T>(
-  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: unknown }>
-): Promise<{ data: T[]; error: unknown }> {
-  const out: T[] = []
-  let offset = 0
-  let hasMore = true
-  let lastError: unknown = null
-  while (hasMore) {
-    const { data, error } = await fetchPage(offset, PAGE_SIZE)
-    if (error) return { data: out, error }
-    lastError = error
-    const chunkData = data ?? []
-    out.push(...chunkData)
-    hasMore = chunkData.length === PAGE_SIZE
-    offset += chunkData.length
-  }
-  return { data: out, error: lastError }
-}
-
-function weekStart(d: Date): string {
-  const x = new Date(d)
-  const day = x.getDay()
-  const diff = x.getDate() - day + (day === 0 ? -6 : 1)
-  x.setDate(diff)
-  x.setHours(0, 0, 0, 0)
-  return x.toISOString().slice(0, 10)
-}
-
-function monthStart(d: Date): string {
-  const x = new Date(d)
-  x.setDate(1)
-  x.setHours(0, 0, 0, 0)
-  return x.toISOString().slice(0, 10)
-}
-
-function toDateKey(value: string): string {
-  return value.slice(0, 10)
 }
 
 export async function GET(request: NextRequest) {
-  const requestId = getRequestId(request)
-
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      const { response, errorId } = createErrorResponse(
-        'Unauthorized: Please log in to access analytics',
-        'UNAUTHORIZED',
-        { requestId, statusCode: 401 }
-      )
-      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
-        category: 'auth', severity: 'warn', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 401,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.organization_id) {
-      const { response, errorId } = createErrorResponse(
-        'Failed to get organization ID',
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
-      )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const orgId = userData.organization_id
-
-    const { data: orgSub, error: orgSubError } = await supabase
-      .from('org_subscriptions')
-      .select('plan_code, status')
-      .eq('organization_id', orgId)
-      .maybeSingle()
-
-    if (orgSubError && orgSubError.code !== 'PGRST116') {
-      const { response, errorId } = createErrorResponse(
-        'Failed to get subscription',
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
-      )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-        category: 'internal', severity: 'error', route: ROUTE,
-      })
-      return NextResponse.json(response, {
-        status: 500,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-
-    const planCode: PlanCode =
-      orgSub?.plan_code && orgSub.plan_code !== 'none' ? (orgSub.plan_code as PlanCode) : 'none'
-    const status = orgSub?.status ?? (planCode === 'none' ? 'none' : 'inactive')
-    const isActive = ['active', 'trialing', 'free'].includes(status)
-    const features = isActive ? planFeatures(planCode) : []
-    const hasAnalytics = features.includes('analytics')
-
+    const ctx = await getAnalyticsContext(request, ROUTE)
+    if (ctx instanceof NextResponse) return ctx
+    const { orgId, requestId, hasAnalytics, isActive } = ctx
     if (!isActive || !hasAnalytics) {
       return NextResponse.json(
         { period: '30d', groupBy: 'day', metric: 'jobs', data: [], locked: true },
@@ -182,6 +59,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const supabase = await createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
@@ -245,7 +123,13 @@ export async function GET(request: NextRequest) {
           p_group_by: groupBy,
         }
       )
-      if (complianceError) throw complianceError
+      if (complianceError) {
+        console.warn('get_trends_compliance_buckets RPC failed, returning empty data:', complianceError)
+        return NextResponse.json(
+          { period: periodLabel, groupBy, metric, data: [] },
+          { status: 200, headers: { 'X-Request-ID': requestId } }
+        )
+      }
       const compPoints: Point[] = (Array.isArray(complianceRows) ? complianceRows : []).map(
         (r: {
           period_key: string
