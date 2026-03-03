@@ -17,7 +17,8 @@ ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
 
--- Backfill key_hash and key_prefix from legacy plaintext key when column exists
+-- Backfill key_hash and key_prefix from legacy plaintext key when column exists.
+-- Prefix length 16 matches runtime getKeyPrefix semantics (rm_live_/rm_test_ + 8 chars).
 DO $$
 BEGIN
   IF EXISTS (
@@ -27,9 +28,23 @@ BEGIN
     UPDATE api_keys
     SET
       key_hash = encode(digest(key, 'sha256'), 'hex'),
-      key_prefix = left(key, 15)
+      key_prefix = left(key, 16)
     WHERE key IS NOT NULL
       AND (key_hash IS NULL OR key_hash = '');
+  END IF;
+END $$;
+
+-- Corrective backfill: ensure key_prefix is 16 chars where plaintext key still exists (e.g. prior 15-char backfill).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'api_keys' AND column_name = 'key'
+  ) THEN
+    UPDATE api_keys
+    SET key_prefix = left(key, 16)
+    WHERE key IS NOT NULL
+      AND (length(key_prefix) IS NULL OR length(key_prefix) <> 16);
   END IF;
 END $$;
 

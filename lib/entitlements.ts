@@ -154,11 +154,14 @@ export async function getOrgSubscriptionWithAdmin(
     .limit(1)
     .maybeSingle()
 
+  // Treat non-PGRST116 (no rows) as hard errors so callers can return 500 instead of applying starter limits
   if (orgSubError && orgSubError.code !== 'PGRST116') {
     console.error('Failed to fetch org_subscriptions (admin):', orgSubError)
+    throw new Error(`Subscription lookup failed: ${orgSubError.message}`)
   }
   if (subError && subError.code !== 'PGRST116') {
     console.error('Failed to fetch subscriptions (admin):', subError)
+    throw new Error(`Subscription lookup failed: ${subError.message}`)
   }
 
   const tier = (orgSubscription?.plan_code as PlanTier) ||

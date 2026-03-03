@@ -187,7 +187,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const entitlements = await getOrgEntitlementsForApiKey(context.organization_id)
+    let entitlements
+    try {
+      entitlements = await getOrgEntitlementsForApiKey(context.organization_id)
+    } catch (e) {
+      console.error('[v1/jobs] entitlement resolution error:', e)
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('QUERY_ERROR', 'Failed to resolve entitlements', requestId),
+          { status: 500, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     if (entitlements.jobs_monthly_limit !== null) {
       const periodStart = entitlements.period_end
         ? new Date(new Date(entitlements.period_end).getTime() - 30 * 24 * 60 * 60 * 1000)
