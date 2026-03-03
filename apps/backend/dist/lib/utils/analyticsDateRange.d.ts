@@ -20,4 +20,13 @@ export declare function dateRangeForDays(days: number): {
     since: string;
     until: string;
 };
+/**
+ * Derive effective span in days from explicit since/until (covers full calendar days in range).
+ * Used for period metadata and MV eligibility when callers send explicit range instead of period.
+ */
+export declare function effectiveDaysFromRange(since: string, until: string): number;
+/**
+ * Period label for response metadata: "1y" when span >= 365 days, otherwise "{days}d".
+ */
+export declare function periodLabelFromDays(days: number): string;
 //# sourceMappingURL=analyticsDateRange.d.ts.map

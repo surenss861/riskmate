@@ -50,7 +50,12 @@ function buildForwardHeaders(request: NextRequest): Headers {
   return out
 }
 
-/** Forward to the bulk sub-route (POST) and return the response. */
+/**
+ * Forward to the bulk sub-route (POST) and return the response.
+ * Sub-routes (e.g. /api/jobs/bulk/status, /assign, /delete) must be accessible at the same
+ * origin; the cookie header is forwarded so session auth is preserved for the internal request.
+ * If those sub-routes move behind middleware that blocks internal requests, this pattern will break.
+ */
 async function forwardToBulkAction(
   request: NextRequest,
   canonicalAction: BulkAction,
