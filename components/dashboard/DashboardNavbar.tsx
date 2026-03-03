@@ -50,17 +50,21 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
       try {
         const supabase = createSupabaseBrowserClient()
         const {
-          data: { user },
-        } = await supabase.auth.getUser()
+          data: { session },
+        } = await supabase.auth.getSession()
 
-        if (user) {
-          const { data: userRow } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle()
+        if (!session?.access_token) {
+          setUserRole('member')
+          setLoading(false)
+          return
+        }
 
-          setUserRole(userRow?.role ?? 'member')
+        const res = await fetch('/api/me/context', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok) {
+          const { user_role } = await res.json()
+          setUserRole(user_role ?? 'member')
         } else {
           setUserRole('member')
         }

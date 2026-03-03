@@ -177,24 +177,47 @@ export async function POST(request: NextRequest) {
       status = 'draft',
     } = body
 
-    const client_name = rawClientName != null ? String(rawClientName).trim() : ''
-    const client_type = rawClientType != null ? String(rawClientType).trim() : ''
-    const job_type = rawJobType != null ? String(rawJobType).trim() : ''
-    const location = rawLocation != null ? String(rawLocation).trim() : ''
-
-    if (!client_name || !client_type || !job_type || !location) {
-      return withRateLimitHeaders(
-        NextResponse.json(
-          errorBody(
-            'INVALID_FORMAT',
-            'Missing required fields: client_name, client_type, job_type, location',
-            requestId
+    // Validate required fields as non-empty strings before any normalization
+    const requiredStringFields = [
+      { name: 'client_name', value: rawClientName },
+      { name: 'client_type', value: rawClientType },
+      { name: 'job_type', value: rawJobType },
+      { name: 'location', value: rawLocation },
+    ] as const
+    for (const { name, value } of requiredStringFields) {
+      if (value === undefined || value === null) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('INVALID_FORMAT', `Missing required field: ${name}`, requestId),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
           ),
-          { status: 400, headers: { 'X-Request-ID': requestId } }
-        ),
-        rateLimitResult
-      )
+          rateLimitResult
+        )
+      }
+      if (typeof value !== 'string') {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('INVALID_FORMAT', `${name} must be a string`, requestId),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      if (!value.trim()) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody('INVALID_FORMAT', `${name} cannot be empty`, requestId),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
     }
+
+    const client_name = (rawClientName as string).trim()
+    const client_type = (rawClientType as string).trim()
+    const job_type = (rawJobType as string).trim()
+    const location = (rawLocation as string).trim()
 
     const validClientTypes = ['residential', 'commercial', 'industrial', 'government', 'mixed']
     const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction', 'remodel', 'other']

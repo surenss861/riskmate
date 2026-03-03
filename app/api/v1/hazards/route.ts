@@ -158,16 +158,40 @@ export async function POST(request: NextRequest) {
     }
     const { job_id, title: rawTitle, description } = body
 
-    const title = rawTitle != null ? String(rawTitle).trim() : ''
-
-    if (!job_id || !title) {
+    // Validate required title as non-empty string before any normalization
+    if (rawTitle === undefined || rawTitle === null) {
       return withRateLimitHeaders(
         NextResponse.json(
-          errorBody(
-            'INVALID_FORMAT',
-            'Missing required fields: job_id, title',
-            requestId
-          ),
+          errorBody('INVALID_FORMAT', 'Missing required field: title', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+    if (typeof rawTitle !== 'string') {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'title must be a string', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+    const title = rawTitle.trim()
+    if (!title) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'title cannot be empty', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
+
+    if (!job_id) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Missing required field: job_id', requestId),
           { status: 400, headers: { 'X-Request-ID': requestId } }
         ),
         rateLimitResult
