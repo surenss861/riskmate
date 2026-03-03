@@ -42,7 +42,8 @@ export async function getAnalyticsContext(
     user = result.data.user
     authError = result.error
   }
-  if (!user && !authError) {
+  // Whenever bearer did not yield a user (including on error), try cookie-based auth
+  if (!user) {
     const result = await supabase.auth.getUser()
     user = result.data.user
     authError = result.error

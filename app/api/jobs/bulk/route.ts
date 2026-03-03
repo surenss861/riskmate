@@ -186,5 +186,13 @@ export async function DELETE(request: NextRequest) {
     )
   }
 
+  const action = body?.action
+  if (action !== undefined && action !== 'delete') {
+    return NextResponse.json(
+      { message: 'DELETE only allows action "delete" or no action; received conflicting action' },
+      { status: 400 }
+    )
+  }
+
   return forwardToBulkAction(request, 'delete', { job_ids: jobIds })
 }
