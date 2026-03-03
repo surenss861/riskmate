@@ -24,6 +24,16 @@ jest.mock('next/server', () => {
   return { ...actual, NextRequest: MockNextRequest }
 })
 
+jest.mock('@/lib/utils/analyticsAuth', () => ({
+  getAnalyticsContext: jest.fn().mockResolvedValue({
+    orgId: ORG_ID,
+    requestId: 'req-trends-test-123',
+    hasAnalytics: true,
+    isActive: true,
+    status: 'active',
+  }),
+}))
+
 jest.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: jest.fn().mockResolvedValue({
     auth: {
@@ -37,11 +47,13 @@ jest.mock('@/lib/supabase/server', () => ({
   }),
 }))
 
-function trendsRequest(params: { period?: string; groupBy?: string; metric?: string }) {
+function trendsRequest(params: { period?: string; groupBy?: string; metric?: string; since?: string; until?: string }) {
   const search = new URLSearchParams()
   if (params.period != null) search.set('period', params.period)
   if (params.groupBy != null) search.set('groupBy', params.groupBy)
   if (params.metric != null) search.set('metric', params.metric)
+  if (params.since != null) search.set('since', params.since)
+  if (params.until != null) search.set('until', params.until)
   const qs = search.toString()
   const url = `http://localhost/api/analytics/trends${qs ? `?${qs}` : ''}`
   return new NextRequest(url) as NextRequest
@@ -120,25 +132,13 @@ describe('GET /api/analytics/trends', () => {
 
   describe('locked-plan', () => {
     it('returns 200 with data [] and locked true when subscription has no analytics', async () => {
-      fromMock = jest.fn((table: string) => {
-        if (table === 'users') {
-          return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({ data: { organization_id: ORG_ID }, error: null }),
-          }
-        }
-        if (table === 'org_subscriptions') {
-          return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            maybeSingle: jest.fn().mockResolvedValue({
-              data: { plan_code: 'none', status: 'inactive' },
-              error: null,
-            }),
-          }
-        }
-        return {}
+      const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
+      ;(getAnalyticsContext as jest.Mock).mockResolvedValueOnce({
+        orgId: ORG_ID,
+        requestId: 'req-trends-test-123',
+        hasAnalytics: false,
+        isActive: false,
+        status: 'inactive',
       })
       const res = await GET(trendsRequest({ period: '30d', groupBy: 'week', metric: 'jobs' }))
       const body = await res.json()
@@ -496,6 +496,62 @@ describe('GET /api/analytics/trends', () => {
       expect(res.status).toBe(200)
       expect(Array.isArray(body.data)).toBe(true)
       expect(body).toHaveProperty('metric')
+    })
+  })
+
+  describe('explicit since/until (custom range)', () => {
+    it('returns period metadata reflecting requested range for range >730 days (fallback path, not 30d)', async () => {
+      fromMock = jest.fn((table: string) => {
+        if (table === 'users') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: { organization_id: ORG_ID }, error: null }),
+          }
+        }
+        if (table === 'org_subscriptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            maybeSingle: jest.fn().mockResolvedValue({
+              data: { plan_code: 'pro', status: 'active' },
+              error: null,
+            }),
+          }
+        }
+        if (table === 'analytics_weekly_job_stats' || table === 'analytics_weekly_completion_stats') {
+          return mvChain({ data: [], error: null })
+        }
+        if (table === 'jobs') {
+          return mvChain({
+            data: [
+              { id: 'j1', risk_score: 2, status: 'completed', created_at: '2022-06-01T00:00:00Z', completed_at: '2022-06-02T00:00:00Z' },
+            ],
+            error: null,
+          })
+        }
+        return {}
+      })
+      const since = '2020-01-01T00:00:00.000Z'
+      const until = '2022-12-31T23:59:59.999Z'
+      const res = await GET(trendsRequest({ since, until, groupBy: 'week', metric: 'jobs' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.period).not.toBe('30d')
+      expect(body.period).toBe('1y')
+      expect(Array.isArray(body.data)).toBe(true)
+    })
+
+    it('returns period metadata reflecting short explicit range (e.g. 10d)', async () => {
+      const since = '2025-01-01T00:00:00.000Z'
+      const until = '2025-01-10T23:59:59.999Z'
+      const res = await GET(trendsRequest({ since, until, groupBy: 'day', metric: 'jobs' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.period).toBe('10d')
+      expect(Array.isArray(body.data)).toBe(true)
     })
   })
 

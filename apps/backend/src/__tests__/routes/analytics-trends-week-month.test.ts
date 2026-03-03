@@ -37,6 +37,8 @@ function chainMock(data: unknown[]) {
   return {
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    is: jest.fn().mockReturnThis(),
+    not: jest.fn().mockReturnThis(),
     gte: jest.fn().mockReturnThis(),
     lte: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
@@ -199,5 +201,27 @@ describe("GET /api/analytics/trends (groupBy=week|month)", () => {
     expect(res.body.data.length).toBe(2);
     expect(res.body.data[0].value).toBe(80);
     expect(res.body.data[1].value).toBe(80);
+  });
+
+  it("explicit since/until >730 days: response period reflects range (fallback path, not 30d)", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "analytics_weekly_job_stats" || table === "analytics_weekly_completion_stats") {
+        return chainMock([]);
+      }
+      if (table === "jobs") {
+        return chainMock([
+          { id: "j1", risk_score: 2, status: "completed", created_at: "2021-06-01T00:00:00Z", completed_at: "2021-06-02T00:00:00Z" },
+        ]);
+      }
+      return chainMock([]);
+    });
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ since: "2020-01-01T00:00:00.000Z", until: "2022-12-31T23:59:59.999Z", groupBy: "week", metric: "jobs" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.period).not.toBe("30d");
+    expect(res.body.period).toBe("1y");
+    expect(Array.isArray(res.body.data)).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
-import { parsePeriod, parseSinceUntil, dateRangeForDays } from '@/lib/utils/analyticsDateRange'
+import { parsePeriod, parseSinceUntil, dateRangeForDays, effectiveDaysFromRange, periodLabelFromDays } from '@/lib/utils/analyticsDateRange'
 import {
   calendarYearBounds,
   PAGE_SIZE,
@@ -64,7 +64,13 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
-    const { days, key: periodKey } = parsePeriod(searchParams.get('period'))
+    const parsed = parsePeriod(searchParams.get('period'))
+    const { since, until } =
+      customRange ??
+      (parsed.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsed.days))
+    const effectiveDays = customRange ? effectiveDaysFromRange(since, until) : parsed.days
+    const periodLabel = customRange ? periodLabelFromDays(effectiveDays) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
+
     const groupByRaw = searchParams.get('groupBy') || 'day'
     const groupBy = groupByRaw === 'month' ? 'month' : groupByRaw === 'week' ? 'week' : 'day'
     const metricRaw = searchParams.get('metric') || 'jobs'
@@ -78,11 +84,6 @@ export async function GET(request: NextRequest) {
             : metricRaw === 'jobs_completed'
               ? 'jobs_completed'
               : 'jobs'
-
-    const periodLabel = periodKey === '1y' ? '1y' : `${days}d`
-    const { since, until } =
-      customRange ??
-      (periodKey === '1y' ? calendarYearBounds() : dateRangeForDays(days))
 
     type Point = { period: string; value: number; label: string }
 
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
     // Week/month: use MV path for jobs, risk, completion, jobs_completed (same strategy as backend)
     const useMv =
       (groupBy === 'week' || groupBy === 'month') &&
-      days <= MV_COVERAGE_DAYS &&
+      effectiveDays <= MV_COVERAGE_DAYS &&
       (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')
 
     if (useMv) {

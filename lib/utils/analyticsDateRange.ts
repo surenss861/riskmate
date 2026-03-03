@@ -32,3 +32,23 @@ export function dateRangeForDays(days: number): { since: string; until: string }
   since.setHours(0, 0, 0, 0)
   return { since: since.toISOString(), until: until.toISOString() }
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Derive effective span in days from explicit since/until (covers full calendar days in range).
+ * Used for period metadata and MV eligibility when callers send explicit range instead of period.
+ */
+export function effectiveDaysFromRange(since: string, until: string): number {
+  const sinceMs = new Date(since).getTime()
+  const untilMs = new Date(until).getTime()
+  if (Number.isNaN(sinceMs) || Number.isNaN(untilMs) || untilMs < sinceMs) return 30
+  return Math.ceil((untilMs - sinceMs) / MS_PER_DAY)
+}
+
+/**
+ * Period label for response metadata: "1y" when span >= 365 days, otherwise "{days}d".
+ */
+export function periodLabelFromDays(days: number): string {
+  return days >= 365 ? '1y' : `${days}d`
+}

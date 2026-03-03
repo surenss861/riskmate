@@ -12,7 +12,7 @@ import {
   toDateKey,
   fetchAllPages,
 } from "../../../../lib/utils/analyticsTrends";
-import { parsePeriod, parseSinceUntil, dateRangeForDays } from "../../../../lib/utils/analyticsDateRange";
+import { parsePeriod, parseSinceUntil, dateRangeForDays, effectiveDaysFromRange, periodLabelFromDays } from "../../../../lib/utils/analyticsDateRange";
 
 /** Normalize Express query (string | string[]) to the shape expected by shared parseSinceUntil. */
 function parseSinceUntilQuery(query: { since?: string | string[]; until?: string | string[] }): { since: string; until: string } | null {
@@ -120,7 +120,11 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days, key: periodKey } = parsePeriodQuery(authReq.query.period);
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const effectiveDays = customRange ? effectiveDaysFromRange(since, until) : parsed.days;
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDays) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
+
       const groupByRaw = (authReq.query.groupBy as string) || "day";
       const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
       const metricRaw = (authReq.query.metric as string) || "jobs";
@@ -135,11 +139,9 @@ analyticsRouter.get(
               : metricRaw === "jobs_completed"
                 ? "jobs_completed"
                 : "jobs";
-      const { since, until } = customRange ?? dateRangeForDays(days);
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];
-      const periodLabel = periodKey === "1y" ? "1y" : `${days}d`;
 
       // Day grouping: SQL aggregation only — RPC returns { period_key, value } per bucket (no full job fetch)
       if (groupBy === "day") {
@@ -190,7 +192,7 @@ analyticsRouter.get(
       }
 
       // Week/month: use MV/RPC path for jobs, risk, and completion (analytics_weekly_completion_stats keyed by completion date); compliance uses its own RPC.
-      const useMv = (groupBy === "week" || groupBy === "month") && days <= MV_COVERAGE_DAYS && metric !== "compliance";
+      const useMv = (groupBy === "week" || groupBy === "month") && effectiveDays <= MV_COVERAGE_DAYS && metric !== "compliance";
 
       if (useMv) {
         await ensureAnalyticsMvRefreshed();
@@ -556,8 +558,9 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(days);
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 
       const { data: rows, error } = await supabase.rpc("get_risk_heatmap_buckets", {
         p_org_id: orgId,
@@ -572,7 +575,7 @@ analyticsRouter.get(
         avg_risk: Number(r.avg_risk ?? 0),
         count: Number(r.count ?? 0),
       }));
-      return res.json({ period: `${days}d`, buckets });
+      return res.json({ period: periodLabel, buckets });
     } catch (error: any) {
       console.error("Analytics risk-heatmap error:", error);
       return res.status(500).json({ message: "Failed to fetch risk heatmap" });
@@ -597,8 +600,9 @@ analyticsRouter.get(
       const orgId = authReq.user.organization_id;
       if (!orgId) return res.status(400).json({ message: "Missing organization id" });
       const customRange = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
-      const { days } = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(days);
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_team_performance_kpis", {
         p_org_id: orgId,
@@ -650,7 +654,7 @@ analyticsRouter.get(
         ...m,
         name: userMap.get(m.user_id) ?? "Unknown",
       }));
-      return res.json({ period: `${days}d`, members: membersWithNames });
+      return res.json({ period: periodLabel, members: membersWithNames });
     } catch (error: any) {
       console.error("Analytics team-performance error:", error);
       return res.status(500).json({ message: "Failed to fetch team performance" });

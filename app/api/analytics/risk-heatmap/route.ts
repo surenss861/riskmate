@@ -4,7 +4,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
-import { parsePeriod, parseSinceUntil, dateRangeForDays } from '@/lib/utils/analyticsDateRange'
+import { parsePeriod, parseSinceUntil, dateRangeForDays, effectiveDaysFromRange, periodLabelFromDays } from '@/lib/utils/analyticsDateRange'
 
 export const runtime = 'nodejs'
 
@@ -27,8 +27,9 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
-    const { days } = parsePeriod(searchParams.get('period'))
-    const { since, until } = customRange ?? dateRangeForDays(days)
+    const parsed = parsePeriod(searchParams.get('period'))
+    const { since, until } = customRange ?? dateRangeForDays(parsed.days)
+    const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
 
     const { data: rows, error } = await supabase.rpc('get_risk_heatmap_buckets', {
       p_org_id: orgId,
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json(
-      { period: `${days}d`, buckets },
+      { period: periodLabel, buckets },
       { status: 200, headers: { 'X-Request-ID': requestId } }
     )
   } catch (error: unknown) {
