@@ -31,7 +31,22 @@ export async function getAnalyticsContext(
   const requestId = getRequestId(request)
 
   const supabase = await createSupabaseServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null
+  let authError: Awaited<ReturnType<typeof supabase.auth.getUser>>['error'] = null
+
+  // Try Authorization header first (Bearer token), then fall back to cookie-based auth
+  const authHeader = request.headers.get('authorization')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    const result = await supabase.auth.getUser(token)
+    user = result.data.user
+    authError = result.error
+  }
+  if (!user && !authError) {
+    const result = await supabase.auth.getUser()
+    user = result.data.user
+    authError = result.error
+  }
 
   if (authError || !user) {
     const { response, errorId } = createErrorResponse(

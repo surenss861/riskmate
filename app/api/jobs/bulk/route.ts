@@ -15,6 +15,19 @@ function normalizeBulkAction(action: string): BulkAction | null {
   return null
 }
 
+/** Hop-by-hop and other headers we must not forward from the delegated response. */
+const BULK_RESPONSE_HEADERS_EXCLUDE = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'content-length', // NextResponse sets this from the body
+])
+
 /** Headers we allow when forwarding to the bulk sub-route. Excludes hop-by-hop and framing headers (e.g. content-length, host, connection). */
 const BULK_FORWARD_ALLOWED_HEADERS = [
   'authorization',
@@ -52,11 +65,18 @@ async function forwardToBulkAction(
     body: JSON.stringify(rest),
   })
   const responseBody = await res.text()
-  const contentType = res.headers.get('Content-Type') ?? 'application/json'
+  const outHeaders = new Headers()
+  outHeaders.set('Content-Type', res.headers.get('Content-Type') ?? 'application/json')
+  res.headers.forEach((value, name) => {
+    const lower = name.toLowerCase()
+    if (!BULK_RESPONSE_HEADERS_EXCLUDE.has(lower)) {
+      outHeaders.set(name, value)
+    }
+  })
   return new NextResponse(responseBody, {
     status: res.status,
     statusText: res.statusText,
-    headers: { 'Content-Type': contentType },
+    headers: outHeaders,
   })
 }
 
