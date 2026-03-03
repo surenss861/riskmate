@@ -2,16 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, GlassCard } from '@/components/shared'
-
-export const API_KEY_SCOPES = [
-  'jobs:read',
-  'jobs:write',
-  'hazards:read',
-  'hazards:write',
-  'reports:read',
-  'team:read',
-  'webhooks:manage',
-] as const
+import { API_KEY_SCOPES } from '@/lib/api/apiKeyScopes'
 
 export interface ApiKeyRow {
   id: string

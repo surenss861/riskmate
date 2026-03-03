@@ -11,34 +11,11 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
 import { hashApiKey, getKeyPrefix, getDefaultKeyPrefix } from '@/lib/middleware/apiKeyAuth'
 import { randomBytes } from 'crypto'
+import { API_KEY_SCOPES, isScopesArrayOfStrings, validateAndNormalizeScopes } from '@/lib/api/apiKeyScopes'
 
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/api-keys'
-
-const API_KEY_SCOPES = [
-  'jobs:read',
-  'jobs:write',
-  'hazards:read',
-  'hazards:write',
-  'reports:read',
-  'team:read',
-  'webhooks:manage',
-] as const
-
-const ALLOWED_SCOPES_SET = new Set<string>(API_KEY_SCOPES)
-
-/** Ensure scopes is an array of strings. Returns false if provided but malformed. */
-function isScopesArrayOfStrings(scopes: unknown): scopes is string[] {
-  return Array.isArray(scopes) && scopes.every((s) => typeof s === 'string')
-}
-
-/** Validate scopes: return invalid values if any; otherwise return deduped allowed scopes. Call only when scopes is already an array of strings. */
-function validateAndNormalizeScopes(scopes: string[]): { valid: string[]; invalid: string[] } {
-  const invalid = scopes.filter((s) => !ALLOWED_SCOPES_SET.has(s))
-  const valid = [...new Set(scopes.filter((s) => ALLOWED_SCOPES_SET.has(s)))]
-  return { valid, invalid }
-}
 
 /** 32 random hex characters (16 bytes) after prefix to match documented format. */
 function generateSecureKey(prefix: string): string {
