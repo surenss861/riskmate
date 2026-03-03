@@ -1,10 +1,12 @@
 /**
  * Shared auth + subscription check for analytics routes (trends, risk-heatmap, team-performance, mitigations).
  * Same pattern as lib/utils/organizationGuard.ts for bulk routes.
+ * Bearer-only requests are supported: after resolving user.id, DB lookups use admin client so RLS does not depend on cookie session.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -34,16 +36,31 @@ export async function getAnalyticsContext(
   let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null
   let authError: Awaited<ReturnType<typeof supabase.auth.getUser>>['error'] = null
 
-  // Try Authorization header first (Bearer token), then fall back to cookie-based auth
   const authHeader = request.headers.get('authorization')
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7)
+  const hasBearer = authHeader != null && authHeader.startsWith('Bearer ')
+
+  if (hasBearer) {
+    const token = authHeader!.substring(7)
     const result = await supabase.auth.getUser(token)
     user = result.data.user
     authError = result.error
-  }
-  // Whenever bearer did not yield a user (including on error), try cookie-based auth
-  if (!user) {
+    // Strict bearer semantics: if caller sent Authorization, do not fall back to cookie
+    if (authError || !user) {
+      const { response, errorId } = createErrorResponse(
+        'Unauthorized: Please log in to access analytics',
+        'UNAUTHORIZED',
+        { requestId, statusCode: 401 }
+      )
+      logApiError(401, 'UNAUTHORIZED', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route,
+      })
+      return NextResponse.json(response, {
+        status: 401,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+  } else {
+    // No Authorization header: use cookie-based auth
     const result = await supabase.auth.getUser()
     user = result.data.user
     authError = result.error
@@ -64,7 +81,9 @@ export async function getAnalyticsContext(
     })
   }
 
-  const { data: userData, error: userError } = await supabase
+  // Use admin client for DB lookups so bearer-only requests work without cookie session (RLS not bound to anon cookie)
+  const admin = createSupabaseAdminClient()
+  const { data: userData, error: userError } = await admin
     .from('users')
     .select('organization_id')
     .eq('id', user.id)
@@ -87,7 +106,7 @@ export async function getAnalyticsContext(
 
   const orgId = userData.organization_id
 
-  const { data: orgSub, error: orgSubError } = await supabase
+  const { data: orgSub, error: orgSubError } = await admin
     .from('org_subscriptions')
     .select('plan_code, status')
     .eq('organization_id', orgId)
