@@ -147,7 +147,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}))
-    const { job_id, title, description } = body
+    const { job_id, title: rawTitle, description } = body
+
+    const title = rawTitle != null ? String(rawTitle).trim() : ''
 
     if (!job_id || !title) {
       return withRateLimitHeaders(
@@ -217,7 +219,7 @@ export async function POST(request: NextRequest) {
       .insert({
         job_id,
         organization_id: context.organization_id,
-        title: String(title).trim(),
+        title,
         description: description != null ? String(description) : '',
         done: false,
         is_completed: false,

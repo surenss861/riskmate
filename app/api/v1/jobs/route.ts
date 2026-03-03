@@ -142,15 +142,20 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
     const {
-      client_name,
-      client_type,
-      job_type,
-      location,
+      client_name: rawClientName,
+      client_type: rawClientType,
+      job_type: rawJobType,
+      location: rawLocation,
       description,
       start_date,
       end_date,
       status = 'draft',
     } = body
+
+    const client_name = rawClientName != null ? String(rawClientName).trim() : ''
+    const client_type = rawClientType != null ? String(rawClientType).trim() : ''
+    const job_type = rawJobType != null ? String(rawJobType).trim() : ''
+    const location = rawLocation != null ? String(rawLocation).trim() : ''
 
     if (!client_name || !client_type || !job_type || !location) {
       return withRateLimitHeaders(
@@ -170,8 +175,8 @@ export async function POST(request: NextRequest) {
     const validJobTypes = ['repair', 'maintenance', 'installation', 'inspection', 'renovation', 'new_construction', 'remodel', 'other']
 
     const st = String(status).toLowerCase()
-    const ct = String(client_type).toLowerCase()
-    const jt = String(job_type).toLowerCase()
+    const ct = client_type.toLowerCase()
+    const jt = job_type.toLowerCase()
     if (!VALID_JOB_STATUSES_SET.has(st) || !validClientTypes.includes(ct) || !validJobTypes.includes(jt)) {
       return withRateLimitHeaders(
         NextResponse.json(
@@ -226,10 +231,10 @@ export async function POST(request: NextRequest) {
       .insert({
         organization_id: context.organization_id,
         title: [client_name, job_type, location].filter(Boolean).join(' – ') || 'Untitled Job',
-        client_name: String(client_name).trim(),
+        client_name,
         client_type: ct,
         job_type: jt,
-        location: String(location).trim(),
+        location,
         description: description != null ? String(description) : null,
         start_date: start_date || null,
         end_date: end_date || null,

@@ -1,12 +1,14 @@
 /**
  * Shared job constants for Public API v1, aligned with DB CHECK constraints
- * (see supabase/migrations/20260340000000_jobs_enum_constraints_api_contract.sql).
- * Used by POST (create) and PATCH (update) so create/update semantics stay consistent.
+ * (see supabase/migrations/20260340000000_jobs_enum_constraints_api_contract.sql and
+ * 20260345000000_jobs_status_include_on_hold.sql). Used by POST (create) and PATCH (update)
+ * and kept in sync with bulk status flows (BulkStatusModal, bulk/shared.ts, Express jobs).
  */
 export const VALID_JOB_STATUSES = [
   'draft',
   'pending',
   'in_progress',
+  'on_hold',
   'completed',
   'cancelled',
   'archived',
