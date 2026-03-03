@@ -124,8 +124,10 @@ export async function POST(request: NextRequest) {
 
 /**
  * PATCH /api/jobs/bulk
- * REST alias for bulk update operations. Body must include action: 'status' | 'update_status' | 'assign'
- * and the same payload as the sub-route (job_ids, and status or worker_id). Delegates to the same sub-route as POST.
+ * REST alias for bulk update operations. Body may include action: 'status' | 'update_status' | 'assign'
+ * for backward compatibility, or omit action and send { job_ids, status } for status update or
+ * { job_ids, worker_id } for assignment. Ambiguous payloads (e.g. both status and worker_id without action)
+ * return 400. Delegates to the same sub-route as POST.
  */
 export async function PATCH(request: NextRequest) {
   let body: { action?: unknown; job_ids?: unknown; status?: unknown; worker_id?: unknown; [key: string]: unknown }
@@ -138,29 +140,44 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
+  let canonicalAction: 'status' | 'assign' | null = null
   const action = body?.action
-  if (typeof action !== 'string') {
-    return NextResponse.json(
-      {
-        message: 'PATCH body must include action: "status", "update_status", or "assign"',
-        allowed_actions: ['status', 'update_status', 'assign'],
-      },
-      { status: 400 }
-    )
+  if (typeof action === 'string') {
+    const normalized = normalizeBulkAction(action)
+    if (normalized === 'status' || normalized === 'assign') {
+      canonicalAction = normalized
+    }
   }
-  const canonicalAction = normalizeBulkAction(action)
-  if (canonicalAction !== 'status' && canonicalAction !== 'assign') {
-    return NextResponse.json(
-      {
-        message: 'PATCH only supports action: "status", "update_status", or "assign"',
-        allowed_actions: ['status', 'update_status', 'assign'],
-      },
-      { status: 400 }
-    )
+
+  if (canonicalAction === null) {
+    const hasStatus = body?.status !== undefined
+    const hasWorkerId = body?.worker_id !== undefined
+    if (hasStatus && hasWorkerId) {
+      return NextResponse.json(
+        {
+          message: 'PATCH body is ambiguous: both status and worker_id present. Specify action: "status" or "assign".',
+          allowed_actions: ['status', 'update_status', 'assign'],
+        },
+        { status: 400 }
+      )
+    }
+    if (hasStatus) {
+      canonicalAction = 'status'
+    } else if (hasWorkerId) {
+      canonicalAction = 'assign'
+    } else {
+      return NextResponse.json(
+        {
+          message: 'PATCH body must include action or inferrable payload: include "status" for status update or "worker_id" for assignment.',
+          allowed_actions: ['status', 'update_status', 'assign'],
+        },
+        { status: 400 }
+      )
+    }
   }
 
   const { action: _drop, ...rest } = body
-  return forwardToBulkAction(request, canonicalAction, rest as Record<string, unknown>)
+  return forwardToBulkAction(request, canonicalAction as 'status' | 'assign', rest as Record<string, unknown>)
 }
 
 /**
