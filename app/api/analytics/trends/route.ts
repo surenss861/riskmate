@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import type { SupabaseAnalyticsClient } from '@/lib/utils/analyticsAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -31,7 +31,7 @@ let refreshInFlight = false
  * ensureAnalyticsMvRefreshed in apps/backend/src/routes/analytics.ts; this Next.js route's refresh is only needed
  * when the dashboard is served directly without going through the Express backend.
  */
-async function ensureAnalyticsMvRefreshed(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<void> {
+async function ensureAnalyticsMvRefreshed(supabase: SupabaseAnalyticsClient): Promise<void> {
   const now = Date.now()
   if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return
   if (refreshInFlight) return
@@ -51,15 +51,13 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await getAnalyticsContext(request, ROUTE)
     if (ctx instanceof NextResponse) return ctx
-    const { orgId, requestId, hasAnalytics, isActive } = ctx
+    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
     if (!isActive || !hasAnalytics) {
       return NextResponse.json(
         { period: '30d', groupBy: 'day', metric: 'jobs', data: [], locked: true },
         { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }
-
-    const supabase = await createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
@@ -238,10 +236,12 @@ export async function GET(request: NextRequest) {
               points.push({ period, value, label: period })
             }
           }
-          return NextResponse.json(
-            { period: periodLabel, groupBy, metric, data: points },
-            { status: 200, headers: { 'X-Request-ID': requestId } }
-          )
+          if (points.length > 0) {
+            return NextResponse.json(
+              { period: periodLabel, groupBy, metric, data: points },
+              { status: 200, headers: { 'X-Request-ID': requestId } }
+            )
+          }
         }
         if (completionRes.error) throw completionRes.error
         if (creationRes.error) throw creationRes.error
@@ -283,10 +283,12 @@ export async function GET(request: NextRequest) {
               points.push({ period, value: byMonth.get(period) ?? 0, label: period })
             }
           }
-          return NextResponse.json(
-            { period: periodLabel, groupBy, metric, data: points },
-            { status: 200, headers: { 'X-Request-ID': requestId } }
-          )
+          if (points.length > 0) {
+            return NextResponse.json(
+              { period: periodLabel, groupBy, metric, data: points },
+              { status: 200, headers: { 'X-Request-ID': requestId } }
+            )
+          }
         }
         if (completionRes.error) throw completionRes.error
       }

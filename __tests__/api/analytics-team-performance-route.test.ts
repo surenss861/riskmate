@@ -22,19 +22,7 @@ jest.mock('next/server', () => {
 })
 
 jest.mock('@/lib/utils/analyticsAuth', () => ({
-  getAnalyticsContext: jest.fn().mockResolvedValue({
-    orgId: ORG_ID,
-    requestId: REQUEST_ID,
-    hasAnalytics: true,
-    isActive: true,
-    status: 'active',
-  }),
-}))
-
-jest.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: jest.fn().mockResolvedValue({
-    rpc: (...args: unknown[]) => rpcMock(...args),
-  }),
+  getAnalyticsContext: jest.fn(),
 }))
 
 function teamPerformanceRequest(params?: { period?: string; since?: string; until?: string }) {
@@ -67,6 +55,15 @@ describe('GET /api/analytics/team-performance', () => {
       }
       return Promise.resolve({ data: null, error: null })
     })
+    const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
+    ;(getAnalyticsContext as jest.Mock).mockResolvedValue({
+      orgId: ORG_ID,
+      requestId: REQUEST_ID,
+      hasAnalytics: true,
+      isActive: true,
+      status: 'active',
+      supabase: { rpc: rpcMock },
+    })
     const mod = await import('@/app/api/analytics/team-performance/route')
     GET = mod.GET
   })
@@ -76,6 +73,17 @@ describe('GET /api/analytics/team-performance', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body).toHaveProperty('period', '30d')
+    expect(body).toHaveProperty('members')
+    expect(Array.isArray(body.members)).toBe(true)
+  })
+
+  it('succeeds with bearer-only request (no cookies)', async () => {
+    const req = new NextRequest('http://localhost/api/analytics/team-performance?period=30d', {
+      headers: { Authorization: 'Bearer test-token' },
+    }) as NextRequest
+    const res = await GET(req)
+    const body = await res.json()
+    expect(res.status).toBe(200)
     expect(body).toHaveProperty('members')
     expect(Array.isArray(body.members)).toBe(true)
   })

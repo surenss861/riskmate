@@ -25,26 +25,7 @@ jest.mock('next/server', () => {
 })
 
 jest.mock('@/lib/utils/analyticsAuth', () => ({
-  getAnalyticsContext: jest.fn().mockResolvedValue({
-    orgId: ORG_ID,
-    requestId: 'req-trends-test-123',
-    hasAnalytics: true,
-    isActive: true,
-    status: 'active',
-  }),
-}))
-
-jest.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: jest.fn().mockResolvedValue({
-    auth: {
-      getUser: jest.fn().mockResolvedValue({
-        data: { user: { id: 'user-trends-test-1111-2222-3333-4444' } },
-        error: null,
-      }),
-    },
-    from: (table: string) => fromMock(table),
-    rpc: (...args: unknown[]) => rpcMock(...args),
-  }),
+  getAnalyticsContext: jest.fn(),
 }))
 
 function trendsRequest(params: { period?: string; groupBy?: string; metric?: string; since?: string; until?: string }) {
@@ -79,8 +60,7 @@ describe('GET /api/analytics/trends', () => {
   beforeEach(async () => {
     jest.clearAllMocks()
     jest.resetModules()
-    const mod = await import('@/app/api/analytics/trends/route')
-    GET = mod.GET
+    const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
     rpcMock = jest.fn((name: string) => {
       if (name === 'get_trends_day_buckets') {
         return Promise.resolve({
@@ -114,8 +94,20 @@ describe('GET /api/analytics/trends', () => {
           }),
         }
       }
-      return {}
+      return mvChain({ data: [], error: null })
     })
+    ;(getAnalyticsContext as jest.Mock).mockImplementation(() =>
+      Promise.resolve({
+        orgId: ORG_ID,
+        requestId: 'req-trends-test-123',
+        hasAnalytics: true,
+        isActive: true,
+        status: 'active',
+        supabase: { from: fromMock, rpc: rpcMock },
+      })
+    )
+    const mod = await import('@/app/api/analytics/trends/route')
+    GET = mod.GET
   })
 
   it('returns 200 with period, groupBy, metric, data (trends response shape)', async () => {
@@ -130,6 +122,20 @@ describe('GET /api/analytics/trends', () => {
     expect(Array.isArray(body.data)).toBe(true)
   })
 
+  describe('bearer-only', () => {
+    it('succeeds with bearer-only request (no cookies)', async () => {
+      const url = 'http://localhost/api/analytics/trends?period=30d&groupBy=day&metric=jobs'
+      const req = new NextRequest(url, {
+        headers: { Authorization: 'Bearer test-token' },
+      }) as NextRequest
+      const res = await GET(req)
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body).toHaveProperty('data')
+      expect(Array.isArray(body.data)).toBe(true)
+    })
+  })
+
   describe('locked-plan', () => {
     it('returns 200 with data [] and locked true when subscription has no analytics', async () => {
       const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
@@ -139,6 +145,7 @@ describe('GET /api/analytics/trends', () => {
         hasAnalytics: false,
         isActive: false,
         status: 'inactive',
+        supabase: { from: fromMock, rpc: rpcMock },
       })
       const res = await GET(trendsRequest({ period: '30d', groupBy: 'week', metric: 'jobs' }))
       const body = await res.json()
@@ -592,6 +599,144 @@ describe('GET /api/analytics/trends', () => {
       expect(res.status).toBe(200)
       expect(Array.isArray(body.data)).toBe(true)
       expect(body).toHaveProperty('metric')
+    })
+  })
+
+  describe('empty MV fallback for completion and jobs_completed', () => {
+    it('returns non-empty fallback data when metric=completion and MV tables are empty but jobs exist', async () => {
+      fromMock = jest.fn((table: string) => {
+        if (table === 'users') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: { organization_id: ORG_ID }, error: null }),
+          }
+        }
+        if (table === 'org_subscriptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            maybeSingle: jest.fn().mockResolvedValue({
+              data: { plan_code: 'pro', status: 'active' },
+              error: null,
+            }),
+          }
+        }
+        if (table === 'analytics_weekly_completion_stats' || table === 'analytics_weekly_job_stats') {
+          return mvChain({ data: [], error: null })
+        }
+        if (table === 'jobs') {
+          return mvChain({
+            data: [
+              { id: 'j1', risk_score: 2, status: 'completed', created_at: '2025-02-03T00:00:00Z', completed_at: '2025-02-04T00:00:00Z' },
+              { id: 'j2', risk_score: 1, status: 'completed', created_at: '2025-02-03T00:00:00Z', completed_at: '2025-02-05T00:00:00Z' },
+            ],
+            error: null,
+          })
+        }
+        return {}
+      })
+      const res = await GET(trendsRequest({
+        since: '2025-02-01T00:00:00.000Z',
+        until: '2025-02-28T23:59:59.999Z',
+        groupBy: 'week',
+        metric: 'completion',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body.metric).toBe('completion')
+      expect(Array.isArray(body.data)).toBe(true)
+      expect(body.data.length).toBeGreaterThan(0)
+    })
+
+    it('returns non-empty fallback data when metric=jobs_completed and MV table is empty but jobs exist', async () => {
+      fromMock = jest.fn((table: string) => {
+        if (table === 'users') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: { organization_id: ORG_ID }, error: null }),
+          }
+        }
+        if (table === 'org_subscriptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            maybeSingle: jest.fn().mockResolvedValue({
+              data: { plan_code: 'pro', status: 'active' },
+              error: null,
+            }),
+          }
+        }
+        if (table === 'analytics_weekly_completion_stats' || table === 'analytics_weekly_job_stats') {
+          return mvChain({ data: [], error: null })
+        }
+        if (table === 'jobs') {
+          return mvChain({
+            data: [
+              { id: 'j1', completed_at: '2025-02-03T12:00:00Z' },
+              { id: 'j2', completed_at: '2025-02-10T12:00:00Z' },
+            ],
+            error: null,
+          })
+        }
+        return {}
+      })
+      const res = await GET(trendsRequest({
+        since: '2025-02-01T00:00:00.000Z',
+        until: '2025-02-28T23:59:59.999Z',
+        groupBy: 'week',
+        metric: 'jobs_completed',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body.metric).toBe('jobs_completed')
+      expect(Array.isArray(body.data)).toBe(true)
+      expect(body.data.length).toBeGreaterThan(0)
+    })
+
+    it('returns non-empty fallback data for groupBy=month metric=completion when MV is empty', async () => {
+      fromMock = jest.fn((table: string) => {
+        if (table === 'users') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: { organization_id: ORG_ID }, error: null }),
+          }
+        }
+        if (table === 'org_subscriptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            maybeSingle: jest.fn().mockResolvedValue({
+              data: { plan_code: 'pro', status: 'active' },
+              error: null,
+            }),
+          }
+        }
+        if (table === 'analytics_weekly_completion_stats' || table === 'analytics_weekly_job_stats') {
+          return mvChain({ data: [], error: null })
+        }
+        if (table === 'jobs') {
+          return mvChain({
+            data: [
+              { id: 'j1', risk_score: 2, status: 'completed', created_at: '2025-02-01T00:00:00Z', completed_at: '2025-02-15T00:00:00Z' },
+            ],
+            error: null,
+          })
+        }
+        return {}
+      })
+      const res = await GET(trendsRequest({
+        since: '2025-01-01T00:00:00.000Z',
+        until: '2025-03-31T23:59:59.999Z',
+        groupBy: 'month',
+        metric: 'completion',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body.metric).toBe('completion')
+      expect(body.data.length).toBeGreaterThan(0)
     })
   })
 })

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -111,7 +110,7 @@ export async function GET(request: NextRequest) {
 
     const crewId = searchParams.get('crew_id') || undefined
 
-    const supabase = await createSupabaseServerClient()
+    const { supabase } = ctx
 
     // Server-side aggregation: one RPC for KPIs, one for daily trend (O(1) queries)
     const [kpisResult, trendResult] = await Promise.all([

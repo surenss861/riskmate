@@ -22,19 +22,7 @@ jest.mock('next/server', () => {
 })
 
 jest.mock('@/lib/utils/analyticsAuth', () => ({
-  getAnalyticsContext: jest.fn().mockResolvedValue({
-    orgId: ORG_ID,
-    requestId: REQUEST_ID,
-    hasAnalytics: true,
-    isActive: true,
-    status: 'active',
-  }),
-}))
-
-jest.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: jest.fn().mockResolvedValue({
-    rpc: (...args: unknown[]) => rpcMock(...args),
-  }),
+  getAnalyticsContext: jest.fn(),
 }))
 
 function riskHeatmapRequest(params?: { period?: string; since?: string; until?: string }) {
@@ -61,6 +49,15 @@ describe('GET /api/analytics/risk-heatmap', () => {
         error: null,
       })
     )
+    const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
+    ;(getAnalyticsContext as jest.Mock).mockResolvedValue({
+      orgId: ORG_ID,
+      requestId: REQUEST_ID,
+      hasAnalytics: true,
+      isActive: true,
+      status: 'active',
+      supabase: { rpc: rpcMock },
+    })
     const mod = await import('@/app/api/analytics/risk-heatmap/route')
     GET = mod.GET
   })
@@ -70,6 +67,17 @@ describe('GET /api/analytics/risk-heatmap', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body).toHaveProperty('period', '30d')
+    expect(body).toHaveProperty('buckets')
+    expect(Array.isArray(body.buckets)).toBe(true)
+  })
+
+  it('succeeds with bearer-only request (no cookies)', async () => {
+    const req = new NextRequest('http://localhost/api/analytics/risk-heatmap?period=30d', {
+      headers: { Authorization: 'Bearer test-token' },
+    }) as NextRequest
+    const res = await GET(req)
+    const body = await res.json()
+    expect(res.status).toBe(200)
     expect(body).toHaveProperty('buckets')
     expect(Array.isArray(body.buckets)).toBe(true)
   })

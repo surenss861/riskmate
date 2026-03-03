@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -14,15 +13,13 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await getAnalyticsContext(request, ROUTE)
     if (ctx instanceof NextResponse) return ctx
-    const { orgId, requestId, hasAnalytics, isActive } = ctx
+    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
     if (!isActive || !hasAnalytics) {
       return NextResponse.json(
         { period: '30d', members: [], locked: true },
         { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }
-
-    const supabase = await createSupabaseServerClient()
     const { searchParams } = new URL(request.url)
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')

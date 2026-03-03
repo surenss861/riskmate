@@ -12,6 +12,8 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
 
+export type SupabaseAnalyticsClient = ReturnType<typeof createSupabaseAdminClient>
+
 export type AnalyticsContext = {
   orgId: string
   requestId: string
@@ -19,6 +21,8 @@ export type AnalyticsContext = {
   isActive: boolean
   /** Subscription status for route-specific locked messages (e.g. mitigations). */
   status: string
+  /** Client for data/RPC queries. Admin client so bearer-only requests work without cookie session; org scoping is explicit in RPC params. */
+  supabase: SupabaseAnalyticsClient
 }
 
 /**
@@ -134,5 +138,5 @@ export async function getAnalyticsContext(
   const features = isActive ? planFeatures(planCode) : []
   const hasAnalytics = features.includes('analytics')
 
-  return { orgId, requestId, hasAnalytics, isActive, status }
+  return { orgId, requestId, hasAnalytics, isActive, status, supabase: admin }
 }
