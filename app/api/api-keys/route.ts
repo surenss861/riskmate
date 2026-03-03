@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organizationGuard'
+import { UnauthorizedError } from '@/lib/utils/adminAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
       })),
     })
   } catch (e: any) {
-    if (e.message?.includes('Unauthorized') || e.message?.includes('organization')) {
+    if (e instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         e.message || 'Unauthorized',
         'UNAUTHORIZED',
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (e: any) {
-    if (e.message?.includes('Unauthorized') || e.message?.includes('organization')) {
+    if (e instanceof UnauthorizedError) {
       const { response, errorId } = createErrorResponse(
         e.message || 'Unauthorized',
         'UNAUTHORIZED',

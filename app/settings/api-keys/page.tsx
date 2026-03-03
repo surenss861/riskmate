@@ -64,6 +64,7 @@ export default function ApiKeysPage() {
     const id = revokeConfirmId
     if (!id) return
     setRevokingId(id)
+    setActionError(null)
     try {
       const res = await fetch(`/api/api-keys/${id}`, {
         method: 'DELETE',
@@ -76,6 +77,8 @@ export default function ApiKeysPage() {
       }
       setActionSuccess('API key revoked.')
       await loadKeys()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Request failed. Please check your connection and try again.')
     } finally {
       setRevokingId(null)
       setRevokeConfirmId(null)
