@@ -4,6 +4,7 @@
  * Secrets are read from webhook_endpoint_secrets (service-role only). Rotate SUPABASE_SERVICE_ROLE_KEY
  * regularly and restrict/audit service-role access.
  */
+export declare const MAX_ATTEMPTS = 5;
 /**
  * Parse an env value as a finite integer within [min, max]; invalid or out-of-range yields default.
  * Prevents NaN from non-numeric env (e.g. WEBHOOK_DELIVERY_CONCURRENCY=foo) from creating zero workers

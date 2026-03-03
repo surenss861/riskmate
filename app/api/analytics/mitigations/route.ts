@@ -111,6 +111,8 @@ export async function GET(request: NextRequest) {
 
     const crewId = searchParams.get('crew_id') || undefined
 
+    const supabase = await createSupabaseServerClient()
+
     // Server-side aggregation: one RPC for KPIs, one for daily trend (O(1) queries)
     const [kpisResult, trendResult] = await Promise.all([
       supabase.rpc('get_mitigations_analytics_kpis', {

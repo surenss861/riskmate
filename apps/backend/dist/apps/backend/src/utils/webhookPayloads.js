@@ -19,6 +19,7 @@ function buildReportGeneratedObject(raw) {
     const storage_path = raw.storage_path ?? null;
     const generated_at = raw.generated_at ?? new Date().toISOString();
     const generated_by = raw.generated_by ?? null;
+    const snapshot_id = raw.snapshot_id ?? null;
     const id = raw.id ?? report_run_id;
     for (const key of REPORT_GENERATED_REQUIRED) {
         const value = key === 'report_run_id' ? report_run_id : key === 'job_id' ? job_id : key === 'status' ? status : data_hash;
@@ -35,6 +36,7 @@ function buildReportGeneratedObject(raw) {
         ...(storage_path != null && { storage_path }),
         generated_at,
         ...(generated_by != null && { generated_by }),
+        ...(snapshot_id != null && { snapshot_id }),
         id,
     };
 }

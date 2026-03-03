@@ -16,7 +16,7 @@ const auth_1 = require("../middleware/auth");
 const requireWriteAccess_1 = require("../middleware/requireWriteAccess");
 const audit_1 = require("../middleware/audit");
 const audit_2 = require("../middleware/audit");
-const webhookDelivery_1 = require("../workers/webhookDelivery");
+const syncWebhookEvents_1 = require("./syncWebhookEvents");
 exports.syncRouter = express_1.default.Router();
 const MAX_BATCH_SIZE = 200; // Support 100+ as per ticket, allow up to 200
 // POST /api/sync/batch - Upload pending operations
@@ -115,14 +115,12 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
-                            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.created", {
-                                id: job.id,
+                            (0, syncWebhookEvents_1.emitSyncJobCreated)(organization_id, userId, job, {
                                 client_name,
                                 job_type,
                                 location,
                                 status: data.status ?? "draft",
-                                created_by: userId,
-                            }).catch((e) => console.warn("[Sync] Webhook job.created enqueue failed:", e));
+                            });
                         }
                         results.push(baseResult);
                         break;
@@ -219,30 +217,8 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
-                            // Only emit webhooks when at least one persisted mutable column actually changed
-                            const valueChanged = (a, b) => {
-                                const na = a === undefined || a === null ? null : a;
-                                const nb = b === undefined || b === null ? null : b;
-                                if (na === null && nb === null)
-                                    return false;
-                                if (na === null || nb === null)
-                                    return true;
-                                return String(na) !== String(nb);
-                            };
-                            const hadActualChange = Object.keys(updates).some((k) => valueChanged(updates[k], existing[k]));
-                            if (updatedJobRow && hadActualChange) {
-                                (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", {
-                                    id: jobId,
-                                    ...updatedJobRow,
-                                }).catch((e) => console.warn("[Sync] Webhook job.updated enqueue failed:", e));
-                                const didTransitionToCompleted = updates.status === "completed" && (existing.completed_at ?? null) == null;
-                                if (didTransitionToCompleted) {
-                                    (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", {
-                                        id: jobId,
-                                        completed_at: updatedJobRow.completed_at ?? new Date().toISOString(),
-                                        status: "completed",
-                                    }).catch((e) => console.warn("[Sync] Webhook job.completed enqueue failed:", e));
-                                }
+                            if (updatedJobRow) {
+                                (0, syncWebhookEvents_1.emitSyncJobUpdated)(organization_id, jobId, updatedJobRow, existing, updates);
                             }
                         }
                         results.push(baseResult);
@@ -298,11 +274,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
-                            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.deleted", {
-                                id: jobId,
-                                deleted_at: deletedAt,
-                                status: existing.status,
-                            }).catch((e) => console.warn("[Sync] Webhook job.deleted enqueue failed:", e));
+                            (0, syncWebhookEvents_1.emitSyncJobDeleted)(organization_id, jobId, deletedAt, existing.status);
                         }
                         results.push(baseResult);
                         break;
@@ -367,16 +339,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
-                            (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.created", {
-                                id: inserted.id,
-                                job_id: jobId,
-                                title,
-                                description: description ?? "",
-                                severity: "medium",
-                                status: "open",
-                                created_at: inserted.created_at ?? new Date().toISOString(),
-                                updated_at: inserted.updated_at ?? inserted.created_at ?? new Date().toISOString(),
-                            }).catch((e) => console.warn("[Sync] Webhook hazard.created enqueue failed:", e));
+                            (0, syncWebhookEvents_1.emitSyncHazardCreated)(organization_id, inserted, jobId, title, description ?? "");
                         }
                         results.push(baseResult);
                         break;
@@ -516,6 +479,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                             .update(updates)
                             .eq("id", mitigationId)
                             .eq("job_id", jobId)
+                            .is("hazard_id", null)
                             .eq("organization_id", organization_id)
                             .select("id, job_id, title, description, done, is_completed, completed_at, created_at, hazard_id")
                             .single();
@@ -535,9 +499,10 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                 metadata: { job_id: jobId, sync_batch: true, operation_id: op.id },
                                 ...clientMetadata,
                             });
+                            // Emit hazard.updated only for top-level hazards (hazard_id is null); controls have hazard_id set
                             const itemWithHazardId = updatedItem;
-                            if (itemWithHazardId != null && itemWithHazardId.hazard_id != null) {
-                                (0, webhookDelivery_1.deliverEvent)(organization_id, "hazard.updated", {
+                            if (itemWithHazardId != null && itemWithHazardId.hazard_id == null) {
+                                (0, syncWebhookEvents_1.emitSyncHazardUpdated)(organization_id, {
                                     id: updatedItem.id,
                                     job_id: updatedItem.job_id ?? jobId,
                                     title: updatedItem.title ?? "",
@@ -546,7 +511,7 @@ exports.syncRouter.post("/batch", auth_1.authenticate, requireWriteAccess_1.requ
                                     is_completed: updatedItem.is_completed,
                                     completed_at: updatedItem.completed_at,
                                     created_at: updatedItem.created_at,
-                                }).catch((e) => console.warn("[Sync] Webhook hazard.updated enqueue failed:", e));
+                                });
                             }
                         }
                         results.push(baseResult);
@@ -1047,6 +1012,12 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                     metadata: { sync_resolve_conflict: true, operation_id: operation_id },
                     ...clientMetadataJob,
                 });
+                (0, syncWebhookEvents_1.emitSyncJobCreated)(organization_id, userId, job, {
+                    client_name,
+                    job_type,
+                    location,
+                    status: data.status ?? "draft",
+                });
             }
             else if (opType === "create_hazard") {
                 const jobId = data.job_id ?? data.jobId;
@@ -1118,6 +1089,7 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                         metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id, reconciled: true },
                         ...clientMetadata,
                     });
+                    (0, syncWebhookEvents_1.emitSyncHazardUpdated)(organization_id, updated);
                 }
                 else {
                     const insertPayload = {
@@ -1149,6 +1121,7 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                         metadata: { job_id: jobId, sync_resolve_conflict: true, operation_id: operation_id },
                         ...clientMetadata,
                     });
+                    (0, syncWebhookEvents_1.emitSyncHazardCreated)(organization_id, inserted, jobId, title, description ?? "");
                 }
             }
             else if (opType === "create_control") {
@@ -1302,6 +1275,12 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                         updates[dest] = data[src];
                 }
                 if (Object.keys(updates).length > 0) {
+                    const { data: existingJob } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .select("id, client_name, job_type, location, status, completed_at, created_at, updated_at, created_by")
+                        .eq("id", targetId)
+                        .eq("organization_id", organization_id)
+                        .single();
                     const { data: job, error } = await supabaseClient_1.supabase
                         .from("jobs")
                         .update(updates)
@@ -1309,8 +1288,12 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                         .eq("organization_id", organization_id)
                         .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, created_by")
                         .single();
-                    if (!error)
+                    if (!error) {
                         updatedJob = job;
+                        if (existingJob) {
+                            (0, syncWebhookEvents_1.emitSyncJobUpdated)(organization_id, targetId, job, existingJob, updates);
+                        }
+                    }
                 }
             }
             else if (opType === "update_hazard") {
@@ -1344,8 +1327,11 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                     .eq("organization_id", organization_id)
                     .select("id, job_id, hazard_id, title, description, done, is_completed, created_at, updated_at")
                     .single();
-                if (!error)
+                if (!error) {
                     updatedMitigationItem = mit;
+                    if (mit)
+                        (0, syncWebhookEvents_1.emitSyncHazardUpdated)(organization_id, mit);
+                }
             }
             else if (opType === "update_control") {
                 const jobId = data.job_id ?? data.jobId;
@@ -1397,14 +1383,16 @@ exports.syncRouter.post("/resolve-conflict", auth_1.authenticate, requireWriteAc
                         deletion_performed: false,
                     });
                 }
+                const deletedAt = new Date().toISOString();
                 const { error: deleteErr } = await supabaseClient_1.supabase
                     .from("jobs")
-                    .update({ deleted_at: new Date().toISOString() })
+                    .update({ deleted_at: deletedAt })
                     .eq("id", targetId)
                     .eq("organization_id", organization_id);
                 if (deleteErr) {
                     return res.status(500).json({ message: deleteErr.message });
                 }
+                (0, syncWebhookEvents_1.emitSyncJobDeleted)(organization_id, targetId, deletedAt, existing.status);
             }
             else if (opType === "delete_hazard" || opType === "delete_control") {
                 const jobId = data.job_id ?? data.jobId;

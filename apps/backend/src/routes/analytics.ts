@@ -11,8 +11,8 @@ import {
   monthStart,
   toDateKey,
   fetchAllPages,
-} from "@/lib/utils/analyticsTrends";
-import { parsePeriod, parseSinceUntil, dateRangeForDays } from "@/lib/utils/analyticsDateRange";
+} from "../../../../lib/utils/analyticsTrends";
+import { parsePeriod, parseSinceUntil, dateRangeForDays } from "../../../../lib/utils/analyticsDateRange";
 
 /** Normalize Express query (string | string[]) to the shape expected by shared parseSinceUntil. */
 function parseSinceUntilQuery(query: { since?: string | string[]; until?: string | string[] }): { since: string; until: string } | null {

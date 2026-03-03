@@ -9,7 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALLOWED_WEBHOOK_EVENT_TYPES = void 0;
+exports.ALLOWED_WEBHOOK_EVENT_TYPES = exports.MAX_ATTEMPTS = void 0;
 exports.parseSafeBoundedInt = parseSafeBoundedInt;
 exports.validateWebhookEmitPayload = validateWebhookEmitPayload;
 exports.buildWebhookPayload = buildWebhookPayload;
@@ -34,7 +34,7 @@ const RETRY_DELAYS_AFTER_ATTEMPT_MS = [
     2 * 60 * 60 * 1000, // after attempt 3 → 2 hr
     24 * 60 * 60 * 1000, // after attempt 4 → 24 hr
 ];
-const MAX_ATTEMPTS = 5;
+exports.MAX_ATTEMPTS = 5;
 const WEBHOOK_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h dedupe
 /** Debounce delay for wake-up: coalesce rapid enqueues into one immediate run. */
 const WAKE_DEBOUNCE_MS = 100;
@@ -90,6 +90,10 @@ function parseSafeBoundedInt(envValue, defaultVal, min, max) {
 }
 /** Max number of sendDelivery() calls in flight at once; avoids one slow endpoint blocking the queue. */
 const DELIVERY_CONCURRENCY = parseSafeBoundedInt(process.env.WEBHOOK_DELIVERY_CONCURRENCY, 5, 1, 10);
+/** Claim this many rows per round so we re-claim between chunks and pick up fresh events promptly (avoids batch starvation). */
+const CLAIM_CHUNK_SIZE = Math.max(DELIVERY_CONCURRENCY * 2, 10);
+/** Max claim rounds per run so one run does not hold the worker indefinitely; total cap = CLAIM_CHUNK_SIZE * MAX_CLAIM_ROUNDS. */
+const MAX_CLAIM_ROUNDS = 5;
 /** Escape HTML special characters to prevent injection when interpolating into HTML (e.g. admin alert email). */
 function escapeHtml(str) {
     return str
@@ -449,7 +453,7 @@ async function updateDeliveryResult(deliveryId, endpointId, responseStatus, resp
  */
 async function updateDeliveryFailure(deliveryId, endpointId, responseStatus, responseBody, durationMs, currentAttemptCount, forceTerminal = false, terminalOutcomeReason = 'failed', countAsConsecutiveFailure = true) {
     const nextAttempt = currentAttemptCount + 1;
-    const terminal = forceTerminal || nextAttempt > MAX_ATTEMPTS;
+    const terminal = forceTerminal || nextAttempt > exports.MAX_ATTEMPTS;
     const delayMs = nextAttempt < 2
         ? 0
         : (RETRY_DELAYS_AFTER_ATTEMPT_MS[nextAttempt - 2] ?? RETRY_DELAYS_AFTER_ATTEMPT_MS[RETRY_DELAYS_AFTER_ATTEMPT_MS.length - 1]);
@@ -543,7 +547,7 @@ async function maybeAlertAdmin(endpointId) {
         return;
     const subject = 'Riskmate: Webhook delivery failed after retries';
     const html = `
-    <p>A webhook delivery has failed after exhausting all ${MAX_ATTEMPTS} retry attempts.</p>
+    <p>A webhook delivery has failed after exhausting all ${exports.MAX_ATTEMPTS} retry attempts.</p>
     <p><strong>Endpoint URL:</strong> ${escapeHtml(endpoint.url || '(not set)')}</p>
     <p>Please check your endpoint URL, secret, and server logs. You can view delivery history and retry failed deliveries in Riskmate settings.</p>
   `;
@@ -609,8 +613,8 @@ async function runWithConcurrency(items, concurrency, fn) {
 /**
  * Process pending deliveries: those with delivered_at IS NULL, next_retry_at <= now,
  * and attempt_count <= MAX_ATTEMPTS so the final (5th) scheduled attempt is processed; terminally failed have next_retry_at = null.
- * Claims rows first (one-by-one to preserve claim semantics), then dispatches sendDelivery() with bounded concurrency so one slow
- * endpoint does not block others. Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
+ * Claims in chunks and re-claims between chunks so newly enqueued rows are picked promptly (avoids starvation under backlog/slow endpoints).
+ * Stale-claim recovery runs first so rows stuck after a worker crash become reclaimable.
  */
 let processPendingDeliveriesRunning = false;
 /** Set when wake/timer fires during an active run; triggers an immediate claim cycle after current batch completes so new rows are not delayed by long send timeouts. */
@@ -623,13 +627,19 @@ async function processPendingDeliveries() {
     processPendingDeliveriesRunning = true;
     try {
         await recoverStaleClaims();
-        const { data: claimed, error } = await supabaseClient_1.supabase.rpc('claim_pending_webhook_deliveries', { p_limit: 50 });
-        if (error) {
-            console.error('[WebhookDelivery] Atomic claim failed:', error);
-            return;
+        for (let round = 0; round < MAX_CLAIM_ROUNDS; round++) {
+            const { data: claimed, error } = await supabaseClient_1.supabase.rpc('claim_pending_webhook_deliveries', {
+                p_limit: CLAIM_CHUNK_SIZE,
+            });
+            if (error) {
+                console.error('[WebhookDelivery] Atomic claim failed:', error);
+                break;
+            }
+            const rows = (claimed ?? []);
+            if (rows.length === 0)
+                break;
+            await runWithConcurrency(rows, DELIVERY_CONCURRENCY, sendDelivery);
         }
-        const rows = (claimed ?? []);
-        await runWithConcurrency(rows, DELIVERY_CONCURRENCY, sendDelivery);
     }
     finally {
         processPendingDeliveriesRunning = false;

@@ -93,7 +93,7 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
     const requestId = authReq.requestId || 'unknown';
     try {
         const { organization_id } = authReq.user;
-        const { page = 1, limit: limitParamFromQuery, page_size, status, risk_level, include_archived, sort, q, // Search query
+        const { page = 1, limit: limitParamFromQuery, page_size, status, risk_level, include_archived, sort, order: orderParam, q, // Search query
         time_range, missing_evidence, created_after: createdAfterParam, created_before: createdBeforeParam, completed_after: completedAfterParam, completed_before: completedBeforeParam, hazard: hazardParam, insight: insightParam, reference_date: referenceDateParam, due_soon: dueSoonParam, pending_signatures: pendingSignaturesParam, } = authReq.query;
         const includeArchived = include_archived === 'true' || include_archived === '1';
         // Map UI filter status to DB values (active -> in_progress, on-hold -> on_hold)
@@ -145,7 +145,9 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 }
             }
         }
-        // Parse sort parameter (e.g., "risk_desc", "created_desc", "status_asc", "blockers_desc", "readiness_asc")
+        // Parse sort parameter: supports (1) legacy combined tokens (e.g. "risk_desc", "created_desc")
+        // and (2) spec format: sort=field&order=asc|desc (e.g. sort=due_date&order=asc, sort=created_at&order=desc).
+        // Alias: due_date (client) -> end_date (DB column).
         let sortField = 'created_at';
         let sortDirection = 'desc';
         let useStatusOrdering = false;
@@ -153,9 +155,17 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         let useBlockersOrdering = false; // Will sort in-memory after fetching blockers data
         let sortMode = 'created_desc';
         if (sort) {
-            const sortStr = String(sort);
-            if (sortStr.includes('_')) {
-                const [field, dir] = sortStr.split('_');
+            const sortStr = String(sort).trim();
+            const orderStr = (orderParam != null && orderParam !== '') ? String(orderParam).trim().toLowerCase() : '';
+            const directionFromOrder = orderStr === 'asc' ? 'asc' : 'desc';
+            // Legacy only when value ends in _asc or _desc (e.g. created_desc, risk_asc, status_desc).
+            // Spec-format fields with underscores (due_date, created_at, risk_score) use the separate order param.
+            const isLegacyToken = /_(asc|desc)$/.test(sortStr);
+            if (isLegacyToken) {
+                // Legacy: combined token (e.g. created_desc, risk_asc)
+                const lastUnderscore = sortStr.lastIndexOf('_');
+                const field = sortStr.slice(0, lastUnderscore);
+                const dir = sortStr.slice(lastUnderscore + 1);
                 sortMode = `${field}_${dir}`;
                 if (field === 'status') {
                     useStatusOrdering = true;
@@ -164,13 +174,11 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 else if (field === 'blockers') {
                     useBlockersOrdering = true;
                     sortDirection = dir === 'asc' ? 'asc' : 'desc';
-                    // Pre-sort by created_at for consistency, then sort by blockers in memory
                     sortField = 'created_at';
                 }
                 else if (field === 'readiness') {
                     useReadinessOrdering = true;
                     sortDirection = dir === 'asc' ? 'asc' : 'desc';
-                    // Pre-sort by created_at for consistency, then sort by readiness in memory
                     sortField = 'created_at';
                 }
                 else if (field === 'newest') {
@@ -184,6 +192,42 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 else {
                     sortField = field === 'risk' ? 'risk_score' : field === 'created' ? 'created_at' : 'created_at';
                     sortDirection = dir === 'asc' ? 'asc' : 'desc';
+                }
+            }
+            else {
+                // Spec format: sort=field & order=asc|desc (order defaults to desc when omitted)
+                const field = sortStr;
+                sortDirection = directionFromOrder;
+                if (field === 'status') {
+                    useStatusOrdering = true;
+                    sortMode = `status_${sortDirection}`;
+                }
+                else if (field === 'blockers') {
+                    useBlockersOrdering = true;
+                    sortField = 'created_at';
+                    sortMode = `blockers_${sortDirection}`;
+                }
+                else if (field === 'readiness') {
+                    useReadinessOrdering = true;
+                    sortField = 'created_at';
+                    sortMode = `readiness_${sortDirection}`;
+                }
+                else if (field === 'due_date') {
+                    sortField = 'end_date'; // API alias: due_date -> end_date (DB column)
+                    sortMode = `due_date_${sortDirection}`;
+                }
+                else if (field === 'created_at' || field === 'created') {
+                    sortField = 'created_at';
+                    sortMode = `created_at_${sortDirection}`;
+                }
+                else if (field === 'risk_score' || field === 'risk') {
+                    sortField = 'risk_score';
+                    sortMode = `risk_${sortDirection}`;
+                }
+                else {
+                    sortField = 'created_at';
+                    sortDirection = 'desc';
+                    sortMode = 'created_desc';
                 }
             }
         }
@@ -225,9 +269,9 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                 code: "INVALID_FORMAT",
             });
         }
-        // Cursor pagination is only safe for sorts that match SQL ordering
-        // status_asc uses in-memory sorting, so cursor pagination would be inconsistent
-        const supportsCursorPagination = !useStatusOrdering;
+        // Cursor pagination is only safe for sorts that match SQL ordering.
+        // status_asc uses in-memory sorting; end_date has null boundary issues so we force offset.
+        const supportsCursorPagination = !useStatusOrdering && sortField !== 'end_date';
         // Hardening: Explicitly reject cursor param when sort=status_* (prevents misuse)
         if (cursor && useStatusOrdering) {
             // Log misuse once per organization per hour (helps identify client misconfigurations)
@@ -250,6 +294,26 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             (0, errorResponse_1.logErrorForSupport)(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
             return res.status(400).json(errorResponse);
         }
+        // Reject cursor when sort=due_date (end_date); null end_date causes page boundary issues
+        if (cursor && sortField === 'end_date') {
+            const lastLogged = logCursorMisuse(organization_id, sortMode);
+            const retryAfterSeconds = lastLogged ? Math.ceil((CURSOR_MISUSE_LOG_TTL_MS - (Date.now() - lastLogged)) / 1000) : 0;
+            const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                message: "Cursor pagination is not supported for due date sorting. Use offset pagination (page parameter) instead.",
+                internalMessage: `Cursor pagination attempted with sort=${sortMode} (end_date null boundary incompatible with cursor)`,
+                code: "PAGINATION_CURSOR_NOT_SUPPORTED",
+                requestId,
+                statusCode: 400,
+                sort: sortMode,
+                reason: "Due date sorting has null end_date values which make cursor pagination inconsistent",
+                documentation_url: "/docs/pagination#due-date-sorting",
+                allowed_pagination_modes: ["offset"],
+                ...(retryAfterSeconds > 0 && { retry_after_seconds: retryAfterSeconds }),
+            });
+            res.setHeader('X-Error-ID', errorId);
+            (0, errorResponse_1.logErrorForSupport)(400, "PAGINATION_CURSOR_NOT_SUPPORTED", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
+            return res.status(400).json(errorResponse);
+        }
         const useCursor = cursor && supportsCursorPagination;
         // Deterministic status order: draft → in_progress → completed → archived
         const statusOrder = ['draft', 'in_progress', 'completed', 'archived', 'cancelled', 'on_hold'];
@@ -261,6 +325,9 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         const baseColumns = "id, title, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at, review_flag, flagged_at";
         // Optional columns (may not exist if migration hasn't run)
         const optionalColumns = "applied_template_id, applied_template_type, assigned_to_id, assigned_to_name, assigned_to_email";
+        const selectColumns = sortField === 'end_date'
+            ? `${baseColumns}, ${optionalColumns}, end_date`
+            : `${baseColumns}, ${optionalColumns}`;
         // Resolve hazard / insight / due_soon / pending_signatures filters (need job ID sets from related tables)
         let hazardJobIds = [];
         let signedJobIds = [];
@@ -323,7 +390,7 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         }
         let query = supabaseClient_1.supabase
             .from("jobs")
-            .select(`${baseColumns}, ${optionalColumns}`)
+            .select(selectColumns)
             .eq("organization_id", organization_id)
             .is("deleted_at", null); // Always exclude deleted
         if (hazardCategory) {
@@ -423,13 +490,23 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                         const cursorRiskNum = parseFloat(cursorRisk);
                         if (!isNaN(cursorRiskNum) && cursorTimestamp && cursorId) {
                             if (sortDirection === 'desc') {
-                                // risk_desc: risk < cursor OR (risk = cursor AND created < cursor) OR (risk = cursor AND created = cursor AND id < cursorId)
                                 query = query.or(`risk_score.lt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.lt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.lt.${cursorId})`);
                             }
                             else {
-                                // risk_asc: risk > cursor OR (risk = cursor AND created > cursor) OR (risk = cursor AND created = cursor AND id > cursorId)
                                 query = query.or(`risk_score.gt.${cursorRiskNum},and(risk_score.eq.${cursorRiskNum},created_at.gt.${cursorTimestamp}),and(risk_score.eq.${cursorRiskNum},created_at.eq.${cursorTimestamp},id.gt.${cursorId})`);
                             }
+                        }
+                    }
+                }
+                else if (sortField === 'end_date') {
+                    // due_date/end_date: cursor = "end_date|id"
+                    const [cursorEndDate, cursorId] = cursorStr.split('|');
+                    if (cursorEndDate && cursorId) {
+                        if (sortDirection === 'desc') {
+                            query = query.or(`end_date.lt.${cursorEndDate},and(end_date.eq.${cursorEndDate},id.lt.${cursorId})`);
+                        }
+                        else {
+                            query = query.or(`end_date.gt.${cursorEndDate},and(end_date.eq.${cursorEndDate},id.gt.${cursorId})`);
                         }
                     }
                 }
@@ -446,15 +523,17 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             query = query.order("created_at", { ascending: false }); // Pre-sort by created_at DESC for consistency
         }
         else {
-            // For created_at and risk_score, use SQL ordering (cursor-compatible)
+            // For created_at, risk_score, end_date use SQL ordering (cursor-compatible)
             if (sortField === 'risk_score') {
-                // Multi-column sort: risk_score, then created_at, then id (for deterministic cursor)
                 query = query.order(sortField, { ascending: sortDirection === 'asc' });
                 query = query.order("created_at", { ascending: sortDirection === 'asc' });
                 query = query.order("id", { ascending: sortDirection === 'asc' });
             }
+            else if (sortField === 'end_date') {
+                query = query.order("end_date", { ascending: sortDirection === 'asc' });
+                query = query.order("id", { ascending: sortDirection === 'asc' });
+            }
             else {
-                // Single-column sort: created_at, then id (for deterministic cursor)
                 query = query.order(sortField, { ascending: sortDirection === 'asc' });
                 query = query.order("id", { ascending: sortDirection === 'asc' });
             }
@@ -505,9 +584,26 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
             error.message?.includes('assigned_to_id') ||
             error.message?.includes('assigned_to_name') ||
             error.message?.includes('assigned_to_email') ||
+            error.message?.includes('end_date') ||
             error.code === 'PGRST116')) {
+            // Due-date sort must not silently degrade to created_at: return error when end_date is unavailable
+            if (sortField === 'end_date') {
+                const { response: errorResponse, errorId } = (0, errorResponse_1.createErrorResponse)({
+                    message: "Due-date sorting is unavailable until required database migrations are applied.",
+                    internalMessage: `Jobs list failed with missing column (e.g. end_date); sort=${sortMode} requested but cannot be fulfilled without end_date.`,
+                    code: "SORT_DUE_DATE_UNAVAILABLE",
+                    requestId,
+                    statusCode: 503,
+                    sort: sortMode,
+                    reason: "The end_date column is not available; apply migrations that add end_date to jobs.",
+                    documentation_url: "/docs/pagination#due-date-sorting",
+                });
+                res.setHeader('X-Error-ID', errorId);
+                (0, errorResponse_1.logErrorForSupport)(503, "SORT_DUE_DATE_UNAVAILABLE", requestId, organization_id, errorResponse.message, errorResponse.internal_message, errorResponse.category, errorResponse.severity, '/api/jobs');
+                return res.status(503).json(errorResponse);
+            }
             console.warn('[JOBS] Some columns not found - retrying with minimal columns (migration may not be applied yet):', error.message);
-            // Fallback: only select columns that definitely exist (core columns only)
+            // Minimal columns only (no end_date) so fallback works when migrations are partial
             let fallbackQuery = supabaseClient_1.supabase
                 .from("jobs")
                 .select("id, client_name, job_type, location, status, risk_score, risk_level, created_at, updated_at")
@@ -568,6 +664,7 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                             }
                         }
                     }
+                    // end_date cursor skipped in fallback (minimal select has no end_date)
                 }
                 catch (e) {
                     // Invalid cursor, fall back to offset
@@ -583,6 +680,7 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
                     fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
                 }
                 else {
+                    // sortField === 'end_date' is not possible here: we return 503 above when end_date is unavailable
                     fallbackQuery = fallbackQuery.order(sortField, { ascending: sortDirection === 'asc' });
                     fallbackQuery = fallbackQuery.order("id", { ascending: sortDirection === 'asc' });
                 }
@@ -788,13 +886,15 @@ exports.jobsRouter.get("/", auth_1.authenticate, async (req, res) => {
         if (useCursor && jobs && jobs.length === limitNum) {
             const lastJob = jobs[jobs.length - 1];
             if (sortField === 'created_at') {
-                // created_desc/created_asc: cursor = "created_at|id"
                 nextCursor = `${lastJob.created_at}|${lastJob.id}`;
             }
             else if (sortField === 'risk_score') {
-                // risk_desc/risk_asc: cursor = "risk_score|created_at|id"
                 const riskScore = lastJob.risk_score ?? 0;
                 nextCursor = `${riskScore}|${lastJob.created_at}|${lastJob.id}`;
+            }
+            else if (sortField === 'end_date') {
+                const endDate = lastJob.end_date ?? '';
+                nextCursor = `${endDate}|${lastJob.id}`;
             }
         }
         // Get total count for pagination (apply same filters as main query)
@@ -1127,16 +1227,32 @@ exports.jobsRouter.post("/bulk/status", auth_1.authenticate, requireWriteAccess_
             await (0, realtimeEvents_1.emitJobEvent)(organization_id, "job.updated", jobId, userId);
         }
         const completedAt = dbStatus === "completed" ? new Date().toISOString() : undefined;
+        const webhookPromises = [];
         for (const jobId of succeeded) {
             const previousStatus = found.get(jobId)?.status;
             const payload = { id: jobId, status: dbStatus };
             if (completedAt != null)
                 payload.completed_at = completedAt;
-            (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", payload).catch((e) => console.warn("[Jobs] Bulk webhook job.updated enqueue failed:", e));
+            webhookPromises.push({
+                jobId,
+                event: "job.updated",
+                promise: (0, webhookDelivery_1.deliverEvent)(organization_id, "job.updated", payload),
+            });
             if (dbStatus === "completed" && previousStatus !== "completed") {
-                (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", payload).catch((e) => console.warn("[Jobs] Bulk webhook job.completed enqueue failed:", e));
+                webhookPromises.push({
+                    jobId,
+                    event: "job.completed",
+                    promise: (0, webhookDelivery_1.deliverEvent)(organization_id, "job.completed", payload),
+                });
             }
         }
+        const webhookResults = await Promise.allSettled(webhookPromises.map((w) => w.promise));
+        webhookResults.forEach((result, i) => {
+            if (result.status === "rejected") {
+                const { jobId, event } = webhookPromises[i];
+                console.warn("[Webhook] bulk enqueue failed", { jobId, event, error: result.reason });
+            }
+        });
         const total = succeeded.length + failed.length;
         res.json({ success: true, summary: { total, succeeded: succeeded.length, failed: failed.length }, data: { succeeded, failed }, results: buildBulkResults(succeeded, failed) });
     }
