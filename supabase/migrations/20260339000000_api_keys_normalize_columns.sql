@@ -50,5 +50,35 @@ BEGIN
   END IF;
 END $$;
 
--- Enforce unique index on key_hash for lookup (allows multiple NULLs for orphan rows)
+-- Enforce non-null invariants for key_hash and key_prefix (required credentials metadata).
+-- Fail the migration clearly if any row lacks valid values; then set NOT NULL idempotently.
+DO $$
+DECLARE
+  v_missing INT;
+  v_key_hash_nullable TEXT;
+  v_key_prefix_nullable TEXT;
+BEGIN
+  SELECT count(*)::INT INTO v_missing
+  FROM api_keys
+  WHERE key_hash IS NULL OR key_hash = '' OR key_prefix IS NULL OR key_prefix = '';
+  IF v_missing > 0 THEN
+    RAISE EXCEPTION 'api_keys_normalize_columns: % row(s) have NULL or empty key_hash/key_prefix; backfill or remove them before enforcing NOT NULL', v_missing;
+  END IF;
+
+  SELECT is_nullable INTO v_key_hash_nullable
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'api_keys' AND column_name = 'key_hash';
+  IF v_key_hash_nullable = 'YES' THEN
+    ALTER TABLE api_keys ALTER COLUMN key_hash SET NOT NULL;
+  END IF;
+
+  SELECT is_nullable INTO v_key_prefix_nullable
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'api_keys' AND column_name = 'key_prefix';
+  IF v_key_prefix_nullable = 'YES' THEN
+    ALTER TABLE api_keys ALTER COLUMN key_prefix SET NOT NULL;
+  END IF;
+END $$;
+
+-- Enforce unique index on key_hash for lookup
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);

@@ -15,7 +15,11 @@ import {
 } from '@/lib/api/v1Helpers'
 import { isValidUUID } from '@/lib/utils/uuid'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
-import { VALID_JOB_STATUSES_SET } from '@/lib/api/v1JobsConstants'
+import {
+  VALID_JOB_STATUSES_SET,
+  VALID_CLIENT_TYPES_SET,
+  VALID_JOB_TYPES_SET,
+} from '@/lib/api/v1JobsConstants'
 
 export const runtime = 'nodejs'
 
@@ -193,27 +197,64 @@ async function handler(
       status,
     } = body
 
-    const updateData: Record<string, unknown> = {}
-    if (client_name !== undefined) updateData.client_name = client_name
-    if (client_type !== undefined) updateData.client_type = client_type
-    if (job_type !== undefined) updateData.job_type = job_type
-    if (location !== undefined) updateData.location = location
-    if (description !== undefined) updateData.description = description
-    if (start_date !== undefined) updateData.start_date = start_date || null
-    if (end_date !== undefined) updateData.end_date = end_date || null
+    // Reject null or invalid values for required/mutable fields so client mistakes return 400, not 500.
+    const invalidFormatBody = () =>
+      withRateLimitHeaders(
+        NextResponse.json(
+          errorBody('INVALID_FORMAT', 'Invalid or null value for client_name, location, client_type, job_type, status, or dates', requestId),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    const validDate = (v: unknown): boolean =>
+      v === null ||
+      v === '' ||
+      (typeof v === 'string' && isFinite(Date.parse(v)))
+    if (client_name !== undefined) {
+      if (client_name === null || typeof client_name !== 'string' || client_name.trim() === '') {
+        return invalidFormatBody()
+      }
+    }
+    if (location !== undefined) {
+      if (location === null || typeof location !== 'string' || location.trim() === '') {
+        return invalidFormatBody()
+      }
+    }
+    if (client_type !== undefined) {
+      if (client_type === null || !VALID_CLIENT_TYPES_SET.has(String(client_type).toLowerCase())) {
+        return invalidFormatBody()
+      }
+    }
+    if (job_type !== undefined) {
+      if (job_type === null || !VALID_JOB_TYPES_SET.has(String(job_type).toLowerCase())) {
+        return invalidFormatBody()
+      }
+    }
     if (status !== undefined) {
       const st = String(status).toLowerCase()
-      if (!VALID_JOB_STATUSES_SET.has(st)) {
-        return withRateLimitHeaders(
-          NextResponse.json(
-            errorBody('INVALID_FORMAT', 'Invalid status, client_type, or job_type', requestId),
-            { status: 400, headers: { 'X-Request-ID': requestId } }
-          ),
-          rateLimitResult
-        )
+      if (status === null || !VALID_JOB_STATUSES_SET.has(st)) {
+        return invalidFormatBody()
       }
-      updateData.status = st
     }
+    if (start_date !== undefined && start_date !== null && start_date !== '' && !validDate(start_date)) {
+      return invalidFormatBody()
+    }
+    if (end_date !== undefined && end_date !== null && end_date !== '' && !validDate(end_date)) {
+      return invalidFormatBody()
+    }
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return invalidFormatBody()
+    }
+
+    const updateData: Record<string, unknown> = {}
+    if (client_name !== undefined) updateData.client_name = (client_name as string).trim()
+    if (client_type !== undefined) updateData.client_type = String(client_type).toLowerCase()
+    if (job_type !== undefined) updateData.job_type = String(job_type).toLowerCase()
+    if (location !== undefined) updateData.location = (location as string).trim()
+    if (description !== undefined) updateData.description = description !== null && description !== '' ? String(description) : null
+    if (start_date !== undefined) updateData.start_date = start_date === null || start_date === '' ? null : start_date
+    if (end_date !== undefined) updateData.end_date = end_date === null || end_date === '' ? null : end_date
+    if (status !== undefined) updateData.status = String(status).toLowerCase()
 
     if (Object.keys(updateData).length === 0) {
       const res = v1Json(job)
@@ -235,6 +276,7 @@ async function handler(
         pgCode === '23514' || pgCode === 'check_violation'
       const isInvalidDateOrType =
         pgCode === '22007' || pgCode === '22P02'
+      const isNotNullViolation = pgCode === '23502'
       if (isCheckOrEnumViolation) {
         return withRateLimitHeaders(
           NextResponse.json(
@@ -254,6 +296,19 @@ async function handler(
             errorBody(
               'INVALID_FORMAT',
               'Invalid date or type format for start_date or end_date',
+              requestId
+            ),
+            { status: 400, headers: { 'X-Request-ID': requestId } }
+          ),
+          rateLimitResult
+        )
+      }
+      if (isNotNullViolation) {
+        return withRateLimitHeaders(
+          NextResponse.json(
+            errorBody(
+              'INVALID_FORMAT',
+              'Required field missing or null: client_name, location, client_type, or job_type',
               requestId
             ),
             { status: 400, headers: { 'X-Request-ID': requestId } }

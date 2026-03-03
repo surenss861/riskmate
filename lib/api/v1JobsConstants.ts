@@ -13,3 +13,26 @@ export const VALID_JOB_STATUSES = [
 ] as const
 
 export const VALID_JOB_STATUSES_SET = new Set<string>(VALID_JOB_STATUSES)
+
+export const VALID_CLIENT_TYPES = [
+  'residential',
+  'commercial',
+  'industrial',
+  'government',
+  'mixed',
+] as const
+
+export const VALID_CLIENT_TYPES_SET = new Set<string>(VALID_CLIENT_TYPES)
+
+export const VALID_JOB_TYPES = [
+  'repair',
+  'maintenance',
+  'installation',
+  'inspection',
+  'renovation',
+  'new_construction',
+  'remodel',
+  'other',
+] as const
+
+export const VALID_JOB_TYPES_SET = new Set<string>(VALID_JOB_TYPES)
