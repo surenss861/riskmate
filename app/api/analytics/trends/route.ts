@@ -45,6 +45,48 @@ function calendarYearBounds(): { since: string; until: string } {
   return { since: since.toISOString(), until: until.toISOString() }
 }
 
+const PAGE_SIZE = 500
+const MV_COVERAGE_DAYS = 730
+
+async function fetchAllPages<T>(
+  fetchPage: (offset: number, limit: number) => Promise<{ data: T[] | null; error: unknown }>
+): Promise<{ data: T[]; error: unknown }> {
+  const out: T[] = []
+  let offset = 0
+  let hasMore = true
+  let lastError: unknown = null
+  while (hasMore) {
+    const { data, error } = await fetchPage(offset, PAGE_SIZE)
+    if (error) return { data: out, error }
+    lastError = error
+    const chunkData = data ?? []
+    out.push(...chunkData)
+    hasMore = chunkData.length === PAGE_SIZE
+    offset += chunkData.length
+  }
+  return { data: out, error: lastError }
+}
+
+function weekStart(d: Date): string {
+  const x = new Date(d)
+  const day = x.getDay()
+  const diff = x.getDate() - day + (day === 0 ? -6 : 1)
+  x.setDate(diff)
+  x.setHours(0, 0, 0, 0)
+  return x.toISOString().slice(0, 10)
+}
+
+function monthStart(d: Date): string {
+  const x = new Date(d)
+  x.setDate(1)
+  x.setHours(0, 0, 0, 0)
+  return x.toISOString().slice(0, 10)
+}
+
+function toDateKey(value: string): string {
+  return value.slice(0, 10)
+}
+
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request)
 
@@ -212,6 +254,321 @@ export async function GET(request: NextRequest) {
       )
       return NextResponse.json(
         { period: periodLabel, groupBy, metric, data: compPoints },
+        { status: 200, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+
+    // Week/month: use MV path for jobs, risk, completion, jobs_completed (same strategy as backend)
+    const useMv =
+      (groupBy === 'week' || groupBy === 'month') &&
+      days <= MV_COVERAGE_DAYS &&
+      (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')
+
+    if (useMv) {
+      const refreshRes = await supabase.rpc('refresh_analytics_weekly_job_stats')
+      if (refreshRes.error) {
+        console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', refreshRes.error)
+      }
+      const sinceWeek = weekStart(new Date(since))
+      const untilWeek = weekStart(new Date(until))
+      const points: Point[] = []
+
+      if (metric === 'completion') {
+        const [completionRes, creationRes] = await Promise.all([
+          fetchAllPages<{ week_start: string; jobs_completed: number }>(async (offset, limit) => {
+            const { data, error } = await supabase
+              .from('analytics_weekly_completion_stats')
+              .select('week_start, jobs_completed')
+              .eq('organization_id', orgId)
+              .gte('week_start', sinceWeek)
+              .lte('week_start', untilWeek)
+              .order('week_start', { ascending: true })
+              .range(offset, offset + limit - 1)
+            return { data, error }
+          }),
+          fetchAllPages<{ week_start: string; jobs_created: number }>(async (offset, limit) => {
+            const { data, error } = await supabase
+              .from('analytics_weekly_job_stats')
+              .select('week_start, jobs_created')
+              .eq('organization_id', orgId)
+              .gte('week_start', sinceWeek)
+              .lte('week_start', untilWeek)
+              .order('week_start', { ascending: true })
+              .range(offset, offset + limit - 1)
+            return { data, error }
+          }),
+        ])
+        if (!completionRes.error && !creationRes.error) {
+          const completionRows = (completionRes.data ?? []) as { week_start: string; jobs_completed: number }[]
+          const creationRows = (creationRes.data ?? []) as { week_start: string; jobs_created: number }[]
+          const createdByWeek = new Map<string, number>()
+          const completedByWeek = new Map<string, number>()
+          for (const r of creationRows) {
+            const w = typeof r.week_start === 'string' ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10)
+            createdByWeek.set(w, (createdByWeek.get(w) ?? 0) + Number(r.jobs_created ?? 0))
+          }
+          for (const r of completionRows) {
+            const w = typeof r.week_start === 'string' ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10)
+            completedByWeek.set(w, (completedByWeek.get(w) ?? 0) + Number(r.jobs_completed ?? 0))
+          }
+          if (groupBy === 'week') {
+            const allWeeks = [...new Set([...createdByWeek.keys(), ...completedByWeek.keys()])].sort()
+            for (const period of allWeeks) {
+              const created = createdByWeek.get(period) ?? 0
+              const completed = completedByWeek.get(period) ?? 0
+              const ratePct = created === 0 ? 0 : (completed / created) * 100
+              const value = Math.min(100, Math.max(0, Math.round(ratePct * 100) / 100))
+              points.push({ period, value, label: period })
+            }
+          } else {
+            const byMonth = new Map<string, { created: number; completed: number }>()
+            for (const r of completionRows) {
+              const period = monthStart(new Date(typeof r.week_start === 'string' ? r.week_start : String(r.week_start)))
+              const cur = byMonth.get(period) ?? { created: 0, completed: 0 }
+              cur.completed += Number(r.jobs_completed ?? 0)
+              byMonth.set(period, cur)
+            }
+            for (const r of creationRows) {
+              const period = monthStart(new Date(typeof r.week_start === 'string' ? r.week_start : String(r.week_start)))
+              const cur = byMonth.get(period) ?? { created: 0, completed: 0 }
+              cur.created += Number(r.jobs_created ?? 0)
+              byMonth.set(period, cur)
+            }
+            for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+              const { created, completed } = byMonth.get(period)!
+              const ratePct = created === 0 ? 0 : (completed / created) * 100
+              const value = Math.min(100, Math.max(0, Math.round(ratePct * 100) / 100))
+              points.push({ period, value, label: period })
+            }
+          }
+          return NextResponse.json(
+            { period: periodLabel, groupBy, metric, data: points },
+            { status: 200, headers: { 'X-Request-ID': requestId } }
+          )
+        }
+        if (completionRes.error) throw completionRes.error
+        if (creationRes.error) throw creationRes.error
+      }
+
+      if (metric === 'jobs_completed') {
+        const completionRes = await fetchAllPages<{ week_start: string; jobs_completed: number }>(
+          async (offset, limit) => {
+            const { data, error } = await supabase
+              .from('analytics_weekly_completion_stats')
+              .select('week_start, jobs_completed')
+              .eq('organization_id', orgId)
+              .gte('week_start', sinceWeek)
+              .lte('week_start', untilWeek)
+              .order('week_start', { ascending: true })
+              .range(offset, offset + limit - 1)
+            return { data, error }
+          }
+        )
+        if (!completionRes.error && completionRes.data) {
+          const completionRows = completionRes.data as { week_start: string; jobs_completed: number }[]
+          const completedByWeek = new Map<string, number>()
+          for (const r of completionRows) {
+            const w = typeof r.week_start === 'string' ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10)
+            completedByWeek.set(w, (completedByWeek.get(w) ?? 0) + Number(r.jobs_completed ?? 0))
+          }
+          if (groupBy === 'week') {
+            const allWeeks = [...completedByWeek.keys()].sort()
+            for (const period of allWeeks) {
+              points.push({ period, value: completedByWeek.get(period) ?? 0, label: period })
+            }
+          } else {
+            const byMonth = new Map<string, number>()
+            for (const r of completionRows) {
+              const period = monthStart(new Date(typeof r.week_start === 'string' ? r.week_start : String(r.week_start)))
+              byMonth.set(period, (byMonth.get(period) ?? 0) + Number(r.jobs_completed ?? 0))
+            }
+            for (const period of [...byMonth.keys()].sort((a, b) => a.localeCompare(b))) {
+              points.push({ period, value: byMonth.get(period) ?? 0, label: period })
+            }
+          }
+          return NextResponse.json(
+            { period: periodLabel, groupBy, metric, data: points },
+            { status: 200, headers: { 'X-Request-ID': requestId } }
+          )
+        }
+        if (completionRes.error) throw completionRes.error
+      }
+
+      const { data: mvRows, error: mvError } = await fetchAllPages<{
+        week_start: string
+        jobs_created: number
+        avg_risk: number | null
+      }>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from('analytics_weekly_job_stats')
+          .select('week_start, jobs_created, avg_risk')
+          .eq('organization_id', orgId)
+          .gte('week_start', sinceWeek)
+          .lte('week_start', untilWeek)
+          .order('week_start', { ascending: true })
+          .range(offset, offset + limit - 1)
+        return { data, error }
+      })
+
+      if (!mvError && mvRows && mvRows.length > 0 && (metric === 'jobs' || metric === 'risk')) {
+        const rows = mvRows as { week_start: string; jobs_created: number; avg_risk: number | null }[]
+        if (groupBy === 'week') {
+          for (const r of rows) {
+            const period =
+              typeof r.week_start === 'string' ? r.week_start.slice(0, 10) : String(r.week_start).slice(0, 10)
+            let value = 0
+            if (metric === 'jobs') value = r.jobs_created ?? 0
+            else if (metric === 'risk') value = r.avg_risk != null ? Math.round(r.avg_risk * 100) / 100 : 0
+            points.push({ period, value, label: period })
+          }
+        } else {
+          const byMonth = new Map<string, { jobs_created: number; riskSum: number; riskWeight: number }>()
+          for (const r of rows) {
+            const period = monthStart(new Date(typeof r.week_start === 'string' ? r.week_start : String(r.week_start)))
+            const cur = byMonth.get(period) ?? { jobs_created: 0, riskSum: 0, riskWeight: 0 }
+            cur.jobs_created += r.jobs_created ?? 0
+            if (r.avg_risk != null && (r.jobs_created ?? 0) > 0) {
+              cur.riskSum += (r.avg_risk ?? 0) * (r.jobs_created ?? 0)
+              cur.riskWeight += r.jobs_created ?? 0
+            }
+            byMonth.set(period, cur)
+          }
+          for (const [period] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+            const cur = byMonth.get(period)!
+            let value = 0
+            if (metric === 'jobs') value = cur.jobs_created
+            else if (metric === 'risk')
+              value = cur.riskWeight === 0 ? 0 : Math.round((cur.riskSum / cur.riskWeight) * 100) / 100
+            points.push({ period, value, label: period })
+          }
+        }
+        return NextResponse.json(
+          { period: periodLabel, groupBy, metric, data: points },
+          { status: 200, headers: { 'X-Request-ID': requestId } }
+        )
+      }
+    }
+
+    // Fallback: week/month when MV unavailable or out of range — bucket jobs in memory (same as backend)
+    if ((groupBy === 'week' || groupBy === 'month') && (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')) {
+      const getBucketKey = (date: Date) =>
+        groupBy === 'month' ? monthStart(date) : groupBy === 'week' ? weekStart(date) : toDateKey(date.toISOString())
+
+      if (metric === 'jobs_completed') {
+        const { data: completedJobs, error: completedError } = await fetchAllPages<{
+          id: string
+          completed_at: string | null
+        }>(async (offset, limit) => {
+          const { data, error } = await supabase
+            .from('jobs')
+            .select('id, completed_at')
+            .eq('organization_id', orgId)
+            .is('deleted_at', null)
+            .not('completed_at', 'is', null)
+            .gte('completed_at', since)
+            .lte('completed_at', until)
+            .order('completed_at', { ascending: false })
+            .range(offset, offset + limit - 1)
+          return { data, error }
+        })
+        if (!completedError && completedJobs) {
+          const bucketCompletedByDate = new Map<string, number>()
+          for (const j of completedJobs as { id: string; completed_at: string | null }[]) {
+            if (j.completed_at) {
+              const key = getBucketKey(new Date(j.completed_at))
+              bucketCompletedByDate.set(key, (bucketCompletedByDate.get(key) ?? 0) + 1)
+            }
+          }
+          const points: Point[] = []
+          for (const period of [...bucketCompletedByDate.keys()].sort((a, b) => a.localeCompare(b))) {
+            points.push({ period, value: bucketCompletedByDate.get(period) ?? 0, label: period })
+          }
+          return NextResponse.json(
+            { period: periodLabel, groupBy, metric, data: points },
+            { status: 200, headers: { 'X-Request-ID': requestId } }
+          )
+        }
+        if (completedError) throw completedError
+      }
+
+      const { data: jobs, error: jobsError } = await fetchAllPages<{
+        id: string
+        risk_score: number | null
+        status: string | null
+        created_at: string
+        completed_at: string | null
+      }>(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select('id, risk_score, status, created_at, completed_at')
+          .eq('organization_id', orgId)
+          .is('deleted_at', null)
+          .gte('created_at', since)
+          .lte('created_at', until)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1)
+        return { data, error }
+      })
+
+      if (jobsError) throw jobsError
+      const jobList = (jobs ?? []) as {
+        id: string
+        risk_score: number | null
+        status: string | null
+        created_at: string
+        completed_at: string | null
+      }[]
+
+      const bucketValues = new Map<string, number>()
+      const bucketRiskSums = new Map<string, { sum: number; count: number }>()
+      const bucketCompleted = new Map<string, number>()
+      const points: Point[] = []
+
+      for (const j of jobList) {
+        const keyCreated = getBucketKey(new Date(j.created_at))
+        const completed =
+          j.status?.toLowerCase() === 'completed' &&
+          j.completed_at != null &&
+          j.completed_at >= since &&
+          j.completed_at <= until
+
+        if (metric === 'completion') {
+          bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1)
+          if (completed) {
+            bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1)
+          }
+        } else if (metric === 'jobs') {
+          bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1)
+        } else if (metric === 'risk' && j.risk_score != null) {
+          const cur = bucketRiskSums.get(keyCreated) ?? { sum: 0, count: 0 }
+          cur.sum += j.risk_score
+          cur.count += 1
+          bucketRiskSums.set(keyCreated, cur)
+        }
+      }
+
+      if (metric === 'completion') {
+        for (const period of [...bucketValues.keys()].sort((a, b) => a.localeCompare(b))) {
+          const created = bucketValues.get(period) ?? 0
+          const completed = bucketCompleted.get(period) ?? 0
+          const rate = created === 0 ? 0 : (completed / created) * 100
+          const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100))
+          points.push({ period, value, label: period })
+        }
+      } else if (metric === 'jobs') {
+        for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          points.push({ period, value: bucketValues.get(period) ?? 0, label: period })
+        }
+      } else if (metric === 'risk') {
+        for (const [period] of [...bucketRiskSums.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+          const { sum, count } = bucketRiskSums.get(period)!
+          const value = count === 0 ? 0 : Math.round((sum / count) * 100) / 100
+          points.push({ period, value, label: period })
+        }
+      }
+
+      return NextResponse.json(
+        { period: periodLabel, groupBy, metric, data: points },
         { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }
