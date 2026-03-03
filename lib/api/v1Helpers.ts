@@ -44,85 +44,99 @@ export async function withApiKeyAuth(
 > {
   const requestId = getRequestId(request)
 
-  const authResult = await getApiKeyContext(request)
-  if (authResult.kind === 'backend_error') {
-    return NextResponse.json(
-      errorBody(
-        'INTERNAL_ERROR',
-        'API key lookup temporarily unavailable. Please retry later.',
-        requestId
-      ),
-      {
-        status: 500,
-        headers: { 'X-Request-ID': requestId },
-      }
-    )
-  }
-  if (authResult.kind === 'auth_failure') {
-    return NextResponse.json(
-      errorBody('UNAUTHORIZED', 'Invalid or missing API key', requestId),
-      {
-        status: 401,
-        headers: { 'X-Request-ID': requestId },
-      }
-    )
-  }
-  const auth = authResult
-  await touchApiKeyLastUsed(auth.context.api_key_id).catch(() => {})
-
-  const rateLimitOutcome = await checkApiKeyRateLimit(
-    request,
-    auth.keyRow.id,
-    RATE_LIMIT_CONFIGS.apiKey
-  )
-  if (rateLimitOutcome.kind === 'infrastructure_error') {
-    return NextResponse.json(
-      errorBody(
-        'INTERNAL_ERROR',
-        'Rate limit check temporarily unavailable. Please retry later.',
-        requestId
-      ),
-      {
-        status: 500,
-        headers: { 'X-Request-ID': requestId },
-      }
-    )
-  }
-  const rateLimitResult = rateLimitOutcome.result
-  if (!rateLimitResult.allowed) {
-    return addRateLimitHeaders(
-      NextResponse.json(
+  try {
+    const authResult = await getApiKeyContext(request)
+    if (authResult.kind === 'backend_error') {
+      return NextResponse.json(
         errorBody(
-          'RATE_LIMIT_EXCEEDED',
-          'Too many requests. Retry after the time indicated by Retry-After.',
+          'INTERNAL_ERROR',
+          'API key lookup temporarily unavailable. Please retry later.',
           requestId
         ),
         {
-          status: 429,
-          headers: {
-            'X-Request-ID': requestId,
-            'Retry-After': String(rateLimitResult.retryAfter),
-          },
-        }
-      ),
-      rateLimitResult
-    )
-  }
-
-  if (!requireScope(auth.context, requiredScopes)) {
-    return addRateLimitHeaders(
-      NextResponse.json(
-        errorBody('FORBIDDEN', 'Insufficient scope for this endpoint', requestId),
-        {
-          status: 403,
+          status: 500,
           headers: { 'X-Request-ID': requestId },
         }
+      )
+    }
+    if (authResult.kind === 'auth_failure') {
+      return NextResponse.json(
+        errorBody('UNAUTHORIZED', 'Invalid or missing API key', requestId),
+        {
+          status: 401,
+          headers: { 'X-Request-ID': requestId },
+        }
+      )
+    }
+    const auth = authResult
+    await touchApiKeyLastUsed(auth.context.api_key_id).catch(() => {})
+
+    const rateLimitOutcome = await checkApiKeyRateLimit(
+      request,
+      auth.keyRow.id,
+      RATE_LIMIT_CONFIGS.apiKey
+    )
+    if (rateLimitOutcome.kind === 'infrastructure_error') {
+      return NextResponse.json(
+        errorBody(
+          'INTERNAL_ERROR',
+          'Rate limit check temporarily unavailable. Please retry later.',
+          requestId
+        ),
+        {
+          status: 500,
+          headers: { 'X-Request-ID': requestId },
+        }
+      )
+    }
+    const rateLimitResult = rateLimitOutcome.result
+    if (!rateLimitResult.allowed) {
+      return addRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'RATE_LIMIT_EXCEEDED',
+            'Too many requests. Retry after the time indicated by Retry-After.',
+            requestId
+          ),
+          {
+            status: 429,
+            headers: {
+              'X-Request-ID': requestId,
+              'Retry-After': String(rateLimitResult.retryAfter),
+            },
+          }
+        ),
+        rateLimitResult
+      )
+    }
+
+    if (!requireScope(auth.context, requiredScopes)) {
+      return addRateLimitHeaders(
+        NextResponse.json(
+          errorBody('FORBIDDEN', 'Insufficient scope for this endpoint', requestId),
+          {
+            status: 403,
+            headers: { 'X-Request-ID': requestId },
+          }
+        ),
+        rateLimitResult
+      )
+    }
+
+    return { context: auth.context, rateLimitResult }
+  } catch (err) {
+    return NextResponse.json(
+      errorBody(
+        'INTERNAL_ERROR',
+        'An unexpected error occurred during authentication. Please retry later.',
+        requestId
       ),
-      rateLimitResult
+      {
+        status: 500,
+        headers: { 'X-Request-ID': requestId },
+      }
     )
   }
-
-  return { context: auth.context, rateLimitResult }
 }
 
 /**

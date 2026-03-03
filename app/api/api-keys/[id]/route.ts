@@ -123,8 +123,16 @@ export async function PATCH(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (typeof body !== 'object' || body === null) {
-      body = {}
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      const { response, errorId } = createErrorResponse(
+        'Request body must be a JSON object',
+        'INVALID_FORMAT',
+        { requestId, statusCode: 400 }
+      )
+      return NextResponse.json(response, {
+        status: 400,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
     }
     const { name, scopes, expires_at } = body
     const updateData: Record<string, unknown> = {}
