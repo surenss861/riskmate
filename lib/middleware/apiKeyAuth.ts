@@ -4,14 +4,39 @@
  * Extracts Bearer token (rm_live_xxx or rm_test_xxx), hashes with SHA-256,
  * looks up in api_keys table, checks revoked/expired, updates last_used_at,
  * and attaches organization context to the request.
+ * Environment-aware: production accepts only rm_live_; non-production accepts
+ * rm_test_ and optionally rm_live_ when explicitly configured.
  */
 
 import { createHash } from 'crypto'
 import { NextRequest } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
-const KEY_PREFIX_LIVE = 'rm_live_'
-const KEY_PREFIX_TEST = 'rm_test_'
+export const KEY_PREFIX_LIVE = 'rm_live_'
+export const KEY_PREFIX_TEST = 'rm_test_'
+
+/** When set in non-production, live keys are accepted for auth (e.g. testing). */
+const ENV_ALLOW_LIVE_KEYS_IN_NON_PROD = 'RISKMATE_ALLOW_LIVE_KEYS_IN_NON_PROD'
+
+/**
+ * Allowed prefixes for API key authentication in the current environment.
+ * Production: only rm_live_. Non-production: rm_test_, and rm_live_ only if
+ * RISKMATE_ALLOW_LIVE_KEYS_IN_NON_PROD is set.
+ */
+export function getAllowedPrefixesForAuth(): string[] {
+  const isProd = process.env.NODE_ENV === 'production'
+  if (isProd) return [KEY_PREFIX_LIVE]
+  const allowLive = process.env[ENV_ALLOW_LIVE_KEYS_IN_NON_PROD] === 'true' || process.env[ENV_ALLOW_LIVE_KEYS_IN_NON_PROD] === '1'
+  return allowLive ? [KEY_PREFIX_TEST, KEY_PREFIX_LIVE] : [KEY_PREFIX_TEST]
+}
+
+/**
+ * Default prefix for newly created API keys in the current environment.
+ * Production: rm_live_; non-production: rm_test_.
+ */
+export function getDefaultKeyPrefix(): string {
+  return process.env.NODE_ENV === 'production' ? KEY_PREFIX_LIVE : KEY_PREFIX_TEST
+}
 
 export interface ApiKeyContext {
   organization_id: string
@@ -36,7 +61,8 @@ export function getKeyPrefix(plainKey: string): string {
 }
 
 /**
- * Check if the request is using API key auth (Bearer rm_live_... or rm_test_...).
+ * Check if the request is using API key auth with an environment-allowed prefix.
+ * Production: only Bearer rm_live_... . Non-production: rm_test_... and optionally rm_live_... if configured.
  * Authorization scheme is parsed case-insensitively per HTTP semantics.
  */
 export function getBearerApiKey(request: NextRequest): string | null {
@@ -47,7 +73,8 @@ export function getBearerApiKey(request: NextRequest): string | null {
   const scheme = auth.slice(0, spaceIdx)
   if (scheme.toLowerCase() !== 'bearer') return null
   const token = auth.slice(spaceIdx + 1).trim()
-  if (token.startsWith(KEY_PREFIX_LIVE) || token.startsWith(KEY_PREFIX_TEST)) return token
+  const allowed = getAllowedPrefixesForAuth()
+  if (allowed.some((p) => token.startsWith(p))) return token
   return null
 }
 

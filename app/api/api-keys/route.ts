@@ -9,7 +9,7 @@ import { getOrganizationContext, requireOwnerOrAdmin } from '@/lib/utils/organiz
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 import { normalizeExpiresAt } from '@/lib/utils/apiKeyExpiry'
-import { hashApiKey, getKeyPrefix } from '@/lib/middleware/apiKeyAuth'
+import { hashApiKey, getKeyPrefix, getDefaultKeyPrefix } from '@/lib/middleware/apiKeyAuth'
 import { randomBytes } from 'crypto'
 
 export const runtime = 'nodejs'
@@ -47,9 +47,6 @@ function generateSecureKey(prefix: string): string {
   return `${prefix}${hex}`
 }
 
-function getApiKeyPrefix(): string {
-  return process.env.NODE_ENV === 'production' ? 'rm_live_' : 'rm_test_'
-}
 
 /** GET - List API keys for the org (prefix, scopes, last_used, never full key) */
 export async function GET(request: NextRequest) {
@@ -179,7 +176,7 @@ export async function POST(request: NextRequest) {
       expiresAt = normalized
     }
 
-    const prefix = getApiKeyPrefix()
+    const prefix = getDefaultKeyPrefix()
     const plainKey = generateSecureKey(prefix)
     const keyHash = hashApiKey(plainKey)
     const keyPrefix = getKeyPrefix(plainKey)

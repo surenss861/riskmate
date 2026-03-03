@@ -14,6 +14,7 @@ import {
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
 import { isValidUUID } from '@/lib/utils/uuid'
+import { parseStrictInt } from '@/lib/utils/parseStrictInt'
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 
 export const runtime = 'nodejs'
@@ -54,15 +55,9 @@ export async function GET(request: NextRequest) {
 
   const pageRaw = searchParams.get('page') ?? '1'
   const limitRaw = searchParams.get('limit') ?? '20'
-  const pageParsed = parseInt(pageRaw, 10)
-  const limitParsed = parseInt(limitRaw, 10)
-  if (
-    !Number.isFinite(pageParsed) ||
-    !Number.isFinite(limitParsed) ||
-    pageParsed < 1 ||
-    limitParsed < 1 ||
-    limitParsed > 100
-  ) {
+  const page = parseStrictInt(pageRaw, { min: 1 })
+  const limit = parseStrictInt(limitRaw, { min: 1, max: 100 })
+  if (page === null || limit === null) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody(
@@ -75,8 +70,6 @@ export async function GET(request: NextRequest) {
       rateLimitResult
     )
   }
-  const page = pageParsed
-  const limit = limitParsed
   const offset = (page - 1) * limit
 
   const admin = createSupabaseAdminClient()

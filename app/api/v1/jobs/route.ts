@@ -16,6 +16,7 @@ import {
 import { triggerWebhookEvent } from '@/lib/webhooks/trigger'
 import { getOrgEntitlementsForApiKey } from '@/lib/entitlements'
 import { VALID_JOB_STATUSES_SET } from '@/lib/api/v1JobsConstants'
+import { parseStrictInt } from '@/lib/utils/parseStrictInt'
 
 export const runtime = 'nodejs'
 
@@ -36,15 +37,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const pageRaw = searchParams.get('page') ?? '1'
     const limitRaw = searchParams.get('limit') ?? '20'
-    const pageParsed = parseInt(pageRaw, 10)
-    const limitParsed = parseInt(limitRaw, 10)
-    if (
-      !Number.isFinite(pageParsed) ||
-      !Number.isFinite(limitParsed) ||
-      pageParsed < 1 ||
-      limitParsed < 1 ||
-      limitParsed > 100
-    ) {
+    const page = parseStrictInt(pageRaw, { min: 1 })
+    const limit = parseStrictInt(limitRaw, { min: 1, max: 100 })
+    if (page === null || limit === null) {
       return withRateLimitHeaders(
         NextResponse.json(
           errorBody(
@@ -57,8 +52,6 @@ export async function GET(request: NextRequest) {
         rateLimitResult
       )
     }
-    const page = pageParsed
-    const limit = limitParsed
     const status = searchParams.get('status') || null
     const offset = (page - 1) * limit
 

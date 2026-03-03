@@ -14,6 +14,7 @@ import {
   V1_SCOPES,
 } from '@/lib/api/v1Helpers'
 import { isValidUUID } from '@/lib/utils/uuid'
+import { parseStrictInt } from '@/lib/utils/parseStrictInt'
 
 export const runtime = 'nodejs'
 
@@ -91,15 +92,11 @@ export async function GET(request: NextRequest) {
   const pageRaw = request.nextUrl.searchParams.get('page')
   const limitRaw = request.nextUrl.searchParams.get('limit') ?? '20'
   const offsetRaw = request.nextUrl.searchParams.get('offset')
-  const limitParsed = parseInt(limitRaw, 10)
-  const pageParsed = pageRaw != null ? parseInt(pageRaw, 10) : null
-  const offsetParsed = offsetRaw != null ? parseInt(offsetRaw, 10) : null
+  const limit = parseStrictInt(limitRaw, { min: 1, max: 100 })
+  const pageParsed = pageRaw != null ? parseStrictInt(pageRaw, { min: 1 }) : null
+  const offsetParsed = offsetRaw != null ? parseStrictInt(offsetRaw, { min: 0 }) : null
 
-  if (
-    !Number.isFinite(limitParsed) ||
-    limitParsed < 1 ||
-    limitParsed > 100
-  ) {
+  if (limit === null) {
     return withRateLimitHeaders(
       NextResponse.json(
         errorBody(
@@ -112,46 +109,44 @@ export async function GET(request: NextRequest) {
       rateLimitResult
     )
   }
-  const limit = limitParsed
 
   let offset: number
   let page: number
-  if (pageParsed != null && Number.isFinite(pageParsed) && pageParsed >= 1) {
+  if (pageRaw != null) {
+    if (pageParsed === null) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'INVALID_FORMAT',
+            'Invalid pagination: page must be a positive integer',
+            requestId
+          ),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     page = pageParsed
     offset = (page - 1) * limit
-  } else if (offsetParsed != null && Number.isFinite(offsetParsed) && offsetParsed >= 0) {
+  } else if (offsetRaw != null) {
+    if (offsetParsed === null) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          errorBody(
+            'INVALID_FORMAT',
+            'Invalid pagination: offset must be a non-negative integer',
+            requestId
+          ),
+          { status: 400, headers: { 'X-Request-ID': requestId } }
+        ),
+        rateLimitResult
+      )
+    }
     offset = offsetParsed
     page = Math.floor(offset / limit) + 1
   } else {
     page = 1
     offset = 0
-  }
-
-  if (pageRaw != null && (pageParsed == null || !Number.isFinite(pageParsed) || pageParsed < 1)) {
-    return withRateLimitHeaders(
-      NextResponse.json(
-        errorBody(
-          'INVALID_FORMAT',
-          'Invalid pagination: page must be a positive integer',
-          requestId
-        ),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
-      ),
-      rateLimitResult
-    )
-  }
-  if (offsetRaw != null && (offsetParsed == null || !Number.isFinite(offsetParsed) || offsetParsed < 0)) {
-    return withRateLimitHeaders(
-      NextResponse.json(
-        errorBody(
-          'INVALID_FORMAT',
-          'Invalid pagination: offset must be a non-negative integer',
-          requestId
-        ),
-        { status: 400, headers: { 'X-Request-ID': requestId } }
-      ),
-      rateLimitResult
-    )
   }
 
   const { data: runs, error, count } = await admin

@@ -128,7 +128,20 @@ export async function PATCH(
     }
     const { name, scopes, expires_at } = body
     const updateData: Record<string, unknown> = {}
-    if (typeof name === 'string' && name.trim()) updateData.name = name.trim()
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) {
+        const { response, errorId } = createErrorResponse(
+          'name must be a non-empty string',
+          'INVALID_FORMAT',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      updateData.name = name.trim()
+    }
     if (scopes !== undefined) {
       if (!isScopesArrayOfStrings(scopes)) {
         const { response, errorId } = createErrorResponse(
