@@ -212,10 +212,23 @@ export async function PATCH(
       .update(updateData)
       .eq('id', id)
       .eq('organization_id', result.organization_id!)
+      .is('revoked_at', null)
       .select('id, name, key_prefix, scopes, expires_at, last_used_at, created_at')
       .single()
 
     if (error) {
+      // Zero rows: concurrent revoke won; return deterministic INVALID_STATE
+      if (error.code === 'PGRST116') {
+        const { response, errorId } = createErrorResponse(
+          'Cannot update a revoked key',
+          'INVALID_STATE',
+          { requestId, statusCode: 400 }
+        )
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
       const { response, errorId } = createErrorResponse(
         error.message,
         'QUERY_ERROR',
@@ -329,6 +342,25 @@ export async function DELETE(
       .single()
 
     if (error) {
+      // Zero rows: concurrent revoke won; re-read and return idempotent 200 if already revoked
+      if (error.code === 'PGRST116') {
+        const { data: reRead } = await admin
+          .from('api_keys')
+          .select('id, name, key_prefix, revoked_at')
+          .eq('id', id)
+          .eq('organization_id', result.organization_id!)
+          .maybeSingle()
+        if (reRead?.revoked_at) {
+          return NextResponse.json({
+            data: {
+              id: reRead.id,
+              name: reRead.name,
+              key_prefix: reRead.key_prefix,
+              revoked_at: reRead.revoked_at,
+            },
+          })
+        }
+      }
       const { response, errorId } = createErrorResponse(
         error.message,
         'QUERY_ERROR',
