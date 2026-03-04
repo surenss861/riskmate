@@ -63,6 +63,32 @@ describe('parseSinceUntil', () => {
     expect(parseSinceUntil('not-a-date', '2025-01-15')).toEqual({ error: 'invalid_format' })
   })
 
+  it('normalizes timezone-less datetime to UTC (deterministic across environments)', () => {
+    // 2025-01-01T06:00:00 with no Z/offset is interpreted as 06:00:00 UTC, not local time
+    const result = parseSinceUntil('2025-01-01T06:00:00', '2025-01-15T18:30:00')
+    expect(result).not.toBeNull()
+    expect('error' in (result ?? {})).toBe(false)
+    if (result && !('error' in result)) {
+      expect(result.since).toBe('2025-01-01T06:00:00.000Z')
+      expect(result.until).toBe('2025-01-15T18:30:00.000Z')
+    }
+  })
+
+  it('accepts explicit Z and offset datetimes unchanged', () => {
+    const result = parseSinceUntil('2025-01-01T06:00:00Z', '2025-01-15T18:30:00.000Z')
+    expect(result).not.toBeNull()
+    if (result && !('error' in result)) {
+      expect(result.since).toBe('2025-01-01T06:00:00.000Z')
+      expect(result.until).toBe('2025-01-15T18:30:00.000Z')
+    }
+    const withOffset = parseSinceUntil('2025-01-01T00:00:00+00:00', '2025-01-15T23:59:59-05:00')
+    expect(withOffset).not.toBeNull()
+    if (withOffset && !('error' in withOffset)) {
+      expect(withOffset.since).toBe('2025-01-01T00:00:00.000Z')
+      expect(withOffset.until).toBe('2025-01-16T04:59:59.000Z') // -05 → UTC
+    }
+  })
+
   it('effectiveDaysFromRange counts inclusive days for date-only normalized range', () => {
     const parsed = parseSinceUntil('2025-01-01', '2025-01-15')
     expect(parsed).not.toBeNull()

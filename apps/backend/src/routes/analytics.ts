@@ -132,8 +132,25 @@ analyticsRouter.get(
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
+
+    const parsedPeriod = parsePeriodQuery(authReq.query.period);
+    const periodLabelLocked = parsedPeriod.key === "1y" ? "1y" : `${parsedPeriod.days}d`;
+    const groupByRaw = (authReq.query.groupBy as string) || "day";
+    const groupByLocked = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
+    const metricRaw = (authReq.query.metric as string) || "jobs";
+    const metricLocked =
+      metricRaw === "risk"
+        ? "risk"
+        : metricRaw === "compliance"
+          ? "compliance"
+          : metricRaw === "completion" || metricRaw === "completion_rate"
+            ? "completion"
+            : metricRaw === "jobs_completed"
+              ? "jobs_completed"
+              : "jobs";
+
     if (!isActive || !hasAnalytics) {
-      return res.json({ period: "30d", groupBy: "day", metric: "jobs", data: [], locked: true });
+      return res.json({ period: periodLabelLocked, groupBy: groupByLocked, metric: metricLocked, data: [], locked: true });
     }
     try {
       const orgId = authReq.user.organization_id;
@@ -146,20 +163,8 @@ analyticsRouter.get(
       const effectiveDays = customRange ? effectiveDaysFromRange(since, until) : parsed.days;
       const periodLabel = customRange ? periodLabelFromDays(effectiveDays) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 
-      const groupByRaw = (authReq.query.groupBy as string) || "day";
-      const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
-      const metricRaw = (authReq.query.metric as string) || "jobs";
-      // Spec-aligned metric enum: jobs | risk | compliance | completion
-      const metric =
-        metricRaw === "risk"
-          ? "risk"
-          : metricRaw === "compliance"
-            ? "compliance"
-            : metricRaw === "completion" || metricRaw === "completion_rate"
-              ? "completion"
-              : metricRaw === "jobs_completed"
-                ? "jobs_completed"
-                : "jobs";
+      const groupBy = groupByLocked;
+      const metric = metricLocked;
 
       type Point = { period: string; value: number; label: string };
       const points: Point[] = [];

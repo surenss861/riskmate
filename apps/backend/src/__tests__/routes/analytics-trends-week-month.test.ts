@@ -335,4 +335,27 @@ describe("GET /api/analytics/trends locked response", () => {
       locked: true,
     });
   });
+
+  it("locked response reflects requested non-jobs metric (request/response parity)", async () => {
+    mockAuthenticate.mockImplementationOnce((req: any, _res: any, next: () => void) => {
+      req.user = {
+        id: "user-locked",
+        organization_id: "org-locked",
+        subscriptionStatus: "canceled",
+        features: [],
+      };
+      next();
+    });
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ period: "90d", groupBy: "month", metric: "completion" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      period: "90d",
+      groupBy: "month",
+      metric: "completion",
+      data: [],
+      locked: true,
+    });
+  });
 });

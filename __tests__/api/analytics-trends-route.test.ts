@@ -154,6 +154,27 @@ describe('GET /api/analytics/trends', () => {
       expect(body.locked).toBe(true)
       expect(body.data).toEqual([])
     })
+
+    it('locked response reflects requested metric and groupBy (request/response parity)', async () => {
+      const { getAnalyticsContext } = await import('@/lib/utils/analyticsAuth')
+      ;(getAnalyticsContext as jest.Mock).mockResolvedValueOnce({
+        orgId: ORG_ID,
+        requestId: 'req-trends-test-123',
+        hasAnalytics: false,
+        isActive: true,
+        status: 'canceled',
+        supabase: { from: fromMock, rpc: rpcMock },
+      })
+      const res = await GET(trendsRequest({ period: '90d', groupBy: 'month', metric: 'risk' }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.locked).toBe(true)
+      expect(body.metric).toBe('risk')
+      expect(body.groupBy).toBe('month')
+      expect(body.period).toBe('90d')
+      expect(body.data).toEqual([])
+    })
   })
 
   describe('day RPC fallback', () => {
@@ -614,6 +635,24 @@ describe('GET /api/analytics/trends', () => {
       if (rpcCall) {
         expect(rpcCall[1].p_since).toBe('2025-01-01T00:00:00.000Z')
         expect(rpcCall[1].p_until).toBe('2025-01-15T23:59:59.999Z')
+      }
+    })
+
+    it('timezone-less datetime since/until: normalized to UTC (identical across environments)', async () => {
+      const res = await GET(trendsRequest({
+        since: '2025-01-01T06:00:00',
+        until: '2025-01-15T18:30:00',
+        groupBy: 'day',
+        metric: 'jobs',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(Array.isArray(body.data)).toBe(true)
+      const rpcCall = rpcMock.mock.calls.find((c: string[]) => c[0] === 'get_trends_day_buckets')
+      expect(rpcCall).toBeDefined()
+      if (rpcCall) {
+        expect(rpcCall[1].p_since).toBe('2025-01-01T06:00:00.000Z')
+        expect(rpcCall[1].p_until).toBe('2025-01-15T18:30:00.000Z')
       }
     })
 

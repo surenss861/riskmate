@@ -52,13 +52,30 @@ export async function GET(request: NextRequest) {
     const ctx = await getAnalyticsContext(request, ROUTE)
     if (ctx instanceof NextResponse) return ctx
     const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
+
+    const { searchParams } = new URL(request.url)
+    const parsedPeriod = parsePeriod(searchParams.get('period'))
+    const periodLabelLocked = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
+    const groupByRaw = searchParams.get('groupBy') || 'day'
+    const groupByLocked = groupByRaw === 'month' ? 'month' : groupByRaw === 'week' ? 'week' : 'day'
+    const metricRaw = searchParams.get('metric') || 'jobs'
+    const metricLocked =
+      metricRaw === 'risk'
+        ? 'risk'
+        : metricRaw === 'compliance'
+          ? 'compliance'
+          : metricRaw === 'completion' || metricRaw === 'completion_rate'
+            ? 'completion'
+            : metricRaw === 'jobs_completed'
+              ? 'jobs_completed'
+              : 'jobs'
+
     if (!isActive || !hasAnalytics) {
       return NextResponse.json(
-        { period: '30d', groupBy: 'day', metric: 'jobs', data: [], locked: true },
+        { period: periodLabelLocked, groupBy: groupByLocked, metric: metricLocked, data: [], locked: true },
         { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }
-    const { searchParams } = new URL(request.url)
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
@@ -114,19 +131,8 @@ export async function GET(request: NextRequest) {
     const effectiveDays = customRangeValid ? effectiveDaysFromRange(since, until) : parsed.days
     const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDays) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
 
-    const groupByRaw = searchParams.get('groupBy') || 'day'
-    const groupBy = groupByRaw === 'month' ? 'month' : groupByRaw === 'week' ? 'week' : 'day'
-    const metricRaw = searchParams.get('metric') || 'jobs'
-    const metric =
-      metricRaw === 'risk'
-        ? 'risk'
-        : metricRaw === 'compliance'
-          ? 'compliance'
-          : metricRaw === 'completion' || metricRaw === 'completion_rate'
-            ? 'completion'
-            : metricRaw === 'jobs_completed'
-              ? 'jobs_completed'
-              : 'jobs'
+    const groupBy = groupByLocked
+    const metric = metricLocked
 
     type Point = { period: string; value: number; label: string }
 

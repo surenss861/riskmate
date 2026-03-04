@@ -60,6 +60,37 @@ function parseStrictDate(value: string): string | null {
   if (dateOnly) {
     return new Date(Date.UTC(year, month - 1, day)).toISOString()
   }
+
+  // Datetime: timezone-less values are normalized to UTC so results are identical across environments
+  const dateTimeMatch = ISO_DATETIME_REGEX.exec(trimmed)!
+  const hasTz = dateTimeMatch[8] !== undefined // group 8: Z or sign of offset
+  const hour = parseInt(dateTimeMatch[4], 10)
+  const min = parseInt(dateTimeMatch[5], 10)
+  const sec = parseInt(dateTimeMatch[6], 10) || 0
+  let ms = 0
+  if (dateTimeMatch[7] != null && dateTimeMatch[7] !== '') {
+    ms = parseInt(dateTimeMatch[7].padEnd(3, '0').slice(0, 3), 10)
+  }
+  if (hour > 23 || min > 59 || sec > 59 || ms > 999) return null
+
+  if (!hasTz) {
+    // Normalize timezone-less datetime to UTC so results are identical across environments
+    const utcDateTimeMs = Date.UTC(year, month - 1, day, hour, min, sec, ms)
+    if (Number.isNaN(utcDateTimeMs)) return null
+    const dt = new Date(utcDateTimeMs)
+    if (
+      dt.getUTCFullYear() !== year ||
+      dt.getUTCMonth() !== month - 1 ||
+      dt.getUTCDate() !== day ||
+      dt.getUTCHours() !== hour ||
+      dt.getUTCMinutes() !== min ||
+      dt.getUTCSeconds() !== sec
+    ) {
+      return null
+    }
+    return dt.toISOString()
+  }
+
   const fullParsed = new Date(trimmed)
   if (Number.isNaN(fullParsed.getTime())) return null
   return fullParsed.toISOString()
