@@ -12,6 +12,22 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
 
+const ORG_PLAN_CACHE_TTL_MS = 60_000
+const orgPlanCache = new Map<
+  string,
+  { orgId: string; planCode: PlanCode; status: string; cachedAt: number }
+>()
+
+function getCachedOrgPlan(userId: string): { orgId: string; planCode: PlanCode; status: string } | null {
+  const entry = orgPlanCache.get(userId)
+  if (!entry || Date.now() - entry.cachedAt > ORG_PLAN_CACHE_TTL_MS) return null
+  return { orgId: entry.orgId, planCode: entry.planCode, status: entry.status }
+}
+
+function setCachedOrgPlan(userId: string, orgId: string, planCode: PlanCode, status: string): void {
+  orgPlanCache.set(userId, { orgId, planCode, status, cachedAt: Date.now() })
+}
+
 export type SupabaseAnalyticsClient = ReturnType<typeof createSupabaseAdminClient>
 
 export type AnalyticsContext = {
@@ -29,6 +45,14 @@ export type AnalyticsContext = {
  * Resolve auth, org, subscription and plan features for analytics routes.
  * Returns context with orgId, requestId, hasAnalytics, isActive, or a NextResponse on auth/query error.
  * Routes should then check !isActive || !hasAnalytics and return their own locked response body if needed.
+ *
+ * Auth semantics (stricter than organizationGuard.ts):
+ * - If the request has *any* non-empty Authorization header, we treat it as bearer-intent and do **not**
+ *   fall back to cookie auth. Non-Bearer schemes (e.g. Basic, Digest) result in 401 without trying cookies.
+ *   Rationale: analytics is often called by API clients with Bearer; allowing cookie fallback when a
+ *   non-Bearer header is present would be inconsistent and could surprise consumers. Other app routes
+ *   use organizationGuard, which falls back to cookies when the header is absent or when Bearer
+ *   parsing fails; analytics routes intentionally use bearer-only when any Authorization header exists.
  */
 export async function getAnalyticsContext(
   request: NextRequest,
@@ -101,8 +125,23 @@ export async function getAnalyticsContext(
     })
   }
 
-  // Use admin client for DB lookups so bearer-only requests work without cookie session (RLS not bound to anon cookie)
   const admin = createSupabaseAdminClient()
+
+  const cached = getCachedOrgPlan(user.id)
+  if (cached) {
+    const isActive = ['active', 'trialing', 'free'].includes(cached.status)
+    const features = isActive ? planFeatures(cached.planCode) : []
+    const hasAnalytics = features.includes('analytics')
+    return {
+      orgId: cached.orgId,
+      requestId,
+      hasAnalytics,
+      isActive,
+      status: cached.status,
+      supabase: admin,
+    }
+  }
+
   const { data: userData, error: userError } = await admin
     .from('users')
     .select('organization_id')
@@ -188,6 +227,7 @@ export async function getAnalyticsContext(
   const planCode: PlanCode =
     orgSub?.plan_code && orgSub.plan_code !== 'none' ? (orgSub.plan_code as PlanCode) : 'none'
   const status = orgSub?.status ?? (planCode === 'none' ? 'none' : 'inactive')
+  setCachedOrgPlan(user.id, orgId, planCode, status)
   const isActive = ['active', 'trialing', 'free'].includes(status)
   const features = isActive ? planFeatures(planCode) : []
   const hasAnalytics = features.includes('analytics')

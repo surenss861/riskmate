@@ -18,6 +18,21 @@ export const APP_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
+// Server-side: warn when production would use localhost (bulk delegation would fail)
+if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+  const isLocalhost =
+    APP_ORIGIN.includes('localhost') || APP_ORIGIN.includes('127.0.0.1')
+  if (isLocalhost) {
+    console.error('[Config] ❌ CRITICAL: APP_ORIGIN resolves to localhost in production. Bulk operations will fail.')
+    console.error('[Config] Set NEXT_PUBLIC_APP_URL to your app URL (e.g. https://riskmate.com.au) for non-Vercel deployments.')
+  }
+  // Defense-in-depth: warn if APP_ORIGIN looks like an unexpected external host (could expose cookies if misconfigured)
+  const allowedHostPattern = /^(https?:\/\/)(localhost|127\.0\.0\.1|[\w.-]*riskmate\.com\.au|[\w.-]*\.vercel\.app)(:\d+)?(\/|$)/i
+  if (!allowedHostPattern.test(APP_ORIGIN)) {
+    console.error('[Config] ⚠️ APP_ORIGIN may be misconfigured (unexpected host). Expected localhost (dev) or riskmate.com.au / *.vercel.app:', APP_ORIGIN)
+  }
+}
+
 // Validate: Never use localhost in production
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   if (BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1')) {

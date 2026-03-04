@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { SupabaseAnalyticsClient } from '@/lib/utils/analyticsAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
@@ -18,34 +17,6 @@ import {
 export const runtime = 'nodejs'
 
 const ROUTE = '/api/analytics/trends'
-
-/** Cooldown for MV refresh (align with backend ensureAnalyticsMvRefreshed): at most once per hour. */
-const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000
-let lastAnalyticsMvRefreshAt = 0
-/** In-flight guard to prevent concurrent refreshes within the same process (avoids race when multiple requests hit simultaneously). */
-let refreshInFlight = false
-
-/**
- * Refresh analytics MVs at most once per bounded interval; skip when within cooldown or when a refresh is already in flight.
- * This is a best-effort fallback for environments without pg_cron. The primary refresh path is the backend's
- * ensureAnalyticsMvRefreshed in apps/backend/src/routes/analytics.ts; this Next.js route's refresh is only needed
- * when the dashboard is served directly without going through the Express backend.
- */
-async function ensureAnalyticsMvRefreshed(supabase: SupabaseAnalyticsClient): Promise<void> {
-  const now = Date.now()
-  if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return
-  if (refreshInFlight) return
-  refreshInFlight = true
-  lastAnalyticsMvRefreshAt = now
-  try {
-    const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
-    if (error) {
-      console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
-    }
-  } finally {
-    refreshInFlight = false
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -124,12 +95,11 @@ export async function GET(request: NextRequest) {
       }
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
-    const parsed = parsePeriod(searchParams.get('period'))
     const { since, until } =
       customRangeValid ??
-      (parsed.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsed.days))
-    const effectiveDays = customRangeValid ? effectiveDaysFromRange(since, until) : parsed.days
-    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDays) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
+      (parsedPeriod.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsedPeriod.days))
+    const effectiveDays = customRangeValid ? effectiveDaysFromRange(since, until) : parsedPeriod.days
+    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDays) : (parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`)
 
     const groupBy = groupByLocked
     const metric = metricLocked
@@ -214,7 +184,6 @@ export async function GET(request: NextRequest) {
       (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')
 
     if (useMv) {
-      await ensureAnalyticsMvRefreshed(supabase)
       const sinceWeek = weekStart(new Date(since))
       const untilWeek = weekStart(new Date(until))
       const points: Point[] = []

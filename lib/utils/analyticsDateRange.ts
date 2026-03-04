@@ -18,6 +18,13 @@ export type ParseSinceUntilResult =
   | { error: 'missing_bound' }
   | null
 
+/** Type guard: true when the result is a valid date range (not null and not an error object). Use before accessing since/until. */
+export function isSinceUntilRange(
+  r: ParseSinceUntilResult
+): r is { since: string; until: string } {
+  return r != null && !('error' in r)
+}
+
 /** ISO date: YYYY-MM-DD. ISO datetime: YYYY-MM-DDTHH:mm:ss[.sss][Z|±HH:mm]. */
 const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/
 const ISO_DATETIME_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/

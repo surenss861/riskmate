@@ -3,7 +3,8 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
-import { parseSinceUntil, effectiveDaysFromRange } from '@/lib/utils/analyticsDateRange'
+import { parseSinceUntil, effectiveDaysFromRange, dateRangeForDays } from '@/lib/utils/analyticsDateRange'
+import { calendarYearBounds, toDateKey } from '@/lib/utils/analyticsTrends'
 
 export const runtime = 'nodejs'
 
@@ -23,28 +24,9 @@ function parseRangeDays(range?: string | null): number {
   return Math.min(days, 180)
 }
 
-/** Calendar-year bounds (Jan 1 00:00 to today 23:59:59 UTC). */
-function calendarYearBounds(): { since: string; until: string } {
-  const now = new Date()
-  const y = now.getUTCFullYear()
-  const since = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0))
-  const until = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999))
-  return { since: since.toISOString(), until: until.toISOString() }
-}
-
-/** Rolling-window bounds for the last N days. */
-function rollingDaysBounds(days: number): { since: string; until: string } {
-  const until = new Date()
-  until.setHours(23, 59, 59, 999)
-  const since = new Date(until.getTime())
-  since.setDate(since.getDate() - (days - 1))
-  since.setHours(0, 0, 0, 0)
-  return { since: since.toISOString(), until: until.toISOString() }
-}
-
-function toDateKey(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toISOString().slice(0, 10)
+/** Convert Date or ISO string to YYYY-MM-DD key (uses shared toDateKey for strings). */
+function toDateKeyFromDateOrString(value: Date | string): string {
+  return toDateKey(typeof value === 'string' ? value : value.toISOString())
 }
 
 export async function GET(request: NextRequest) {
@@ -150,7 +132,7 @@ export async function GET(request: NextRequest) {
       rangeDays = 365
     } else {
       rangeDays = parseRangeDays(searchParams.get('range') || undefined)
-      const bounds = rollingDaysBounds(rangeDays)
+      const bounds = dateRangeForDays(rangeDays)
       sinceIso = bounds.since
       untilIso = bounds.until
     }
@@ -209,7 +191,7 @@ export async function GET(request: NextRequest) {
 
     const trendByDate = new Map<string, number>()
     for (const r of trendRows) {
-      const key = typeof r.period_key === 'string' ? r.period_key.slice(0, 10) : toDateKey(new Date(r.period_key))
+      const key = toDateKeyFromDateOrString(typeof r.period_key === 'string' ? r.period_key : new Date(r.period_key))
       trendByDate.set(key, Number(r.completion_rate))
     }
     const trend: { date: string; completion_rate: number }[] = []
@@ -218,7 +200,7 @@ export async function GET(request: NextRequest) {
     const untilDate = new Date(untilIso)
     untilDate.setHours(23, 59, 59, 999)
     while (dateCursor <= untilDate) {
-      const dateKey = toDateKey(dateCursor)
+      const dateKey = toDateKeyFromDateOrString(dateCursor)
       trend.push({
         date: dateKey,
         completion_rate: trendByDate.get(dateKey) ?? 0,

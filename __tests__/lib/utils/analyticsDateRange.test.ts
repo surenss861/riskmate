@@ -4,7 +4,22 @@
  * missing_bound when only one of since/until is provided, and other error cases.
  */
 
-import { parseSinceUntil, effectiveDaysFromRange } from '@/lib/utils/analyticsDateRange'
+import { parseSinceUntil, effectiveDaysFromRange, isSinceUntilRange } from '@/lib/utils/analyticsDateRange'
+
+describe('isSinceUntilRange', () => {
+  it('returns true for valid range result', () => {
+    expect(isSinceUntilRange(parseSinceUntil('2025-01-01', '2025-01-15'))).toBe(true)
+    expect(isSinceUntilRange({ since: '2025-01-01T00:00:00.000Z', until: '2025-01-15T23:59:59.999Z' })).toBe(true)
+  })
+  it('returns false for null', () => {
+    expect(isSinceUntilRange(null)).toBe(false)
+  })
+  it('returns false for error results', () => {
+    expect(isSinceUntilRange({ error: 'missing_bound' })).toBe(false)
+    expect(isSinceUntilRange({ error: 'invalid_order' })).toBe(false)
+    expect(isSinceUntilRange({ error: 'invalid_format' })).toBe(false)
+  })
+})
 
 describe('parseSinceUntil', () => {
   it('returns null when both since and until are omitted', () => {

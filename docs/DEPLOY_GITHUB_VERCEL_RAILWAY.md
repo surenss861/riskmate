@@ -44,6 +44,7 @@ In **Project → Settings → Environment Variables**, add (for **Production** a
 
 | Name | Value | Notes |
 |------|--------|--------|
+| `NEXT_PUBLIC_APP_URL` | `https://<your-vercel-app>.vercel.app` or your custom domain | **Required for non-Vercel deployments** (e.g. Railway, Fly.io, Docker). On Vercel this is optional; `VERCEL_URL` is used when unset. Used for bulk action self-delegation. |
 | `NEXT_PUBLIC_API_URL` | `https://<your-railway-backend>.up.railway.app` | Backend URL (from Railway step below) |
 | `NEXT_PUBLIC_BACKEND_URL` | Same as above | Legacy; some code still reads this |
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project>.supabase.co` | Supabase project URL |

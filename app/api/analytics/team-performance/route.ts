@@ -15,13 +15,8 @@ export async function GET(request: NextRequest) {
     const ctx = await getAnalyticsContext(request, ROUTE)
     if (ctx instanceof NextResponse) return ctx
     const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
-    if (!isActive || !hasAnalytics) {
-      return NextResponse.json(
-        { period: '30d', members: [], locked: true },
-        { status: 200, headers: { 'X-Request-ID': requestId } }
-      )
-    }
     const { searchParams } = new URL(request.url)
+    const parsedPeriod = parsePeriod(searchParams.get('period'))
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
@@ -70,10 +65,16 @@ export async function GET(request: NextRequest) {
       }
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
-    const parsed = parsePeriod(searchParams.get('period'))
+    const periodLabelLocked = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
+    if (!isActive || !hasAnalytics) {
+      return NextResponse.json(
+        { period: periodLabelLocked, members: [], locked: true },
+        { status: 200, headers: { 'X-Request-ID': requestId } }
+      )
+    }
     const { since, until } =
-      customRangeValid ?? (parsed.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsed.days))
-    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
+      customRangeValid ?? (parsedPeriod.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsedPeriod.days))
+    const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`)
 
     const { data: kpiRows, error: rpcError } = await supabase.rpc('get_team_performance_kpis', {
       p_org_id: orgId,

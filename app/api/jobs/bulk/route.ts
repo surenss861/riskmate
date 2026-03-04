@@ -221,6 +221,14 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  const jobIds = body?.job_ids
+  if (!Array.isArray(jobIds) || jobIds.length === 0) {
+    return NextResponse.json(
+      { message: 'PATCH body must include job_ids (non-empty array)' },
+      { status: 400 }
+    )
+  }
+
   const { action: _drop, ...rest } = body
   return forwardToBulkAction(request, canonicalAction as 'status' | 'assign', rest as Record<string, unknown>)
 }

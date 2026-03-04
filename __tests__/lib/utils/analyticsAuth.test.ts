@@ -19,39 +19,27 @@ jest.mock('@/lib/supabase/server', () => ({
   }),
 }))
 
-const mockUsersChain = {
-  select: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
-  maybeSingle: jest.fn(),
+function createMockChain() {
+  return {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn(),
+    maybeSingle: jest.fn(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn(),
+  }
 }
-const mockOrgSubChain = {
-  select: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  maybeSingle: jest.fn().mockResolvedValue({
-    data: { plan_code: 'business', status: 'active' },
-    error: null,
-  }),
-}
-const mockOrgMembersChain = {
-  select: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  order: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockResolvedValue({ data: [], error: null }),
-}
+
+let mockUsersChain: ReturnType<typeof createMockChain>
+let mockOrgSubChain: ReturnType<typeof createMockChain>
+let mockOrgMembersChain: ReturnType<typeof createMockChain>
 
 jest.mock('@/lib/supabase/admin', () => ({
   createSupabaseAdminClient: jest.fn().mockReturnValue({
     from: (table: string) => {
-      if (table === 'users') {
-        return mockUsersChain
-      }
-      if (table === 'org_subscriptions') {
-        return mockOrgSubChain
-      }
-      if (table === 'organization_members') {
-        return mockOrgMembersChain
-      }
+      if (table === 'users') return mockUsersChain
+      if (table === 'org_subscriptions') return mockOrgSubChain
+      if (table === 'organization_members') return mockOrgMembersChain
       return {}
     },
   }),
@@ -68,8 +56,15 @@ describe('getAnalyticsContext (analytics route auth)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     serverGetUserMock = jest.fn()
+    mockUsersChain = createMockChain()
+    mockOrgSubChain = createMockChain()
+    mockOrgMembersChain = createMockChain()
     mockUsersChain.maybeSingle.mockResolvedValue({
       data: { organization_id: ORG_ID },
+      error: null,
+    })
+    mockOrgSubChain.maybeSingle.mockResolvedValue({
+      data: { plan_code: 'business', status: 'active' },
       error: null,
     })
     mockOrgMembersChain.limit.mockResolvedValue({ data: [], error: null })

@@ -476,8 +476,12 @@ jobsRouter.get("/", authenticate, async (req: express.Request, res: express.Resp
     // Apply search filter (q parameter - search job name, address, or ID)
     if (q && typeof q === 'string' && q.trim()) {
       const searchTerm = q.trim();
-      // Validate searchTerm to prevent injection (alphanumeric, spaces, hyphens, underscores only)
-      if (!/^[a-zA-Z0-9\s\-_]+$/.test(searchTerm)) {
+      // Max length to avoid abuse; allow common punctuation in job names (apostrophes, dots, commas, parentheses)
+      if (searchTerm.length > 200) {
+        return res.status(400).json({ message: 'Search term must be 200 characters or less' });
+      }
+      // Allow letters, digits, spaces, hyphens, underscores, apostrophes, dots, commas, parentheses (safe with escaped % _ in ilike)
+      if (!/^[a-zA-Z0-9\s\-_'.,()]+$/.test(searchTerm)) {
         return res.status(400).json({ message: 'Invalid search term format' });
       }
       // Escape special characters for LIKE query
