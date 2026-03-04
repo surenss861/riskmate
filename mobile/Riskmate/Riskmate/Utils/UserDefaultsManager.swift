@@ -53,6 +53,31 @@ struct UserDefaultsManager {
         }
     }
     
+    // MARK: - Notifications (pinned IDs; backend may not support pin yet)
+    
+    struct Notifications {
+        private static let category = "\(prefix).notifications"
+        private static let pinnedIdsKey = "\(category).pinnedIds"
+        
+        static func pinnedIds() -> Set<String> {
+            (UserDefaults.standard.array(forKey: pinnedIdsKey) as? [String]).map { Set($0) } ?? []
+        }
+        
+        static func setPinnedIds(_ ids: Set<String>) {
+            UserDefaults.standard.set(Array(ids), forKey: pinnedIdsKey)
+        }
+        
+        static func togglePinned(id: String) {
+            var set = pinnedIds()
+            if set.contains(id) { set.remove(id) } else { set.insert(id) }
+            setPinnedIds(set)
+        }
+        
+        static func isPinned(id: String) -> Bool {
+            pinnedIds().contains(id)
+        }
+    }
+    
     // MARK: - Banners
     
     struct Banners {

@@ -10,6 +10,13 @@ private nonisolated func _notificationDefaultSinceISO() -> String {
     return formatter.string(from: date)
 }
 
+/// Section for grouped notifications (Package 6 — Today / This Week / Older).
+struct NotificationSection: Identifiable {
+    var id: String { title }
+    let title: String
+    let items: [AppNotification]
+}
+
 /// Notification center screen shown when the user opens riskmate://notifications or taps a notification.
 /// Lists the user's notifications with unread indicators; tap marks item read and refreshes badge.
 struct NotificationCenterView: View {
@@ -22,6 +29,11 @@ struct NotificationCenterView: View {
     @State private var markingAllRead = false
     @State private var typeFilter: NotificationType? = nil
     @State private var showMentionsList = false
+    /// Pinned notification IDs (local; backend may not support). Refresh to reorder.
+    @State private var pinnedIds: Set<String> = UserDefaultsManager.Notifications.pinnedIds()
+    /// IDs that were just inserted (realtime or prepend); get one-time appear animation. Cleared after delay.
+    @State private var newInsertedIds: Set<String> = []
+    @State private var previousItemIds: Set<String> = []
 
     private let pageSize = 50
     @State private var hasMore = true
@@ -32,6 +44,31 @@ struct NotificationCenterView: View {
     private var filteredItems: [AppNotification] {
         guard let typeFilter = typeFilter else { return items }
         return items.filter { $0.type == typeFilter }
+    }
+    
+    /// Group into Today / This Week / Older; each section sorted by pinned first, then by date desc. Empty sections omitted.
+    private var sections: [NotificationSection] {
+        let cal = Calendar.current
+        let now = Date()
+        let today = filteredItems.filter { cal.isDateInToday($0.createdAt) }
+        let weekAgo = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        let thisWeek = filteredItems.filter {
+            !cal.isDateInToday($0.createdAt) && $0.createdAt >= weekAgo
+        }
+        let older = filteredItems.filter { $0.createdAt < weekAgo }
+        func sort(_ list: [AppNotification]) -> [AppNotification] {
+            list.sorted { a, b in
+                let aPin = pinnedIds.contains(a.id)
+                let bPin = pinnedIds.contains(b.id)
+                if aPin != bPin { return aPin }
+                return a.createdAt >= b.createdAt
+            }
+        }
+        var out: [NotificationSection] = []
+        if !today.isEmpty { out.append(NotificationSection(title: "Today", items: sort(today))) }
+        if !thisWeek.isEmpty { out.append(NotificationSection(title: "This Week", items: sort(thisWeek))) }
+        if !older.isEmpty { out.append(NotificationSection(title: "Older", items: sort(older))) }
+        return out
     }
 
     private var navigationTitle: String {
@@ -162,42 +199,10 @@ struct NotificationCenterView: View {
 
     private var listContent: some View {
         List {
-            ForEach(filteredItems, id: \.id) { item in
-                NotificationRow(
-                    item: item,
-                    onTap: { Task { await handleRowTap(item) } }
-                )
-                .listRowBackground(item.isRead ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
-                .listRowSeparator(.visible)
-                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.md, leading: RMTheme.Spacing.md, bottom: RMTheme.Spacing.md, trailing: RMTheme.Spacing.md))
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    if item.isRead {
-                        Button {
-                            Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
-                        } label: {
-                            Label("Mark unread", systemImage: "envelope.badge")
-                        }
-                    } else {
-                        Button {
-                            Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
-                        } label: {
-                            Label("Mark read", systemImage: "envelope.open")
-                        }
-                    }
-                }
-                .contextMenu {
-                    if item.isRead {
-                        Button {
-                            Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
-                        } label: {
-                            Label("Mark unread", systemImage: "envelope.badge")
-                        }
-                    } else {
-                        Button {
-                            Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
-                        } label: {
-                            Label("Mark read", systemImage: "envelope.open")
-                        }
+            ForEach(sections) { section in
+                Section(header: Text(section.title).rmSectionHeader()) {
+                    ForEach(section.items, id: \.id) { item in
+                        notificationRow(for: item)
                     }
                 }
             }
@@ -213,6 +218,69 @@ struct NotificationCenterView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
+    
+    private func notificationRow(for item: AppNotification) -> some View {
+        let isNew = newInsertedIds.contains(item.id)
+        return NotificationRow(
+            item: item,
+            isNew: isNew,
+            onTap: { Task { await handleRowTap(item) } }
+        )
+        .listRowBackground(item.isRead ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
+        .listRowSeparator(.visible)
+        .listRowInsets(EdgeInsets(top: RMTheme.Spacing.md, leading: RMTheme.Spacing.md, bottom: RMTheme.Spacing.md, trailing: RMTheme.Spacing.md))
+        .modifier(NewInsertModifier(isNew: isNew, id: item.id, clearInsert: { id in
+            newInsertedIds.remove(id)
+        }))
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button {
+                Haptics.impact(.light)
+                UserDefaultsManager.Notifications.togglePinned(id: item.id)
+                pinnedIds = UserDefaultsManager.Notifications.pinnedIds()
+            } label: {
+                Label(UserDefaultsManager.Notifications.isPinned(id: item.id) ? "Unpin" : "Pin",
+                      systemImage: UserDefaultsManager.Notifications.isPinned(id: item.id) ? "pin.slash" : "pin")
+            }
+            if item.isRead {
+                Button {
+                    Haptics.impact(.light)
+                    Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
+                } label: {
+                    Label("Mark unread", systemImage: "envelope.badge")
+                }
+            } else {
+                Button {
+                    Haptics.impact(.light)
+                    Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
+                } label: {
+                    Label("Mark read", systemImage: "envelope.open")
+                }
+            }
+        }
+        .contextMenu {
+            Button {
+                Haptics.impact(.light)
+                UserDefaultsManager.Notifications.togglePinned(id: item.id)
+                pinnedIds = UserDefaultsManager.Notifications.pinnedIds()
+            } label: {
+                Label(UserDefaultsManager.Notifications.isPinned(id: item.id) ? "Unpin" : "Pin",
+                      systemImage: UserDefaultsManager.Notifications.isPinned(id: item.id) ? "pin.slash" : "pin")
+            }
+            if item.isRead {
+                Button {
+                    Task { await markAsUnreadAndRefreshBadge(ids: [item.id]) }
+                } label: {
+                    Label("Mark unread", systemImage: "envelope.badge")
+                }
+            } else {
+                Button {
+                    Task { await markAsReadAndRefreshBadge(ids: [item.id]) }
+                } label: {
+                    Label("Mark read", systemImage: "envelope.open")
+                }
+            }
+        }
+    }
 
     private func load(offset: Int, since: String? = _notificationDefaultSinceISO()) async {
         if offset == 0 {
@@ -227,15 +295,17 @@ struct NotificationCenterView: View {
         do {
             let list = try await APIClient.shared.getNotifications(limit: pageSize, offset: offset, since: since)
             let mapped = list.map { AppNotification(from: $0) }
-            await MainActor.run {
-                if offset == 0 {
-                    items = mapped
-                    listSince = since
-                } else {
-                    items.append(contentsOf: mapped)
-                }
-                hasMore = list.count >= pageSize
+        await MainActor.run {
+            if offset == 0 {
+                newInsertedIds = []
+                items = mapped
+                listSince = since
+                previousItemIds = Set(mapped.map(\.id))
+            } else {
+                items.append(contentsOf: mapped)
             }
+            hasMore = list.count >= pageSize
+        }
         } catch {
             await MainActor.run {
                 if offset == 0 {
@@ -366,50 +436,35 @@ struct NotificationCenterView: View {
     }
 }
 
-// MARK: - Row
+// MARK: - New insert animation (Package 6)
 
-private struct NotificationRow: View {
-    let item: AppNotification
-    let onTap: () async -> Void
+private struct NewInsertModifier: ViewModifier {
+    let isNew: Bool
+    let id: String
+    let clearInsert: (String) -> Void
 
-    var body: some View {
-        Button {
-            Task { await onTap() }
-        } label: {
-            HStack(alignment: .top, spacing: RMTheme.Spacing.md) {
-                if !item.isRead {
-                    Circle()
-                        .fill(RMTheme.Colors.accent)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                }
-                VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-                    if !item.title.isEmpty {
-                        Text(item.title)
-                            .font(RMTheme.Typography.bodyBold)
-                            .foregroundColor(RMTheme.Colors.textPrimary)
+    func body(content: Content) -> some View {
+        content
+            .modifier(ConditionalAppearModifier(animate: isNew))
+            .onAppear {
+                if isNew {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        clearInsert(id)
                     }
-                    Text(item.body)
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                        .multilineTextAlignment(.leading)
-                    Text(formatDate(item.createdAt))
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textTertiary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Spacer(minLength: 0)
             }
-            .padding(RMTheme.Spacing.md)
-            .background(item.isRead ? Color.clear : RMTheme.Colors.surface.opacity(0.5))
-        }
-        .buttonStyle(.plain)
     }
+}
 
-    private func formatDate(_ date: Date) -> String {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        return f.localizedString(for: date, relativeTo: Date())
+private struct ConditionalAppearModifier: ViewModifier {
+    let animate: Bool
+
+    func body(content: Content) -> some View {
+        if animate {
+            content.rmAppearIn(staggerIndex: 0)
+        } else {
+            content
+        }
     }
 }
 

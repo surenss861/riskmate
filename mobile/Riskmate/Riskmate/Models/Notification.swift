@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// In-app notification model for the notification center.
 /// Maps from API response (APIClient.NotificationItem); supports display and deep link navigation.
@@ -80,6 +81,33 @@ enum NotificationType: String, CaseIterable, Identifiable {
     /// Parse API type string; returns .push for unknown values.
     static func from(apiType: String) -> NotificationType {
         NotificationType(rawValue: apiType) ?? .push
+    }
+    
+    /// SF Symbol for list row iconography (Package 6).
+    var iconName: String {
+        switch self {
+        case .jobAssigned: return "briefcase.fill"
+        case .signatureRequest: return "signature"
+        case .evidenceUploaded: return "camera.fill"
+        case .hazardAdded: return "exclamationmark.triangle.fill"
+        case .deadline, .mitigationDue, .jobReminder: return "clock.fill"
+        case .mention: return "at.badge.plus"
+        case .reportReady, .reportGenerated: return "doc.text.fill"
+        case .weeklySummary: return "chart.bar.fill"
+        case .highRiskJob, .riskAlert: return "exclamationmark.octagon.fill"
+        case .subscriptionUpdate: return "creditcard.fill"
+        case .push: return "bell.fill"
+        }
+    }
+    
+    /// Semantic color for row icon (info / warning / success).
+    var iconColor: Color {
+        switch self {
+        case .deadline, .mitigationDue, .jobReminder, .highRiskJob, .riskAlert: return RMTheme.Colors.warning
+        case .signatureRequest, .reportReady, .reportGenerated, .evidenceUploaded: return RMTheme.Colors.success
+        case .mention, .jobAssigned, .hazardAdded: return RMTheme.Colors.accent
+        default: return RMTheme.Colors.textSecondary
+        }
     }
 }
 

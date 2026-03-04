@@ -74,13 +74,15 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Plan + entitlement card | `AccountView` + `EntitlementsManager` | Single card for plan / entitlement |
 | Danger zone | `AccountView` | Confirm sheet; strong typography; no jank |
 
-### B8) Notifications — Modern list
+### B8) Notifications — Modern list ✅ Package 6 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Grouping | `Views/Main/NotificationCenterView.swift` | “Today” / “This Week” |
-| Swipe actions | `NotificationCenterView` | Mark read; pin (if supported by API) |
-| New item animation | `NotificationCenterView` | Slide in + fade for new notification |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Grouping | `NotificationCenterView.swift`, `NotificationSection` | “Today” / “This Week” / “Older”; empty sections hidden; `.rmSectionHeader()` | ✅ |
+| Swipe actions | `NotificationCenterView` | Mark read / Unread + Pin (toggle); light haptic; pin stored in `UserDefaultsManager.Notifications` | ✅ |
+| New item animation | `NotificationCenterView`, `NewInsertModifier` | `.rmAppearIn(staggerIndex: 0)` on insert; optional “New” chip; Reduce Motion = fade only | ✅ |
+| Row design | `Components/Premium/NotificationRow.swift`, `NotificationType.iconName/iconColor` | Leading icon by type, headline, subheadline, trailing time + unread dot | ✅ |
+| **QA** | | Notifications grouped correctly; swipe read/pin + light haptic; new inserts animate (when realtime set); Reduce Motion no slide; no list jank when swiping | |
 
 ---
 
