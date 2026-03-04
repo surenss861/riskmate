@@ -117,6 +117,20 @@ export async function GET(request: NextRequest) {
           headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
         })
       }
+      if (customRange.error === 'missing_bound') {
+        const { response, errorId } = createErrorResponse(
+          'Date range requires both since and until',
+          'VALIDATION_ERROR',
+          { requestId, statusCode: 400 }
+        )
+        logApiError(400, 'VALIDATION_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'validation', severity: 'warn', route: ROUTE,
+        })
+        return NextResponse.json(response, {
+          status: 400,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const rangeParam = searchParams.get('range')?.trim()?.toLowerCase()

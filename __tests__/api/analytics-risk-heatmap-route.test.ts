@@ -111,4 +111,31 @@ describe('GET /api/analytics/risk-heatmap', () => {
     expect(body.code).toBe('VALIDATION_ERROR')
     expect(body.message).toMatch(/since must be before or equal to until/i)
   })
+
+  it('date-only since/until: until normalized to end-of-day UTC', async () => {
+    const res = await GET(riskHeatmapRequest({ since: '2025-01-01', until: '2025-01-15' }))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.period).toBe('15d')
+    expect(rpcMock).toHaveBeenCalledWith('get_risk_heatmap_buckets', expect.objectContaining({
+      p_since: '2025-01-01T00:00:00.000Z',
+      p_until: '2025-01-15T23:59:59.999Z',
+    }))
+  })
+
+  it('returns 400 VALIDATION_ERROR when only since is provided', async () => {
+    const res = await GET(riskHeatmapRequest({ since: '2025-01-01' }))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.message).toMatch(/both since and until|requires both/i)
+  })
+
+  it('returns 400 VALIDATION_ERROR when only until is provided', async () => {
+    const res = await GET(riskHeatmapRequest({ until: '2025-01-15' }))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.message).toMatch(/both since and until|requires both/i)
+  })
 })

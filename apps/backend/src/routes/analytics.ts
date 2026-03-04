@@ -21,7 +21,7 @@ function parseSinceUntilQuery(query: { since?: string | string[]; until?: string
   return parseSinceUntil(since || null, until || null);
 }
 
-/** If parse result is invalid_order or invalid_format, send 400 and return true; otherwise return false. */
+/** If parse result is invalid_order, invalid_format, or missing_bound, send 400 and return true; otherwise return false. */
 function rejectInvalidDateRange(res: express.Response, parseResult: ParseSinceUntilResult): boolean {
   if (parseResult && "error" in parseResult) {
     if (parseResult.error === "invalid_order") {
@@ -30,6 +30,10 @@ function rejectInvalidDateRange(res: express.Response, parseResult: ParseSinceUn
     }
     if (parseResult.error === "invalid_format") {
       res.status(400).json({ message: "Invalid date format for since or until", code: "VALIDATION_ERROR" });
+      return true;
+    }
+    if (parseResult.error === "missing_bound") {
+      res.status(400).json({ message: "Date range requires both since and until", code: "VALIDATION_ERROR" });
       return true;
     }
   }
@@ -129,7 +133,7 @@ analyticsRouter.get(
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-      return res.json({ period: "30d", groupBy: "day", data: [], locked: true });
+      return res.json({ period: "30d", groupBy: "day", metric: "jobs", data: [], locked: true });
     }
     try {
       const orgId = authReq.user.organization_id;

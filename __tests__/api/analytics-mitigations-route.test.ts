@@ -158,4 +158,31 @@ describe('GET /api/analytics/mitigations', () => {
     expect(res.headers.get('X-Error-ID')).toBeDefined()
     expect(rpcMock).not.toHaveBeenCalled()
   })
+
+  it('date-only since/until: until normalized to end-of-day UTC', async () => {
+    const res = await GET(mitigationsRequest({ since: '2025-01-01', until: '2025-01-31' }))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.range_days).toBe(31)
+    expect(rpcMock).toHaveBeenCalledWith('get_mitigations_analytics_kpis', expect.objectContaining({
+      p_since: '2025-01-01T00:00:00.000Z',
+      p_until: '2025-01-31T23:59:59.999Z',
+    }))
+  })
+
+  it('returns 400 VALIDATION_ERROR when only since is provided', async () => {
+    const res = await GET(mitigationsRequest({ since: '2025-01-01' }))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.message).toMatch(/both since and until|requires both/i)
+  })
+
+  it('returns 400 VALIDATION_ERROR when only until is provided', async () => {
+    const res = await GET(mitigationsRequest({ until: '2025-01-15' }))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.message).toMatch(/both since and until|requires both/i)
+  })
 })

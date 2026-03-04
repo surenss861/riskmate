@@ -17,16 +17,17 @@ jest.mock("../../lib/supabaseClient", () => ({
   },
 }));
 
+const mockAuthenticate = jest.fn((req: any, _res: any, next: () => void) => {
+  req.user = {
+    id: "user-1",
+    organization_id: "org-1",
+    subscriptionStatus: "active",
+    features: ["analytics"],
+  };
+  next();
+});
 jest.mock("../../middleware/auth", () => ({
-  authenticate: (req: any, _res: any, next: () => void) => {
-    req.user = {
-      id: "user-1",
-      organization_id: "org-1",
-      subscriptionStatus: "active",
-      features: ["analytics"],
-    };
-    next();
-  },
+  authenticate: (req: any, res: any, next: () => void) => mockAuthenticate(req, res, next),
 }));
 
 jest.mock("../../middleware/limits", () => ({
@@ -273,5 +274,65 @@ describe("GET /api/analytics/trends (groupBy=week|month)", () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("VALIDATION_ERROR");
     expect(res.body.message).toMatch(/invalid date format|since or until/i);
+  });
+
+  it("returns 400 VALIDATION_ERROR when only since is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ since: "2025-01-01", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("returns 400 VALIDATION_ERROR when only until is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ until: "2025-01-15", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("date-only since/until: until normalized to end-of-day UTC", async () => {
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ since: "2025-01-01", until: "2025-01-15", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe("15d");
+    expect(res.body.metric).toBe("jobs");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "get_trends_day_buckets",
+      expect.objectContaining({
+        p_since: "2025-01-01T00:00:00.000Z",
+        p_until: "2025-01-15T23:59:59.999Z",
+      })
+    );
+  });
+});
+
+describe("GET /api/analytics/trends locked response", () => {
+  it("locked response includes metric for schema parity with unlocked response", async () => {
+    mockAuthenticate.mockImplementationOnce((req: any, _res: any, next: () => void) => {
+      req.user = {
+        id: "user-locked",
+        organization_id: "org-locked",
+        subscriptionStatus: "canceled",
+        features: [],
+      };
+      next();
+    });
+    const res = await request(app).get("/api/analytics/trends").query({ period: "30d", metric: "jobs" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      period: "30d",
+      groupBy: "day",
+      metric: "jobs",
+      data: [],
+      locked: true,
+    });
   });
 });

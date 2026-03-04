@@ -15,6 +15,7 @@ export type ParseSinceUntilResult =
   | { since: string; until: string }
   | { error: 'invalid_order' }
   | { error: 'invalid_format' }
+  | { error: 'missing_bound' }
   | null
 
 /** ISO date: YYYY-MM-DD. ISO datetime: YYYY-MM-DDTHH:mm:ss[.sss][Z|±HH:mm]. */
@@ -64,20 +65,32 @@ function parseStrictDate(value: string): string | null {
   return fullParsed.toISOString()
 }
 
+/** For date-only (YYYY-MM-DD) until: return end-of-day UTC (23:59:59.999). Datetime inputs unchanged. */
+function toEndOfDayUTC(iso: string): string {
+  const d = new Date(iso)
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth()
+  const day = d.getUTCDate()
+  return new Date(Date.UTC(y, m, day, 23, 59, 59, 999)).toISOString()
+}
+
 export function parseSinceUntil(
   sinceParam?: string | null,
   untilParam?: string | null
 ): ParseSinceUntilResult {
   const since = sinceParam?.trim() ?? ''
   const until = untilParam?.trim() ?? ''
-  if (!since || !until) return null
+  if (!since && !until) return null
+  if (!since || !until) return { error: 'missing_bound' }
   const sinceIso = parseStrictDate(since)
   const untilIso = parseStrictDate(until)
   if (sinceIso === null || untilIso === null) return { error: 'invalid_format' }
   const sinceMs = new Date(sinceIso).getTime()
   const untilMs = new Date(untilIso).getTime()
   if (sinceMs > untilMs) return { error: 'invalid_order' }
-  return { since: sinceIso, until: untilIso }
+  // Normalize date-only bounds: since is already start-of-day UTC; until → end-of-day UTC when date-only
+  const untilNormalized = ISO_DATE_REGEX.test(until) ? toEndOfDayUTC(untilIso) : untilIso
+  return { since: sinceIso, until: untilNormalized }
 }
 
 export function dateRangeForDays(days: number): { since: string; until: string } {

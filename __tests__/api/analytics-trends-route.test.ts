@@ -597,6 +597,41 @@ describe('GET /api/analytics/trends', () => {
       expect(body.code).toBe('VALIDATION_ERROR')
       expect(body.message).toMatch(/invalid date format|since or until/i)
     })
+
+    it('date-only since/until: until is normalized to end-of-day UTC (inclusive last day)', async () => {
+      const res = await GET(trendsRequest({
+        since: '2025-01-01',
+        until: '2025-01-15',
+        groupBy: 'day',
+        metric: 'jobs',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body.period).toBe('15d')
+      expect(Array.isArray(body.data)).toBe(true)
+      const rpcCall = rpcMock.mock.calls.find((c: string[]) => c[0] === 'get_trends_day_buckets')
+      expect(rpcCall).toBeDefined()
+      if (rpcCall) {
+        expect(rpcCall[1].p_since).toBe('2025-01-01T00:00:00.000Z')
+        expect(rpcCall[1].p_until).toBe('2025-01-15T23:59:59.999Z')
+      }
+    })
+
+    it('returns 400 VALIDATION_ERROR when only since is provided (one-sided range)', async () => {
+      const res = await GET(trendsRequest({ since: '2025-01-01', groupBy: 'day', metric: 'jobs' }))
+      const body = await res.json()
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(body.message).toMatch(/both since and until|requires both/i)
+    })
+
+    it('returns 400 VALIDATION_ERROR when only until is provided (one-sided range)', async () => {
+      const res = await GET(trendsRequest({ until: '2025-01-15', groupBy: 'day', metric: 'jobs' }))
+      const body = await res.json()
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(body.message).toMatch(/both since and until|requires both/i)
+    })
   })
 
   describe('RPC fallback for week/month', () => {

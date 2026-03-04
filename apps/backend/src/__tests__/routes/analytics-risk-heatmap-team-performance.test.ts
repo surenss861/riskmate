@@ -78,6 +78,39 @@ describe("GET /api/analytics/risk-heatmap", () => {
     expect(daysDiff).toBeLessThanOrEqual(366);
     expect(daysDiff).toBeGreaterThanOrEqual(0);
   });
+
+  it("returns 400 VALIDATION_ERROR when only since is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/risk-heatmap")
+      .query({ since: "2025-01-01" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("returns 400 VALIDATION_ERROR when only until is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/risk-heatmap")
+      .query({ until: "2025-01-15" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("date-only since/until: until normalized to end-of-day UTC", async () => {
+    const res = await request(app)
+      .get("/api/analytics/risk-heatmap")
+      .query({ since: "2025-01-01", until: "2025-01-15" });
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe("15d");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "get_risk_heatmap_buckets",
+      expect.objectContaining({
+        p_since: "2025-01-01T00:00:00.000Z",
+        p_until: "2025-01-15T23:59:59.999Z",
+      })
+    );
+  });
 });
 
 describe("GET /api/analytics/team-performance", () => {
@@ -119,5 +152,39 @@ describe("GET /api/analytics/team-performance", () => {
     expect(until.getUTCFullYear()).toBe(currentYear);
     expect(until.getUTCMonth()).toBe(now.getUTCMonth());
     expect(until.getUTCDate()).toBe(now.getUTCDate());
+  });
+
+  it("returns 400 VALIDATION_ERROR when only since is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/team-performance")
+      .query({ since: "2025-01-01" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("returns 400 VALIDATION_ERROR when only until is provided (one-sided range)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/team-performance")
+      .query({ until: "2025-01-15" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/both since and until|requires both/i);
+  });
+
+  it("date-only since/until: until normalized to end-of-day UTC", async () => {
+    const res = await request(app)
+      .get("/api/analytics/team-performance")
+      .query({ since: "2025-01-01", until: "2025-01-20" });
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe("20d");
+    const getTeamPerformanceCalls = (mockRpc.mock.calls as [string, Record<string, unknown>][]).filter(
+      (c) => c[0] === "get_team_performance_kpis"
+    );
+    expect(getTeamPerformanceCalls.length).toBeGreaterThanOrEqual(1);
+    expect(getTeamPerformanceCalls[0][1]).toMatchObject({
+      p_since: "2025-01-01T00:00:00.000Z",
+      p_until: "2025-01-20T23:59:59.999Z",
+    });
   });
 });
