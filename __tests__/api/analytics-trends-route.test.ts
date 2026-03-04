@@ -571,6 +571,32 @@ describe('GET /api/analytics/trends', () => {
       expect(body.code).toBe('VALIDATION_ERROR')
       expect(body.message).toMatch(/since must be before or equal to until/i)
     })
+
+    it('returns 400 VALIDATION_ERROR for impossible calendar date (e.g. Feb 30)', async () => {
+      const res = await GET(trendsRequest({
+        since: '2024-02-30',
+        until: '2024-03-15',
+        groupBy: 'day',
+        metric: 'jobs',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(body.message).toMatch(/invalid date format|since or until/i)
+    })
+
+    it('returns 400 VALIDATION_ERROR for impossible month (e.g. month 13)', async () => {
+      const res = await GET(trendsRequest({
+        since: '2025-13-01',
+        until: '2025-12-31',
+        groupBy: 'day',
+        metric: 'jobs',
+      }))
+      const body = await res.json()
+      expect(res.status).toBe(400)
+      expect(body.code).toBe('VALIDATION_ERROR')
+      expect(body.message).toMatch(/invalid date format|since or until/i)
+    })
   })
 
   describe('RPC fallback for week/month', () => {

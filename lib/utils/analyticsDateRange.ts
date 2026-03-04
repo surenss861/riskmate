@@ -17,6 +17,53 @@ export type ParseSinceUntilResult =
   | { error: 'invalid_format' }
   | null
 
+/** ISO date: YYYY-MM-DD. ISO datetime: YYYY-MM-DDTHH:mm:ss[.sss][Z|±HH:mm]. */
+const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/
+const ISO_DATETIME_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/
+
+/**
+ * Parse a string as ISO date or ISO datetime and validate that the calendar date exists
+ * (reject e.g. 2024-02-30). Returns ISO string or null if invalid.
+ */
+function parseStrictDate(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  let year: number
+  let month: number
+  let day: number
+
+  const dateOnly = ISO_DATE_REGEX.exec(trimmed)
+  if (dateOnly) {
+    year = parseInt(dateOnly[1], 10)
+    month = parseInt(dateOnly[2], 10)
+    day = parseInt(dateOnly[3], 10)
+  } else {
+    const dateTime = ISO_DATETIME_REGEX.exec(trimmed)
+    if (!dateTime) return null
+    year = parseInt(dateTime[1], 10)
+    month = parseInt(dateTime[2], 10)
+    day = parseInt(dateTime[3], 10)
+  }
+
+  if (month < 1 || month > 12) return null
+  if (day < 1 || day > 31) return null
+
+  const utcMs = Date.UTC(year, month - 1, day)
+  if (Number.isNaN(utcMs)) return null
+  const d = new Date(utcMs)
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    return null
+  }
+
+  if (dateOnly) {
+    return new Date(Date.UTC(year, month - 1, day)).toISOString()
+  }
+  const fullParsed = new Date(trimmed)
+  if (Number.isNaN(fullParsed.getTime())) return null
+  return fullParsed.toISOString()
+}
+
 export function parseSinceUntil(
   sinceParam?: string | null,
   untilParam?: string | null
@@ -24,11 +71,13 @@ export function parseSinceUntil(
   const since = sinceParam?.trim() ?? ''
   const until = untilParam?.trim() ?? ''
   if (!since || !until) return null
-  const sinceDate = new Date(since)
-  const untilDate = new Date(until)
-  if (Number.isNaN(sinceDate.getTime()) || Number.isNaN(untilDate.getTime())) return { error: 'invalid_format' }
-  if (sinceDate.getTime() > untilDate.getTime()) return { error: 'invalid_order' }
-  return { since: sinceDate.toISOString(), until: untilDate.toISOString() }
+  const sinceIso = parseStrictDate(since)
+  const untilIso = parseStrictDate(until)
+  if (sinceIso === null || untilIso === null) return { error: 'invalid_format' }
+  const sinceMs = new Date(sinceIso).getTime()
+  const untilMs = new Date(untilIso).getTime()
+  if (sinceMs > untilMs) return { error: 'invalid_order' }
+  return { since: sinceIso, until: untilIso }
 }
 
 export function dateRangeForDays(days: number): { since: string; until: string } {

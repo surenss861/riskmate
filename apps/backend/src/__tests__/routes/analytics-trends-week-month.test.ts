@@ -254,4 +254,24 @@ describe("GET /api/analytics/trends (groupBy=week|month)", () => {
     expect(res.body.period).toBe("1y");
     expect(Array.isArray(res.body.data)).toBe(true);
   });
+
+  it("returns 400 VALIDATION_ERROR for impossible calendar date (e.g. Feb 30)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ since: "2024-02-30", until: "2024-03-15", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/invalid date format|since or until/i);
+  });
+
+  it("returns 400 VALIDATION_ERROR for impossible month (e.g. month 13)", async () => {
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ since: "2025-13-01", until: "2025-12-31", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+    expect(res.body.message).toMatch(/invalid date format|since or until/i);
+  });
 });

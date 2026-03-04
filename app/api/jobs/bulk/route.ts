@@ -51,11 +51,15 @@ function buildForwardHeaders(request: NextRequest): Headers {
   return out
 }
 
+/** Timeout for delegated bulk sub-route fetch (ms). Prevents hanging requests. */
+const BULK_FORWARD_TIMEOUT_MS = 30_000
+
 /**
  * Forward to the bulk sub-route (POST) and return the response.
  * Target URL is built from server-controlled APP_ORIGIN only; request Host/URL are never used,
  * so delegated fetch cannot be influenced by client headers (credential exfiltration protection).
  * Cookie header is forwarded so session auth is preserved for the internal request.
+ * Transport failures (fetch throw, timeout) return structured JSON with 502 and stable code.
  */
 async function forwardToBulkAction(
   request: NextRequest,
@@ -64,35 +68,52 @@ async function forwardToBulkAction(
 ): Promise<NextResponse> {
   const targetUrl = `${APP_ORIGIN}/api/jobs/bulk/${canonicalAction}`
   const headers = buildForwardHeaders(request)
-  const res = await fetch(targetUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(rest),
-  })
-  const responseBody = await res.text()
-  const outHeaders = new Headers()
-  outHeaders.set('Content-Type', res.headers.get('Content-Type') ?? 'application/json')
-  // Preserve repeated headers (e.g. multiple Set-Cookie): use getSetCookie() for set-cookie, append for others.
-  const setCookieValues =
-    typeof (res.headers as Headers & { getSetCookie?(): string[] }).getSetCookie === 'function'
-      ? (res.headers as Headers & { getSetCookie(): string[] }).getSetCookie()
-      : []
-  for (const cookie of setCookieValues) {
-    outHeaders.append('set-cookie', cookie)
-  }
-  res.headers.forEach((value, name) => {
-    const lower = name.toLowerCase()
-    if (lower === 'set-cookie') return
-    if (lower === 'content-type') return // already set above; avoid duplicate
-    if (!BULK_RESPONSE_HEADERS_EXCLUDE.has(lower)) {
-      outHeaders.append(name, value)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), BULK_FORWARD_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(rest),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    const responseBody = await res.text()
+    const outHeaders = new Headers()
+    outHeaders.set('Content-Type', res.headers.get('Content-Type') ?? 'application/json')
+    // Preserve repeated headers (e.g. multiple Set-Cookie): use getSetCookie() for set-cookie, append for others.
+    const setCookieValues =
+      typeof (res.headers as Headers & { getSetCookie?(): string[] }).getSetCookie === 'function'
+        ? (res.headers as Headers & { getSetCookie(): string[] }).getSetCookie()
+        : []
+    for (const cookie of setCookieValues) {
+      outHeaders.append('set-cookie', cookie)
     }
-  })
-  return new NextResponse(responseBody, {
-    status: res.status,
-    statusText: res.statusText,
-    headers: outHeaders,
-  })
+    res.headers.forEach((value, name) => {
+      const lower = name.toLowerCase()
+      if (lower === 'set-cookie') return
+      if (lower === 'content-type') return // already set above; avoid duplicate
+      if (!BULK_RESPONSE_HEADERS_EXCLUDE.has(lower)) {
+        outHeaders.append(name, value)
+      }
+    })
+    return new NextResponse(responseBody, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: outHeaders,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    const isAbort = err instanceof Error && err.name === 'AbortError'
+    const message = isAbort
+      ? 'Bulk action request timed out.'
+      : 'Bulk action request failed due to a temporary connectivity issue.'
+    return NextResponse.json(
+      { message, code: 'BULK_DELEGATION_ERROR' },
+      { status: 502 }
+    )
+  }
 }
 
 /**

@@ -64,3 +64,42 @@ describe('POST /api/jobs/bulk – delegated fetch target', () => {
     )
   })
 })
+
+describe('POST /api/jobs/bulk – transport errors', () => {
+  it('returns 502 and structured JSON when fetch throws (e.g. DNS failure)', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('fetch failed'))
+    const { POST } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'status', job_ids: [] }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    const res = await POST(request)
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body).toMatchObject({
+      code: 'BULK_DELEGATION_ERROR',
+      message: expect.stringMatching(/connectivity|failed/i),
+    })
+    expect(typeof body.message).toBe('string')
+  })
+
+  it('returns 502 and stable code when fetch throws TypeError (e.g. network)', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { POST } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'assign', job_ids: ['j1'], worker_id: 'w1' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    const res = await POST(request)
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body.code).toBe('BULK_DELEGATION_ERROR')
+    expect(body.message).toBeDefined()
+  })
+})
