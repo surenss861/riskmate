@@ -13,19 +13,59 @@ import { getRequestId } from '@/lib/utils/requestId'
 import { planFeatures, type PlanCode } from '@/lib/utils/planRules'
 
 const ORG_PLAN_CACHE_TTL_MS = 60_000
+const ORG_PLAN_CACHE_MAX_ENTRIES =
+  typeof process !== 'undefined' && process.env?.ORG_PLAN_CACHE_MAX_ENTRIES != null
+    ? Math.max(1, parseInt(process.env.ORG_PLAN_CACHE_MAX_ENTRIES, 10) || 1000)
+    : 1000
 const orgPlanCache = new Map<
   string,
   { orgId: string; planCode: PlanCode; status: string; cachedAt: number }
 >()
 
+function pruneExpiredOrgPlanEntries(): void {
+  const now = Date.now()
+  for (const [key, entry] of orgPlanCache.entries()) {
+    if (now - entry.cachedAt > ORG_PLAN_CACHE_TTL_MS) orgPlanCache.delete(key)
+  }
+}
+
+function evictOldestOrgPlanEntryIfNeeded(): void {
+  if (orgPlanCache.size < ORG_PLAN_CACHE_MAX_ENTRIES) return
+  let oldestKey: string | null = null
+  let oldestAt = Infinity
+  for (const [key, entry] of orgPlanCache.entries()) {
+    if (entry.cachedAt < oldestAt) {
+      oldestAt = entry.cachedAt
+      oldestKey = key
+    }
+  }
+  if (oldestKey !== null) orgPlanCache.delete(oldestKey)
+}
+
 function getCachedOrgPlan(userId: string): { orgId: string; planCode: PlanCode; status: string } | null {
   const entry = orgPlanCache.get(userId)
-  if (!entry || Date.now() - entry.cachedAt > ORG_PLAN_CACHE_TTL_MS) return null
+  if (!entry) return null
+  if (Date.now() - entry.cachedAt > ORG_PLAN_CACHE_TTL_MS) {
+    orgPlanCache.delete(userId)
+    return null
+  }
   return { orgId: entry.orgId, planCode: entry.planCode, status: entry.status }
 }
 
 function setCachedOrgPlan(userId: string, orgId: string, planCode: PlanCode, status: string): void {
+  pruneExpiredOrgPlanEntries()
+  evictOldestOrgPlanEntryIfNeeded()
   orgPlanCache.set(userId, { orgId, planCode, status, cachedAt: Date.now() })
+}
+
+/** Exposed for unit tests: current cache size. */
+export function getOrgPlanCacheSizeForTesting(): number {
+  return orgPlanCache.size
+}
+
+/** Test-only: clear org-plan cache so tests can isolate cache effects (e.g. membership fallback). */
+export function resetOrgPlanCacheForTesting(): void {
+  orgPlanCache.clear()
 }
 
 export type SupabaseAnalyticsClient = ReturnType<typeof createSupabaseAdminClient>

@@ -580,7 +580,13 @@ analyticsRouter.get(
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-      return res.json({ buckets: [], locked: true });
+      const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
+      const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
+      return res.json({ period: periodLabel, buckets: [], locked: true });
     }
     try {
       const orgId = authReq.user.organization_id;
@@ -624,7 +630,13 @@ analyticsRouter.get(
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-      return res.json({ members: [], locked: true });
+      const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
+      if (rejectInvalidDateRange(res, customRangeRaw)) return;
+      const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
+      return res.json({ period: periodLabel, members: [], locked: true });
     }
     try {
       const orgId = authReq.user.organization_id;
@@ -994,7 +1006,7 @@ analyticsRouter.get(
       );
 
       const effectiveRangeDays = explicitRange
-        ? Math.ceil((new Date(until).getTime() - new Date(since).getTime()) / (24 * 60 * 60 * 1000)) + 1
+        ? effectiveDaysFromRange(since, until)
         : (rangeParam === "1y" || rangeParam === "365d" ? 365 : rangeDays);
 
       const [kpisRes, trendRes] = await Promise.all([

@@ -15,14 +15,15 @@ jest.mock("../../lib/supabaseClient", () => ({
   },
 }));
 
+let mockUser: { id: string; organization_id: string; subscriptionStatus: string; features: string[] } = {
+  id: "user-1",
+  organization_id: "org-1",
+  subscriptionStatus: "active",
+  features: ["analytics"],
+};
 jest.mock("../../middleware/auth", () => ({
   authenticate: (req: any, _res: any, next: () => void) => {
-    req.user = {
-      id: "user-1",
-      organization_id: "org-1",
-      subscriptionStatus: "active",
-      features: ["analytics"],
-    };
+    req.user = { ...mockUser };
     next();
   },
 }));
@@ -113,6 +114,47 @@ describe("GET /api/analytics/risk-heatmap", () => {
   });
 });
 
+describe("GET /api/analytics/risk-heatmap locked response period parity", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUser = {
+      id: "user-1",
+      organization_id: "org-1",
+      subscriptionStatus: "none",
+      features: [],
+    };
+  });
+
+  afterEach(() => {
+    mockUser = {
+      id: "user-1",
+      organization_id: "org-1",
+      subscriptionStatus: "active",
+      features: ["analytics"],
+    };
+  });
+
+  it("locked response includes period from period=30d", async () => {
+    const res = await request(app).get("/api/analytics/risk-heatmap").query({ period: "30d" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "30d", buckets: [], locked: true });
+  });
+
+  it("locked response includes period from period=1y", async () => {
+    const res = await request(app).get("/api/analytics/risk-heatmap").query({ period: "1y" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "1y", buckets: [], locked: true });
+  });
+
+  it("locked response includes period from custom since/until", async () => {
+    const res = await request(app)
+      .get("/api/analytics/risk-heatmap")
+      .query({ since: "2025-01-01", until: "2025-01-10" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "10d", buckets: [], locked: true });
+  });
+});
+
 describe("GET /api/analytics/team-performance", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -186,5 +228,46 @@ describe("GET /api/analytics/team-performance", () => {
       p_since: "2025-01-01T00:00:00.000Z",
       p_until: "2025-01-20T23:59:59.999Z",
     });
+  });
+});
+
+describe("GET /api/analytics/team-performance locked response period parity", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUser = {
+      id: "user-1",
+      organization_id: "org-1",
+      subscriptionStatus: "none",
+      features: [],
+    };
+  });
+
+  afterEach(() => {
+    mockUser = {
+      id: "user-1",
+      organization_id: "org-1",
+      subscriptionStatus: "active",
+      features: ["analytics"],
+    };
+  });
+
+  it("locked response includes period from period=30d", async () => {
+    const res = await request(app).get("/api/analytics/team-performance").query({ period: "30d" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "30d", members: [], locked: true });
+  });
+
+  it("locked response includes period from period=1y", async () => {
+    const res = await request(app).get("/api/analytics/team-performance").query({ period: "1y" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "1y", members: [], locked: true });
+  });
+
+  it("locked response includes period from custom since/until", async () => {
+    const res = await request(app)
+      .get("/api/analytics/team-performance")
+      .query({ since: "2025-01-01", until: "2025-01-10" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ period: "10d", members: [], locked: true });
   });
 });
