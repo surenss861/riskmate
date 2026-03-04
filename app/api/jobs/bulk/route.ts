@@ -72,10 +72,19 @@ async function forwardToBulkAction(
   const responseBody = await res.text()
   const outHeaders = new Headers()
   outHeaders.set('Content-Type', res.headers.get('Content-Type') ?? 'application/json')
+  // Preserve repeated headers (e.g. multiple Set-Cookie): use getSetCookie() for set-cookie, append for others.
+  const setCookieValues =
+    typeof (res.headers as Headers & { getSetCookie?(): string[] }).getSetCookie === 'function'
+      ? (res.headers as Headers & { getSetCookie(): string[] }).getSetCookie()
+      : []
+  for (const cookie of setCookieValues) {
+    outHeaders.append('set-cookie', cookie)
+  }
   res.headers.forEach((value, name) => {
     const lower = name.toLowerCase()
+    if (lower === 'set-cookie') return
     if (!BULK_RESPONSE_HEADERS_EXCLUDE.has(lower)) {
-      outHeaders.set(name, value)
+      outHeaders.append(name, value)
     }
   })
   return new NextResponse(responseBody, {

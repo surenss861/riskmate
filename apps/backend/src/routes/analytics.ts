@@ -580,7 +580,7 @@ analyticsRouter.get(
       if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
       const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 
       const { data: rows, error } = await supabase.rpc("get_risk_heatmap_buckets", {
@@ -624,7 +624,7 @@ analyticsRouter.get(
       if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
       const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_team_performance_kpis", {
