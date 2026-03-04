@@ -180,8 +180,9 @@ struct AuditFeedView: View {
             }
         }
         .rmNavigationBar(title: "Ledger")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            RMTopBar(title: "Ledger", notificationBadge: 0) {
                 Menu {
                     Button {
                         Haptics.tap()

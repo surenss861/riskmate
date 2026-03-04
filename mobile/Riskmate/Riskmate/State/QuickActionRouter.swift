@@ -14,6 +14,9 @@ final class QuickActionRouter: ObservableObject {
     @Published var requestedTab: MainTab? = nil
     @Published var workRecordsFilter: String? = nil
     
+    /// When true, ContentView presents notification center and switches to settings tab.
+    @Published var showNotificationCenter: Bool = false
+    
     private init() {}
     
     /// Present evidence capture sheet, optionally scoped to a job
@@ -49,5 +52,21 @@ final class QuickActionRouter: ObservableObject {
         requestedTab = nil
         workRecordsFilter = nil
         return (tab, filter)
+    }
+
+    /// Request opening notification center (sheet + switch to settings). ContentView observes showNotificationCenter.
+    func openNotificationCenter() {
+        showNotificationCenter = true
+    }
+
+    /// Clear the request after ContentView has reacted.
+    func dismissNotificationCenterRequest() {
+        showNotificationCenter = false
+    }
+
+    /// Request switch to Settings/Account tab (iPhone) or Account sidebar (iPad).
+    func requestSwitchToSettings() {
+        requestedTab = .settings
+        workRecordsFilter = nil
     }
 }

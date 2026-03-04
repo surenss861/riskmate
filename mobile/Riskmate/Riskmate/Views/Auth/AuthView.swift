@@ -46,8 +46,8 @@ struct AuthView: View {
 
     @ViewBuilder
     private var heroBlock: some View {
-        VStack(spacing: 12) {
-            // Micro-pill above headline — anchors as infrastructure, not marketing
+        VStack(alignment: .center, spacing: 10) {
+            // Micro-pill above headline
             Text("RISK MATE")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(2)
@@ -59,23 +59,25 @@ struct AuthView: View {
                         .fill(Color.white.opacity(0.06))
                         .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
                 )
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
 
-            // Web-hero lockup: line 1 = authority, line 2 = grounded
             Text("Audit-ready proof packs\nfrom everyday field work")
                 .font(.system(size: 36, weight: .semibold, design: .serif))
                 .tracking(-0.6)
                 .lineSpacing(4)
                 .multilineTextAlignment(.center)
                 .foregroundColor(Color.white.opacity(0.95))
-            // No gradient, no glow — let the words carry it
 
             Text("Turn site activity into compliance you can defend — fast.")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(Color.white.opacity(0.72))
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
-                .padding(.top, 4)
+                .padding(.top, 2)
+
+            // Proof Pack Sample — product hint so it feels like RiskMate, not a template
+            proofPackSampleCard
+                .padding(.top, 6)
 
             Text("Ledger Contract v1.0 • Frozen")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -87,7 +89,7 @@ struct AuthView: View {
                         .fill(Color.white.opacity(0.04))
                         .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.5))
                 )
-                .padding(.top, 2)
+                .padding(.top, 4)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -108,8 +110,36 @@ struct AuthView: View {
         )
     }
 
+    /// Small "Proof Pack Sample" card: hash + Verified strip — brand proof, not filler.
+    private var proofPackSampleCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Proof Pack Sample")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color.white.opacity(0.9))
+            Text("a3f2b1c9…d8e7")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.6))
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(RMTheme.Colors.accent)
+                Text("Verified")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color.white.opacity(0.8))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.10), lineWidth: 0.5))
+        )
+        .frame(maxWidth: 200)
+    }
+
     private func landingCTAs(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Button {
                 clearFormState()
                 withAnimation(RMTheme.Animation.spring) { screen = .signup }
@@ -123,10 +153,7 @@ struct AuthView: View {
                     .background(RMTheme.Colors.accent.opacity(0.95), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(
                         LinearGradient(
-                            gradient: Gradient(colors: [
-                                .white.opacity(0.10),
-                                .clear
-                            ]),
+                            gradient: Gradient(colors: [.white.opacity(0.10), .clear]),
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -139,6 +166,9 @@ struct AuthView: View {
                     )
                     .shadow(color: RMTheme.Colors.accent.opacity(0.18), radius: 14, x: 0, y: 10)
             }
+            Text("No credit card")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(Color.white.opacity(0.5))
 
             Button {
                 clearFormState()
@@ -150,17 +180,11 @@ struct AuthView: View {
                     .foregroundColor(.white.opacity(0.85))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
         }
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 10)
         .padding(.horizontal, 18)
-        .padding(.bottom, max(18, safeBottom + 10))
+        .padding(.top, 8)
+        .padding(.bottom, max(40, safeBottom + 12))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -199,9 +223,9 @@ struct AuthView: View {
 
                         Spacer(minLength: 0)
 
-                        // CTA REGION — pull up 24–40pt to reduce gap canyon
+                        // CTA REGION — pull up so it feels connected to hero
                         landingCTAs(safeBottom: safeBottom)
-                            .padding(.top, -32)
+                            .padding(.top, -40)
                     }
 
                     // FORM (only when login/signup) — AuthRail centers card, scrolls with keyboard

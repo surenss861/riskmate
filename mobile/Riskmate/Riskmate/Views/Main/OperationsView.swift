@@ -257,6 +257,10 @@ struct OperationsView: View {
                 }
             }
             .rmNavigationBar(title: "Operations")
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                RMTopBar(title: "Operations", notificationBadge: 0)
+            }
             .task {
                 // Refresh entitlements on view load
                 await entitlements.refresh()

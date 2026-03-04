@@ -354,21 +354,23 @@ struct JobsListView: View {
                 }
             }
             .rmNavigationBar(title: "Work Records")
-            .syncStatusChip()
-            .toolbar {
-                if !isAuditor {
-                    ToolbarItem(placement: .primaryAction) {
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                RMTopBar(title: "Work Records", notificationBadge: 0) {
+                    if !isAuditor {
                         Button {
                             Haptics.tap()
                             showCreateJobSheet = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
                                 .foregroundColor(RMTheme.Colors.accent)
                         }
                         .accessibilityLabel("Create new job")
                     }
                 }
             }
+            .syncStatusChip()
             .onAppear {
                 // Apply initial filter if provided (e.g. from Dashboard tap-to-drill)
                 if let filter = initialFilter {

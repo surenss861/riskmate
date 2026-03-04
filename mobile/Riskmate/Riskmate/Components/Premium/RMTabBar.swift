@@ -2,6 +2,9 @@ import SwiftUI
 
 /// Premium tab bar: blur, spring selection, haptic. Use with ZStack of screens (not system TabView).
 struct RMTabBar: View {
+    /// Height reserved for the tab bar (content + safe area). Use for bottom padding on tab screens.
+    static let barHeight: CGFloat = 80
+
     @Binding var selection: MainTab
     var namespace: Namespace.ID
     /// Optional badge counts per tab (e.g. notifications, pending sync).

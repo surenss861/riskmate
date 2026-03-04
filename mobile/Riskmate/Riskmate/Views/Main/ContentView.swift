@@ -206,11 +206,10 @@ struct ContentView: View {
         backendHealthCheckComplete = true
     }
     
-    // MARK: - iPhone Navigation (custom tab bar + ZStack for premium lift/blur/spring)
+    // MARK: - iPhone Navigation (custom tab bar + safeAreaInset so bar is never covered)
     
     private var iPhoneNavigation: some View {
-        ZStack(alignment: .bottom) {
-            // One visible screen at a time (no system TabView)
+        ZStack {
             tabScreen(.operations) {
                 OperationsView(onKPINavigate: { filter in
                     quickAction.requestSwitchToWorkRecords(filter: filter)
@@ -219,17 +218,19 @@ struct ContentView: View {
             }
             tabScreen(.ledger) {
                 AuditFeedView()
-                .rmNavigationBar(title: "Ledger")
+                    .rmNavigationBar(title: "Ledger")
             }
             tabScreen(.workRecords) {
                 JobsListView(initialFilter: workRecordsFilter)
-                .rmNavigationBar(title: "Work Records")
+                    .rmNavigationBar(title: "Work Records")
             }
             tabScreen(.settings) {
                 AccountView()
             }
-
+        }
+        .safeAreaInset(edge: .bottom) {
             RMTabBar(selection: $selectedTab, namespace: tabBarNamespace)
+                .zIndex(999)
         }
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
             guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
@@ -250,7 +251,14 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 100)
+                .padding(.bottom, RMTabBar.barHeight + 14)
+            }
+        }
+        .onChange(of: quickAction.showNotificationCenter) { _, show in
+            if show {
+                selectedTab = .settings
+                showNotificationCenterFromDeepLink = true
+                quickAction.dismissNotificationCenterRequest()
             }
         }
         .task {
@@ -264,10 +272,13 @@ struct ContentView: View {
 
     @ViewBuilder
     private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
-        NavigationStack { content() }
-            .opacity(selectedTab == tab ? 1 : 0)
-            .allowsHitTesting(selectedTab == tab)
-            .zIndex(selectedTab == tab ? 1 : 0)
+        NavigationStack {
+            content()
+                .padding(.bottom, RMTabBar.barHeight + 10)
+        }
+        .opacity(selectedTab == tab ? 1 : 0)
+        .allowsHitTesting(selectedTab == tab)
+        .zIndex(selectedTab == tab ? 1 : 0)
     }
     
     // MARK: - iPad Navigation (NavigationSplitView)

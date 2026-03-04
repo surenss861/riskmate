@@ -119,6 +119,10 @@ struct AccountView: View {
             }
         }
         .rmNavigationBar(title: "Account")
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            RMTopBar(title: "Account", notificationBadge: 0)
+        }
         .preferredColorScheme(.dark)
     }
 
