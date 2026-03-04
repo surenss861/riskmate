@@ -17,8 +17,6 @@
 		2117957E2F18FC2D00FDF243 /* SwiftDate in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957D2F18FC2D00FDF243 /* SwiftDate */; };
 		211795802F18FC3000FDF243 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 2117957F2F18FC3000FDF243 /* Lottie */; };
 		211795892F18FC4A00FDF243 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 211795882F18FC4A00FDF243 /* Supabase */; };
-		211796242F19003E00FDF243 /* JobCommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211796232F19003E00FDF243 /* JobCommentsView.swift */; };
-		211796272F19004E00FDF243 /* MentionsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211796262F19004E00FDF243 /* MentionsListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -614,8 +612,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				211796242F19003E00FDF243 /* JobCommentsView.swift in Sources */,
-				211796272F19004E00FDF243 /* MentionsListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
