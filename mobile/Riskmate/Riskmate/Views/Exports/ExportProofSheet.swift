@@ -228,6 +228,7 @@ struct ExportProofSheet: View {
                 initiatedFromForeground: true
             )
             Haptics.success()
+            UserDefaultsManager.Streaks.recordDayLogged()
             print("🐛 [ExportProofSheet] Export created successfully")
         } catch {
             print("🐛 [ExportProofSheet] Export FAILED: \(error)")

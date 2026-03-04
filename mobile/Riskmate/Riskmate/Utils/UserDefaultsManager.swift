@@ -92,10 +92,15 @@ struct UserDefaultsManager {
         private static let category = "\(prefix).streaks"
         private static let lastLoggedKey = "\(category).lastLogged"
         private static let streakCountKey = "\(category).streakCount"
-        private static let calendar = Calendar.current
+        private static var utcCalendar: Calendar {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "UTC") ?? .current
+            return cal
+        }
         
         /// Call when user does a “log” action (e.g. added evidence, opened a job, completed a task).
         static func recordDayLogged() {
+            let calendar = utcCalendar
             let today = calendar.startOfDay(for: Date())
             let stored = UserDefaults.standard.object(forKey: lastLoggedKey) as? Date
             let count = UserDefaults.standard.integer(forKey: streakCountKey)
@@ -112,8 +117,9 @@ struct UserDefaultsManager {
             UserDefaults.standard.set(newCount, forKey: streakCountKey)
         }
         
-        /// Current consecutive days with at least one log (0 if none or streak broken).
+        /// Current consecutive days with at least one meaningful log (0 if none or streak broken).
         static func currentStreak() -> Int {
+            let calendar = utcCalendar
             let last = UserDefaults.standard.object(forKey: lastLoggedKey) as? Date
             let count = UserDefaults.standard.integer(forKey: streakCountKey)
             guard let last = last, count > 0 else { return 0 }

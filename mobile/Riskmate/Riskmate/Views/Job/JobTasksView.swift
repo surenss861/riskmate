@@ -380,6 +380,7 @@ struct JobTasksView: View {
                 sort_order: nil
             )
             let created = try await APIClient.shared.createTask(jobId: jobId, payload: payload)
+            UserDefaultsManager.Streaks.recordDayLogged()
             let assigneeIdForNotify = newTaskAssigneeId
             let dueDateForReminder = newTaskDueDate
 
@@ -416,6 +417,7 @@ struct JobTasksView: View {
     private func completeTask(task: TaskItem) async {
         do {
             try await APIClient.shared.completeTask(id: task.id)
+            UserDefaultsManager.Streaks.recordDayLogged()
             await loadTasks()
             ToastCenter.shared.show("Task completed", systemImage: "checkmark.circle.fill", style: .success)
             if let creatorId = task.createdBy {

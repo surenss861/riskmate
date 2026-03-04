@@ -53,7 +53,7 @@ private struct RMPressableModifier: ViewModifier {
     }
 }
 
-// MARK: - Staggered appear
+// MARK: - Staggered appear (no y-offset when Reduce Motion)
 private struct RMAppearInModifier: ViewModifier {
     let staggerIndex: Int
     @State private var shown = false
@@ -61,33 +61,41 @@ private struct RMAppearInModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 8)
+            .offset(y: (RMMotion.reduceMotion ? 0 : (shown ? 0 : 8)))
             .animation(RMMotion.easeOut.delay(Double(staggerIndex) * RMMotion.staggerStep), value: shown)
             .onAppear { shown = true }
     }
 }
 
-// MARK: - Shimmer (for use on skeleton shapes)
+// MARK: - Shimmer (skeleton only; Reduce Motion = static pulse, no sweep)
 private struct RMShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = 0
     
     func body(content: Content) -> some View {
         content
             .overlay(
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [.clear, .white.opacity(RMMotion.shimmerOpacity), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 1.5)
-                    .offset(x: phase * geo.size.width * 1.5 - geo.size.width * 0.5)
+                Group {
+                    if RMMotion.shimmerDuration > 0 {
+                        GeometryReader { geo in
+                            LinearGradient(
+                                colors: [.clear, .white.opacity(RMMotion.shimmerOpacity), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: geo.size.width * 1.5)
+                            .offset(x: phase * geo.size.width * 1.5 - geo.size.width * 0.5)
+                        }
+                    } else {
+                        Color.clear
+                    }
                 }
                 .allowsHitTesting(false)
             )
             .onAppear {
-                withAnimation(.linear(duration: RMMotion.shimmerDuration).repeatForever(autoreverses: false)) {
-                    phase = 1
+                if RMMotion.shimmerDuration > 0 {
+                    withAnimation(.linear(duration: RMMotion.shimmerDuration).repeatForever(autoreverses: false)) {
+                        phase = 1
+                    }
                 }
             }
     }

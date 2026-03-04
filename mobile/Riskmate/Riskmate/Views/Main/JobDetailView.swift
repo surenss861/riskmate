@@ -51,11 +51,23 @@ struct JobDetailView: View {
         RMBackground()
             .overlay {
                 if isLoading {
-                    VStack(spacing: RMTheme.Spacing.lg) {
-                        RMSkeletonCard()
-                        RMSkeletonList(count: 3)
+                    if let displayJob = initialJob, let ns = namespace {
+                        // Destination exists on first frame: hero strip + skeleton body (avoids matched-geometry teleport)
+                        VStack(spacing: 0) {
+                            jobDetailHeroStrip(job: displayJob, namespace: ns)
+                            VStack(spacing: RMTheme.Spacing.lg) {
+                                RMSkeletonCard()
+                                RMSkeletonList(count: 3)
+                            }
+                            .padding(RMTheme.Spacing.pagePadding)
+                        }
+                    } else {
+                        VStack(spacing: RMTheme.Spacing.lg) {
+                            RMSkeletonCard()
+                            RMSkeletonList(count: 3)
+                        }
+                        .padding(RMTheme.Spacing.pagePadding)
                     }
-                    .padding(RMTheme.Spacing.pagePadding)
                 } else if let errorMessage = errorMessage {
                     // Error state - show error with retry
                     RMEmptyState(
@@ -74,9 +86,9 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
-                        // Matched-geometry hero strip (pill + title + score) when coming from list
-                        if let ns = namespace {
-                            jobDetailHeroStrip(job: job, namespace: ns)
+                        // Matched-geometry hero strip (stable IDs; render with job or initialJob so destination exists on first frame)
+                        if let ns = namespace, let displayJob = job ?? initialJob {
+                            jobDetailHeroStrip(job: displayJob, namespace: ns)
                         }
                         // Changes will sync banner when offline or when job has pending updates
                         if !statusManager.isOnline || !OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: jobId).isEmpty {
@@ -240,7 +252,6 @@ struct JobDetailView: View {
             }
             .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
                 await loadJob()
-                UserDefaultsManager.Streaks.recordDayLogged()
             }
             .task(id: job?.id) {
                 guard job != nil else { return }

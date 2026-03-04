@@ -24,7 +24,9 @@ struct FloatingEvidenceFAB: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private let expandThreshold: CGFloat = 44
-    private let snapHapticFired = "snapHaptic"
+    /// Resistance: effective drag = physical * factor (so user must drag farther to expand)
+    private let dragResistance: CGFloat = 0.72
+    private let fanStaggerStep: Double = 0.05
 
     private var quickActions: [FABQuickAction] {
         var list = [
@@ -49,7 +51,6 @@ struct FloatingEvidenceFAB: View {
                 VStack(spacing: RMTheme.Spacing.sm) {
                     ForEach(Array(quickActions.dropFirst().enumerated()), id: \.element.id) { index, item in
                         Button {
-                            Haptics.impact(.medium)
                             item.action()
                             withAnimation(RMMotion.spring) { isExpanded = false }
                         } label: {
@@ -67,12 +68,16 @@ struct FloatingEvidenceFAB: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .rmPressable(scale: 0.96, haptic: true)
+                        .opacity(isExpanded ? 1 : 0)
+                        .scaleEffect(isExpanded ? 1 : 0.8)
+                        .animation(RMMotion.easeOut.delay(Double(index) * fanStaggerStep), value: isExpanded)
                     }
                 }
                 .padding(.bottom, RMTheme.Spacing.sm)
                 .transition(.asymmetric(
-                    insertion: .scale(scale: 0.8).combined(with: .opacity),
-                    removal: .scale(scale: 0.8).combined(with: .opacity)
+                    insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
                 ))
             }
 
@@ -123,11 +128,12 @@ struct FloatingEvidenceFAB: View {
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
                         let up = -value.translation.height
+                        let effectiveUp = up * dragResistance
                         dragOffset = up
-                        if up > expandThreshold && !isExpanded {
+                        if effectiveUp > expandThreshold && !isExpanded {
                             withAnimation(RMMotion.spring) { isExpanded = true }
                             Haptics.tap()
-                        } else if up < -expandThreshold && isExpanded {
+                        } else if isExpanded && value.translation.height > 24 {
                             withAnimation(RMMotion.spring) { isExpanded = false }
                             Haptics.tap()
                         }

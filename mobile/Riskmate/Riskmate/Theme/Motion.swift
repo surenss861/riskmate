@@ -1,48 +1,56 @@
 import SwiftUI
 
-/// Canonical motion tokens — same language across the app (and shareable conceptually with web).
-/// Use these so transitions and microinteractions feel consistent, not random.
+/// Canonical motion tokens — same language across the app (and shareable with web via docs/MOTION_TOKENS.md).
+/// Guardrails: Reduce Motion shortens durations and disables offset/shimmer; one canonical style per interaction.
 enum RMMotion {
-    // MARK: - Springs (selections, toggles, “alive” feedback)
+    /// When true, use shorter durations and no y-offset / no shimmer sweep (prevents jank and respects accessibility).
+    static var reduceMotion: Bool {
+        UIAccessibility.isReduceMotionEnabled
+    }
     
-    /// Selection / pill / chip (snappy, not bouncy)
+    // MARK: - Canonical styles (one per interaction — don’t mix)
+    // press = springPress | selection = spring | appear = easeOut | skeleton = shimmer
+    
+    /// Selection / pill / chip (snappy)
     static var spring: Animation {
-        .spring(response: 0.35, dampingFraction: 0.75)
+        reduceMotion ? .easeOut(duration: durationFast) : .spring(response: 0.35, dampingFraction: 0.75)
     }
     
-    /// Button press / FAB (slightly bouncy)
+    /// Button press / FAB
     static var springPress: Animation {
-        .spring(response: 0.3, dampingFraction: 0.6)
+        reduceMotion ? .easeOut(duration: durationFast) : .spring(response: 0.3, dampingFraction: 0.6)
     }
     
-    /// Softer spring for large elements (e.g. sheet)
+    /// Softer spring (e.g. sheet)
     static var springSoft: Animation {
-        .spring(response: 0.45, dampingFraction: 0.82)
+        reduceMotion ? .easeOut(duration: durationNormal) : .spring(response: 0.45, dampingFraction: 0.82)
     }
     
-    // MARK: - Ease (fades, content crossfades)
-    
-    /// Standard content fade / crossfade
+    /// Standard content fade / crossfade (appear)
     static var easeOut: Animation {
-        .easeOut(duration: 0.22)
+        .easeOut(duration: reduceMotion ? durationFast : 0.22)
     }
     
     /// Slightly longer fade (e.g. overlay)
     static var easeOutSlow: Animation {
-        .easeOut(duration: 0.3)
+        .easeOut(duration: reduceMotion ? durationNormal : 0.3)
     }
     
-    /// Stagger delay step between list items
-    static let staggerStep: Double = 0.04
+    /// Stagger delay step (cap list stagger at 12 in callers for perf).
+    static let staggerStep: Double = 0.045
     
-    // MARK: - Durations (for manual animations)
+    // MARK: - Durations
     
-    static let durationFast: Double = 0.2
-    static let durationNormal: Double = 0.28
-    static let durationSlow: Double = 0.4
+    static let durationFast: Double = 0.14
+    static let durationNormal: Double = 0.22
+    static let durationSlow: Double = 0.32
     
-    // MARK: - Shimmer (skeleton)
+    // MARK: - Shimmer (skeleton only; respect Reduce Motion)
     
-    static let shimmerDuration: Double = 1.8
-    static let shimmerOpacity: Double = 0.06
+    static var shimmerDuration: Double {
+        reduceMotion ? 0 : 1.25
+    }
+    static var shimmerOpacity: Double {
+        reduceMotion ? 0 : 0.22
+    }
 }

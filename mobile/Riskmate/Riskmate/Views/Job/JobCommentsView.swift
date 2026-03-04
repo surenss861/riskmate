@@ -846,6 +846,7 @@ struct JobCommentsView: View {
         do {
             let created = try await APIClient.shared.createComment(jobId: jobId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
             Haptics.success()
+            UserDefaultsManager.Streaks.recordDayLogged()
             newContent = ""
             newlyPostedIds.insert(created.id)
             await loadComments()
@@ -864,6 +865,7 @@ struct JobCommentsView: View {
         do {
             let created = try await APIClient.shared.createReply(commentId: commentId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
             Haptics.success()
+            UserDefaultsManager.Streaks.recordDayLogged()
             newlyPostedIds.insert(created.id)
             replyContent.removeValue(forKey: commentId)
             await loadReplies(commentId: commentId)

@@ -519,6 +519,7 @@ struct JobSignaturesView: View {
             )
             signingContext = nil
             Haptics.success()
+            UserDefaultsManager.Streaks.recordDayLogged()
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadData()
             completion(.success(()))

@@ -1,25 +1,32 @@
 import SwiftUI
 
-/// Skeleton loader for premium loading states. Align to final layout; subtle shimmer; use varied widths.
+/// Skeleton loader for premium loading states. Typography-aligned heights; corner radius matches cards; optional per-view shimmer (set false when parent applies one sweep to content block).
 struct RMSkeletonView: View {
     let width: CGFloat?
     let height: CGFloat
     var cornerRadius: CGFloat = RMTheme.Radius.sm
+    var shimmer: Bool = true
     
-    init(width: CGFloat? = nil, height: CGFloat, cornerRadius: CGFloat = RMTheme.Radius.sm) {
+    init(width: CGFloat? = nil, height: CGFloat, cornerRadius: CGFloat = RMTheme.Radius.sm, shimmer: Bool = true) {
         self.width = width
         self.height = height
         self.cornerRadius = cornerRadius
+        self.shimmer = shimmer
     }
-    
-    @State private var isAnimating = false
     
     var body: some View {
         Rectangle()
             .fill(RMTheme.Colors.inputFill)
             .frame(width: width, height: height)
-            .cornerRadius(cornerRadius)
-            .rmShimmer()
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .modifier(ShimmerIfEnabled(shimmer: shimmer))
+    }
+}
+
+private struct ShimmerIfEnabled: ViewModifier {
+    let shimmer: Bool
+    func body(content: Content) -> some View {
+        if shimmer { content.rmShimmer() } else { content }
     }
 }
 
@@ -49,16 +56,23 @@ struct RMSkeletonViewVaried: View {
 
 // MARK: - Skeleton Card Components
 
+/// Skeleton card: typography hierarchy (headline / subheadline / body), card radius; one shimmer sweep on content block only.
 struct RMSkeletonCard: View {
+    private static let headlineHeight: CGFloat = 20
+    private static let subheadlineHeight: CGFloat = 15
+    private static let bodyHeight: CGFloat = 12
+    private static let lineRadius = RMTheme.Radius.sm
+    
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                RMSkeletonView(width: 100, height: 14)
-                RMSkeletonView(width: 160, height: 22)
-                RMSkeletonView(width: nil, height: 12)
-                RMSkeletonView(width: 220, height: 12)
+                RMSkeletonView(width: 100, height: Self.subheadlineHeight, cornerRadius: lineRadius, shimmer: false)
+                RMSkeletonView(width: 160, height: Self.headlineHeight, cornerRadius: lineRadius, shimmer: false)
+                RMSkeletonView(width: nil, height: Self.bodyHeight, cornerRadius: lineRadius, shimmer: false)
+                RMSkeletonView(width: 220, height: Self.bodyHeight, cornerRadius: lineRadius, shimmer: false)
             }
             .padding(RMTheme.Spacing.md)
+            .rmShimmer()
         }
     }
 }
@@ -70,17 +84,17 @@ struct RMSkeletonListRow: View {
     
     var body: some View {
         HStack(spacing: RMTheme.Spacing.md) {
-            RMSkeletonView(width: 44, height: 44, cornerRadius: 10)
+            RMSkeletonView(width: 44, height: 44, cornerRadius: RMTheme.Radius.sm)
             VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-                RMSkeletonView(width: titleWidth, height: 16)
-                RMSkeletonView(width: subtitleWidth, height: 12)
+                RMSkeletonView(width: titleWidth, height: 16, cornerRadius: RMTheme.Radius.sm)
+                RMSkeletonView(width: subtitleWidth, height: 12, cornerRadius: RMTheme.Radius.sm)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            RMSkeletonView(width: 52, height: 24, cornerRadius: 8)
+            RMSkeletonView(width: 52, height: 24, cornerRadius: RMTheme.Radius.sm)
         }
         .padding(RMTheme.Spacing.md)
         .background(RMTheme.Colors.surface.opacity(0.35))
-        .cornerRadius(RMTheme.Radius.md)
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
     }
 }
 
