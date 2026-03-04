@@ -18,7 +18,7 @@ export async function PATCH(
 ) {
   try {
     // Get organization context (throws if unauthorized)
-    const { organization_id, user_id } = await getOrganizationContext()
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: jobId, mitigationId } = await params
     const body = await request.json()
     const { done } = body

@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
     const body = await request.json()
 

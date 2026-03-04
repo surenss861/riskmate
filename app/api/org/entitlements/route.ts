@@ -13,7 +13,7 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
 
     // Get entitlements (server-computed, single source of truth)
     const entitlements = await getOrgEntitlements(organization_id)

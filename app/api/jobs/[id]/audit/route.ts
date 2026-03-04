@@ -16,7 +16,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { organization_id, user_id } = await getOrganizationContext()
+  const { organization_id, user_id } = await getOrganizationContext(request)
   const { id: jobId } = await params
 
   // Get request ID from header or generate

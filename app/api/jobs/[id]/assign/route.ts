@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
     const { worker_id } = await request.json()
 
@@ -121,7 +121,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
     const { worker_id } = await request.json()
 

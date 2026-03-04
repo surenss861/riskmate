@@ -757,6 +757,7 @@ analyticsRouter.get(
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : `${days}d`;
       const groupBy = (authReq.query.groupBy as string) === "location" ? "location" : "type";
 
       const spanMs = new Date(until).getTime() - new Date(since).getTime();
@@ -784,7 +785,7 @@ analyticsRouter.get(
           trend,
         };
       });
-      return res.json({ period: `${days}d`, groupBy, items: itemsOut.slice(0, 100) });
+      return res.json({ period: periodLabel, groupBy, items: itemsOut.slice(0, 100) });
     } catch (error: any) {
       console.error("Analytics hazard-frequency error:", error);
       return res.status(500).json({ message: "Failed to fetch hazard frequency" });
@@ -819,6 +820,7 @@ analyticsRouter.get(
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : `${days}d`;
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_compliance_rate_kpis", {
         p_org_id: orgId,
@@ -830,7 +832,7 @@ analyticsRouter.get(
       const totalJobs = Number(row?.total_jobs ?? 0);
       if (totalJobs === 0) {
         return res.json({
-          period: `${days}d`,
+          period: periodLabel,
           signatures: 0,
           photos: 0,
           checklists: 0,
@@ -846,7 +848,7 @@ analyticsRouter.get(
       const overall = Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
 
       return res.json({
-        period: `${days}d`,
+        period: periodLabel,
         signatures,
         photos,
         checklists,
@@ -890,6 +892,7 @@ analyticsRouter.get(
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const { days } = parsePeriodQuery(authReq.query.period);
       const { since, until } = customRange ?? dateRangeForDays(days);
+      const periodLabel = customRange ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : `${days}d`;
 
       const { data: kpiRows, error: rpcError } = await supabase.rpc("get_job_completion_kpis", {
         p_org_id: orgId,
@@ -907,7 +910,7 @@ analyticsRouter.get(
           overdue_count_all_time: 0,
           total: 0,
           completed: 0,
-          period: `${days}d`,
+          period: periodLabel,
           avg_days_to_complete: 0,
         });
       }
@@ -929,7 +932,7 @@ analyticsRouter.get(
         overdue_count_all_time,
         total,
         completed,
-        period: `${days}d`,
+        period: periodLabel,
         avg_days_to_complete,
       });
     } catch (error: any) {

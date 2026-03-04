@@ -21,7 +21,7 @@ export async function GET(
 ) {
   try {
     // Get organization context (throws if unauthorized)
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
 
     // Verify job ownership (defense-in-depth)
@@ -172,7 +172,7 @@ export async function POST(
 ) {
   try {
     // Get organization context (throws if unauthorized)
-    const { organization_id, user_id } = await getOrganizationContext()
+    const { organization_id, user_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
     const body = await request.json()
 

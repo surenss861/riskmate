@@ -77,11 +77,34 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
-      .limit(1)
     if (memberError || !memberRows?.length) {
       throw new ForbiddenError('User has no organization membership')
     }
-    organization_id = memberRows[0].organization_id
+    if (memberRows.length === 1) {
+      organization_id = memberRows[0].organization_id
+    } else {
+      // Multiple memberships: require explicit selector (align with backend authenticate and proxy)
+      const headerOrgId = request?.headers?.get?.('x-organization-id')?.trim() ?? ''
+      let queryOrgId = ''
+      if (request?.url) {
+        try {
+          queryOrgId = new URL(request.url).searchParams.get('organization_id')?.trim() ?? ''
+        } catch {
+          // ignore URL parse errors
+        }
+      }
+      const requestedOrgId = headerOrgId || queryOrgId
+      if (!requestedOrgId) {
+        throw new ForbiddenError(
+          'User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.'
+        )
+      }
+      const membership = memberRows.find((m) => m.organization_id === requestedOrgId)
+      if (!membership) {
+        throw new ForbiddenError('The specified organization is not one of your memberships.')
+      }
+      organization_id = membership.organization_id
+    }
   }
 
   // Resolve effective role for this org. Only consider users.role when it applies to

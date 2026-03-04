@@ -15,7 +15,7 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: NextRequest) {
   try {
-    const { organization_id, user_id } = await getOrganizationContext()
+    const { organization_id, user_id } = await getOrganizationContext(request)
     
     const body = await request.json()
     const {

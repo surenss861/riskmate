@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { organization_id } = await getOrganizationContext()
+    const { organization_id } = await getOrganizationContext(request)
     const { id: jobId } = await params
 
     await verifyJobOwnership(jobId, organization_id)

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     let user_id: string
     let user_role: string
     try {
-      const context = await getOrganizationContext()
+      const context = await getOrganizationContext(request)
       organization_id = context.organization_id
       user_id = context.user_id
       user_role = context.user_role
