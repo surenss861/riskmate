@@ -26,6 +26,7 @@ import { FirstRunSetupWizard } from '@/components/setup/FirstRunSetupWizard'
 import Link from 'next/link'
 import { getRiskBadgeClass, getStatusBadgeClass } from '@/lib/styles/design-system'
 import { AppBackground, AppShell, PageHeader, Button as SharedButton, GlassCard } from '@/components/shared'
+import { PressableCard } from '@/components/motion/PressableCard'
 import clsx from 'clsx'
 
 type TimeRange = '7d' | '30d' | '90d' | 'all' | 'custom'
@@ -1009,9 +1010,9 @@ function DashboardPageInner() {
             ) : (
               <div className="divide-y divide-white/5/50">
                 {jobs.map((job, index) => (
-                  <div
+                  <PressableCard
                     key={job.id}
-                    className="group relative px-6 py-3.5 transition duration-200 hover:bg-white/5"
+                    className="group relative px-6 py-3.5 transition duration-200 hover:bg-white/5 rounded-lg"
                   >
                     {/* Visual separator - subtle left border */}
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white/5" />
@@ -1076,7 +1077,7 @@ function DashboardPageInner() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </PressableCard>
                 ))}
               </div>
             )}

@@ -337,3 +337,12 @@ select:focus option:checked {
   background-color: #F97316 !important;
   color: #000000 !important;
 }
+
+/* Motion tokens — skeleton shimmer (match iOS RMMotion.shimmer) */
+@keyframes rmShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.rm-shimmer-sweep {
+  animation: rmShimmer 1.25s linear infinite;
+}

@@ -17,6 +17,7 @@ import { EvidenceVerification } from '@/components/dashboard/EvidenceVerificatio
 import { TemplatesManager, TemplateModal, TemplateModalProps } from '@/components/dashboard/TemplatesManager'
 import { ApplyTemplateInline } from '@/components/dashboard/ApplyTemplateInline'
 import { JobPacketView } from '@/components/job/JobPacketView'
+import { ProofSealStatus } from '@/components/proof/ProofSealStatus'
 import { JobActivityFeed, type AuditEvent } from '@/components/job/JobActivityFeed'
 import { JobCommentsPanel } from '@/components/job/JobCommentsPanel'
 import { MentionsInbox } from '@/components/job/MentionsInbox'
@@ -103,6 +104,7 @@ export default function JobDetailPage() {
   }>>([])
   const [loadingPermitPacks, setLoadingPermitPacks] = useState(false)
   const [showProgressModal, setShowProgressModal] = useState(false)
+  const [exportSealing, setExportSealing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showApplyTemplate, setShowApplyTemplate] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
@@ -1379,6 +1381,11 @@ export default function JobDetailPage() {
           {subscriptionTier === 'business' && (
             <PageSection>
               <GlassCard className="p-8">
+                {generatingPermitPack && (
+                  <div className="mb-6">
+                    <ProofSealStatus start={true} />
+                  </div>
+                )}
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h2 className={`${typography.h2} mb-2`}>Permit Packs</h2>
@@ -1666,6 +1673,11 @@ export default function JobDetailPage() {
           {/* Job Packet View */}
           <PageSection>
             <div id="job-packet">
+                {exportSealing && (
+                  <div className="mb-4">
+                    <ProofSealStatus start={true} />
+                  </div>
+                )}
                 <JobPacketView
                   job={job}
                   mitigations={job.mitigation_items || []}
@@ -1679,6 +1691,7 @@ export default function JobDetailPage() {
                   attachments={attachments}
                   signoffs={signoffs}
                   onExport={async (packType) => {
+                    setExportSealing(true)
                     try {
                       const response = await jobsApi.exportProofPack(jobId, packType)
                       
@@ -1702,6 +1715,8 @@ export default function JobDetailPage() {
                       }
                     } catch (err: any) {
                       setToast({ message: err.message || 'Export failed', type: 'error' })
+                    } finally {
+                      setTimeout(() => setExportSealing(false), 2500)
                     }
                   }}
                   onAttachmentUploaded={async () => {

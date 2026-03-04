@@ -27,6 +27,7 @@ import { SelectedActionBar } from '@/components/audit/SelectedActionBar'
 import { BulkActionResultModal } from '@/components/audit/BulkActionResultModal'
 import { EventDetailsDrawer } from '@/components/audit/EventDetailsDrawer'
 import { PackHistoryDrawer } from '@/components/audit/PackHistoryDrawer'
+import { ProofSealStatus } from '@/components/proof/ProofSealStatus'
 import { useSelectedRows } from '@/lib/hooks/useSelectedRows'
 import { terms } from '@/lib/terms'
 import { extractProxyError, formatProxyErrorTitle, logProxyError } from '@/lib/utils/extractProxyError'
@@ -155,6 +156,7 @@ export default function AuditViewPage() {
   const [highlightedFailedIds, setHighlightedFailedIds] = useState<Set<string>>(new Set())
   const [advancedExportMenuOpen, setAdvancedExportMenuOpen] = useState(false)
   const [packHistoryDrawerOpen, setPackHistoryDrawerOpen] = useState(false)
+  const [isSealing, setIsSealing] = useState(false)
   const selectionHook = useSelectedRows()
   const { selectedIds, selectedCount } = selectionHook
 
@@ -792,8 +794,10 @@ export default function AuditViewPage() {
           message: `Proof Pack generated: ${filename}`,
           type: 'success',
         })
+        setTimeout(() => setIsSealing(false), 2500)
       },
       onError: (err: any) => {
+        setIsSealing(false)
         // Extract structured error details (code, message, hint, error_id)
         const errorMessage = err.message || 'Failed to generate proof pack'
         const errorId = err.error_id || err.errorId
@@ -812,7 +816,10 @@ export default function AuditViewPage() {
     }
   )
 
-  const handleGeneratePack = (view?: string) => generatePackAction.run(view)
+  const handleGeneratePack = (view?: string) => {
+    setIsSealing(true)
+    generatePackAction.run(view)
+  }
 
   const handleAssign = async (assignment: {
     owner_id: string
@@ -1925,6 +1932,11 @@ export default function AuditViewPage() {
           {/* Events List */}
           <PageSection>
             <GlassCard className="p-6">
+            {isSealing && (
+              <div className="mb-4">
+                <ProofSealStatus start={true} />
+              </div>
+            )}
             <div className="flex items-center justify-between mb-4">
               <h2 className={`${typography.h2}`}>
                 {activeTab === 'governance' && 'Governance Enforcement Events'}

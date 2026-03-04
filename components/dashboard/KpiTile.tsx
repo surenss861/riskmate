@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, useSpring } from 'framer-motion';
 import clsx from 'clsx';
 import Link from 'next/link';
+import { PressableCard } from '@/components/motion/PressableCard';
 
 type KpiTileProps = {
   title: string;
@@ -123,17 +124,18 @@ export function KpiTile({
     return trendLabel ?? null;
   }, [trend, trendDirection, trendLabel, trendPercent]);
 
+  const isInteractive = !!(href || onClick)
+  const Wrapper = isInteractive ? PressableCard : motion.div
   const tileContent = (
-    <motion.div
+    <Wrapper
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.35 }}
       className={clsx(
         "group relative rounded-3xl border border-white/10",
         "bg-white/[0.03] backdrop-blur-xl",
         "shadow-[0_4px_24px_rgba(0,0,0,0.15)] p-6 transition-transform duration-300",
-        (href || onClick) && "cursor-pointer"
+        isInteractive && "cursor-pointer"
       )}
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(previousValue != null)}
@@ -180,7 +182,7 @@ export function KpiTile({
           Previous period: {prefix}{formatNumber(previousValue)}{suffix}
         </div>
       )}
-    </motion.div>
+    </Wrapper>
   );
 
   if (href) {

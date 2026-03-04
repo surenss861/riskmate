@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { SkeletonShimmer } from '@/components/motion/SkeletonShimmer'
 
 interface SkeletonLoaderProps {
   className?: string
@@ -44,37 +45,30 @@ export function SkeletonLoader({
 
   if (variant === 'card') {
     return (
-      <motion.div
-        className={`${baseClasses} p-6 ${className}`}
+      <div
+        className={`rounded-xl border border-white/10 bg-white/5 p-6 ${className}`}
         style={{ width, height: height || '200px' }}
-        initial={{ opacity: 0.5 }}
-        animate={{ opacity: [0.5, 0.8, 0.5] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
       >
-        <div className="space-y-3">
-          <div className="h-4 bg-white/10 rounded w-3/4" />
-          <div className="h-4 bg-white/10 rounded w-1/2" />
-          <div className="h-20 bg-white/10 rounded" />
+        <div className="h-4 w-3/4 rounded bg-white/10" />
+        <div className="mt-3">
+          <SkeletonShimmer className="h-20 w-full" />
         </div>
-      </motion.div>
+        <div className="mt-3 h-4 w-1/2 rounded bg-white/10" />
+      </div>
     )
   }
 
   if (variant === 'table-row') {
     return (
-      <motion.div
-        className={`${baseClasses} h-16 ${className}`}
-        initial={{ opacity: 0.5 }}
-        animate={{ opacity: [0.5, 0.8, 0.5] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
-      >
+      <div className={`h-16 ${className}`}>
         <div className="flex items-center gap-4 px-6 py-4">
-          <div className="h-4 bg-white/10 rounded w-1/4" />
-          <div className="h-4 bg-white/10 rounded w-1/4" />
-          <div className="h-4 bg-white/10 rounded w-1/4" />
-          <div className="h-4 bg-white/10 rounded w-1/4" />
+          <div className="h-4 w-1/4 rounded bg-white/10" />
+          <div className="flex-1">
+            <SkeletonShimmer className="h-4 w-full" />
+          </div>
+          <div className="h-4 w-1/4 rounded bg-white/10" />
         </div>
-      </motion.div>
+      </div>
     )
   }
 

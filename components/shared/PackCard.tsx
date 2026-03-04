@@ -12,6 +12,7 @@ import { Package, Download, CheckCircle2, FileText, Hash, Calendar, Filter } fro
 import { Badge } from './Badge'
 import { ActionButton } from './ActionButton'
 import { IntegrityBadge, type IntegrityStatus } from './IntegrityBadge'
+import { PressableCard } from '@/components/motion/PressableCard'
 
 // Locked type unions (reuse everywhere)
 export type PackType = 'proof' | 'insurance' | 'audit' | 'incident' | 'compliance'
@@ -144,32 +145,39 @@ export function PackCard({
 
   // Compact mode: Minimal display for saved view cards
   if (variant === 'compact') {
-    return (
-      <div 
-        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-pointer hover:bg-white/[0.05] transition-colors ${onClick ? '' : 'cursor-default'} ${className}`}
+    const compactContent = (
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs text-white/60 mb-1">Proof Pack</div>
+          <div className="truncate font-mono text-sm text-white mb-1" title={packId}>
+            {packId.slice(0, 16)}...
+          </div>
+          <div className="text-xs text-white/60 mb-1" suppressHydrationWarning>
+            {formatRelativeTime(generatedDate)}
+          </div>
+          {packContents && summarizeContents(packContents) !== 'Contents not available' && (
+            <div className="text-xs text-white/50 truncate mt-1">
+              {summarizeContents(packContents)}
+            </div>
+          )}
+        </div>
+        <div className="flex-shrink-0 mt-0.5">
+          <IntegrityBadge 
+            status={integrityStatus}
+          />
+        </div>
+      </div>
+    )
+    return onClick ? (
+      <PressableCard
+        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-pointer ${className}`}
         onClick={onClick}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs text-white/60 mb-1">Proof Pack</div>
-            <div className="truncate font-mono text-sm text-white mb-1" title={packId}>
-              {packId.slice(0, 16)}...
-            </div>
-            <div className="text-xs text-white/60 mb-1" suppressHydrationWarning>
-              {formatRelativeTime(generatedDate)}
-            </div>
-            {packContents && summarizeContents(packContents) !== 'Contents not available' && (
-              <div className="text-xs text-white/50 truncate mt-1">
-                {summarizeContents(packContents)}
-              </div>
-            )}
-          </div>
-          <div className="flex-shrink-0 mt-0.5">
-            <IntegrityBadge 
-              status={integrityStatus}
-            />
-          </div>
-        </div>
+        {compactContent}
+      </PressableCard>
+    ) : (
+      <div className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 cursor-default ${className}`}>
+        {compactContent}
       </div>
     )
   }

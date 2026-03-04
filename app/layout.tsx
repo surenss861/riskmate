@@ -4,6 +4,7 @@ import './globals.css'
 import { PWARegister } from '@/components/PWARegister'
 import { SmoothScroll } from '@/components/SmoothScroll'
 import { AuthProvider } from '@/components/AuthProvider'
+import { PageTransition } from '@/components/motion/PageTransition'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const playfair = Playfair_Display({
@@ -59,7 +60,7 @@ export default function RootLayout({
         <AuthProvider>
           <SmoothScroll />
           <PWARegister />
-          {children}
+          <PageTransition>{children}</PageTransition>
         </AuthProvider>
       </body>
     </html>
