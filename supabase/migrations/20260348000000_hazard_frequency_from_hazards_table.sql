@@ -1,5 +1,23 @@
 -- Hazard frequency: use hazards table as source of truth (not mitigation_items).
 -- mitigation_items has no factor_id/code; hazards has hazard_type and organization_id.
+--
+-- After applying, verify in Supabase SQL editor (replace org id and dates as needed):
+--   select * from public.get_hazard_frequency_buckets(
+--     '8fb419d2-ade6-4ec1-ab80-bce3ffff151e'::uuid,
+--     now() - interval '30 days',
+--     now(),
+--     now() - interval '60 days',
+--     now() - interval '30 days',
+--     'type'
+--   ) limit 10;
+--   select * from public.get_hazard_frequency_buckets(
+--     '8fb419d2-ade6-4ec1-ab80-bce3ffff151e'::uuid,
+--     now() - interval '30 days',
+--     now(),
+--     now() - interval '60 days',
+--     now() - interval '30 days',
+--     'location'
+--   ) limit 10;
 
 CREATE OR REPLACE FUNCTION get_hazard_frequency_buckets(
   p_org_id UUID,

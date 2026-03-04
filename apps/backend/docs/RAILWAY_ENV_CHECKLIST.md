@@ -19,6 +19,18 @@
 - Required for: Server binding
 - **Railway auto-injects this** - don't set manually
 
+✅ **WEBHOOK_SECRET_ENCRYPTION_KEY** (Required in production when webhook worker is enabled)
+- Used in: `src/workers/webhookDelivery.ts`
+- Required for: Decrypting webhook endpoint secrets; without it, webhook delivery is degraded or fails
+- **In production** the backend will **exit(1) on boot** if this is missing (unless `DISABLE_WEBHOOK_WORKER=true`)
+- Format: Strong 32+ character random string; **keep the same value on web app and backend** (Railway + Vercel)
+- Generate once and store in both places
+
+⚠️ **INTERNAL_API_KEY** (Recommended)
+- Used in: webhook worker wake-up from Next.js
+- If not set: Worker still runs on poll interval; Next.js cannot wake it after enqueue (log warning at boot)
+- Set same value on backend (Railway) and web (Vercel) for reliable delivery
+
 ⚠️ **ALLOWED_ORIGINS** (Conditional - only if calling backend directly from browser)
 - Used in: `src/index.ts` (CORS config)
 - Required for: Direct browser → Railway backend calls
@@ -57,6 +69,22 @@
 - **RAILWAY_DEPLOYMENT_ID** - Railway injects (for version endpoint)
 - **HOST** - Railway may inject (not currently used)
 
+## Production hardening (so prod doesn't randomly break)
+
+1. **Startup checks** (in code)
+   - In **production**, the backend **exits with code 1** if required env is missing: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and (when webhook worker enabled) `WEBHOOK_SECRET_ENCRYPTION_KEY`.
+   - After listen, it calls the analytics RPC `get_hazard_frequency_buckets` once; if the error indicates a **schema mismatch** (e.g. "column does not exist"), it **exits(1)** with a message to run migrations.
+
+2. **Apply hazard-frequency migration in Supabase**
+   - The dashboard analytics 500 on `/api/analytics/hazard-frequency` is fixed only after you **apply** the migration in the **same Supabase project** the backend uses.
+   - Migration: `supabase/migrations/20260348000000_hazard_frequency_from_hazards_table.sql`
+   - Apply via: **Supabase Dashboard → SQL Editor** (paste and run), or `supabase link` + `supabase db push`.
+   - Verify: In SQL editor, run `select * from public.get_hazard_frequency_buckets('...'::uuid, now() - interval '30 days', now(), now() - interval '60 days', now() - interval '30 days', 'type') limit 10;` (use a real org id). Should return rows or empty set, not an error.
+
+3. **Dependency health**
+   - **GET /health** – always 200, no DB check.
+   - **GET /healthz** – 200 if Supabase is reachable, **503** if not (use for k8s/Railway readiness probes).
+
 ## Current Status Check
 
 Run this in Railway to verify all required vars are set:
@@ -65,6 +93,8 @@ Run this in Railway to verify all required vars are set:
 # Check required vars
 echo "SUPABASE_URL: ${SUPABASE_URL:+SET}"
 echo "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:+SET}"
+echo "WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:+SET}"
+echo "INTERNAL_API_KEY: ${INTERNAL_API_KEY:+SET}"
 echo "ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:+SET}"
 echo "PORT: ${PORT:+SET (Railway auto-injected)}"
 ```

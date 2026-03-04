@@ -50,7 +50,7 @@ async function authenticateInternal(req, res, next) {
         return next();
     }
     // Skip auth logging for health/version endpoints (they don't require auth)
-    const isHealthEndpoint = req.path === '/health' || req.path === '/v1/health' || req.path === '/__version';
+    const isHealthEndpoint = req.path === '/health' || req.path === '/healthz' || req.path === '/v1/health' || req.path === '/__version';
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {

@@ -99,12 +99,55 @@ const PORT = Number(process.env.PORT);
 if (!Number.isFinite(PORT)) {
     throw new Error(`[BOOT] PORT is missing/invalid. Got: ${JSON.stringify(process.env.PORT)}`);
 }
+// Production startup: fail fast if required env is missing (so we never ship broken).
+function runProductionStartupEnvChecks() {
+    if (process.env.NODE_ENV !== "production")
+        return;
+    const missing = [];
+    if (!(process.env.SUPABASE_URL ?? "").trim())
+        missing.push("SUPABASE_URL");
+    if (!(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim())
+        missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    const webhookDisabled = process.env.DISABLE_WEBHOOK_WORKER === "true" || process.env.DISABLE_WEBHOOK_WORKER === "1";
+    if (!webhookDisabled && !(process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? "").trim()) {
+        missing.push("WEBHOOK_SECRET_ENCRYPTION_KEY");
+    }
+    if (missing.length > 0) {
+        console.error("[BOOT] FATAL: Required env vars missing in production:", missing.join(", "));
+        console.error("[BOOT] Set them in Railway (backend service) and redeploy. See apps/backend/docs/RAILWAY_ENV_CHECKLIST.md");
+        process.exit(1);
+    }
+    if (!(process.env.INTERNAL_API_KEY ?? "").trim()) {
+        console.warn("[BOOT] INTERNAL_API_KEY is not set; Next.js cannot wake webhook worker. Deliveries will process on poll interval.");
+    }
+}
+runProductionStartupEnvChecks();
 // Health check route - MUST be first (no Supabase dependency)
 app.get("/health", (_req, res) => {
     const body = { status: "ok", timestamp: new Date().toISOString() };
     if (webhookWorkerDegraded)
         body.webhook_worker = "degraded";
     res.json(body);
+});
+// Dependency health: Supabase connectivity. Returns 503 if DB unreachable (for k8s/Railway probes).
+app.get("/healthz", async (_req, res) => {
+    try {
+        const { getSupabaseAdmin } = await Promise.resolve().then(() => __importStar(require("./lib/supabaseClient")));
+        const supabase = getSupabaseAdmin();
+        const { error } = await supabase.from("organizations").select("id").limit(1);
+        if (error) {
+            res.status(503).json({ status: "unhealthy", dependency: "supabase", error: error.message });
+            return;
+        }
+        res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    }
+    catch (err) {
+        res.status(503).json({
+            status: "unhealthy",
+            dependency: "supabase",
+            error: err?.message ?? String(err),
+        });
+    }
 });
 // Routes debug endpoint - lists all registered routes
 app.get("/__routes", (_req, res) => {
@@ -473,6 +516,34 @@ if (process.env.NODE_ENV !== "test") {
         console.log(`🚀 Riskmate Backend API running on port ${PORT}`);
         console.log(`📡 Health check: http://0.0.0.0:${PORT}/health`);
         console.log(`✅ Build: ${process.env.RAILWAY_DEPLOYMENT_ID || 'local'} | Commit: ${process.env.RAILWAY_GIT_COMMIT_SHA || 'dev'}`);
+        // Production: verify analytics RPC (hazard-frequency) runs without schema errors; fail fast if migrations are stale.
+        if (process.env.NODE_ENV === "production") {
+            try {
+                const { supabase } = await Promise.resolve().then(() => __importStar(require("./lib/supabaseClient")));
+                const now = new Date().toISOString();
+                const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                const { error } = await supabase.rpc("get_hazard_frequency_buckets", {
+                    p_org_id: "00000000-0000-0000-0000-000000000000",
+                    p_since: thirtyDaysAgo,
+                    p_until: now,
+                    p_prev_since: thirtyDaysAgo,
+                    p_prev_until: now,
+                    p_group_by: "type",
+                });
+                if (error) {
+                    const msg = error.message ?? "";
+                    if (/does not exist|relation.*does not exist|column .* does not exist/i.test(msg)) {
+                        console.error("[BOOT] FATAL: Analytics RPC schema mismatch:", msg);
+                        console.error("[BOOT] Run migrations in Supabase (e.g. 20260348000000_hazard_frequency_from_hazards_table.sql).");
+                        process.exit(1);
+                    }
+                }
+            }
+            catch (err) {
+                console.error("[BOOT] FATAL: Analytics RPC check failed:", err?.message ?? err);
+                process.exit(1);
+            }
+        }
         // Start background workers
         (0, exportWorker_1.startExportWorker)();
         (0, retentionWorker_1.startRetentionWorker)();
