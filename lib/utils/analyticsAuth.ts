@@ -203,7 +203,21 @@ export async function getAnalyticsContext(
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
-    if (memberError || !memberRows?.length) {
+    if (memberError) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to load organization membership',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'internal', severity: 'error', route,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    if (!memberRows?.length) {
       // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
       const userOrgId = userData?.organization_id ?? null
       if (userOrgId && userOrgId === requestedOrgId) {
@@ -253,7 +267,21 @@ export async function getAnalyticsContext(
         .select('organization_id')
         .eq('user_id', user.id)
         .order('organization_id', { ascending: true })
-      if (memberError || !memberRows?.length) {
+      if (memberError) {
+        const { response, errorId } = createErrorResponse(
+          'Failed to load organization membership',
+          'QUERY_ERROR',
+          { requestId, statusCode: 500 }
+        )
+        logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+          category: 'internal', severity: 'error', route,
+        })
+        return NextResponse.json(response, {
+          status: 500,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      if (!memberRows?.length) {
         const { response, errorId } = createErrorResponse(
           'No organization assigned',
           'NO_ORGANIZATION',

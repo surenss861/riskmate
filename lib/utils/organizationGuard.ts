@@ -89,7 +89,15 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
-    if (memberError || !memberRows?.length) {
+    if (memberError) {
+      console.error('[getOrganizationContext] Membership query error:', {
+        userId: user.id.substring(0, 8),
+        error: memberError.message,
+        code: memberError.code,
+      })
+      throw new Error('Failed to load organization membership')
+    }
+    if (!memberRows?.length) {
       // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
       const userOrgId = userData?.organization_id ?? null
       if (userOrgId && userOrgId === requestedOrgId) {
@@ -113,7 +121,15 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
         .select('organization_id')
         .eq('user_id', user.id)
         .order('organization_id', { ascending: true })
-      if (memberError || !memberRows?.length) {
+      if (memberError) {
+        console.error('[getOrganizationContext] Membership query error:', {
+          userId: user.id.substring(0, 8),
+          error: memberError.message,
+          code: memberError.code,
+        })
+        throw new Error('Failed to load organization membership')
+      }
+      if (!memberRows?.length) {
         throw new ForbiddenError('User has no organization membership')
       }
       if (memberRows.length === 1) {
@@ -219,13 +235,19 @@ export async function getOrganizationContextWithMemberships(request?: Request): 
     .eq('user_id', user.id)
     .order('organization_id', { ascending: true })
 
+  if (memberError) {
+    console.error('[getOrganizationContextWithMemberships] Membership query error:', {
+      userId: user.id.substring(0, 8),
+      error: memberError.message,
+      code: memberError.code,
+    })
+    throw new Error('Failed to load organization membership')
+  }
+
   // Legacy compatibility: when organization_members is empty but users.organization_id is present,
   // treat that org as a valid membership (e.g. invite/legacy provisioning without organization_members row).
   const userOrgIdFromTable = userData?.organization_id ?? null
   let orgIds: string[]
-  if (memberError) {
-    throw new ForbiddenError('User has no organization membership')
-  }
   if (memberRows?.length) {
     orgIds = Array.from(new Set((memberRows ?? []).map((r: { organization_id: string }) => r.organization_id).filter(Boolean))).sort()
   } else if (userOrgIdFromTable) {

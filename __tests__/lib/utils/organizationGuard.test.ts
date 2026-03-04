@@ -260,3 +260,71 @@ describe('getOrganizationContext (legacy explicit-selector: empty organization_m
     await expect(getOrganizationContext(req)).rejects.toThrow('User has no organization membership')
   })
 })
+
+describe('getOrganizationContext (membership query error → 500-class)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    serverGetUserMock = jest.fn().mockImplementation((token?: string) => {
+      if (token !== undefined) {
+        return Promise.resolve({ data: { user: { id: USER_ID } }, error: null })
+      }
+      return Promise.resolve({ data: { user: null }, error: null })
+    })
+    mockUsersChain = createChain()
+    mockUsersChain.maybeSingle.mockResolvedValue({
+      data: { organization_id: ORG_A, role: 'member' },
+      error: null,
+    })
+    mockOrgMembersChain = createChain()
+    mockOrgMembersChain.order.mockResolvedValue({ data: null, error: { message: 'Connection timeout', code: 'PGRST301' } })
+    mockOrgMembersChain.maybeSingle.mockResolvedValue({ data: null, error: null })
+    mockOrgsChain = createChain()
+    mockOrgsChain.in.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('throws Error (500-class) when membership query fails with requestedOrgId', async () => {
+    const req = request({
+      Authorization: `Bearer token-${USER_ID}`,
+      'X-Organization-Id': ORG_A,
+    })
+    await expect(getOrganizationContext(req)).rejects.toThrow('Failed to load organization membership')
+    await expect(getOrganizationContext(req)).rejects.toThrow(Error)
+  })
+
+  it('throws Error (500-class) when membership query fails with no selector', async () => {
+    mockUsersChain.maybeSingle.mockResolvedValue({
+      data: { organization_id: null, role: 'member' },
+      error: null,
+    })
+    const req = request({ Authorization: `Bearer token-${USER_ID}` })
+    await expect(getOrganizationContext(req)).rejects.toThrow('Failed to load organization membership')
+    await expect(getOrganizationContext(req)).rejects.toThrow(Error)
+  })
+})
+
+describe('getOrganizationContextWithMemberships (membership query error → 500-class)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    serverGetUserMock = jest.fn().mockImplementation((token?: string) => {
+      if (token !== undefined) {
+        return Promise.resolve({ data: { user: { id: USER_ID } }, error: null })
+      }
+      return Promise.resolve({ data: { user: null }, error: null })
+    })
+    mockUsersChain = createChain()
+    mockUsersChain.maybeSingle.mockResolvedValue({
+      data: { organization_id: ORG_A, role: 'member' },
+      error: null,
+    })
+    mockOrgMembersChain = createChain()
+    mockOrgMembersChain.order.mockResolvedValue({ data: null, error: { message: 'Connection timeout', code: 'PGRST301' } })
+    mockOrgMembersChain.maybeSingle.mockResolvedValue({ data: null, error: null })
+    mockOrgsChain = createChain()
+    mockOrgsChain.in.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('throws Error (500-class) when membership query fails', async () => {
+    await expect(getOrganizationContextWithMemberships(request())).rejects.toThrow('Failed to load organization membership')
+    await expect(getOrganizationContextWithMemberships(request())).rejects.toThrow(Error)
+  })
+})

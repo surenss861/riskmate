@@ -479,4 +479,58 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       expect(body.code).toBe('NO_ORGANIZATION')
     })
   })
+
+  describe('membership query error returns 500', () => {
+    beforeEach(() => {
+      resetOrgPlanCacheForTesting()
+      serverGetUserMock.mockImplementation((token?: string) => {
+        if (token !== undefined) {
+          return Promise.resolve({
+            data: { user: { id: USER_ID } },
+            error: null,
+          })
+        }
+        return Promise.resolve({ data: { user: null }, error: null })
+      })
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: null },
+        error: null,
+      })
+    })
+
+    it('returns 500 QUERY_ERROR when organization_members query fails (no selector)', async () => {
+      mockOrgMembersChain.order.mockResolvedValue({
+        data: null,
+        error: { message: 'Connection timeout', code: 'PGRST301' },
+      })
+      const req = requestWithHeaders({ Authorization: 'Bearer valid-token' })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(500)
+      const body = await res.json()
+      expect(body.code).toBe('QUERY_ERROR')
+    })
+
+    it('returns 500 QUERY_ERROR when organization_members query fails (with requestedOrgId)', async () => {
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: ORG_ID },
+        error: null,
+      })
+      mockOrgMembersChain.order.mockResolvedValue({
+        data: null,
+        error: { message: 'Connection timeout', code: 'PGRST301' },
+      })
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': ORG_ID,
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(500)
+      const body = await res.json()
+      expect(body.code).toBe('QUERY_ERROR')
+    })
+  })
 })

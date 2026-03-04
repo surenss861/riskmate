@@ -185,7 +185,16 @@ async function authenticateInternal(
         .eq("user_id", userId)
         .order("organization_id", { ascending: true });
 
-      if (memberError || !memberRows?.length) {
+      if (memberError) {
+        console.error("[AUTH] Membership query error:", memberError);
+        res.status(500).json({
+          message: "Internal server error",
+          code: "DATABASE_ERROR",
+          hint: "Failed to load organization membership",
+        });
+        return;
+      }
+      if (!memberRows?.length) {
         // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
         if (userRecord.organization_id && userRecord.organization_id === requestedOrgId) {
           organizationId = requestedOrgId;
@@ -222,7 +231,16 @@ async function authenticateInternal(
         .eq("user_id", userId)
         .order("organization_id", { ascending: true });
 
-      if (memberError || !memberRows?.length) {
+      if (memberError) {
+        console.error("[AUTH] Membership query error:", memberError);
+        res.status(500).json({
+          message: "Internal server error",
+          code: "DATABASE_ERROR",
+          hint: "Failed to load organization membership",
+        });
+        return;
+      }
+      if (!memberRows?.length) {
         res.status(403).json({
           message: "No organization assigned",
           code: "NO_ORGANIZATION",
