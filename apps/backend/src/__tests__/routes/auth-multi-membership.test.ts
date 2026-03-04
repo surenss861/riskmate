@@ -147,4 +147,18 @@ describeIntegration("Auth multi-membership resolution", () => {
     expect(res.status).toBe(200);
     expect(res.body).toBeDefined();
   });
+
+  it("resolves to selected org when users.organization_id is non-null and X-Organization-Id points to non-default org", async () => {
+    const admin = getSupabaseAdmin();
+    await admin
+      .from("users")
+      .update({ organization_id: testData.testOrgId })
+      .eq("id", testData.auditorUserId);
+    const res = await request(app)
+      .get("/api/analytics/compliance-rate")
+      .set("Authorization", `Bearer ${testData.auditorToken}`)
+      .set("X-Organization-Id", secondOrgId!);
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+  });
 });

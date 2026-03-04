@@ -70,8 +70,20 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
     throw new Error('Failed to get organization ID')
   }
 
-  let organization_id = userData?.organization_id ?? null
-  if (!organization_id) {
+  const headerOrgId = request?.headers?.get?.('x-organization-id')?.trim() ?? ''
+  let queryOrgId = ''
+  if (request?.url) {
+    try {
+      queryOrgId = new URL(request.url).searchParams.get('organization_id')?.trim() ?? ''
+    } catch {
+      // ignore URL parse errors
+    }
+  }
+  const requestedOrgId = headerOrgId || queryOrgId
+
+  let organization_id: string
+  if (requestedOrgId) {
+    // Honor explicit selector whenever provided: validate against organization_members
     const { data: memberRows, error: memberError } = await serviceSupabase
       .from('organization_members')
       .select('organization_id')
@@ -80,30 +92,30 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
     if (memberError || !memberRows?.length) {
       throw new ForbiddenError('User has no organization membership')
     }
-    if (memberRows.length === 1) {
-      organization_id = memberRows[0].organization_id
-    } else {
-      // Multiple memberships: require explicit selector (align with backend authenticate and proxy)
-      const headerOrgId = request?.headers?.get?.('x-organization-id')?.trim() ?? ''
-      let queryOrgId = ''
-      if (request?.url) {
-        try {
-          queryOrgId = new URL(request.url).searchParams.get('organization_id')?.trim() ?? ''
-        } catch {
-          // ignore URL parse errors
-        }
+    const membership = memberRows.find((m) => m.organization_id === requestedOrgId)
+    if (!membership) {
+      throw new ForbiddenError('The specified organization is not one of your memberships.')
+    }
+    organization_id = membership.organization_id
+  } else {
+    // No selector: keep current fallback (users.organization_id, then single/multi membership)
+    organization_id = userData?.organization_id ?? null
+    if (!organization_id) {
+      const { data: memberRows, error: memberError } = await serviceSupabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .order('organization_id', { ascending: true })
+      if (memberError || !memberRows?.length) {
+        throw new ForbiddenError('User has no organization membership')
       }
-      const requestedOrgId = headerOrgId || queryOrgId
-      if (!requestedOrgId) {
+      if (memberRows.length === 1) {
+        organization_id = memberRows[0].organization_id
+      } else {
         throw new ForbiddenError(
           'User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.'
         )
       }
-      const membership = memberRows.find((m) => m.organization_id === requestedOrgId)
-      if (!membership) {
-        throw new ForbiddenError('The specified organization is not one of your memberships.')
-      }
-      organization_id = membership.organization_id
     }
   }
 

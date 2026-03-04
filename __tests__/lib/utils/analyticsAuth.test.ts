@@ -385,4 +385,46 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       expect(body.code).toBe('ORGANIZATION_NOT_ACCESSIBLE')
     })
   })
+
+  describe('selector honored when users.organization_id is non-null (regression)', () => {
+    const ORG_A = 'org-default-aaa'
+    const ORG_B = 'org-selected-bbb'
+
+    beforeEach(() => {
+      resetOrgPlanCacheForTesting()
+      serverGetUserMock.mockImplementation((token?: string) => {
+        if (token !== undefined) {
+          return Promise.resolve({
+            data: { user: { id: USER_ID } },
+            error: null,
+          })
+        }
+        return Promise.resolve({ data: { user: null }, error: null })
+      })
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: ORG_A },
+        error: null,
+      })
+      mockOrgMembersChain.order.mockResolvedValue({
+        data: [{ organization_id: ORG_A }, { organization_id: ORG_B }],
+        error: null,
+      })
+      mockOrgSubChain.maybeSingle.mockResolvedValue({
+        data: { plan_code: 'business', status: 'active' },
+        error: null,
+      })
+    })
+
+    it('resolves to selected org when users.organization_id is non-null, multiple memberships, and X-Organization-Id points to non-default org', async () => {
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': ORG_B,
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).not.toBeInstanceOf(Response)
+      if (typeof result === 'object' && result !== null && 'orgId' in result) {
+        expect(result.orgId).toBe(ORG_B)
+      }
+    })
+  })
 })

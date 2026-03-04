@@ -191,8 +191,13 @@ export async function getAnalyticsContext(
     })
   }
 
-  let orgId: string | null = userData?.organization_id ?? null
-  if (!orgId) {
+  const headerOrgId = request.headers.get('x-organization-id')?.trim() || undefined
+  const queryOrgId = request.nextUrl?.searchParams?.get('organization_id')?.trim() || undefined
+  const requestedOrgId = headerOrgId || queryOrgId
+
+  let orgId: string | null = null
+  if (requestedOrgId) {
+    // Honor explicit selector whenever provided: validate against organization_members
     const { data: memberRows, error: memberError } = await admin
       .from('organization_members')
       .select('organization_id')
@@ -212,14 +217,52 @@ export async function getAnalyticsContext(
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    if (memberRows.length === 1) {
-      orgId = memberRows[0].organization_id
-    } else {
-      // Multiple memberships: require explicit org selector (aligned with backend auth)
-      const headerOrgId = request.headers.get('x-organization-id')?.trim() || undefined
-      const queryOrgId = request.nextUrl?.searchParams?.get('organization_id')?.trim() || undefined
-      const requestedOrgId = headerOrgId || queryOrgId
-      if (!requestedOrgId) {
+    const membership = memberRows.find((m: { organization_id: string }) => m.organization_id === requestedOrgId)
+    if (!membership) {
+      const { response, errorId } = createErrorResponse(
+        'Organization not accessible',
+        'ORGANIZATION_NOT_ACCESSIBLE',
+        {
+          requestId,
+          statusCode: 403,
+          error_hint: 'The specified organization is not one of your memberships.',
+          hint: 'The specified organization is not one of your memberships.',
+        }
+      )
+      logApiError(403, 'ORGANIZATION_NOT_ACCESSIBLE', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route,
+      })
+      return NextResponse.json(response, {
+        status: 403,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    orgId = membership.organization_id
+  } else {
+    orgId = userData?.organization_id ?? null
+    if (!orgId) {
+      const { data: memberRows, error: memberError } = await admin
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .order('organization_id', { ascending: true })
+      if (memberError || !memberRows?.length) {
+        const { response, errorId } = createErrorResponse(
+          'No organization assigned',
+          'NO_ORGANIZATION',
+          { requestId, statusCode: 403 }
+        )
+        logApiError(403, 'NO_ORGANIZATION', errorId, requestId, undefined, response.message, {
+          category: 'auth', severity: 'warn', route,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      if (memberRows.length === 1) {
+        orgId = memberRows[0].organization_id
+      } else {
         const { response, errorId } = createErrorResponse(
           'Organization selection required',
           'ORGANIZATION_SELECTION_REQUIRED',
@@ -238,27 +281,6 @@ export async function getAnalyticsContext(
           headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
         })
       }
-      const membership = memberRows.find((m: { organization_id: string }) => m.organization_id === requestedOrgId)
-      if (!membership) {
-        const { response, errorId } = createErrorResponse(
-          'Organization not accessible',
-          'ORGANIZATION_NOT_ACCESSIBLE',
-          {
-            requestId,
-            statusCode: 403,
-            error_hint: 'The specified organization is not one of your memberships.',
-            hint: 'The specified organization is not one of your memberships.',
-          }
-        )
-        logApiError(403, 'ORGANIZATION_NOT_ACCESSIBLE', errorId, requestId, undefined, response.message, {
-          category: 'auth', severity: 'warn', route,
-        })
-        return NextResponse.json(response, {
-          status: 403,
-          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-        })
-      }
-      orgId = membership.organization_id
     }
   }
 
