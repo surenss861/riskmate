@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -33,6 +33,8 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
   const [loading, setLoading] = useState(true)
   const [scrolled, setScrolled] = useState(false)
   const [navOpacity, setNavOpacity] = useState(0.4)
+  const requestIdRef = useRef(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -50,6 +52,11 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
   }, [])
 
   const loadUserRole = async (selectedOrgIdForRequest?: string | null) => {
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const myRequestId = ++requestIdRef.current
+
     try {
       const supabase = createSupabaseBrowserClient()
       const {
@@ -57,6 +64,7 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
+        if (myRequestId !== requestIdRef.current) return
         setUserRole('member')
         setLoading(false)
         return
@@ -66,21 +74,35 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
       const headers: Record<string, string> = { Authorization: `Bearer ${session.access_token}` }
       if (orgId) headers['X-Organization-Id'] = orgId
 
-      const res = await fetch('/api/me/context', { headers })
+      const res = await fetch('/api/me/context', { headers, signal: controller.signal })
+      if (myRequestId !== requestIdRef.current) return
+
       if (res.ok) {
         const data = await res.json()
+        if (myRequestId !== requestIdRef.current) return
         setUserRole(data.user_role ?? 'member')
         setMemberships(Array.isArray(data.memberships) ? data.memberships : [])
         setSelectedOrgId(getSelectedOrganizationId())
+        router.refresh()
       } else {
+        const isHardAuthFailure = res.status === 401 || res.status === 403
         setUserRole('member')
-        setMemberships([])
+        if (isHardAuthFailure) {
+          // Hard auth: do not clear memberships so re-auth or token refresh can restore selector
+        }
+        // Transient/server errors: preserve last known memberships and selectedOrgId so multi-org
+        // users keep selector access and can recover without full reload
       }
     } catch (error) {
-      console.error('Failed to load user role:', error)
+      if (myRequestId !== requestIdRef.current) return
+      const isAbort = error instanceof Error && error.name === 'AbortError'
+      if (!isAbort) console.error('Failed to load user role:', error)
       setUserRole('member')
+      // Do not clear memberships on transport/server errors; preserve last known state
     } finally {
-      setLoading(false)
+      if (myRequestId === requestIdRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -147,7 +169,6 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
                 setSelectedOrgId(id)
                 setLoading(true)
                 loadUserRole(id ?? undefined)
-                router.refresh()
               }}
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 min-w-[140px]"
               aria-label="Switch organization"
