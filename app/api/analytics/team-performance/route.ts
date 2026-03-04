@@ -4,6 +4,7 @@ import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
 import { parsePeriod, parseSinceUntil, dateRangeForDays, effectiveDaysFromRange, periodLabelFromDays } from '@/lib/utils/analyticsDateRange'
+import { calendarYearBounds } from '@/lib/utils/analyticsTrends'
 
 export const runtime = 'nodejs'
 
@@ -56,7 +57,8 @@ export async function GET(request: NextRequest) {
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
     const parsed = parsePeriod(searchParams.get('period'))
-    const { since, until } = customRangeValid ?? dateRangeForDays(parsed.days)
+    const { since, until } =
+      customRangeValid ?? (parsed.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsed.days))
     const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsed.key === '1y' ? '1y' : `${parsed.days}d`)
 
     const { data: kpiRows, error: rpcError } = await supabase.rpc('get_team_performance_kpis', {
