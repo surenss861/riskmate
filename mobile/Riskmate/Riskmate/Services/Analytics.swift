@@ -155,6 +155,28 @@ class Analytics {
     func trackVerificationExplainerOpened() {
         trackEvent("verification_explainer_opened")
     }
+
+    // MARK: - Voice / Sheet (premium feel breadcrumbs)
+
+    func trackVoiceStart() {
+        trackEvent("voice_start")
+    }
+
+    func trackVoiceStop() {
+        trackEvent("voice_stop")
+    }
+
+    func trackVoicePermissionDenied() {
+        trackEvent("voice_permission_denied")
+    }
+
+    func trackSheetOpen(sheet: String) {
+        trackEvent("sheet_open", metadata: ["sheet": sheet])
+    }
+
+    func trackSheetClose(sheet: String) {
+        trackEvent("sheet_close", metadata: ["sheet": sheet])
+    }
     
     // MARK: - Evidence Actions
     

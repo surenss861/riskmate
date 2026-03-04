@@ -28,9 +28,11 @@ final class VoiceDictationService: ObservableObject {
                         cont.resume(returning: true)
                     case .denied:
                         self.errorMessage = "Speech recognition denied"
+                        Task { @MainActor in Analytics.shared.trackVoicePermissionDenied() }
                         cont.resume(returning: false)
                     case .restricted:
                         self.errorMessage = "Speech recognition restricted"
+                        Task { @MainActor in Analytics.shared.trackVoicePermissionDenied() }
                         cont.resume(returning: false)
                     case .notDetermined:
                         cont.resume(returning: false)
@@ -97,6 +99,9 @@ final class VoiceDictationService: ObservableObject {
 
         isListening = true
         Haptics.impact(.light)
+        Task { @MainActor in
+            Analytics.shared.trackVoiceStart()
+        }
     }
 
     func stop() {
@@ -109,5 +114,8 @@ final class VoiceDictationService: ObservableObject {
         task = nil
         isListening = false
         Haptics.impact(.light)
+        Task { @MainActor in
+            Analytics.shared.trackVoiceStop()
+        }
     }
 }

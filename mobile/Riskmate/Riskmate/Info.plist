@@ -10,6 +10,8 @@
 	<string>Riskmate uses the microphone for voice search so you can say things like &quot;high risk jobs&quot; or &quot;blockers&quot;.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Riskmate uses speech recognition to turn your voice into search text for jobs and hazards.</string>
+	<key>ENABLE_VOICE_SEARCH_IOS</key>
+	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Riskmate needs photo library access to attach existing images as safety evidence.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

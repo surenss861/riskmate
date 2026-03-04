@@ -10,6 +10,10 @@ struct RMSearchBar: View {
     @StateObject private var dictation = VoiceDictationService()
     @State private var showDictationSheet = false
 
+    private static var isVoiceSearchEnabled: Bool {
+        (Bundle.main.infoDictionary?["ENABLE_VOICE_SEARCH_IOS"] as? Bool) ?? true
+    }
+
     var body: some View {
         HStack(spacing: RMSystemTheme.Spacing.sm) {
             Image(systemName: "magnifyingglass")
@@ -20,7 +24,7 @@ struct RMSearchBar: View {
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                 .font(RMSystemTheme.Typography.body)
-            if showMic {
+            if showMic && Self.isVoiceSearchEnabled {
                 Button {
                     Haptics.tap()
                     Task {

@@ -32,7 +32,13 @@ struct RMSheetShell<Content: View>: View {
         .background(RMTheme.Colors.background)
         .presentationDragIndicator(.visible)
         .presentationDetents([.medium, .large])
-        .onAppear { contentAppeared = true }
+        .onAppear {
+            contentAppeared = true
+            Analytics.shared.trackSheetOpen(sheet: title)
+        }
+        .onDisappear {
+            Analytics.shared.trackSheetClose(sheet: title)
+        }
     }
 }
 

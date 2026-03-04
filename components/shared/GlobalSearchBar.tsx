@@ -97,6 +97,7 @@ export function GlobalSearchBar() {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const voiceSupported = isSpeechRecognitionSupported()
+  const voiceEnabled = process.env.NEXT_PUBLIC_ENABLE_VOICE_SEARCH !== 'false'
 
   const debouncedQuery = useDebounce(query.trim(), 300)
 
@@ -207,6 +208,24 @@ export function GlobalSearchBar() {
     sel?.scrollIntoView({ block: 'nearest' })
   }, [selectedIndex, sectioned])
 
+  // Stop dictation when modal closes or component unmounts
+  useEffect(() => {
+    if (!open) {
+      if (stopDictationRef.current) {
+        stopDictationRef.current()
+        stopDictationRef.current = null
+      }
+      setIsListening(false)
+    }
+    return () => {
+      if (stopDictationRef.current) {
+        stopDictationRef.current()
+        stopDictationRef.current = null
+      }
+      setIsListening(false)
+    }
+  }, [open])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -247,7 +266,7 @@ export function GlobalSearchBar() {
     : '/operations/jobs'
 
   const handleMicClick = useCallback(() => {
-    if (!voiceSupported) return
+    if (!voiceSupported || !voiceEnabled) return
     if (isListening && stopDictationRef.current) {
       stopDictationRef.current()
       stopDictationRef.current = null
@@ -263,13 +282,19 @@ export function GlobalSearchBar() {
       onError: () => {
         stopDictationRef.current = null
         setIsListening(false)
+        if (process.env.NODE_ENV === 'development') console.log('[Voice] voice_permission_denied')
+        if (typeof window !== 'undefined' && (window as any).posthog) (window as any).posthog.capture('voice_permission_denied')
       },
       onEnd: () => {
         stopDictationRef.current = null
         setIsListening(false)
+        if (process.env.NODE_ENV === 'development') console.log('[Voice] voice_stop')
+        if (typeof window !== 'undefined' && (window as any).posthog) (window as any).posthog.capture('voice_stop')
       },
     })
-  }, [voiceSupported, isListening])
+    if (process.env.NODE_ENV === 'development') console.log('[Voice] voice_start')
+    if (typeof window !== 'undefined' && (window as any).posthog) (window as any).posthog.capture('voice_start')
+  }, [voiceSupported, voiceEnabled, isListening])
 
   return (
     <>
@@ -312,13 +337,12 @@ export function GlobalSearchBar() {
                 className="flex-1 h-14 px-3 bg-transparent text-white placeholder:text-white/40 outline-none"
                 autoComplete="off"
               />
-              {voiceSupported && (
+              {voiceSupported && voiceEnabled && (
                 <button
                   type="button"
                   onClick={handleMicClick}
-                  disabled={isListening}
-                  className="shrink-0 p-2 rounded-lg text-white/60 hover:text-[#F97316] hover:bg-white/5 disabled:opacity-50"
-                  aria-label={isListening ? 'Listening…' : 'Voice search'}
+                  className={`shrink-0 p-2 rounded-lg hover:bg-white/5 ${isListening ? 'text-[#F97316]' : 'text-white/60 hover:text-[#F97316]'}`}
+                  aria-label={isListening ? 'Listening… (click to stop)' : 'Voice search'}
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
