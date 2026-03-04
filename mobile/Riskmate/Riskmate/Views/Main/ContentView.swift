@@ -251,7 +251,7 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, RMTabBar.barHeight + 14)
+                .padding(.bottom, 110) // keeps it above the tab bar
             }
         }
         .onChange(of: quickAction.showNotificationCenter) { _, show in
@@ -274,7 +274,7 @@ struct ContentView: View {
     private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
             content()
-                .padding(.bottom, RMTabBar.barHeight + 10)
+                .padding(.bottom, 90) // tab bar height + breathing room
         }
         .opacity(selectedTab == tab ? 1 : 0)
         .allowsHitTesting(selectedTab == tab)

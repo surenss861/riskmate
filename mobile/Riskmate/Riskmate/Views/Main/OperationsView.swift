@@ -257,6 +257,7 @@ struct OperationsView: View {
                 }
             }
             .rmNavigationBar(title: "Operations")
+            // System nav bar hidden so RMTopBar is the only top chrome (avoids double bar).
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
                 RMTopBar(title: "Operations", notificationBadge: 0)

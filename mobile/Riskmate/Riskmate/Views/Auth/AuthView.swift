@@ -110,32 +110,24 @@ struct AuthView: View {
         )
     }
 
-    /// Small "Proof Pack Sample" card: hash + Verified strip — brand proof, not filler.
+    /// Small "Proof Pack sample" card: hash + Verified — anchors hero to brand.
     private var proofPackSampleCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Proof Pack Sample")
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Proof Pack sample")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color.white.opacity(0.85))
+            Text("hash: 2F3A…9C")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.62))
+            Text("Verified")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Color.white.opacity(0.9))
-            Text("a3f2b1c9…d8e7")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.6))
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(RMTheme.Colors.accent)
-                Text("Verified")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color.white.opacity(0.8))
-            }
+                .foregroundColor(RMTheme.Colors.accent)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.06))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.10), lineWidth: 0.5))
-        )
-        .frame(maxWidth: 200)
+        .padding(12)
+        .frame(maxWidth: 320)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+        .shadow(color: .black.opacity(0.30), radius: 18, x: 0, y: 12)
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
@@ -166,9 +158,9 @@ struct AuthView: View {
                     )
                     .shadow(color: RMTheme.Colors.accent.opacity(0.18), radius: 14, x: 0, y: 10)
             }
-            Text("No credit card")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundColor(Color.white.opacity(0.5))
+            Text("No credit card required")
+                .font(.system(size: 12))
+                .foregroundColor(Color.white.opacity(0.55))
 
             Button {
                 clearFormState()
@@ -182,9 +174,8 @@ struct AuthView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, max(40, safeBottom + 12))
+        .padding(.horizontal, 22)
+        .padding(.bottom, safeBottom + 18)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
