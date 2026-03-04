@@ -13,9 +13,10 @@ struct ProofReceiptDetailsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showShareSheet = false
     @State private var showFullHash = false
-    /// 0 = hashing, 1 = verified. Only runs once on first appear (gate by hasSealCompleted).
+    /// Seal runs once per view appear (not per job/receipt). @State so it survives re-renders.
     @State private var sealPhase: Int = 0
     @State private var hasSealCompleted = false
+    @State private var hasCopiedHash = false
     
     var body: some View {
         NavigationStack {
@@ -45,10 +46,13 @@ struct ProofReceiptDetailsView: View {
                         value: showFullHash ? hash : String(hash.prefix(16)) + "...",
                         icon: "number",
                         isMonospaced: true,
-                        onTap: copyHash
+                        onTap: copyHash,
+                        showCopyAffordance: true,
+                        tapToCopyHint: hasCopiedHash ? nil : "Tap to copy"
                     )
                     .swipeActions(edge: .trailing) {
                         Button {
+                            hasCopiedHash = true
                             copyHash()
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
@@ -69,7 +73,9 @@ struct ProofReceiptDetailsView: View {
                             label: "Previous Hash",
                             value: String(prevHash.prefix(16)) + "...",
                             icon: "link",
-                            isMonospaced: true
+                            isMonospaced: true,
+                            onTap: { copyToClipboard(prevHash) },
+                            showCopyAffordance: true
                         )
                         .swipeActions(edge: .trailing) {
                             Button {
@@ -79,7 +85,6 @@ struct ProofReceiptDetailsView: View {
                             }
                             .tint(RMSystemTheme.Colors.accent)
                         }
-                        .onTapGesture { copyToClipboard(prevHash) }
                     } else {
                         ProofReceiptDetailRow(
                             label: "Previous Hash",
@@ -156,14 +161,19 @@ struct ProofReceiptDetailsView: View {
     }
     
     private var hashingView: some View {
-        HStack(spacing: RMTheme.Spacing.sm) {
-            ProgressView()
-                .scaleEffect(0.9)
-                .tint(RMSystemTheme.Colors.textTertiary)
-            Text("Hashing…")
-                .font(RMSystemTheme.Typography.body)
-                .foregroundStyle(RMSystemTheme.Colors.textSecondary)
-            Spacer()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: RMTheme.Spacing.sm) {
+                ProgressView()
+                    .scaleEffect(0.9)
+                    .tint(RMSystemTheme.Colors.textTertiary)
+                Text("Hashing…")
+                    .font(RMSystemTheme.Typography.body)
+                    .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                Spacer()
+            }
+            Text("Verifying ledger chain")
+                .font(RMSystemTheme.Typography.caption)
+                .foregroundStyle(RMSystemTheme.Colors.textTertiary)
         }
         .padding(.vertical, RMSystemTheme.Spacing.xs)
     }
@@ -189,6 +199,7 @@ struct ProofReceiptDetailsView: View {
     }
     
     private func copyHash() {
+        hasCopiedHash = true
         copyToClipboard(hash)
     }
     
@@ -214,6 +225,8 @@ private struct ProofReceiptDetailRow: View {
     let icon: String
     var isMonospaced: Bool = false
     var onTap: (() -> Void)? = nil
+    var showCopyAffordance: Bool = false
+    var tapToCopyHint: String? = nil
     
     var body: some View {
         HStack(spacing: RMSystemTheme.Spacing.md) {
@@ -231,9 +244,21 @@ private struct ProofReceiptDetailRow: View {
                     .font(isMonospaced ? RMSystemTheme.Typography.monospaced : RMSystemTheme.Typography.body)
                     .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                     .lineLimit(isMonospaced ? 1 : 2)
+                
+                if let hint = tapToCopyHint {
+                    Text(hint)
+                        .font(RMSystemTheme.Typography.caption2)
+                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                }
             }
             
             Spacer()
+            
+            if showCopyAffordance && onTap != nil {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+            }
         }
         .padding(.vertical, RMSystemTheme.Spacing.xs)
         .contentShape(Rectangle())

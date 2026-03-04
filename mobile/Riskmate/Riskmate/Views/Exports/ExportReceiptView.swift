@@ -9,7 +9,7 @@ struct ExportReceiptView: View {
     @State private var showVerificationInstructions = false
     @State private var showHashComparison = false
     @State private var showChainVerification = false
-    /// 0 = Hashing, 1 = Locked, 2 = Verified. Only runs once (gate by hasSealCompleted).
+    /// 0 = Hashing, 1 = Locked, 2 = Verified. Only runs once per sheet appear (gate by hasSealCompleted; @State, not per-export).
     @State private var sealPhase: Int = 0
     @State private var hasSealCompleted = false
     
@@ -143,9 +143,14 @@ struct ExportReceiptView: View {
                     ProgressView()
                         .scaleEffect(0.9)
                         .tint(RMTheme.Colors.textSecondary)
-                    Text("Hashing…")
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hashing…")
+                            .font(RMTheme.Typography.body)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        Text("Computing receipt hash")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
                 } else {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 22))

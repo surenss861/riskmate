@@ -4,6 +4,7 @@ import SwiftUI
 struct VerificationDetailsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showShareSheet = false
+    @State private var hasCopiedRootHash = false
     
     // TODO: Wire to actual ledger verification data
     @State private var isVerified: Bool = true
@@ -82,16 +83,20 @@ struct VerificationDetailsView: View {
                             label: "Root Hash",
                             value: hash,
                             icon: "number",
-                            isMonospaced: true
+                            isMonospaced: true,
+                            showCopyAffordance: true,
+                            tapToCopyHint: hasCopiedRootHash ? nil : "Tap to copy"
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            hasCopiedRootHash = true
                             UIPasteboard.general.string = hash
                             Haptics.impact(.light)
                             ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
                         }
                         .swipeActions(edge: .trailing) {
                             Button {
+                                hasCopiedRootHash = true
                                 UIPasteboard.general.string = hash
                                 Haptics.impact(.light)
                                 ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
@@ -161,6 +166,8 @@ private struct VerificationDetailRow: View {
     let value: String
     let icon: String
     var isMonospaced: Bool = false
+    var showCopyAffordance: Bool = false
+    var tapToCopyHint: String? = nil
     
     var body: some View {
         HStack(spacing: RMSystemTheme.Spacing.md) {
@@ -178,9 +185,21 @@ private struct VerificationDetailRow: View {
                     .font(isMonospaced ? RMSystemTheme.Typography.monospaced : RMSystemTheme.Typography.body)
                     .foregroundStyle(RMSystemTheme.Colors.textPrimary)
                     .lineLimit(2)
+                
+                if let hint = tapToCopyHint {
+                    Text(hint)
+                        .font(RMSystemTheme.Typography.caption2)
+                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                }
             }
             
             Spacer()
+            
+            if showCopyAffordance {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+            }
         }
         .padding(.vertical, RMSystemTheme.Spacing.xs)
     }

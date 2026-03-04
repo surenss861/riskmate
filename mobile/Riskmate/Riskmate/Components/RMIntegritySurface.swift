@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Integrity surface - shows ledger status, last recorded, proof pack count.
 /// Optional scrollOffset: when provided and Reduce Motion off, a background layer has subtle parallax (clamped ±4pt).
+/// When this view is used inside other scroll contexts (e.g. proof screens), pass that scroll’s offset for consistent parallax.
 struct RMIntegritySurface: View {
     let jobId: String
-    /// Scroll offset from parent (e.g. PreferenceKey). Parallax disabled when nil or Reduce Motion.
+    /// Scroll offset from parent (e.g. PreferenceKey). Parallax disabled when nil or Reduce Motion. Pass offset from any scroll that contains this view.
     var scrollOffset: CGFloat = 0
     @State private var integrity: IntegrityStatus?
     @State private var isLoading = true

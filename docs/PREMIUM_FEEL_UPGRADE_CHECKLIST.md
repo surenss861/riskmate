@@ -57,6 +57,7 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Copy hash | `ProofReceiptDetailsView`, `VerificationDetailsView`, `LedgerReceiptCard` | Tap → copy → toast “Copied” + `Haptics.impact(.light)` | ✅ |
 | Integrity parallax | `RMIntegritySurface`, `ExportsTab` + `ScrollOffsetPreferenceKey` | 2–4px background layer; Reduce Motion = off | ✅ |
 | Export receipt sealing | `ExportReceiptView.swift` | Hashing… → Locked → Verified on first appear; Reduce Motion = final state | ✅ |
+| *Micro-tweaks* | | Confidence line: “Verifying ledger chain” / “Computing receipt hash”; copy affordance (trailing icon + “Tap to copy” that fades after first copy); seal/parallax comments | ✅ |
 
 ### B6) TeamView — Workspace feel
 
