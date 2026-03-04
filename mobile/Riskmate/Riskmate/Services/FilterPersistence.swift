@@ -16,6 +16,19 @@ struct FilterPersistence {
         let riskLevel = defaults.string(forKey: "jobs_filter_risk") ?? "all"
         return (status, riskLevel)
     }
+
+    /// Last selected quick filter chip (High Risk, Blockers, etc.); nil = no quick chip.
+    static func saveJobsQuickChip(_ rawValue: String?) {
+        if let v = rawValue {
+            defaults.set(v, forKey: "jobs_filter_quick_chip")
+        } else {
+            defaults.removeObject(forKey: "jobs_filter_quick_chip")
+        }
+    }
+
+    static func loadJobsQuickChip() -> String? {
+        defaults.string(forKey: "jobs_filter_quick_chip")
+    }
     
     // MARK: - Audit Filters
     
@@ -44,6 +57,7 @@ struct FilterPersistence {
     static func clearJobsFilters() {
         defaults.removeObject(forKey: "jobs_filter_status")
         defaults.removeObject(forKey: "jobs_filter_risk")
+        defaults.removeObject(forKey: "jobs_filter_quick_chip")
     }
     
     static func clearAuditFilters() {

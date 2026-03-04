@@ -30,14 +30,14 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Coach marks | `Components/Operations/OperationsCoachMarks.swift` (or inline) | Show once; flag in `UserDefaultsManager`; don’t block FAB |
 | FAB snap haptic | `FloatingEvidenceFAB.swift` | Single haptic on expand threshold (already); no double on long-press + drag |
 
-### B3) JobsListView — List browsing
+### B3) JobsListView — List browsing ✅ Package 1 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Search quick chips | `JobsListView` + `RMSearchBar` | “High Risk”, “Blockers”, “Needs Signature”, “Recent” |
-| Pull-to-refresh | `AnchoringRefreshState.swift` + list | Sticky premium feel; no jank |
-| Live inserts | `JobsListView` + `RealtimeEventService` | New items animate in (e.g. top insert) |
-| High-risk glow | `JobCard.swift` | Subtle glow border for high-risk jobs |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Search quick chips | `RMFilterChips.swift` (new) + `JobsListView` | “High Risk”, “Blockers”, “Needs Signature”, “Recent”; rmPressable + spring | ✅ |
+| Pull-to-refresh | `AnchoringRefreshState.swift` + list | Haptic on refresh already; optional: slim strip with pull distance (custom scroll) | Deferred |
+| Live inserts | `JobsListView` + RealtimeEventService | New items animate in when realtime wired | When realtime ready |
+| High-risk glow | `JobCard.swift` | Subtle stroke (opacity 0.28) for high/critical risk; no pulse | ✅ |
 
 ### B4) JobDetailView — Tabs polish
 

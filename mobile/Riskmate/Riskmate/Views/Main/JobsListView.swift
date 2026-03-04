@@ -19,6 +19,8 @@ struct JobsListView: View {
     @State private var exportProofJobId: String? = nil
     @State private var showCreateJobSheet = false
     @Namespace private var jobListNamespace
+    @Namespace private var filterChipNamespace
+    @State private var selectedQuickChip: JobsQuickFilter?
 
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
@@ -33,11 +35,16 @@ struct JobsListView: View {
     private var lastSyncDate: Date? { jobsStore.lastSyncDate }
     
     private var hasActiveFilters: Bool {
-        selectedStatus != "all" || selectedRiskLevel != "all" || !searchText.isEmpty
+        selectedStatus != "all" || selectedRiskLevel != "all" || !searchText.isEmpty || selectedQuickChip != nil
     }
     
     var filteredJobs: [Job] {
         var filtered = jobs
+        
+        // Quick chip (applied first for instant feedback)
+        if let chip = selectedQuickChip {
+            filtered = applyQuickFilter(chip, to: filtered)
+        }
         
         // Search filter (use debounced text)
         if !debouncedSearchText.isEmpty {
@@ -59,6 +66,31 @@ struct JobsListView: View {
         }
         
         return filtered
+    }
+    
+    private func applyQuickFilter(_ chip: JobsQuickFilter, to list: [Job]) -> [Job] {
+        switch chip {
+        case .highRisk:
+            return list.filter { job in
+                let level = (job.riskLevel ?? "").lowercased()
+                return level == "high" || level == "critical"
+            }
+        case .blockers:
+            return list.filter { (job.riskScore ?? 0) >= 80 }
+        case .needsSignature:
+            return list.filter { $0.status == "active" }
+        case .recent:
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let fallback = ISO8601DateFormatter()
+            fallback.formatOptions = [.withInternetDateTime]
+            let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+            return list.filter { job in
+                let dateStr = job.updatedAt ?? job.createdAt
+                guard let date = formatter.date(from: dateStr) ?? fallback.date(from: dateStr) else { return false }
+                return date >= cutoff
+            }
+        }
     }
     
     var body: some View {
@@ -89,6 +121,9 @@ struct JobsListView: View {
                                     .stroke(isSearchFocused ? RMTheme.Colors.inputStrokeFocused : RMTheme.Colors.inputStroke, lineWidth: 1)
                             }
                             
+                            // Quick filter chips (High Risk, Blockers, Needs Signature, Recent)
+                            RMFilterChips(selection: $selectedQuickChip, namespace: filterChipNamespace)
+                            
                             // Filter Pills
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: RMTheme.Spacing.sm) {
@@ -110,6 +145,7 @@ struct JobsListView: View {
                                         Button {
                                             selectedStatus = "all"
                                             selectedRiskLevel = "all"
+                                            selectedQuickChip = nil
                                             searchText = ""
                                             FilterPersistence.clearJobsFilters()
                                         } label: {
@@ -350,12 +386,12 @@ struct JobsListView: View {
                 }
             }
             .task {
-                // Load persisted filters
                 let filters = FilterPersistence.loadJobsFilters()
                 selectedStatus = filters.status
                 selectedRiskLevel = filters.riskLevel
-                
-                // Fetch from store (cache-first: shows cached instantly, refreshes in background)
+                if let raw = FilterPersistence.loadJobsQuickChip(), let chip = JobsQuickFilter(rawValue: raw) {
+                    selectedQuickChip = chip
+                }
                 _ = try? await jobsStore.fetch()
             }
             .onChange(of: searchText) { _, newValue in
@@ -372,6 +408,9 @@ struct JobsListView: View {
             }
             .onChange(of: selectedRiskLevel) { _, _ in
                 FilterPersistence.saveJobsFilters(status: selectedStatus, riskLevel: selectedRiskLevel)
+            }
+            .onChange(of: selectedQuickChip) { _, new in
+                FilterPersistence.saveJobsQuickChip(new?.rawValue)
             }
             .anchoringRefresh(isRefreshing: $isRefreshing) {
                 _ = try? await jobsStore.fetch(forceRefresh: true)

@@ -122,12 +122,25 @@ struct JobCard: View {
             }
         }
         .contentShape(Rectangle())
+        .overlay {
+            if isHighRisk {
+                RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
+                    .stroke(riskColor.opacity(0.28), lineWidth: 1.2)
+            }
+        }
         .rmPressable(scale: 0.98, haptic: false)
         .onTapGesture {
             Haptics.tap()
             onTap()
         }
         .appearIn()
+    }
+    
+    /// High/critical risk: show subtle glow stroke (no pulsing).
+    private var isHighRisk: Bool {
+        let level = (job.riskLevel ?? "").lowercased()
+        if level == "high" || level == "critical" { return true }
+        return (job.riskScore ?? 0) >= 70
     }
 }
 
