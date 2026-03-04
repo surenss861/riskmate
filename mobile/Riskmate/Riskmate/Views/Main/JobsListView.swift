@@ -76,7 +76,7 @@ struct JobsListView: View {
                 return level == "high" || level == "critical"
             }
         case .blockers:
-            return list.filter { (job.riskScore ?? 0) >= 80 }
+            return list.filter { job in (job.riskScore ?? 0) >= 80 }
         case .needsSignature:
             return list.filter { $0.status == "active" }
         case .recent:

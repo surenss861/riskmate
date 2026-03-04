@@ -66,10 +66,10 @@ struct RMSkeletonCard: View {
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                RMSkeletonView(width: 100, height: Self.subheadlineHeight, cornerRadius: lineRadius, shimmer: false)
-                RMSkeletonView(width: 160, height: Self.headlineHeight, cornerRadius: lineRadius, shimmer: false)
-                RMSkeletonView(width: nil, height: Self.bodyHeight, cornerRadius: lineRadius, shimmer: false)
-                RMSkeletonView(width: 220, height: Self.bodyHeight, cornerRadius: lineRadius, shimmer: false)
+                RMSkeletonView(width: 100, height: Self.subheadlineHeight, cornerRadius: Self.lineRadius, shimmer: false)
+                RMSkeletonView(width: 160, height: Self.headlineHeight, cornerRadius: Self.lineRadius, shimmer: false)
+                RMSkeletonView(width: nil, height: Self.bodyHeight, cornerRadius: Self.lineRadius, shimmer: false)
+                RMSkeletonView(width: 220, height: Self.bodyHeight, cornerRadius: Self.lineRadius, shimmer: false)
             }
             .padding(RMTheme.Spacing.md)
             .rmShimmer()

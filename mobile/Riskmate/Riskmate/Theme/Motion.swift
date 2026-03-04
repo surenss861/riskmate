@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Observable source for Reduce Motion so we react when the user toggles it in Settings while app is open.
 final class RMMotionObserver: ObservableObject {
