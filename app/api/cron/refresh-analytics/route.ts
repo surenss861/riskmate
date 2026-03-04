@@ -16,8 +16,12 @@ export const dynamic = 'force-dynamic'
  * Protected by CRON_SECRET (same as /api/cron/reconcile-subscriptions).
  */
 export async function POST(request: NextRequest) {
+  const secret = process.env.CRON_SECRET
+  if (!secret || secret.trim() === '') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

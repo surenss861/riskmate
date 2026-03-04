@@ -238,31 +238,31 @@ export function useAnalyticsDashboard(
       useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }, signal) : analyticsApi.jobCompletion({ period }, signal),
       useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }, signal) : analyticsApi.complianceRate({ period }, signal),
     ];
-    // Wave 2: Team, hazards, heatmap, trends, insights, statusByPeriod, prior-period. Fired only after wave 1 resolves (max concurrency ~3 then ~15 instead of 18).
-    const wave2Promises = [
-      useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }, signal) : analyticsApi.teamPerformance({ period }, signal),
-      useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }, signal) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }, signal),
-      useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }, signal) : analyticsApi.riskHeatmap({ period }, signal),
-      analyticsApi.trends({ ...trendsParams, metric: 'jobs' }, signal),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }, signal),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }, signal),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }, signal),
-      analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }, signal),
-      (() => {
-        const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
-        return analyticsApi.insights({ ...insightsRange, limit: 5 }, signal);
-      })(),
-      analyticsApi.statusByPeriod(statusByPeriodParams, signal),
-      prior ? analyticsApi.summary({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
-      prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
-      prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
-      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }, signal) : Promise.resolve(null),
-      prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }, signal) : Promise.resolve(null),
-    ];
 
     try {
       const wave1Results = await Promise.allSettled(wave1Promises);
       if (gen !== fetchGenRef.current) return;
+      // Wave 2: created only after wave 1 settles so these requests are not in flight before wave 1 completes (reduces peak concurrency).
+      const wave2Promises = [
+        useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }, signal) : analyticsApi.teamPerformance({ period }, signal),
+        useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }, signal) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }, signal),
+        useExplicitRange ? analyticsApi.riskHeatmap({ since: since!, until: until! }, signal) : analyticsApi.riskHeatmap({ period }, signal),
+        analyticsApi.trends({ ...trendsParams, metric: 'jobs' }, signal),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'risk' }, signal),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'completion' }, signal),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'compliance' }, signal),
+        analyticsApi.trends({ ...(useExplicitRange ? { since: since!, until: until!, groupBy } : { period, groupBy }), metric: 'jobs_completed' }, signal),
+        (() => {
+          const insightsRange = useExplicitRange ? { since: since!, until: until! } : currentRangeForPeriod(period);
+          return analyticsApi.insights({ ...insightsRange, limit: 5 }, signal);
+        })(),
+        analyticsApi.statusByPeriod(statusByPeriodParams, signal),
+        prior ? analyticsApi.summary({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+        prior ? analyticsApi.jobCompletion({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+        prior ? analyticsApi.complianceRate({ since: prior.since, until: prior.until }, signal) : Promise.resolve(null),
+        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'risk' }, signal) : Promise.resolve(null),
+        prior ? analyticsApi.trends({ since: prior.since, until: prior.until, groupBy, metric: 'compliance' }, signal) : Promise.resolve(null),
+      ];
       const wave2Results = await Promise.allSettled(wave2Promises);
       const results = [...wave1Results, ...wave2Results];
 
