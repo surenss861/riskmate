@@ -62,6 +62,12 @@
 - **FRONTEND_URL** - Used in `src/routes/reports.ts`
 - **Impact**: Report sharing fallback URL
 
+### Startup sanity check (optional, prod)
+- **HEALTHCHECK_ORG_ID** - Used in `src/index.ts` for the post-listen analytics RPC sanity check
+- If set (must be a valid UUID), the sanity check calls `get_hazard_frequency_buckets` with this org id so the function is validated against real org-scoped data
+- If not set, the check uses a dummy UUID `00000000-0000-0000-0000-000000000000`
+- **Impact**: With a real org id, schema/RLS issues that only appear for real orgs are caught at boot; optional
+
 ## Railway-Specific (Auto-injected, don't set manually)
 
 - **PORT** - Railway injects this automatically
@@ -73,7 +79,7 @@
 
 1. **Startup checks** (in code)
    - In **production**, the backend **exits with code 1** if required env is missing: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and (when webhook worker enabled) `WEBHOOK_SECRET_ENCRYPTION_KEY`.
-   - After listen, it calls the analytics RPC `get_hazard_frequency_buckets` once; if the error indicates a **schema mismatch** (e.g. "column does not exist"), it **exits(1)** with a message to run migrations.
+   - After listen, it calls the analytics RPC `get_hazard_frequency_buckets` once; if the error indicates a **schema mismatch** (e.g. "column does not exist"), it **exits(1)** with a message to run migrations. If **HEALTHCHECK_ORG_ID** is set (valid UUID), that org id is used; otherwise a dummy UUID is used.
 
 2. **Apply hazard-frequency migration in Supabase**
    - The dashboard analytics 500 on `/api/analytics/hazard-frequency` is fixed only after you **apply** the migration in the **same Supabase project** the backend uses.

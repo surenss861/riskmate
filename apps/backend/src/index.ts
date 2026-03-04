@@ -541,8 +541,13 @@ if (process.env.NODE_ENV !== "test") {
         const { supabase } = await import("./lib/supabaseClient");
         const now = new Date().toISOString();
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const sanityOrgId =
+          process.env.HEALTHCHECK_ORG_ID && uuidLike.test(process.env.HEALTHCHECK_ORG_ID.trim())
+            ? process.env.HEALTHCHECK_ORG_ID.trim()
+            : "00000000-0000-0000-0000-000000000000";
         const { error } = await supabase.rpc("get_hazard_frequency_buckets", {
-          p_org_id: "00000000-0000-0000-0000-000000000000",
+          p_org_id: sanityOrgId,
           p_since: thirtyDaysAgo,
           p_until: now,
           p_prev_since: thirtyDaysAgo,
