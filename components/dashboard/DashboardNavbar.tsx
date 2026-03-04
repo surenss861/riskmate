@@ -49,40 +49,42 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  useEffect(() => {
-    const loadUserRole = async () => {
-      try {
-        const supabase = createSupabaseBrowserClient()
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+  const loadUserRole = async (selectedOrgIdForRequest?: string | null) => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-        if (!session?.access_token) {
-          setUserRole('member')
-          setLoading(false)
-          return
-        }
-
-        const res = await fetch('/api/me/context', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setUserRole(data.user_role ?? 'member')
-          setMemberships(Array.isArray(data.memberships) ? data.memberships : [])
-          setSelectedOrgId(getSelectedOrganizationId())
-        } else {
-          setUserRole('member')
-          setMemberships([])
-        }
-      } catch (error) {
-        console.error('Failed to load user role:', error)
+      if (!session?.access_token) {
         setUserRole('member')
-      } finally {
         setLoading(false)
+        return
       }
-    }
 
+      const orgId = selectedOrgIdForRequest ?? getSelectedOrganizationId()
+      const headers: Record<string, string> = { Authorization: `Bearer ${session.access_token}` }
+      if (orgId) headers['X-Organization-Id'] = orgId
+
+      const res = await fetch('/api/me/context', { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setUserRole(data.user_role ?? 'member')
+        setMemberships(Array.isArray(data.memberships) ? data.memberships : [])
+        setSelectedOrgId(getSelectedOrganizationId())
+      } else {
+        setUserRole('member')
+        setMemberships([])
+      }
+    } catch (error) {
+      console.error('Failed to load user role:', error)
+      setUserRole('member')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadUserRole()
   }, [])
 
@@ -143,6 +145,8 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
                 const id = e.target.value || null
                 setSelectedOrganizationId(id)
                 setSelectedOrgId(id)
+                setLoading(true)
+                loadUserRole(id ?? undefined)
                 router.refresh()
               }}
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 min-w-[140px]"

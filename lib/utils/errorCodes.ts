@@ -55,6 +55,24 @@ export const ERROR_CODE_REGISTRY: Record<string, ErrorCodeMetadata> = {
     category: ERROR_CATEGORIES.AUTH,
     classification: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
   },
+  NO_ORGANIZATION: {
+    hint: 'User has no organization membership',
+    supportUrl: '/support/runbooks/auth#no-organization',
+    category: ERROR_CATEGORIES.AUTH,
+    classification: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  },
+  ORGANIZATION_SELECTION_REQUIRED: {
+    hint: 'Provide X-Organization-Id header or organization_id query parameter',
+    supportUrl: '/support/runbooks/auth#organization-selection',
+    category: ERROR_CATEGORIES.AUTH,
+    classification: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  },
+  ORGANIZATION_NOT_ACCESSIBLE: {
+    hint: 'The specified organization is not one of your memberships',
+    supportUrl: '/support/runbooks/auth#organization-not-accessible',
+    category: ERROR_CATEGORIES.AUTH,
+    classification: ERROR_CLASSIFICATIONS.USER_ACTION_REQUIRED,
+  },
 
   // Validation errors
   VALIDATION_ERROR: {

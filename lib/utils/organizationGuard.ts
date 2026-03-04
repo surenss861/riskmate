@@ -143,35 +143,129 @@ export interface OrganizationContextWithMemberships extends OrganizationContext 
 
 /**
  * Get organization context plus full memberships list (for session bootstrap and org switcher).
- * Uses same auth as getOrganizationContext; returns default org (first when multi) and all memberships with names.
+ * Does not require an already-selected organization: authenticates the user, fetches all memberships,
+ * and derives an effective/default organization_id (users.organization_id when in memberships, else
+ * deterministic first membership). Use this for bootstrap/context; use getOrganizationContext() for
+ * request paths that mutate/read tenant-scoped data (those still enforce explicit org selection when multi-membership).
  */
 export async function getOrganizationContextWithMemberships(request?: Request): Promise<OrganizationContextWithMemberships> {
-  const base = await getOrganizationContext(request)
+  const supabase = await createSupabaseServerClient()
+  let user = null
+  let authError = null
+
+  if (request) {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader) {
+      const parts = authHeader.trim().split(/\s+/, 2)
+      if (parts.length >= 2 && parts[0].toLowerCase() === 'bearer') {
+        const token = parts[1]
+        const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+        user = tokenUser
+        authError = tokenError
+      }
+    }
+  }
+
+  if (!user && !authError) {
+    const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser()
+    user = cookieUser
+    authError = cookieError
+  }
+
+  if (authError || !user) {
+    throw new UnauthorizedError('Unauthorized: User not authenticated')
+  }
+
   const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
   const serviceSupabase = createSupabaseAdminClient()
 
-  const orgIds = new Set<string>([base.organization_id])
-  const { data: memberRows } = await serviceSupabase
+  const { data: userData, error: userError } = await serviceSupabase
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (userError) {
+    console.error('[getOrganizationContextWithMemberships] User lookup error:', {
+      userId: user.id.substring(0, 8),
+      error: userError.message,
+      code: userError.code
+    })
+    throw new Error('Failed to get organization ID')
+  }
+
+  const { data: memberRows, error: memberError } = await serviceSupabase
     .from('organization_members')
     .select('organization_id')
-    .eq('user_id', base.user_id)
-  for (const row of memberRows ?? []) {
-    if (row.organization_id) orgIds.add(row.organization_id)
+    .eq('user_id', user.id)
+    .order('organization_id', { ascending: true })
+
+  // Legacy compatibility: when organization_members is empty but users.organization_id is present,
+  // treat that org as a valid membership (e.g. invite/legacy provisioning without organization_members row).
+  const userOrgIdFromTable = userData?.organization_id ?? null
+  let orgIds: string[]
+  if (memberError) {
+    throw new ForbiddenError('User has no organization membership')
   }
-  const sortedIds = Array.from(orgIds).sort()
-  if (sortedIds.length === 0) {
-    return { ...base, memberships: [] }
+  if (memberRows?.length) {
+    orgIds = Array.from(new Set((memberRows ?? []).map((r: { organization_id: string }) => r.organization_id).filter(Boolean))).sort()
+  } else if (userOrgIdFromTable) {
+    orgIds = [userOrgIdFromTable]
+  } else {
+    throw new ForbiddenError('User has no organization membership')
+  }
+  if (orgIds.length === 0) {
+    throw new ForbiddenError('User has no organization membership')
   }
 
   const { data: orgRows } = await serviceSupabase
     .from('organizations')
     .select('id, name')
-    .in('id', sortedIds)
+    .in('id', orgIds)
   const byId = new Map((orgRows ?? []).map((r: { id: string; name: string | null }) => [r.id, r.name ?? r.id]))
-  const memberships = sortedIds.map((id) => ({ id, name: byId.get(id) ?? id }))
+  const memberships = orgIds.map((id) => ({ id, name: byId.get(id) ?? id }))
+
+  const userOrgId = userData?.organization_id ?? null
+  const inMemberships = userOrgId && orgIds.includes(userOrgId)
+  // Honor explicit org selector for role derivation (e.g. navbar / org switcher).
+  const headerOrgId = request?.headers?.get?.('x-organization-id')?.trim() ?? ''
+  let queryOrgId = ''
+  if (request?.url) {
+    try {
+      queryOrgId = new URL(request.url).searchParams.get('organization_id')?.trim() ?? ''
+    } catch {
+      // ignore URL parse errors
+    }
+  }
+  const requestedOrgId = headerOrgId || queryOrgId
+  const organization_id =
+    requestedOrgId && orgIds.includes(requestedOrgId)
+      ? requestedOrgId
+      : inMemberships
+        ? userOrgId
+        : orgIds[0]
+
+  const { data: memberRow } = await serviceSupabase
+    .from('organization_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('organization_id', organization_id)
+    .maybeSingle()
+  const memberRole = (memberRow?.role as string) ?? null
+  const userRole = userData?.role ?? 'member'
+  const user_role =
+    userOrgId === organization_id
+      ? (memberRole === 'owner' || userRole === 'owner'
+          ? 'owner'
+          : memberRole === 'admin' || userRole === 'admin'
+            ? 'admin'
+            : (memberRole ?? userRole))
+      : (memberRole ?? 'member')
 
   return {
-    ...base,
+    organization_id,
+    user_id: user.id,
+    user_role,
     memberships,
   }
 }

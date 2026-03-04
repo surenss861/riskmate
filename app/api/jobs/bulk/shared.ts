@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrganizationContext } from '@/lib/utils/organizationGuard'
+import { UnauthorizedError, ForbiddenError } from '@/lib/utils/adminAuth'
 import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { getRequestId } from '@/lib/utils/requestId'
 
@@ -163,8 +164,18 @@ export async function parseBulkJobIds(
   return { jobIds: job_ids as string[] }
 }
 
+function bulkAuthOrgErrorCode(message: string): string {
+  const lower = message.toLowerCase()
+  if (lower.includes('no organization') || lower.includes('no organization membership')) return 'NO_ORGANIZATION'
+  if (lower.includes('multiple organizations') || lower.includes('x-organization-id') || lower.includes('organization_id')) return 'ORGANIZATION_SELECTION_REQUIRED'
+  if (lower.includes('not one of your memberships') || lower.includes('specified organization')) return 'ORGANIZATION_NOT_ACCESSIBLE'
+  return 'FORBIDDEN'
+}
+
 /**
- * Get organization context or return 401/500 NextResponse.
+ * Get organization context or return 401/403/500 NextResponse.
+ * Authorization/forbidden organization errors from getOrganizationContext are returned as 403
+ * with stable business codes (ORGANIZATION_SELECTION_REQUIRED, ORGANIZATION_NOT_ACCESSIBLE, NO_ORGANIZATION).
  */
 export async function getBulkAuth(
   request: NextRequest
@@ -177,16 +188,40 @@ export async function getBulkAuth(
     const ctx = await getOrganizationContext(request)
     return { organization_id: ctx.organization_id, user_id: ctx.user_id }
   } catch (err: any) {
-    const message = err?.message || 'Unauthorized'
-    const statusCode = message.toLowerCase().includes('unauthorized') || message.toLowerCase().includes('authenticated') ? 401 : 500
+    const message = err?.message ?? 'Unauthorized'
+    if (err instanceof UnauthorizedError) {
+      const { response, errorId } = createErrorResponse(message, 'UNAUTHORIZED', {
+        requestId,
+        statusCode: 401,
+      })
+      return {
+        errorResponse: NextResponse.json(response, {
+          status: 401,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        }),
+      }
+    }
+    if (err instanceof ForbiddenError) {
+      const code = bulkAuthOrgErrorCode(message)
+      const { response, errorId } = createErrorResponse(message, code, {
+        requestId,
+        statusCode: 403,
+      })
+      return {
+        errorResponse: NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        }),
+      }
+    }
     const { response, errorId } = createErrorResponse(
       message,
-      statusCode === 401 ? 'UNAUTHORIZED' : 'QUERY_ERROR',
-      { requestId, statusCode }
+      'QUERY_ERROR',
+      { requestId, statusCode: 500 }
     )
     return {
       errorResponse: NextResponse.json(response, {
-        status: statusCode,
+        status: 500,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       }),
     }
