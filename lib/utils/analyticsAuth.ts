@@ -197,47 +197,54 @@ export async function getAnalyticsContext(
 
   let orgId: string | null = null
   if (requestedOrgId) {
-    // Honor explicit selector whenever provided: validate against organization_members
+    // Honor explicit selector: validate against organization_members; legacy fallback when memberships empty
     const { data: memberRows, error: memberError } = await admin
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
     if (memberError || !memberRows?.length) {
-      const { response, errorId } = createErrorResponse(
-        'No organization assigned',
-        'NO_ORGANIZATION',
-        { requestId, statusCode: 403 }
-      )
-      logApiError(403, 'NO_ORGANIZATION', errorId, requestId, undefined, response.message, {
-        category: 'auth', severity: 'warn', route,
-      })
-      return NextResponse.json(response, {
-        status: 403,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
+      // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
+      const userOrgId = userData?.organization_id ?? null
+      if (userOrgId && userOrgId === requestedOrgId) {
+        orgId = requestedOrgId
+      } else {
+        const { response, errorId } = createErrorResponse(
+          'No organization assigned',
+          'NO_ORGANIZATION',
+          { requestId, statusCode: 403 }
+        )
+        logApiError(403, 'NO_ORGANIZATION', errorId, requestId, undefined, response.message, {
+          category: 'auth', severity: 'warn', route,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+    } else {
+      const membership = memberRows.find((m: { organization_id: string }) => m.organization_id === requestedOrgId)
+      if (!membership) {
+        const { response, errorId } = createErrorResponse(
+          'Organization not accessible',
+          'ORGANIZATION_NOT_ACCESSIBLE',
+          {
+            requestId,
+            statusCode: 403,
+            error_hint: 'The specified organization is not one of your memberships.',
+            hint: 'The specified organization is not one of your memberships.',
+          }
+        )
+        logApiError(403, 'ORGANIZATION_NOT_ACCESSIBLE', errorId, requestId, undefined, response.message, {
+          category: 'auth', severity: 'warn', route,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      orgId = membership.organization_id
     }
-    const membership = memberRows.find((m: { organization_id: string }) => m.organization_id === requestedOrgId)
-    if (!membership) {
-      const { response, errorId } = createErrorResponse(
-        'Organization not accessible',
-        'ORGANIZATION_NOT_ACCESSIBLE',
-        {
-          requestId,
-          statusCode: 403,
-          error_hint: 'The specified organization is not one of your memberships.',
-          hint: 'The specified organization is not one of your memberships.',
-        }
-      )
-      logApiError(403, 'ORGANIZATION_NOT_ACCESSIBLE', errorId, requestId, undefined, response.message, {
-        category: 'auth', severity: 'warn', route,
-      })
-      return NextResponse.json(response, {
-        status: 403,
-        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
-      })
-    }
-    orgId = membership.organization_id
   } else {
     orgId = userData?.organization_id ?? null
     if (!orgId) {

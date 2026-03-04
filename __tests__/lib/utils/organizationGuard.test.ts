@@ -216,3 +216,47 @@ describe('getOrganizationContext (selector honored when users.organization_id is
     )
   })
 })
+
+describe('getOrganizationContext (legacy explicit-selector: empty organization_members)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    serverGetUserMock = jest.fn().mockImplementation((token?: string) => {
+      if (token !== undefined) {
+        return Promise.resolve({ data: { user: { id: USER_ID } }, error: null })
+      }
+      return Promise.resolve({ data: { user: null }, error: null })
+    })
+
+    mockUsersChain = createChain()
+    mockUsersChain.maybeSingle.mockResolvedValue({
+      data: { organization_id: ORG_A, role: 'member' },
+      error: null,
+    })
+
+    mockOrgMembersChain = createChain()
+    mockOrgMembersChain.order.mockResolvedValue({ data: [], error: null })
+    mockOrgMembersChain.maybeSingle.mockResolvedValue({ data: null, error: null })
+
+    mockOrgsChain = createChain()
+    mockOrgsChain.in.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('allows requestedOrgId when organization_members is empty and users.organization_id equals requestedOrgId', async () => {
+    const req = request({
+      Authorization: `Bearer token-${USER_ID}`,
+      'X-Organization-Id': ORG_A,
+    })
+    const result = await getOrganizationContext(req)
+    expect(result.organization_id).toBe(ORG_A)
+    expect(result.user_id).toBe(USER_ID)
+    expect(result.user_role).toBe('member')
+  })
+
+  it('throws when organization_members is empty and requestedOrgId does not equal users.organization_id', async () => {
+    const req = request({
+      Authorization: `Bearer token-${USER_ID}`,
+      'X-Organization-Id': '00000000-0000-4000-8000-000000000000',
+    })
+    await expect(getOrganizationContext(req)).rejects.toThrow('User has no organization membership')
+  })
+})

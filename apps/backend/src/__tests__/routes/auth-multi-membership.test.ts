@@ -161,4 +161,51 @@ describeIntegration("Auth multi-membership resolution", () => {
     expect(res.status).toBe(200);
     expect(res.body).toBeDefined();
   });
+
+  describe("Legacy explicit-selector (empty organization_members)", () => {
+    beforeAll(async () => {
+      const admin = getSupabaseAdmin();
+      await admin
+        .from("organization_members")
+        .delete()
+        .eq("user_id", testData.auditorUserId);
+      await admin
+        .from("users")
+        .update({ organization_id: testData.testOrgId })
+        .eq("id", testData.auditorUserId);
+    });
+
+    afterAll(async () => {
+      const admin = getSupabaseAdmin();
+      await admin.from("organization_members").upsert(
+        [
+          { user_id: testData.auditorUserId, organization_id: testData.testOrgId, role: "auditor" },
+          { user_id: testData.auditorUserId, organization_id: secondOrgId!, role: "viewer" },
+        ],
+        { onConflict: "user_id,organization_id" }
+      );
+      await admin
+        .from("users")
+        .update({ organization_id: null })
+        .eq("id", testData.auditorUserId);
+    });
+
+    it("returns 200 when X-Organization-Id equals users.organization_id and user has no organization_members rows", async () => {
+      const res = await request(app)
+        .get("/api/analytics/compliance-rate")
+        .set("Authorization", `Bearer ${testData.auditorToken}`)
+        .set("X-Organization-Id", testData.testOrgId);
+      expect(res.status).toBe(200);
+      expect(res.body).toBeDefined();
+    });
+
+    it("returns 403 NO_ORGANIZATION when X-Organization-Id differs from users.organization_id and user has no organization_members rows", async () => {
+      const res = await request(app)
+        .get("/api/analytics/compliance-rate")
+        .set("Authorization", `Bearer ${testData.auditorToken}`)
+        .set("X-Organization-Id", "00000000-0000-4000-8000-000000000000");
+      expect(res.status).toBe(403);
+      expect(res.body?.code).toBe("NO_ORGANIZATION");
+    });
+  });
 });

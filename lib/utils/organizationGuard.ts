@@ -83,20 +83,27 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
 
   let organization_id: string
   if (requestedOrgId) {
-    // Honor explicit selector whenever provided: validate against organization_members
+    // Honor explicit selector: validate against organization_members; legacy fallback when memberships empty
     const { data: memberRows, error: memberError } = await serviceSupabase
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
     if (memberError || !memberRows?.length) {
-      throw new ForbiddenError('User has no organization membership')
+      // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
+      const userOrgId = userData?.organization_id ?? null
+      if (userOrgId && userOrgId === requestedOrgId) {
+        organization_id = requestedOrgId
+      } else {
+        throw new ForbiddenError('User has no organization membership')
+      }
+    } else {
+      const membership = memberRows.find((m) => m.organization_id === requestedOrgId)
+      if (!membership) {
+        throw new ForbiddenError('The specified organization is not one of your memberships.')
+      }
+      organization_id = membership.organization_id
     }
-    const membership = memberRows.find((m) => m.organization_id === requestedOrgId)
-    if (!membership) {
-      throw new ForbiddenError('The specified organization is not one of your memberships.')
-    }
-    organization_id = membership.organization_id
   } else {
     // No selector: keep current fallback (users.organization_id, then single/multi membership)
     organization_id = userData?.organization_id ?? null

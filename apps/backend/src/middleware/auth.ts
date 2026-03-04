@@ -178,7 +178,7 @@ async function authenticateInternal(
     const requestedOrgId = headerOrgId || queryOrgId;
 
     if (requestedOrgId) {
-      // Honor explicit selector whenever provided: validate against organization_members
+      // Honor explicit selector: validate against organization_members; legacy fallback when memberships empty
       const { data: memberRows, error: memberError } = await supabase
         .from("organization_members")
         .select("organization_id, role")
@@ -186,24 +186,31 @@ async function authenticateInternal(
         .order("organization_id", { ascending: true });
 
       if (memberError || !memberRows?.length) {
-        res.status(403).json({
-          message: "No organization assigned",
-          code: "NO_ORGANIZATION",
-          hint: "User account is missing organization assignment. Please contact support.",
-        });
-        return;
+        // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
+        if (userRecord.organization_id && userRecord.organization_id === requestedOrgId) {
+          organizationId = requestedOrgId;
+          role = userRecord.role ?? undefined;
+        } else {
+          res.status(403).json({
+            message: "No organization assigned",
+            code: "NO_ORGANIZATION",
+            hint: "User account is missing organization assignment. Please contact support.",
+          });
+          return;
+        }
+      } else {
+        const membership = memberRows.find((m) => m.organization_id === requestedOrgId);
+        if (!membership) {
+          res.status(403).json({
+            message: "Organization not accessible",
+            code: "ORGANIZATION_NOT_ACCESSIBLE",
+            hint: "The specified organization is not one of your memberships.",
+          });
+          return;
+        }
+        organizationId = membership.organization_id;
+        role = membership.role ?? userRecord.role ?? undefined;
       }
-      const membership = memberRows.find((m) => m.organization_id === requestedOrgId);
-      if (!membership) {
-        res.status(403).json({
-          message: "Organization not accessible",
-          code: "ORGANIZATION_NOT_ACCESSIBLE",
-          hint: "The specified organization is not one of your memberships.",
-        });
-        return;
-      }
-      organizationId = membership.organization_id;
-      role = membership.role ?? userRecord.role ?? undefined;
     } else if (userRecord.organization_id) {
       organizationId = userRecord.organization_id;
       role = userRecord.role ?? undefined;

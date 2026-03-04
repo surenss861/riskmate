@@ -427,4 +427,56 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       }
     })
   })
+
+  describe('legacy explicit-selector: empty organization_members', () => {
+    const LEGACY_ORG = 'org-legacy-only'
+
+    beforeEach(() => {
+      resetOrgPlanCacheForTesting()
+      serverGetUserMock.mockImplementation((token?: string) => {
+        if (token !== undefined) {
+          return Promise.resolve({
+            data: { user: { id: USER_ID } },
+            error: null,
+          })
+        }
+        return Promise.resolve({ data: { user: null }, error: null })
+      })
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: LEGACY_ORG },
+        error: null,
+      })
+      mockOrgMembersChain.order.mockResolvedValue({ data: [], error: null })
+      mockOrgSubChain.maybeSingle.mockResolvedValue({
+        data: { plan_code: 'business', status: 'active' },
+        error: null,
+      })
+    })
+
+    it('returns context when requestedOrgId equals users.organization_id and organization_members is empty', async () => {
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': LEGACY_ORG,
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).not.toBeInstanceOf(Response)
+      if (typeof result === 'object' && result !== null && 'orgId' in result) {
+        expect(result.orgId).toBe(LEGACY_ORG)
+        expect(result.hasAnalytics).toBe(true)
+      }
+    })
+
+    it('returns 403 NO_ORGANIZATION when requestedOrgId differs from users.organization_id and organization_members is empty', async () => {
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': 'org-other-00000',
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(403)
+      const body = await res.json()
+      expect(body.code).toBe('NO_ORGANIZATION')
+    })
+  })
 })
