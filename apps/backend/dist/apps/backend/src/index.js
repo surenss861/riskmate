@@ -88,6 +88,8 @@ const errorResponse_1 = require("./utils/errorResponse");
 const auth_1 = require("./middleware/auth");
 const devAuth_1 = __importDefault(require("./routes/devAuth"));
 const app = (0, express_1.default)();
+// Trust first proxy (Railway / load balancer) for correct client IP and protocol
+app.set("trust proxy", 1);
 /** Set when webhook worker failed to start (e.g. invalid encryption key); API stays up but webhook delivery is degraded. */
 let webhookWorkerDegraded = false;
 // ✅ Debug: Log Railway's injected port
@@ -322,10 +324,18 @@ const corsConfig = {
         return cb(null, isAllowedOrigin(origin)); // false = no CORS header, but NO throw
     },
     credentials: true,
-    optionsSuccessStatus: 200,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
-    exposedHeaders: ['Content-Disposition', 'X-Error-ID', 'X-Request-ID'],
+    optionsSuccessStatus: 204,
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Idempotency-Key',
+        'x-organization-id',
+        'x-internal-api-key',
+    ],
+    exposedHeaders: ['Content-Disposition', 'content-disposition', 'X-Error-ID', 'X-Request-ID'],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    maxAge: 86400,
 };
 // ✅ CORS middleware MUST run first (before any blocking or routes)
 // This ensures CORS headers are set on ALL responses, including errors

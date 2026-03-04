@@ -12,16 +12,30 @@ export declare function parsePeriod(value?: string | null): {
     days: number;
     key: PeriodKey;
 };
-export declare function parseSinceUntil(sinceParam?: string | null, untilParam?: string | null): {
+export type ParseSinceUntilResult = {
     since: string;
     until: string;
+} | {
+    error: 'invalid_order';
+} | {
+    error: 'invalid_format';
+} | {
+    error: 'missing_bound';
 } | null;
+/** Type guard: true when the result is a valid date range (not null and not an error object). Use before accessing since/until. */
+export declare function isSinceUntilRange(r: ParseSinceUntilResult): r is {
+    since: string;
+    until: string;
+};
+export declare function parseSinceUntil(sinceParam?: string | null, untilParam?: string | null): ParseSinceUntilResult;
+/** Returns a date range in UTC: since at 00:00:00.000Z, until at 23:59:59.999Z. Safe across timezones. */
 export declare function dateRangeForDays(days: number): {
     since: string;
     until: string;
 };
 /**
- * Derive effective span in days from explicit since/until (covers full calendar days in range).
+ * Derive effective span in days from explicit since/until (inclusive calendar-day span).
+ * Normalizes both timestamps to UTC day boundaries; minimum 1 day when since <= until.
  * Used for period metadata and MV eligibility when callers send explicit range instead of period.
  */
 export declare function effectiveDaysFromRange(since: string, until: string): number;

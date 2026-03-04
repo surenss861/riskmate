@@ -17,6 +17,24 @@ function parseSinceUntilQuery(query) {
     const until = query.until ? (Array.isArray(query.until) ? query.until[0] : query.until) : "";
     return (0, analyticsDateRange_1.parseSinceUntil)(since || null, until || null);
 }
+/** If parse result is invalid_order, invalid_format, or missing_bound, send 400 and return true; otherwise return false. */
+function rejectInvalidDateRange(res, parseResult) {
+    if (parseResult && "error" in parseResult) {
+        if (parseResult.error === "invalid_order") {
+            res.status(400).json({ message: "Invalid date range: since must be before or equal to until", code: "VALIDATION_ERROR" });
+            return true;
+        }
+        if (parseResult.error === "invalid_format") {
+            res.status(400).json({ message: "Invalid date format for since or until", code: "VALIDATION_ERROR" });
+            return true;
+        }
+        if (parseResult.error === "missing_bound") {
+            res.status(400).json({ message: "Date range requires both since and until", code: "VALIDATION_ERROR" });
+            return true;
+        }
+    }
+    return false;
+}
 function parsePeriodQuery(period) {
     const value = period == null ? undefined : Array.isArray(period) ? (typeof period[0] === "string" ? period[0] : undefined) : typeof period === "string" ? period : undefined;
     return (0, analyticsDateRange_1.parsePeriod)(value ?? null);
@@ -99,31 +117,37 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
     const status = authReq.user.subscriptionStatus;
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
+    const parsedPeriod = parsePeriodQuery(authReq.query.period);
+    const periodLabelLocked = parsedPeriod.key === "1y" ? "1y" : `${parsedPeriod.days}d`;
+    const groupByRaw = authReq.query.groupBy || "day";
+    const groupByLocked = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
+    const metricRaw = authReq.query.metric || "jobs";
+    const metricLocked = metricRaw === "risk"
+        ? "risk"
+        : metricRaw === "compliance"
+            ? "compliance"
+            : metricRaw === "completion" || metricRaw === "completion_rate"
+                ? "completion"
+                : metricRaw === "jobs_completed"
+                    ? "jobs_completed"
+                    : "jobs";
     if (!isActive || !hasAnalytics) {
-        return res.json({ period: "30d", groupBy: "day", data: [], locked: true });
+        return res.json({ period: periodLabelLocked, groupBy: groupByLocked, metric: metricLocked, data: [], locked: true });
     }
     try {
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const parsed = parsePeriodQuery(authReq.query.period);
-        const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(parsed.days);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
         const effectiveDays = customRange ? (0, analyticsDateRange_1.effectiveDaysFromRange)(since, until) : parsed.days;
         const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)(effectiveDays) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
-        const groupByRaw = authReq.query.groupBy || "day";
-        const groupBy = groupByRaw === "month" ? "month" : groupByRaw === "week" ? "week" : "day";
-        const metricRaw = authReq.query.metric || "jobs";
-        // Spec-aligned metric enum: jobs | risk | compliance | completion
-        const metric = metricRaw === "risk"
-            ? "risk"
-            : metricRaw === "compliance"
-                ? "compliance"
-                : metricRaw === "completion" || metricRaw === "completion_rate"
-                    ? "completion"
-                    : metricRaw === "jobs_completed"
-                        ? "jobs_completed"
-                        : "jobs";
+        const groupBy = groupByLocked;
+        const metric = metricLocked;
         const points = [];
         // Day grouping: SQL aggregation only — RPC returns { period_key, value } per bucket (no full job fetch)
         if (groupBy === "day") {
@@ -364,11 +388,62 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
             throw jobsError;
         const jobList = (jobs || []);
         const getBucketKey = (date) => groupBy === "month" ? (0, analyticsTrends_1.monthStart)(date) : groupBy === "week" ? (0, analyticsTrends_1.weekStart)(date) : (0, analyticsTrends_1.toDateKey)(date.toISOString());
+        if (metric === "completion") {
+            const [createdRes, completedRes] = await Promise.all([
+                (0, analyticsTrends_1.fetchAllPages)(async (offset, limit) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .select("id, created_at")
+                        .eq("organization_id", orgId)
+                        .is("deleted_at", null)
+                        .gte("created_at", since)
+                        .lte("created_at", until)
+                        .order("created_at", { ascending: false })
+                        .range(offset, offset + limit - 1);
+                    return { data, error };
+                }),
+                (0, analyticsTrends_1.fetchAllPages)(async (offset, limit) => {
+                    const { data, error } = await supabaseClient_1.supabase
+                        .from("jobs")
+                        .select("id, completed_at")
+                        .eq("organization_id", orgId)
+                        .is("deleted_at", null)
+                        .not("completed_at", "is", null)
+                        .gte("completed_at", since)
+                        .lte("completed_at", until)
+                        .order("completed_at", { ascending: false })
+                        .range(offset, offset + limit - 1);
+                    return { data, error };
+                }),
+            ]);
+            if (!createdRes.error && !completedRes.error) {
+                const createdByBucket = new Map();
+                for (const j of (createdRes.data ?? [])) {
+                    const key = getBucketKey(new Date(j.created_at));
+                    createdByBucket.set(key, (createdByBucket.get(key) ?? 0) + 1);
+                }
+                const completedByBucket = new Map();
+                for (const j of (completedRes.data ?? [])) {
+                    const key = getBucketKey(new Date(j.completed_at));
+                    completedByBucket.set(key, (completedByBucket.get(key) ?? 0) + 1);
+                }
+                const allPeriods = [...new Set([...createdByBucket.keys(), ...completedByBucket.keys()])].sort((a, b) => a.localeCompare(b));
+                for (const period of allPeriods) {
+                    const created = createdByBucket.get(period) ?? 0;
+                    const completed = completedByBucket.get(period) ?? 0;
+                    const rate = created === 0 ? 0 : (completed / created) * 100;
+                    const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100));
+                    points.push({ period, value, label: period });
+                }
+                return res.json({ period: periodLabel, groupBy, metric, data: points });
+            }
+            if (createdRes.error)
+                throw createdRes.error;
+            if (completedRes.error)
+                throw completedRes.error;
+        }
         const bucketValues = new Map();
         const bucketRiskSums = new Map();
-        // Completion (fallback): bucket by creation; value = (jobs_completed / jobs_created) * 100, 0–100. Count completions only when completed_at is within [since, until].
-        const bucketCompleted = new Map();
-        // jobs_completed (fallback): bucket by completion date when not using MV (e.g. custom range)
         const bucketCompletedByDate = new Map();
         if (metric === "jobs_completed") {
             const { data: completedJobs, error: completedError } = await (0, analyticsTrends_1.fetchAllPages)(async (offset, limit) => {
@@ -401,17 +476,7 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
         }
         for (const j of jobList) {
             const keyCreated = getBucketKey(new Date(j.created_at));
-            const completed = j.status?.toLowerCase() === "completed" &&
-                j.completed_at != null &&
-                j.completed_at >= since &&
-                j.completed_at <= until;
-            if (metric === "completion") {
-                bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
-                if (completed) {
-                    bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1);
-                }
-            }
-            else if (metric === "jobs") {
+            if (metric === "jobs") {
                 bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1);
             }
             else if (metric === "risk" && j.risk_score != null) {
@@ -421,16 +486,7 @@ exports.analyticsRouter.get("/trends", auth_1.authenticate, async (req, res) => 
                 bucketRiskSums.set(keyCreated, cur);
             }
         }
-        if (metric === "completion") {
-            for (const period of [...bucketValues.keys()].sort((a, b) => a.localeCompare(b))) {
-                const created = bucketValues.get(period) ?? 0;
-                const completed = bucketCompleted.get(period) ?? 0;
-                const rate = created === 0 ? 0 : (completed / created) * 100;
-                const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100));
-                points.push({ period, value, label: period });
-            }
-        }
-        else if (metric === "jobs") {
+        if (metric === "jobs") {
             for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
                 points.push({ period, value: bucketValues.get(period) ?? 0, label: period });
             }
@@ -462,9 +518,12 @@ exports.analyticsRouter.get("/status-by-period", auth_1.authenticate, async (req
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
-        const { days } = parsePeriodQuery(authReq.query.period);
-        const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(days);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
+        const parsed = parsePeriodQuery(authReq.query.period);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
         const groupByRaw = authReq.query.groupBy || "week";
         const groupBy = groupByRaw === "day" ? "day" : "week";
         const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_analytics_status_by_period", {
@@ -506,15 +565,25 @@ exports.analyticsRouter.get("/risk-heatmap", auth_1.authenticate, async (req, re
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-        return res.json({ buckets: [], locked: true });
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
+        const parsed = parsePeriodQuery(authReq.query.period);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
+        const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
+        return res.json({ period: periodLabel, buckets: [], locked: true });
     }
     try {
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const parsed = parsePeriodQuery(authReq.query.period);
-        const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(parsed.days);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
         const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
         const { data: rows, error } = await supabaseClient_1.supabase.rpc("get_risk_heatmap_buckets", {
             p_org_id: orgId,
@@ -545,15 +614,25 @@ exports.analyticsRouter.get("/team-performance", auth_1.authenticate, async (req
     const hasAnalytics = authReq.user.features.includes("analytics");
     const isActive = ["active", "trialing", "free"].includes(status);
     if (!isActive || !hasAnalytics) {
-        return res.json({ members: [], locked: true });
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
+        const parsed = parsePeriodQuery(authReq.query.period);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
+        const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
+        return res.json({ period: periodLabel, members: [], locked: true });
     }
     try {
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const parsed = parsePeriodQuery(authReq.query.period);
-        const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(parsed.days);
+        const { since, until } = customRange ?? (parsed.key === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(parsed.days));
         const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_team_performance_kpis", {
             p_org_id: orgId,
@@ -616,9 +695,13 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const { days } = parsePeriodQuery(authReq.query.period);
         const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(days);
+        const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : `${days}d`;
         const groupBy = authReq.query.groupBy === "location" ? "location" : "type";
         const spanMs = new Date(until).getTime() - new Date(since).getTime();
         const prevUntil = since;
@@ -645,7 +728,7 @@ exports.analyticsRouter.get("/hazard-frequency", auth_1.authenticate, async (req
                 trend,
             };
         });
-        return res.json({ period: `${days}d`, groupBy, items: itemsOut.slice(0, 100) });
+        return res.json({ period: periodLabel, groupBy, items: itemsOut.slice(0, 100) });
     }
     catch (error) {
         console.error("Analytics hazard-frequency error:", error);
@@ -672,9 +755,13 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const { days } = parsePeriodQuery(authReq.query.period);
         const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(days);
+        const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : `${days}d`;
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_compliance_rate_kpis", {
             p_org_id: orgId,
             p_since: since,
@@ -686,7 +773,7 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
         const totalJobs = Number(row?.total_jobs ?? 0);
         if (totalJobs === 0) {
             return res.json({
-                period: `${days}d`,
+                period: periodLabel,
                 signatures: 0,
                 photos: 0,
                 checklists: 0,
@@ -701,7 +788,7 @@ exports.analyticsRouter.get("/compliance-rate", auth_1.authenticate, async (req,
         const checklists = Math.round((checklistComplete / totalJobs) * 10000) / 100;
         const overall = Math.round(((signatures + photos + checklists) / 3) * 100) / 100;
         return res.json({
-            period: `${days}d`,
+            period: periodLabel,
             signatures,
             photos,
             checklists,
@@ -737,9 +824,13 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const { days } = parsePeriodQuery(authReq.query.period);
         const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(days);
+        const periodLabel = customRange ? (0, analyticsDateRange_1.periodLabelFromDays)((0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)) : `${days}d`;
         const { data: kpiRows, error: rpcError } = await supabaseClient_1.supabase.rpc("get_job_completion_kpis", {
             p_org_id: orgId,
             p_since: since,
@@ -757,7 +848,7 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
                 overdue_count_all_time: 0,
                 total: 0,
                 completed: 0,
-                period: `${days}d`,
+                period: periodLabel,
                 avg_days_to_complete: 0,
             });
         }
@@ -777,7 +868,7 @@ exports.analyticsRouter.get("/job-completion", auth_1.authenticate, async (req, 
             overdue_count_all_time,
             total,
             completed,
-            period: `${days}d`,
+            period: periodLabel,
             avg_days_to_complete,
         });
     }
@@ -804,7 +895,10 @@ exports.analyticsRouter.get("/insights", auth_1.authenticate, async (req, res) =
         const orgId = authReq.user.organization_id;
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const { days, key: periodKey } = parsePeriodQuery(authReq.query.period);
         const { since, until } = customRange ??
             (periodKey === "1y" ? (0, analyticsTrends_1.calendarYearBounds)() : (0, analyticsDateRange_1.dateRangeForDays)(days));
@@ -858,14 +952,17 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         if (!orgId)
             return res.status(400).json({ message: "Missing organization id" });
         const crewId = authReq.query.crew_id ? String(authReq.query.crew_id) : undefined;
-        const explicitRange = parseSinceUntilQuery(authReq.query);
+        const explicitRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, explicitRangeRaw))
+            return;
+        const explicitRange = explicitRangeRaw && !("error" in explicitRangeRaw) ? explicitRangeRaw : null;
         const rangeParam = authReq.query.range;
         const rangeDays = parseRangeDays(rangeParam);
         const { since, until } = explicitRange ?? (rangeParam === "1y" || rangeParam === "365d"
             ? (0, analyticsTrends_1.calendarYearBounds)()
             : (0, analyticsDateRange_1.dateRangeForDays)(rangeDays));
         const effectiveRangeDays = explicitRange
-            ? Math.ceil((new Date(until).getTime() - new Date(since).getTime()) / (24 * 60 * 60 * 1000)) + 1
+            ? (0, analyticsDateRange_1.effectiveDaysFromRange)(since, until)
             : (rangeParam === "1y" || rangeParam === "365d" ? 365 : rangeDays);
         const [kpisRes, trendRes] = await Promise.all([
             supabaseClient_1.supabase.rpc("get_mitigations_analytics_kpis", {
@@ -900,13 +997,13 @@ exports.analyticsRouter.get("/mitigations", auth_1.authenticate, async (req, res
         }
         const trend = [];
         const cursor = new Date(since);
-        cursor.setHours(0, 0, 0, 0);
+        cursor.setUTCHours(0, 0, 0, 0);
         const end = new Date(until);
-        end.setHours(23, 59, 59, 999);
+        end.setUTCHours(23, 59, 59, 999);
         while (cursor <= end) {
             const dateStr = cursor.toISOString().slice(0, 10);
             trend.push({ date: dateStr, completion_rate: trendByDate.get(dateStr) ?? 0 });
-            cursor.setDate(cursor.getDate() + 1);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
         res.json({
             org_id: orgId,
@@ -968,7 +1065,10 @@ exports.analyticsRouter.get("/summary", auth_1.authenticate, async (req, res) =>
         if (!orgId) {
             return res.status(400).json({ message: "Missing organization id" });
         }
-        const customRange = parseSinceUntilQuery(authReq.query);
+        const customRangeRaw = parseSinceUntilQuery(authReq.query);
+        if (rejectInvalidDateRange(res, customRangeRaw))
+            return;
+        const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
         const rangeDays = parseRangeDays(authReq.query.range);
         const { since, until } = customRange ?? (0, analyticsDateRange_1.dateRangeForDays)(rangeDays);
         const { data: row, error: rpcError } = await supabaseClient_1.supabase.rpc("get_analytics_summary", {

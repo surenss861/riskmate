@@ -79,9 +79,10 @@ async function processTaskReminders() {
     try {
         // Due soon: due_date in [now, now+24h]. Overdue: due_date in [now-24h, now). Cap at 24h overdue so we don't email indefinitely.
         // last_reminded_at throttle prevents repeated sends within ~23h for all reminders.
+        // Do not use assignee:assigned_to(email) embed: tasks.assigned_to FKs auth.users; PostgREST has no public relationship. Fetch emails from users.
         const { data: tasks, error } = await supabaseClient_1.supabase
             .from("tasks")
-            .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)")
+            .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name)")
             .gte("due_date", past24hIso)
             .lte("due_date", in24hIso)
             .neq("status", "done")
@@ -94,6 +95,14 @@ async function processTaskReminders() {
             return;
         }
         const pending = tasks || [];
+        const assigneeIds = [...new Set(pending.map((t) => t.assigned_to).filter(Boolean))];
+        let assigneeEmailById = {};
+        if (assigneeIds.length > 0) {
+            const { data: users } = await supabaseClient_1.supabase.from("users").select("id, email").in("id", assigneeIds);
+            if (users) {
+                assigneeEmailById = Object.fromEntries(users.map((u) => [u.id, u.email ?? ""]));
+            }
+        }
         console.log(`[TaskReminderWorker] Processing ${pending.length} task reminders`);
         let processed = 0;
         let failed = 0;
@@ -101,8 +110,7 @@ async function processTaskReminders() {
             try {
                 const jobRow = task.job;
                 const jobTitle = (Array.isArray(jobRow) ? jobRow[0] : jobRow)?.client_name ?? "Job";
-                const assigneeRow = task.assignee;
-                const assigneeEmail = (Array.isArray(assigneeRow) ? assigneeRow[0] : assigneeRow)?.email ?? null;
+                const assigneeEmail = task.assigned_to ? assigneeEmailById[task.assigned_to] ?? null : null;
                 if (!assigneeEmail) {
                     console.warn("[TaskReminderWorker] No email for assignee", task.assigned_to, "skipping email");
                 }
@@ -202,7 +210,7 @@ async function runReminderForTask(organizationId, taskId) {
     const in24hIso = new Date(now.getTime() + ALERT_WINDOW_MS).toISOString();
     const { data: task, error } = await supabaseClient_1.supabase
         .from("tasks")
-        .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name), assignee:assigned_to(email)")
+        .select("id, organization_id, assigned_to, title, job_id, due_date, status, last_reminded_at, job:job_id(client_name)")
         .eq("id", taskId)
         .eq("organization_id", organizationId)
         .maybeSingle();
@@ -227,8 +235,9 @@ async function runReminderForTask(organizationId, taskId) {
     }
     const jobRow = task.job;
     const jobTitle = (Array.isArray(jobRow) ? jobRow[0] : jobRow)?.client_name ?? "Job";
-    const assigneeRow = task.assignee;
-    const assigneeEmail = (Array.isArray(assigneeRow) ? assigneeRow[0] : assigneeRow)?.email ?? null;
+    let assigneeEmail = null;
+    const { data: assigneeUser } = await supabaseClient_1.supabase.from("users").select("email").eq("id", task.assigned_to).maybeSingle();
+    assigneeEmail = assigneeUser?.email ?? null;
     const prefs = await (0, notifications_1.getNotificationPreferences)(task.assigned_to);
     const shouldQueueEmail = assigneeEmail && prefs.email_enabled && prefs.email_deadline_reminder;
     const isOverdue = new Date(task.due_date).getTime() < now.getTime();

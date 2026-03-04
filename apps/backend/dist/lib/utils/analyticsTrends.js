@@ -22,16 +22,16 @@ function calendarYearBounds() {
 }
 function weekStart(d) {
     const x = new Date(d);
-    const day = x.getDay();
-    const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-    x.setDate(diff);
-    x.setHours(0, 0, 0, 0);
+    const day = x.getUTCDay();
+    const diff = x.getUTCDate() - day + (day === 0 ? -6 : 1);
+    x.setUTCDate(diff);
+    x.setUTCHours(0, 0, 0, 0);
     return x.toISOString().slice(0, 10);
 }
 function monthStart(d) {
     const x = new Date(d);
-    x.setDate(1);
-    x.setHours(0, 0, 0, 0);
+    x.setUTCDate(1);
+    x.setUTCHours(0, 0, 0, 0);
     return x.toISOString().slice(0, 10);
 }
 function toDateKey(value) {

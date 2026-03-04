@@ -130,22 +130,102 @@ async function authenticateInternal(req, res, next) {
             });
             return;
         }
-        if (!userRecord.organization_id) {
-            // User exists but has no organization_id
-            res.status(403).json({
-                message: "No organization assigned",
-                code: "NO_ORGANIZATION",
-                hint: "User account is missing organization assignment. Please contact support."
-            });
-            return;
+        let organizationId;
+        let role;
+        const headerOrgId = req.headers["x-organization-id"]?.trim();
+        const queryOrgId = typeof req.query?.organization_id === "string" ? req.query.organization_id.trim() : undefined;
+        const requestedOrgId = headerOrgId || queryOrgId;
+        if (requestedOrgId) {
+            // Honor explicit selector: validate against organization_members; legacy fallback when memberships empty
+            const { data: memberRows, error: memberError } = await supabaseClient_1.supabase
+                .from("organization_members")
+                .select("organization_id, role")
+                .eq("user_id", userId)
+                .order("organization_id", { ascending: true });
+            if (memberError) {
+                console.error("[AUTH] Membership query error:", memberError);
+                res.status(500).json({
+                    message: "Internal server error",
+                    code: "DATABASE_ERROR",
+                    hint: "Failed to load organization membership",
+                });
+                return;
+            }
+            if (!memberRows?.length) {
+                // Legacy: allow requestedOrgId only when users.organization_id exists and equals requestedOrgId
+                if (userRecord.organization_id && userRecord.organization_id === requestedOrgId) {
+                    organizationId = requestedOrgId;
+                    role = userRecord.role ?? undefined;
+                }
+                else {
+                    res.status(403).json({
+                        message: "No organization assigned",
+                        code: "NO_ORGANIZATION",
+                        hint: "User account is missing organization assignment. Please contact support.",
+                    });
+                    return;
+                }
+            }
+            else {
+                const membership = memberRows.find((m) => m.organization_id === requestedOrgId);
+                if (!membership) {
+                    res.status(403).json({
+                        message: "Organization not accessible",
+                        code: "ORGANIZATION_NOT_ACCESSIBLE",
+                        hint: "The specified organization is not one of your memberships.",
+                    });
+                    return;
+                }
+                organizationId = membership.organization_id;
+                role = membership.role ?? userRecord.role ?? undefined;
+            }
+        }
+        else if (userRecord.organization_id) {
+            organizationId = userRecord.organization_id;
+            role = userRecord.role ?? undefined;
+        }
+        else {
+            // No selector: membership fallback. Single-membership: use it; multi-membership: require explicit selector.
+            const { data: memberRows, error: memberError } = await supabaseClient_1.supabase
+                .from("organization_members")
+                .select("organization_id, role")
+                .eq("user_id", userId)
+                .order("organization_id", { ascending: true });
+            if (memberError) {
+                console.error("[AUTH] Membership query error:", memberError);
+                res.status(500).json({
+                    message: "Internal server error",
+                    code: "DATABASE_ERROR",
+                    hint: "Failed to load organization membership",
+                });
+                return;
+            }
+            if (!memberRows?.length) {
+                res.status(403).json({
+                    message: "No organization assigned",
+                    code: "NO_ORGANIZATION",
+                    hint: "User account is missing organization assignment. Please contact support.",
+                });
+                return;
+            }
+            if (memberRows.length === 1) {
+                organizationId = memberRows[0].organization_id;
+                role = memberRows[0].role ?? userRecord.role ?? undefined;
+            }
+            else {
+                res.status(403).json({
+                    message: "Organization selection required",
+                    code: "ORGANIZATION_SELECTION_REQUIRED",
+                    hint: "User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.",
+                });
+                return;
+            }
         }
         if (userRecord.archived_at) {
             res.status(403).json({ message: "Account disabled" });
             return;
         }
-        const organizationId = userRecord.organization_id;
         const email = userRecord.email ?? authData.user.email ?? undefined;
-        const role = userRecord.role ?? undefined;
         const mustResetPassword = Boolean(userRecord.must_reset_password);
         const planInfo = await loadPlanForOrganization(organizationId);
         const planCode = planInfo.planCode;
