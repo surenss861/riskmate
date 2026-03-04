@@ -1,7 +1,8 @@
+import AVFoundation
 import Combine
 import Foundation
 import Speech
-import AVFoundation
+import UIKit
 
 /// Voice dictation for search (e.g. RMSearchBar). Uses SFSpeechRecognizer + AVAudioEngine.
 /// Reduce Motion: no waveform; just state changes + text.
