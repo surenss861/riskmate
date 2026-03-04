@@ -28,14 +28,19 @@ function getClientMetadata(): { client: string; appVersion: string; deviceId: st
   }
 }
 
+/** Match Bearer scheme case-insensitively per HTTP auth semantics; trim token. */
+const BEARER_PREFIX = /^bearer\s+/i
+
 export async function getSessionToken(request?: NextRequest): Promise<string | null> {
-  // First, try to get token from Authorization header (sent by frontend)
+  // First, try to get token from Authorization header (sent by frontend / mobile sync)
   if (request) {
     const authHeader = request.headers.get('authorization')
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7)
-      console.log('[Proxy] Using token from Authorization header')
-      return token
+    if (authHeader && BEARER_PREFIX.test(authHeader)) {
+      const token = authHeader.replace(BEARER_PREFIX, '').trim()
+      if (token) {
+        console.log('[Proxy] Using token from Authorization header')
+        return token
+      }
     }
   }
 
