@@ -34,6 +34,8 @@ struct JobCommentsView: View {
     @State private var updatingCommentId: String?
     @State private var deletingCommentId: String?
     @State private var editOrDeleteError: String?
+    /// IDs of comments/replies just posted for pop-in animation (scale 0.96 → 1) + haptic
+    @State private var newlyPostedIds: Set<String> = []
     @StateObject private var realtimeService = JobCommentsRealtimeService()
 
     var body: some View {
@@ -68,6 +70,28 @@ struct JobCommentsView: View {
                         } else {
                             ForEach(comments) { comment in
                                 commentRow(comment)
+                                    .contextMenu {
+                                        Button {
+                                            Haptics.tap()
+                                            if expandedReplyForId == comment.id { expandedReplyForId = nil }
+                                            else {
+                                                expandedReplyForId = comment.id
+                                                if repliesByParent[comment.id] == nil { Task { await loadReplies(commentId: comment.id) } }
+                                            }
+                                        } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+                                        if canResolve(comment) {
+                                            Button {
+                                                Task { await toggleResolve(comment) }
+                                            } label: {
+                                                Label(comment.isResolved == true ? "Unresolve" : "Resolve", systemImage: comment.isResolved == true ? "circle" : "checkmark.circle")
+                                            }
+                                        }
+                                        Menu {
+                                            Button { Haptics.tap() } label: { Label("👍 Thumbs up", systemImage: "hand.thumbsup") }
+                                            Button { Haptics.tap() } label: { Label("✅ Done", systemImage: "checkmark.circle") }
+                                            Button { Haptics.tap() } label: { Label("⚠️ Warning", systemImage: "exclamationmark.triangle") }
+                                        } label: { Label("Quick reaction", systemImage: "face.smiling") }
+                                    }
                             }
                             if hasMoreComments {
                                 HStack {
@@ -288,149 +312,181 @@ struct JobCommentsView: View {
         return palette[hash % palette.count]
     }
 
+    private var isCurrentUser(_ comment: JobComment) -> Bool {
+        comment.authorId == currentUserId
+    }
+
     private func commentRow(_ comment: JobComment) -> some View {
-        VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-            HStack(alignment: .center) {
-                authorInitialsBadge(comment)
-                Text(authorDisplay(comment))
-                    .font(RMTheme.Typography.bodySmallBold)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
-                if comment.editedAt != nil {
-                    Text("(edited)")
+        let isMe = isCurrentUser(comment)
+        let isResolved = comment.isResolved == true
+        let justPosted = newlyPostedIds.contains(comment.id)
+        return HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
+            if isMe { Spacer(minLength: 48) }
+            if !isMe { authorInitialsBadge(comment) }
+            VStack(alignment: isMe ? .trailing : .leading, spacing: RMTheme.Spacing.xs) {
+                HStack(alignment: .center, spacing: 4) {
+                    if !isMe {
+                        Text(authorDisplay(comment))
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    if comment.editedAt != nil {
+                        Text("(edited)")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                    Text(relativeTime(comment.createdAt))
                         .font(RMTheme.Typography.caption)
                         .foregroundColor(RMTheme.Colors.textTertiary)
-                }
-                Spacer()
-                Text(relativeTime(comment.createdAt))
-                    .font(RMTheme.Typography.caption)
-                    .foregroundColor(RMTheme.Colors.textTertiary)
-                if comment.isResolved == true {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                    if isMe {
+                        Text(authorDisplay(comment))
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    if isResolved {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12))
+                            Text("Resolved")
+                                .font(RMTheme.Typography.caption2)
+                        }
                         .foregroundColor(RMTheme.Colors.success)
-                }
-                if canResolve(comment) {
-                    let isResolving = resolvingCommentId == comment.id
-                    Button {
-                        Task { await toggleResolve(comment) }
-                    } label: {
-                        if isResolving {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                        } else if comment.isResolved == true {
-                            Image(systemName: "circle")
-                                .font(.system(size: 14))
-                                .foregroundColor(RMTheme.Colors.textTertiary)
-                        } else {
-                            Image(systemName: "checkmark.circle")
+                    }
+                    if canResolve(comment) && !isResolved {
+                        let isResolving = resolvingCommentId == comment.id
+                        Button {
+                            Task { await toggleResolve(comment) }
+                        } label: {
+                            if isResolving {
+                                ProgressView().scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isResolving)
+                    }
+                    if canEditOrDelete(comment) && editCommentId != comment.id {
+                        Button {
+                            editCommentId = comment.id
+                            editContent = comment.content
+                            editOrDeleteError = nil
+                        } label: {
+                            Image(systemName: "pencil")
                                 .font(.system(size: 14))
                                 .foregroundColor(RMTheme.Colors.textSecondary)
                         }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isResolving)
-                }
-                if canEditOrDelete(comment) && editCommentId != comment.id {
-                    Button {
-                        editCommentId = comment.id
-                        editContent = comment.content
-                        editOrDeleteError = nil
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 14))
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                    Button {
-                        commentToDelete = comment
-                        editOrDeleteError = nil
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14))
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if editCommentId == comment.id {
-                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-                    TextField("Edit comment…", text: $editContent, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(RMTheme.Typography.bodySmall)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                        .padding(RMTheme.Spacing.sm)
-                        .background(RMTheme.Colors.inputFill)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
-                                .stroke(RMTheme.Colors.border, lineWidth: 1)
-                        )
-                        .lineLimit(2...6)
-                    if let err = editOrDeleteError {
-                        Text(err)
-                            .font(RMTheme.Typography.caption2)
-                            .foregroundColor(RMTheme.Colors.error)
-                    }
-                    HStack(spacing: RMTheme.Spacing.sm) {
-                        Button("Save") {
-                            Task { await saveEdit(commentId: comment.id) }
-                        }
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.accent)
-                        .disabled(updatingCommentId == comment.id || editContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        if updatingCommentId == comment.id {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                        }
-                        Button("Cancel") {
-                            editCommentId = nil
-                            editContent = ""
+                        .buttonStyle(.plain)
+                        Button {
+                            commentToDelete = comment
                             editOrDeleteError = nil
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14))
+                                .foregroundColor(RMTheme.Colors.textSecondary)
                         }
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.top, 4)
-            } else {
-                contentWithMentions(comment.content)
-                    .font(RMTheme.Typography.bodySmall)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if expandedReplyForId == comment.id {
-                        expandedReplyForId = nil
-                    } else {
-                        expandedReplyForId = comment.id
-                        if repliesByParent[comment.id] == nil && loadingRepliesForId != comment.id {
-                            Task { await loadReplies(commentId: comment.id) }
+                if editCommentId == comment.id {
+                    VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                        TextField("Edit comment…", text: $editContent, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(RMTheme.Typography.bodySmall)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                            .padding(RMTheme.Spacing.sm)
+                            .background(RMTheme.Colors.inputFill)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                                    .stroke(RMTheme.Colors.border, lineWidth: 1)
+                            )
+                            .lineLimit(2...6)
+                        if let err = editOrDeleteError {
+                            Text(err)
+                                .font(RMTheme.Typography.caption2)
+                                .foregroundColor(RMTheme.Colors.error)
+                        }
+                        HStack(spacing: RMTheme.Spacing.sm) {
+                            Button("Save") { Task { await saveEdit(commentId: comment.id) } }
+                                .font(RMTheme.Typography.caption)
+                                .foregroundColor(RMTheme.Colors.accent)
+                                .disabled(updatingCommentId == comment.id || editContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            if updatingCommentId == comment.id { ProgressView().scaleEffect(0.7) }
+                            Button("Cancel") {
+                                editCommentId = nil
+                                editContent = ""
+                                editOrDeleteError = nil
+                            }
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
                         }
                     }
+                    .padding(.top, 4)
+                } else if !isResolved {
+                    contentWithMentions(comment.content)
+                        .font(RMTheme.Typography.bodySmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    contentWithMentions(comment.content)
+                        .font(RMTheme.Typography.bodySmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(0.7)
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: expandedReplyForId == comment.id ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("Reply")
-                    if (comment.replyCount ?? 0) > 0 {
-                        Text("(\(comment.replyCount!))")
-                            .foregroundColor(RMTheme.Colors.textTertiary)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if expandedReplyForId == comment.id {
+                            expandedReplyForId = nil
+                        } else {
+                            expandedReplyForId = comment.id
+                            if repliesByParent[comment.id] == nil && loadingRepliesForId != comment.id {
+                                Task { await loadReplies(commentId: comment.id) }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: expandedReplyForId == comment.id ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Reply")
+                        if (comment.replyCount ?? 0) > 0 {
+                            Text("(\(comment.replyCount!))")
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                        }
+                    }
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                if expandedReplyForId == comment.id {
+                    repliesSection(comment)
+                }
+            }
+            .padding(RMTheme.Spacing.md)
+            .frame(maxWidth: UIScreen.main.bounds.width * 0.78, alignment: isMe ? .trailing : .leading)
+            .background(
+                RoundedRectangle(cornerRadius: RMTheme.Radius.md)
+                    .fill(isMe ? RMTheme.Colors.accent.opacity(0.22) : RMTheme.Colors.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RMTheme.Radius.md)
+                    .stroke(isMe ? RMTheme.Colors.accent.opacity(0.35) : RMTheme.Colors.border, lineWidth: 1)
+            )
+            Spacer(minLength: isMe ? 48 : 0)
+        }
+        .scaleEffect(justPosted ? 0.96 : 1.0)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: justPosted)
+        .onAppear {
+            if justPosted {
+                Task {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        newlyPostedIds.remove(comment.id)
                     }
                 }
-                .font(RMTheme.Typography.caption)
-                .foregroundColor(RMTheme.Colors.textSecondary)
-            }
-            .buttonStyle(.plain)
-
-            if expandedReplyForId == comment.id {
-                repliesSection(comment)
             }
         }
-        .padding(RMTheme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RMTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
     }
 
     @ViewBuilder
@@ -731,6 +787,7 @@ struct JobCommentsView: View {
                 _ = try await APIClient.shared.unresolveComment(commentId: comment.id)
             } else {
                 _ = try await APIClient.shared.resolveComment(commentId: comment.id)
+                Haptics.success()
             }
             await loadComments()
         } catch {
@@ -787,8 +844,10 @@ struct JobCommentsView: View {
         mentionQuery = nil
         defer { isPosting = false }
         do {
-            _ = try await APIClient.shared.createComment(jobId: jobId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
+            let created = try await APIClient.shared.createComment(jobId: jobId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
+            Haptics.success()
             newContent = ""
+            newlyPostedIds.insert(created.id)
             await loadComments()
         } catch {
             loadError = error.localizedDescription
@@ -803,7 +862,9 @@ struct JobCommentsView: View {
         if activeReplyMentionParentId == commentId { activeReplyMentionParentId = nil }
         defer { replyPostingForId = nil }
         do {
-            _ = try await APIClient.shared.createReply(commentId: commentId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
+            let created = try await APIClient.shared.createReply(commentId: commentId, content: content, mentionUserIds: mentionUserIds.isEmpty ? nil : mentionUserIds)
+            Haptics.success()
+            newlyPostedIds.insert(created.id)
             replyContent.removeValue(forKey: commentId)
             await loadReplies(commentId: commentId)
             await loadComments()

@@ -248,6 +248,9 @@ struct ContentView: View {
             .tag(MainTab.settings)
         }
         .tint(RMTheme.Colors.accent)
+        .onChange(of: selectedTab) { _, _ in
+            Haptics.tap()
+        }
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
             guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
             workRecordsFilter = filter

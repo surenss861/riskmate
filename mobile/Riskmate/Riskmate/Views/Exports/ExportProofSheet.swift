@@ -227,6 +227,7 @@ struct ExportProofSheet: View {
                 type: type,
                 initiatedFromForeground: true
             )
+            Haptics.success()
             print("🐛 [ExportProofSheet] Export created successfully")
         } catch {
             print("🐛 [ExportProofSheet] Export FAILED: \(error)")

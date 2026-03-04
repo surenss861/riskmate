@@ -314,7 +314,6 @@ struct SignatureCaptureSheet: View {
             signerTitle: title,
             attestationText: attestationStatement
         )
-        Haptics.success()
         onSave(data) { result in
             isSubmitting = false
             switch result {

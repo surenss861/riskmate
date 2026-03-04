@@ -518,6 +518,7 @@ struct JobSignaturesView: View {
                 attestationText: data.attestationText
             )
             signingContext = nil
+            Haptics.success()
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadData()
             completion(.success(()))

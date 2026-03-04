@@ -44,12 +44,13 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .center, spacing: 24) {
                     heroRegion
                     compactCard
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
                 .padding(.bottom, 100)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -75,7 +76,7 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
     }
 
     private var heroRegion: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .center, spacing: 14) {
             Text("Riskmate")
                 .font(.system(size: 15, weight: .semibold, design: .default))
                 .foregroundColor(RMHeroColors.subtext)
@@ -87,6 +88,7 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
                 .lineLimit(2)
                 .lineSpacing(-2)
                 .tracking(-0.5)
+                .multilineTextAlignment(.center)
                 .shadow(color: Color.black.opacity(0.4), radius: 6, x: 0, y: 2)
                 .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
 
@@ -94,6 +96,7 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
                 .font(.system(size: 15, weight: .regular, design: .default))
                 .foregroundColor(RMHeroColors.subtext)
                 .lineSpacing(2)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 5) {
@@ -101,8 +104,8 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.85))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 999)
                     .fill(Color.white.opacity(0.07))
@@ -112,7 +115,7 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
                     )
             )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var compactCard: some View {

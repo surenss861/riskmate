@@ -93,23 +93,17 @@ struct JobDetailView: View {
                                 .padding(.top, RMTheme.Spacing.md)
                         }
                         
-                        // Sticky segmented control (only visible tabs; no Exports)
-                        Picker("Job sections", selection: $selectedTab) {
-                            ForEach(visibleTabs, id: \.self) { tab in
-                                Text(tab.title).tag(tab)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityLabel("Job sections")
-                        .accessibilityHint("Tabs: \(visibleTabs.map(\.title).joined(separator: ", "))")
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        // Sticky premium tab bar: scrollable pills, blur, animated capsule, optional badges
+                        JobDetailTabBar(
+                            tabs: visibleTabs,
+                            selection: $selectedTab,
+                            badgeCounts: [:] // TODO: wire activity unread, tasks due soon, evidence new when API available
+                        )
                         .onAppear {
                             if let tab = initialTab, visibleTabs.contains(tab) {
                                 selectedTab = tab
                             }
                         }
-                        .padding(.vertical, RMTheme.Spacing.sm)
-                        .background(RMTheme.Colors.background)
                         .onChange(of: tabValidationKey) { _, _ in
                             if selectedTab == .hazards && !isLoadingHazards && hazardsCount == 0 {
                                 selectedTab = .overview
@@ -120,7 +114,7 @@ struct JobDetailView: View {
                             }
                         }
                         
-                        // Tab Content (only visible tabs)
+                        // Tab content with subtle crossfade + horizontal offset on switch
                         TabView(selection: $selectedTab) {
                             ForEach(visibleTabs, id: \.self) { tab in
                                 tabContent(for: tab, job: job)
@@ -128,6 +122,7 @@ struct JobDetailView: View {
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
+                        .animation(.easeInOut(duration: 0.22), value: selectedTab)
                     }
                 } else {
                     RMEmptyState(
@@ -226,10 +221,7 @@ struct JobDetailView: View {
                     Task { await checkForFailedExports() }
                 }
             }
-            .onChange(of: selectedTab) { _, _ in
-                // Light haptic on tab change
-                Haptics.tap()
-            }
+            // Tab haptic handled inside JobDetailTabBar
             .sheet(isPresented: $showPDFViewer) {
                 if let pdfURL = pdfURL {
                     RMPDFViewerScreen(url: pdfURL)
