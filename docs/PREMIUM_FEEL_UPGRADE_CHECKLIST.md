@@ -39,15 +39,15 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Live inserts | `JobsListView` + RealtimeEventService | New items animate in when realtime wired | When realtime ready |
 | High-risk glow | `JobCard.swift` | Subtle stroke (opacity 0.28) for high/critical risk; no pulse | ✅ |
 
-### B4) JobDetailView — Tabs polish
+### B4) JobDetailView — Tabs polish ✅ Package 2 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Overview: evidence progress ring | `JobDetailView` (Overview tab) | Ring + “Risk breakdown” mini chart + “Next action” CTA |
-| Activity: stagger + “New” chip | `Views/Job/JobActivityView.swift` | Timeline entries `.rmAppearIn(staggerIndex:)`; “New activity” pulses once |
-| Evidence: progress + upload bar | `EvidenceQuickBar`, `EvidenceCaptureSheet`, `EvidenceUploadStatusBar` | Categories show progress; upload bar animates smoothly |
-| Signatures: “Signed” stamp | `Views/Job/JobSignaturesView.swift` | After save: overlay stamp animation + haptic |
-| Tasks: complete animation | `Views/Job/JobTasksView.swift` | Optional: row → “Completed” chip; or keep current toast |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Overview: evidence ring + next action | `RMEvidenceProgressRing.swift`, `RMNextActionCard.swift`, `OverviewTab` | Ring (overallPct); next-action card (evidence → signature); onSelectTab | ✅ |
+| Activity: stagger + “New” chip | `JobActivityView.swift` | `.rmAppearIn(staggerIndex: min(i,12))`; “New activity” chip 0.6s, gated by lastPulsedEventId | ✅ |
+| Evidence: upload bar smoothing | `EvidenceUploadStatusBar.swift` | `.animation(RMMotion.easeOut, value: statusText)` | ✅ |
+| Signatures: “Signed” stamp | `JobSignaturesView.swift` | Overlay “SIGNED” with springSoft, fades after 1.2s; single haptic | ✅ |
+| Tasks: complete animation | `JobTasksView.swift` | Row → “Completed” chip 0.22s then loadTasks() | ✅ |
 
 ### B5) Ledger / Proof — Cinematic but clean
 

@@ -17,6 +17,7 @@ struct JobTasksView: View {
     @State private var newTaskAssigneeId: String?
     @State private var newTaskDueDate: Date?
     @State private var addSheetMembers: [TeamMember] = []
+    @State private var completingTaskId: String?
 
     struct TaskItem: Codable, Identifiable {
         let id: String
@@ -113,8 +114,12 @@ struct JobTasksView: View {
                     if !inProgress.isEmpty {
                         Section(header: sectionHeader("In Progress")) {
                             ForEach(inProgress) { task in
-                                taskRow(task)
-                                    .onTapGesture { selectedTask = task }
+                                if task.id == completingTaskId {
+                                    completedChipRow(title: task.title)
+                                } else {
+                                    taskRow(task)
+                                        .onTapGesture { selectedTask = task }
+                                }
                             }
                         }
                     }
@@ -122,8 +127,12 @@ struct JobTasksView: View {
                     if !todo.isEmpty {
                         Section(header: sectionHeader("To Do")) {
                             ForEach(todo) { task in
-                                taskRow(task)
-                                    .onTapGesture { selectedTask = task }
+                                if task.id == completingTaskId {
+                                    completedChipRow(title: task.title)
+                                } else {
+                                    taskRow(task)
+                                        .onTapGesture { selectedTask = task }
+                                }
                             }
                         }
                     }
@@ -418,7 +427,11 @@ struct JobTasksView: View {
         do {
             try await APIClient.shared.completeTask(id: task.id)
             UserDefaultsManager.Streaks.recordDayLogged()
-            await loadTasks()
+            await MainActor.run {
+                withAnimation(RMMotion.easeOut) {
+                    completingTaskId = task.id
+                }
+            }
             ToastCenter.shared.show("Task completed", systemImage: "checkmark.circle.fill", style: .success)
             if let creatorId = task.createdBy {
                 Task {
@@ -429,9 +442,32 @@ struct JobTasksView: View {
                     }
                 }
             }
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            await loadTasks()
+            await MainActor.run { completingTaskId = nil }
         } catch {
             loadError = error.localizedDescription
         }
+    }
+    
+    private func completedChipRow(title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(RMTheme.Colors.success)
+            Text("Completed")
+                .font(RMTheme.Typography.captionBold)
+                .foregroundColor(RMTheme.Colors.success)
+            Text(title)
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, RMTheme.Spacing.sm)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RMTheme.Colors.success.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
+        .listRowBackground(Color.clear)
     }
 
     private func deleteTask(id: String) async {

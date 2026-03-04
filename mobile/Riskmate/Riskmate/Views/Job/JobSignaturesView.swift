@@ -19,6 +19,7 @@ struct JobSignaturesView: View {
     @State private var signingContext: SigningContext?
     @State private var isCreatingRun = false
     @State private var showManageRunsSheet = false
+    @State private var showSignedStamp = false
 
     private let packetType = "insurance"
     private var rbac: RBAC {
@@ -47,6 +48,7 @@ struct JobSignaturesView: View {
     }()
 
     var body: some View {
+        ZStack {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.sectionSpacing) {
                 if isLoading {
@@ -147,6 +149,28 @@ struct JobSignaturesView: View {
                 Text(msg)
             }
         }
+            if showSignedStamp {
+                signedStampOverlay
+            }
+        }
+    }
+    
+    private var signedStampOverlay: some View {
+        Text("SIGNED")
+            .font(.system(size: 28, weight: .bold))
+            .foregroundColor(RMTheme.Colors.accent)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(RMTheme.Colors.surface.opacity(0.95))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(RMTheme.Colors.accent.opacity(0.5), lineWidth: 2)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .scaleEffect(showSignedStamp ? 1.0 : 0.9)
+            .opacity(showSignedStamp ? 1 : 0)
+            .animation(RMMotion.springSoft, value: showSignedStamp)
+            .allowsHitTesting(false)
     }
 
     private func isRunSignable(_ status: String) -> Bool {
@@ -520,9 +544,14 @@ struct JobSignaturesView: View {
             signingContext = nil
             Haptics.success()
             UserDefaultsManager.Streaks.recordDayLogged()
+            showSignedStamp = true
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadData()
             completion(.success(()))
+            Task {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                await MainActor.run { showSignedStamp = false }
+            }
         } catch let error as APIError {
             let code = error.statusCode ?? 0
             if code == 403 || code == 409 {

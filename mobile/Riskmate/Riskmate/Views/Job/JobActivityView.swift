@@ -25,6 +25,8 @@ struct JobActivityView: View {
     @State private var loadError: String?
     @State private var loadMoreError: String?
     @StateObject private var realtimeService = JobActivityRealtimeService()
+    @State private var showNewActivityChip = false
+    @State private var lastPulsedEventId: String?
 
     private var hasActiveFilters: Bool {
         appliedFilters.actorId != nil
@@ -45,6 +47,9 @@ struct JobActivityView: View {
                 VStack(spacing: 0) {
                     if let error = loadError {
                         loadErrorBanner(message: error) { Task { await retryLoadInitial() } }
+                    }
+                    if showNewActivityChip {
+                        newActivityChip
                     }
                     activityList
                     if let moreError = loadMoreError {
@@ -74,6 +79,14 @@ struct JobActivityView: View {
             events.insert(event, at: 0)
             offset += 1
             Task { await loadActorsIfNeeded() }
+            if lastPulsedEventId != event.id {
+                lastPulsedEventId = event.id
+                showNewActivityChip = true
+                Task {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    await MainActor.run { showNewActivityChip = false }
+                }
+            }
             ToastCenter.shared.show("New activity", systemImage: "bell.badge", style: .info)
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -198,10 +211,30 @@ struct JobActivityView: View {
         .background(RMTheme.Colors.surface.opacity(0.8))
     }
 
+    private var newActivityChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "bell.badge.fill")
+                .font(.system(size: 12))
+            Text("New activity")
+                .font(RMTheme.Typography.captionBold)
+        }
+        .foregroundColor(RMTheme.Colors.accent)
+        .padding(.horizontal, RMTheme.Spacing.sm)
+        .padding(.vertical, 6)
+        .background(RMTheme.Colors.accent.opacity(0.15))
+        .clipShape(Capsule())
+        .scaleEffect(showNewActivityChip ? 1.0 : 0.98)
+        .opacity(showNewActivityChip ? 1 : 0)
+        .animation(RMMotion.easeOut, value: showNewActivityChip)
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .padding(.vertical, RMTheme.Spacing.xs)
+    }
+    
     private var activityList: some View {
         List {
-            ForEach(events) { event in
+            ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                 ActivityCardView(event: event)
+                    .rmAppearIn(staggerIndex: min(index, 12))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.visible)
                     .listRowInsets(EdgeInsets(

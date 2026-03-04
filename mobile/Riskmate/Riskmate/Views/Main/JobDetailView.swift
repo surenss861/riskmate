@@ -332,7 +332,7 @@ struct JobDetailView: View {
         if let job = job {
             switch tab {
             case .overview:
-                OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0, onRefresh: { await refreshJobDetail() })
+                OverviewTab(job: job, showManagedOnWebCard: hazardsCount == 0 && controlsCount == 0, onRefresh: { await refreshJobDetail() }, onSelectTab: { selectedTab = $0 })
             case .hazards:
                 HazardsTab(jobId: jobId, initialHazardId: initialHazardId, onRefresh: { await refreshJobDetail() })
             case .controls:
@@ -515,10 +515,20 @@ struct OverviewTab: View {
     let job: Job
     var showManagedOnWebCard: Bool = false
     var onRefresh: (() async -> Void)? = nil
+    var onSelectTab: ((JobDetailTab) -> Void)? = nil
     @State private var recentReceipts: [ActionReceipt] = []
     @State private var evidenceCount: Int = 0
     @State private var evidenceRequired: Int = 5
     @EnvironmentObject private var quickAction: QuickActionRouter
+    
+    private var overallEvidencePct: Double {
+        let req = max(1, evidenceRequired)
+        return min(100, Double(evidenceCount) / Double(req) * 100)
+    }
+    
+    private var isEvidenceIncomplete: Bool {
+        evidenceCount < evidenceRequired
+    }
     
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -532,33 +542,32 @@ struct OverviewTab: View {
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 }
                 
-                // Add Evidence CTA at top (scrolls with content; keeps header clean)
+                // Evidence progress ring + Next action card (deterministic: evidence → signature → tasks → log update)
                 if !EntitlementsManager.shared.isAuditor() {
-                    Button {
-                        Haptics.tap()
-                        quickAction.presentEvidence(jobId: job.id)
-                    } label: {
-                        HStack(spacing: RMTheme.Spacing.sm) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text("Add Evidence")
-                                .font(RMTheme.Typography.bodyBold)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .opacity(0.6)
+                    HStack(spacing: RMTheme.Spacing.lg) {
+                        RMEvidenceProgressRing(
+                            beforePct: 0,
+                            duringPct: 0,
+                            afterPct: 0,
+                            overallPct: overallEvidencePct
+                        )
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Evidence")
+                                .font(RMTheme.Typography.bodySmallBold)
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            Text("\(evidenceCount)/\(evidenceRequired) items")
+                                .font(RMTheme.Typography.caption)
+                                .foregroundColor(RMTheme.Colors.textSecondary)
                         }
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                        .padding(RMTheme.Spacing.md)
-                        .frame(maxWidth: .infinity)
-                        .background(RMTheme.Colors.accent.opacity(0.15))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(RMTheme.Colors.accent.opacity(0.3), lineWidth: 1)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        Spacer()
                     }
+                    .padding(RMTheme.Spacing.md)
+                    .background(RMTheme.Colors.surface.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    
+                    nextActionCard
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 }
                 
                 // Next Step card: status + secondary "Add evidence" link (primary CTA is the top row)
@@ -617,8 +626,30 @@ struct OverviewTab: View {
             await loadEvidenceCount()
         }
         .task {
+            evidenceRequired = job.evidenceRequired ?? 5
             await loadRecentReceipts()
             await loadEvidenceCount()
+        }
+    }
+    
+    @ViewBuilder
+    private var nextActionCard: some View {
+        if isEvidenceIncomplete {
+            RMNextActionCard(
+                title: "Add evidence",
+                subtitle: "\(max(0, evidenceRequired - evidenceCount)) of \(evidenceRequired) needed to unlock Proof Pack",
+                icon: "camera.fill",
+                actionTitle: "Add evidence",
+                action: { quickAction.presentEvidence(jobId: job.id) }
+            )
+        } else {
+            RMNextActionCard(
+                title: "Collect signature",
+                subtitle: "Team signatures for this run",
+                icon: "signature",
+                actionTitle: "Go to Signatures",
+                action: { onSelectTab?(.signatures) }
+            )
         }
     }
     

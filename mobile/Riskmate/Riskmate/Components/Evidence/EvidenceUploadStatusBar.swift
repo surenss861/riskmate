@@ -170,6 +170,7 @@ struct EvidenceUploadStatusBar: View {
                                 .stroke(statusColor.opacity(0.2), lineWidth: 0.5)
                         )
                 )
+                .animation(RMMotion.easeOut, value: statusText)
                 
                 // Error details (expanded)
                 if showErrorDetails && !failureReasons.isEmpty {
