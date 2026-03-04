@@ -1,14 +1,31 @@
 import SwiftUI
 
-/// Integrity surface - shows ledger status, last recorded, proof pack count
+/// Integrity surface - shows ledger status, last recorded, proof pack count.
+/// Optional scrollOffset: when provided and Reduce Motion off, a background layer has subtle parallax (clamped ±4pt).
 struct RMIntegritySurface: View {
     let jobId: String
+    /// Scroll offset from parent (e.g. PreferenceKey). Parallax disabled when nil or Reduce Motion.
+    var scrollOffset: CGFloat = 0
     @State private var integrity: IntegrityStatus?
     @State private var isLoading = true
     
+    private var parallaxY: CGFloat {
+        guard !RMMotion.reduceMotion else { return 0 }
+        let raw = scrollOffset * 0.03
+        return min(4, max(-4, raw))
+    }
+    
     var body: some View {
         RMGlassCard {
-            VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+            ZStack {
+                // Background layer: subtle parallax (icons/noise feel)
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(RMTheme.Colors.categoryGovernance.opacity(0.06))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .offset(y: parallaxY)
+                
+                VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                 HStack {
                     Image(systemName: "checkmark.shield.fill")
                         .foregroundColor(RMTheme.Colors.categoryGovernance)
@@ -49,6 +66,7 @@ struct RMIntegritySurface: View {
                         .font(RMTheme.Typography.bodySmall)
                         .foregroundColor(RMTheme.Colors.textSecondary)
                 }
+            }
             }
         }
         .task {

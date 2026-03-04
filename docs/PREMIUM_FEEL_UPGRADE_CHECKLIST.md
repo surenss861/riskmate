@@ -49,13 +49,14 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Signatures: “Signed” stamp | `JobSignaturesView.swift` | Overlay “SIGNED” with springSoft, fades after 1.2s; single haptic | ✅ |
 | Tasks: complete animation | `JobTasksView.swift` | Row → “Completed” chip 0.22s then loadTasks() | ✅ |
 
-### B5) Ledger / Proof — Cinematic but clean
+### B5) Ledger / Proof — Cinematic but clean ✅ Package 3 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Receipt “seal” on open | `Views/Ledger/ProofReceiptDetailsView.swift` | “Hashing…” (e.g. `TickingTimestamp`) then “Verified” strip slides in |
-| Copy hash | Ledger hash views | Tap → copy → toast “Copied” + tiny haptic |
-| Integrity parallax | `RMLedgerIntegrity`, `RMIntegritySurface` | 2–4px shift from scroll (e.g. `ScrollOffsetPreferenceKey`) |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Receipt “seal” on open | `ProofReceiptDetailsView.swift` | “Hashing…” then “Verified” strip; Reduce Motion = instant; once per appear | ✅ |
+| Copy hash | `ProofReceiptDetailsView`, `VerificationDetailsView`, `LedgerReceiptCard` | Tap → copy → toast “Copied” + `Haptics.impact(.light)` | ✅ |
+| Integrity parallax | `RMIntegritySurface`, `ExportsTab` + `ScrollOffsetPreferenceKey` | 2–4px background layer; Reduce Motion = off | ✅ |
+| Export receipt sealing | `ExportReceiptView.swift` | Hashing… → Locked → Verified on first appear; Reduce Motion = final state | ✅ |
 
 ### B6) TeamView — Workspace feel
 
@@ -112,7 +113,8 @@ Run on a **real device** every release:
 - [ ] Post comment + resolve — one haptic; correct animations
 - [ ] Upload evidence — progress smooth; completion feedback
 - [ ] Generate export — receipt moment feels satisfying
-- [ ] **Reduce Motion** on — no shimmer; no y-offset; toggling in Settings updates without restart
+- [ ] **Reduce Motion** on — no shimmer; no y-offset; no parallax; seal/receipt shows final state instantly; toggling in Settings updates without restart
+- [ ] **Package 3:** Opening proof receipt shows hashing → verified (or instant with Reduce Motion); copy hash → “Copied” toast + light haptic; Integrity parallax subtle and clamped, off when Reduce Motion; seal does not repeat on back/forward
 - [ ] Voice mic — doesn’t block UI; feels guided (when implemented)
 - [ ] FAB drag in scroll view — doesn’t steal vertical scroll
 - [ ] Holographic badge drag in horizontal list — doesn’t hijack swipe-back
@@ -125,14 +127,14 @@ Run on a **real device** every release:
 |------|--------|------|
 | Matched geometry IDs | Job list + JobDetail | Use `job.id` only; no reorder animation during push |
 | Haptic fatigue | App-wide | “Success” only for meaningful events (already scoped) |
-| Proof Pack “signature” | `ExportReceiptView` | Optional: “hashing…” tick → receipt “locks” → “Verified” strip shimmer |
+| Proof Pack “signature” | `ExportReceiptView` | ✅ Implemented: Hashing… → Locked → Verified on first appear |
 
 ---
 
-## Optional “signature” moment: Proof Pack sealing
+## Optional “signature” moment: Proof Pack sealing ✅ Done (Package 3)
 
 **Where:** `Views/Exports/ExportReceiptView.swift`  
-**Idea:** When export is created: short “hashing…” tick → receipt card “locks” → tiny shimmer over “Verified” strip. Reuse: `LedgerReceiptCard`, `LedgerTrustStrip`, `TickingTimestamp`. Aligns with evidence-first, audit-ready brand.
+**Done:** On first appear: “Hashing…” (0.5s) → “Locked” (0.5s) → full IntegrityStatusCard “Verified”. Reduce Motion: show final state immediately. Gated by `hasSealCompleted` so it does not repeat on back/forward.
 
 ---
 

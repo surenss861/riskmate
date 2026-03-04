@@ -20,6 +20,8 @@ struct JobSignaturesView: View {
     @State private var isCreatingRun = false
     @State private var showManageRunsSheet = false
     @State private var showSignedStamp = false
+    /// Gate stamp so it only shows once per successful sign (not on view re-appear).
+    @State private var lastStampedSignatureKey: String?
 
     private let packetType = "insurance"
     private var rbac: RBAC {
@@ -544,14 +546,18 @@ struct JobSignaturesView: View {
             signingContext = nil
             Haptics.success()
             UserDefaultsManager.Streaks.recordDayLogged()
-            showSignedStamp = true
+            let key = "\(reportRunId)-\(role.rawValue)"
+            if lastStampedSignatureKey != key {
+                lastStampedSignatureKey = key
+                showSignedStamp = true
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    await MainActor.run { showSignedStamp = false }
+                }
+            }
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadData()
             completion(.success(()))
-            Task {
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                await MainActor.run { showSignedStamp = false }
-            }
         } catch let error as APIError {
             let code = error.statusCode ?? 0
             if code == 403 || code == 409 {

@@ -626,7 +626,11 @@ struct OverviewTab: View {
             await loadEvidenceCount()
         }
         .task {
-            evidenceRequired = job.evidenceRequired ?? 5
+            let fromJob = job.evidenceRequired
+            evidenceRequired = fromJob ?? 5
+            if fromJob == nil {
+                print("[OverviewTab] evidenceRequired fallback to 5 (job.evidenceRequired nil) — consider server/config source of truth")
+            }
             await loadRecentReceipts()
             await loadEvidenceCount()
         }
@@ -2264,6 +2268,7 @@ struct ExportsTab: View {
     @State private var showExportReceipt = false
     @State private var failedExport: ExportTask?
     @State private var showFailedExportSheet = false
+    @State private var scrollOffset: CGFloat = 0
     
     var activeExports: [ExportTask] {
         exportManager.exports.filter { $0.jobId == jobId && ($0.state == .queued || $0.state == .preparing || $0.state == .downloading) }
@@ -2277,8 +2282,8 @@ struct ExportsTab: View {
     
     private var scrollContent: some View {
         VStack(spacing: RMTheme.Spacing.sectionSpacing) {
-            // Integrity Surface
-            RMIntegritySurface(jobId: jobId)
+            // Integrity Surface (parallax driven by scrollOffset)
+            RMIntegritySurface(jobId: jobId, scrollOffset: scrollOffset)
                 .padding(.horizontal, RMTheme.Spacing.pagePadding)
             
             // Generate Buttons
@@ -2385,6 +2390,18 @@ struct ExportsTab: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             scrollContent
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: g.frame(in: .named("exportsScroll")).minY
+                        )
+                    }
+                )
+        }
+        .coordinateSpace(name: "exportsScroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            scrollOffset = value
         }
         .trustToast(
             message: "Ledger recorded",

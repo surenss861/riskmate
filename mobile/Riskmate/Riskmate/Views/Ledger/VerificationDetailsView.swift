@@ -84,11 +84,17 @@ struct VerificationDetailsView: View {
                             icon: "number",
                             isMonospaced: true
                         )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            UIPasteboard.general.string = hash
+                            Haptics.impact(.light)
+                            ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
+                        }
                         .swipeActions(edge: .trailing) {
                             Button {
-                                Haptics.tap()
                                 UIPasteboard.general.string = hash
-                                Haptics.success()
+                                Haptics.impact(.light)
+                                ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
                             } label: {
                                 Label("Copy", systemImage: "doc.on.doc")
                             }

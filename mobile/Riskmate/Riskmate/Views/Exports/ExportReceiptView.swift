@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Export receipt view showing integrity verification details
+/// Export receipt view showing integrity verification details.
+/// Seal moment on open: Hashing… → Locked → Verified (Reduce Motion = show final state).
 struct ExportReceiptView: View {
     let export: ExportTask
     @Environment(\.dismiss) private var dismiss
@@ -8,6 +9,9 @@ struct ExportReceiptView: View {
     @State private var showVerificationInstructions = false
     @State private var showHashComparison = false
     @State private var showChainVerification = false
+    /// 0 = Hashing, 1 = Locked, 2 = Verified. Only runs once (gate by hasSealCompleted).
+    @State private var sealPhase: Int = 0
+    @State private var hasSealCompleted = false
     
     var body: some View {
         NavigationStack {
@@ -32,9 +36,15 @@ struct ExportReceiptView: View {
                         }
                         .padding(.top, RMTheme.Spacing.xl)
                         
-                        // Integrity Status
-                        IntegrityStatusCard(export: export)
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        // Integrity Status (seal moment then full card)
+                        Group {
+                            if sealPhase < 2 {
+                                exportSealPhaseView
+                            } else {
+                                IntegrityStatusCard(export: export)
+                            }
+                        }
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         
                         // What's Inside Preview
                         WhatsInsideCard(export: export)
@@ -104,6 +114,49 @@ struct ExportReceiptView: View {
             .sheet(isPresented: $showChainVerification) {
                 ChainOfCustodyVerificationView(export: export)
             }
+            .onAppear {
+                if UIAccessibility.isReduceMotionEnabled {
+                    sealPhase = 2
+                    hasSealCompleted = true
+                    return
+                }
+                guard !hasSealCompleted else { return }
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    await MainActor.run { sealPhase = 1 }
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    await MainActor.run {
+                        withAnimation(RMMotion.easeOut) {
+                            sealPhase = 2
+                            hasSealCompleted = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private var exportSealPhaseView: some View {
+        RMGlassCard {
+            HStack(spacing: RMTheme.Spacing.md) {
+                if sealPhase == 0 {
+                    ProgressView()
+                        .scaleEffect(0.9)
+                        .tint(RMTheme.Colors.textSecondary)
+                    Text("Hashing…")
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                } else {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(RMTheme.Colors.categoryGovernance)
+                    Text("Locked")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, RMTheme.Spacing.sm)
         }
     }
     
