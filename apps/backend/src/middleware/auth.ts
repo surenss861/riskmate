@@ -177,13 +177,12 @@ async function authenticateInternal(
       organizationId = userRecord.organization_id;
       role = userRecord.role ?? undefined;
     } else {
-      // Membership fallback: resolve org via organization_members (match getAnalyticsContext semantics)
+      // Membership fallback: resolve org via organization_members. Single-membership: use it; multi-membership: require explicit selector.
       const { data: memberRows, error: memberError } = await supabase
         .from("organization_members")
         .select("organization_id, role")
         .eq("user_id", userId)
-        .order("organization_id", { ascending: true })
-        .limit(1);
+        .order("organization_id", { ascending: true });
 
       if (memberError || !memberRows?.length) {
         res.status(403).json({
@@ -193,8 +192,34 @@ async function authenticateInternal(
         });
         return;
       }
-      organizationId = memberRows[0].organization_id;
-      role = memberRows[0].role ?? userRecord.role ?? undefined;
+      if (memberRows.length === 1) {
+        organizationId = memberRows[0].organization_id;
+        role = memberRows[0].role ?? userRecord.role ?? undefined;
+      } else {
+        // Multiple memberships: require explicit organization selector (header or query) for deterministic tenant selection
+        const headerOrgId = (req.headers["x-organization-id"] as string)?.trim();
+        const queryOrgId = typeof req.query?.organization_id === "string" ? req.query.organization_id.trim() : undefined;
+        const requestedOrgId = headerOrgId || queryOrgId;
+        if (!requestedOrgId) {
+          res.status(403).json({
+            message: "Organization selection required",
+            code: "ORGANIZATION_SELECTION_REQUIRED",
+            hint: "User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.",
+          });
+          return;
+        }
+        const membership = memberRows.find((m) => m.organization_id === requestedOrgId);
+        if (!membership) {
+          res.status(403).json({
+            message: "Organization not accessible",
+            code: "ORGANIZATION_NOT_ACCESSIBLE",
+            hint: "The specified organization is not one of your memberships.",
+          });
+          return;
+        }
+        organizationId = membership.organization_id;
+        role = membership.role ?? userRecord.role ?? undefined;
+      }
     }
 
     if (userRecord.archived_at) {

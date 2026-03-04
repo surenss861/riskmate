@@ -30,14 +30,22 @@ async function ensureAnalyticsMvRefreshed(supabase: SupabaseClient): Promise<voi
     return
   }
   analyticsMvRefreshInFlight = (async () => {
-    lastAnalyticsMvRefreshAt = Date.now()
-    const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
-    if (error) {
-      console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+    try {
+      lastAnalyticsMvRefreshAt = Date.now()
+      const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
+      if (error) {
+        console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+      }
+    } catch (e) {
+      console.warn('Analytics MV refresh failed (transport/runtime):', e)
+      // Non-fatal: caller continues with existing/fallback data paths
     }
   })()
-  await analyticsMvRefreshInFlight
-  analyticsMvRefreshInFlight = null
+  try {
+    await analyticsMvRefreshInFlight
+  } finally {
+    analyticsMvRefreshInFlight = null
+  }
 }
 
 const ROUTE = '/api/analytics/trends'
