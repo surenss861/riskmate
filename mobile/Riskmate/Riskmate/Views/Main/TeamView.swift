@@ -6,6 +6,7 @@ struct TeamView: View {
     @State private var teamData: TeamResponse?
     @State private var isLoading = true
     @State private var showingInviteSheet = false
+    @State private var showingRequestSignatureSheet = false
     @State private var inviteEmail = ""
     @State private var inviteRole: TeamRole = .member
     
@@ -48,24 +49,10 @@ struct TeamView: View {
                             SeatsInfoCard(seats: data.seats)
                                 .padding(.horizontal, RMTheme.Spacing.md)
                             
-                            // Invite Form
-                            if canInvite(data.currentUserRole) {
-                                InviteFormCard(
-                                    email: $inviteEmail,
-                                    role: $inviteRole,
-                                    allowedRoles: RBAC(role: data.currentUserRole).inviteableRoles,
-                                    onInvite: {
-                                        await sendInvite(email: inviteEmail, role: inviteRole)
-                                    }
-                                )
-                                .padding(.horizontal, RMTheme.Spacing.md)
-                            }
-                            
-                            // Team Members
+                            // Team Members (Package 7: cards + role pills + stagger)
                             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                                 Text("Team Members")
-                                    .font(RMTheme.Typography.title3)
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                    .rmSectionHeader()
                                     .padding(.horizontal, RMTheme.Spacing.md)
                                 
                                 if data.members.isEmpty {
@@ -76,14 +63,18 @@ struct TeamView: View {
                                     )
                                     .padding(.horizontal, RMTheme.Spacing.md)
                                 } else {
-                                    VStack(spacing: RMTheme.Spacing.sm) {
-                                        ForEach(data.members) { member in
-                                            TeamMemberRow(
+                                    VStack(spacing: RMTheme.Spacing.md) {
+                                        ForEach(Array(data.members.enumerated()), id: \.element.id) { index, member in
+                                            TeamMemberCard(
                                                 member: member,
                                                 currentUserRole: data.currentUserRole,
-                                                onDeactivate: {
+                                                staggerIndex: min(index, 12),
+                                                onRequestSignature: {
+                                                    showingRequestSignatureSheet = true
+                                                },
+                                                onDeactivate: (data.currentUserRole == "owner" || data.currentUserRole == "admin") && member.role != .owner ? {
                                                     // TODO: Deactivate member
-                                                }
+                                                } : nil
                                             )
                                         }
                                     }
@@ -124,6 +115,40 @@ struct TeamView: View {
             }
             .navigationTitle("Team")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Haptics.impact(.light)
+                        showingRequestSignatureSheet = true
+                    } label: {
+                        Label("Request signature", systemImage: "signature")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    .disabled(teamData?.members.isEmpty ?? true)
+                }
+                if canInvite(teamData?.currentUserRole ?? "") {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            Haptics.tap()
+                            showingInviteSheet = true
+                        } label: {
+                            Label("Invite", systemImage: "person.badge.plus")
+                                .font(RMTheme.Typography.bodySmall)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingRequestSignatureSheet) {
+                RequestSignatureSheet(
+                    members: teamData?.members ?? [],
+                    onDismiss: { showingRequestSignatureSheet = false }
+                )
+            }
+            .sheet(isPresented: $showingInviteSheet) {
+                inviteSheetContent
+            }
             .task {
                 await loadTeam()
             }
@@ -159,12 +184,40 @@ struct TeamView: View {
         do {
             try await APIClient.shared.inviteTeamMember(email: email, role: role.rawValue)
             inviteEmail = ""
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
-            await loadTeam() // Refresh
+            Haptics.success()
+            showingInviteSheet = false
+            await loadTeam()
         } catch {
             print("[TeamView] Failed to send invite: \(error)")
-            // TODO: Show error toast
+        }
+    }
+    
+    @ViewBuilder
+    private var inviteSheetContent: some View {
+        NavigationStack {
+            if let data = teamData {
+                InviteFormCard(
+                    email: $inviteEmail,
+                    role: $inviteRole,
+                    allowedRoles: RBAC(role: data.currentUserRole).inviteableRoles,
+                    onInvite: {
+                        await sendInvite(email: inviteEmail, role: inviteRole)
+                    }
+                )
+                .padding(RMTheme.Spacing.pagePadding)
+                .navigationTitle("Invite member")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") {
+                            Haptics.tap()
+                            showingInviteSheet = false
+                        }
+                        .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
+                .background(RMTheme.Colors.background)
+            }
         }
     }
 }

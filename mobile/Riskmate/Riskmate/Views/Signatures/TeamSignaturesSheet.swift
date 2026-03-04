@@ -48,7 +48,15 @@ struct TeamSignaturesSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            RMSheetHeader(
+                title: "Team Signatures",
+                subtitle: "Sign report runs for this job",
+                onClose: {
+                    onDismiss()
+                    dismiss()
+                }
+            )
             Group {
                 if isLoading {
                     VStack(spacing: RMTheme.Spacing.lg) {
@@ -83,19 +91,9 @@ struct TeamSignaturesSheet: View {
                 }
             }
             .background(RMTheme.Colors.background)
-            .navigationTitle("Team Signatures")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        Haptics.tap()
-                        onDismiss()
-                        dismiss()
-                    }
-                    .foregroundColor(RMTheme.Colors.accent)
-                }
-            }
-            .alert("Team Signatures", isPresented: Binding(
+        }
+        .background(RMTheme.Colors.background)
+        .alert("Team Signatures", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
@@ -132,7 +130,6 @@ struct TeamSignaturesSheet: View {
             .refreshable {
                 await loadRuns()
             }
-        }
     }
 
     private var emptyStateView: some View {
@@ -345,6 +342,7 @@ struct TeamSignaturesSheet: View {
                 attestationText: data.attestationText
             )
             signingContext = nil
+            Haptics.success()
             ToastCenter.shared.show("Signature saved", systemImage: "checkmark.circle.fill", style: .success)
             await loadRuns()
             completion(.success(()))

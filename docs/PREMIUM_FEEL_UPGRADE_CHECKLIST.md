@@ -59,12 +59,15 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Export receipt sealing | `ExportReceiptView.swift` | Hashing… → Locked → Verified on first appear; Reduce Motion = final state | ✅ |
 | *Micro-tweaks* | | Confidence line: “Verifying ledger chain” / “Computing receipt hash”; copy affordance (trailing icon + “Tap to copy” that fades after first copy); seal/parallax comments | ✅ |
 
-### B6) TeamView — Workspace feel
+### B6) TeamView — Workspace feel ✅ Package 7 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Members as cards + role pills | `Views/Main/TeamView.swift` | Card layout; role pills; optional presence dot |
-| Request signature flow | `TeamSignaturesSheet` | Sheet header + clear steps; guided feel |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Members as cards + role pills | `TeamMemberCard.swift`, `RolePill.swift`, `TeamView.swift` | Card layout; avatar (initials); role pills; rmPressable + stagger (cap 12) | ✅ |
+| Request signature flow | `RequestSignatureSheet.swift`, `RMSheetHeader.swift` | 3 steps: Select signers → Choose what (job/proof/general) → Confirm & send; toast + success haptic on send | ✅ |
+| Team signatures sheet | `TeamSignaturesSheet.swift` | RMSheetHeader; success haptic on signature saved | ✅ |
+| Toolbar | `TeamView` | Primary = Request signature; trailing = Invite (sheet) | ✅ |
+| **QA** | | Cards with role pills; request signature sheet has header + steps; success toast + haptic; Reduce Motion fades only; no gesture conflicts | |
 
 ### B7) AccountView — Productized
 
