@@ -2,10 +2,15 @@ import SwiftUI
 import Charts
 import SwiftDate
 
-/// Dashboard with KPIs, charts, and recent activity
+/// Dashboard with KPIs, charts, and recent activity. Package 4 (B1): hero strip, badge shelf, card grid, tap-to-drill.
 struct DashboardView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var viewModel = DashboardViewModel()
+    @EnvironmentObject private var quickAction: QuickActionRouter
+    @State private var lastDisplayedHeroScore: Int?
+    @State private var lastDisplayedHeroDelta: Int?
+    var onNavigateToTeam: (() -> Void)?
+    var onNavigateToExports: (() -> Void)?
     
     var body: some View {
         RMBackground()
@@ -16,24 +21,59 @@ struct DashboardView: View {
                         // Setup Checklist (if not dismissed)
                         SetupChecklistView(isDismissed: .constant(UserDefaults.standard.bool(forKey: "setup_checklist_dismissed")))
                         
-                        // Subtitle (navigationTitle handles main title)
+                        // Hero strip (stable layout; skeleton when loading; count-up gated)
+                        DashboardHeroStrip(
+                            readinessScore: viewModel.readinessScore,
+                            delta30d: viewModel.delta30d,
+                            lastSyncedAt: viewModel.lastSyncedAt,
+                            isSkeleton: viewModel.isLoading,
+                            lastDisplayedScore: $lastDisplayedHeroScore,
+                            lastDisplayedDelta: $lastDisplayedHeroDelta
+                        )
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                        
+                        // Badge shelf (only when non-empty)
+                        DashboardBadgeShelf(badges: viewModel.badgeItems)
+                        
+                        if viewModel.isLoading {
+                            // Skeleton card grid (one parent shimmer)
+                            VStack(spacing: RMTheme.Spacing.md) {
+                                skeletonCardGrid
+                            }
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .rmShimmer()
+                        } else if !viewModel.topCards.isEmpty {
+                            // Top cards: stagger + tap-to-drill
+                            VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                                Text("Quick access")
+                                    .rmSectionHeader()
+                                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                DashboardCardGrid(
+                                    items: viewModel.topCards,
+                                    onNavigateToTeam: onNavigateToTeam,
+                                    onNavigateToExports: onNavigateToExports
+                                )
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            }
+                        }
+                        
+                        // Subtitle
                         Text("Overview of your compliance status")
                             .font(RMTheme.Typography.bodySmall)
                             .foregroundColor(RMTheme.Colors.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            .padding(.top, RMTheme.Spacing.sm)
+                            .padding(.top, RMTheme.Spacing.xs)
                         
                         if viewModel.isLoading {
-                            // Premium skeleton loading
+                            // Rest of skeleton (KPI grid, chart, list)
                             VStack(spacing: RMTheme.Spacing.lg) {
                                 RMSkeletonKPIGrid()
-                                
                                 RMSkeletonCard()
                                     .frame(height: 200)
-                                
                                 RMSkeletonList(count: 3)
                             }
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
                         } else if let errorMessage = viewModel.errorMessage {
                             // Error state - show error with retry
                             RMEmptyState(
@@ -49,16 +89,6 @@ struct DashboardView: View {
                             )
                             .padding(.vertical, RMTheme.Spacing.xxl)
                         } else if let kpis = viewModel.kpis {
-                            // Streak badge (local)
-                            if UserDefaultsManager.Streaks.currentStreak() > 0 {
-                                let streak = UserDefaultsManager.Streaks.currentStreak()
-                                HolographicBadgeView(
-                                    title: streak == 1 ? "1 day" : "\(streak)-day streak",
-                                    subtitle: "Logging consistency",
-                                    icon: "flame.fill"
-                                )
-                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            }
                             // KPI Cards
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: RMTheme.Spacing.md) {
@@ -182,6 +212,18 @@ struct DashboardView: View {
             .onDisappear {
                 viewModel.cancel()
             }
+    }
+    
+    private var skeletonCardGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: RMTheme.Spacing.md),
+            GridItem(.flexible(), spacing: RMTheme.Spacing.md)
+        ], spacing: RMTheme.Spacing.md) {
+            ForEach(0..<6, id: \.self) { _ in
+                RMSkeletonCard()
+                    .frame(height: 100)
+            }
+        }
     }
     
     private func generateChartDataFromJobs(_ jobs: [Job]) -> [ChartDataPoint] {

@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var showNotificationCenterFromDeepLink = false
     @State private var showCommentFromDeepLink = false
     @State private var deepLinkCommentId: String?
+    @State private var showExportHistorySheet = false
     @Namespace private var tabBarNamespace
     @StateObject private var motionObserver = RMMotionObserver.shared
 
@@ -282,7 +283,10 @@ struct ContentView: View {
                 switch selectedSidebarItem {
                 case .dashboard:
                     NavigationStack {
-                        DashboardView()
+                        DashboardView(
+                            onNavigateToTeam: { selectedSidebarItem = .team },
+                            onNavigateToExports: { showExportHistorySheet = true }
+                        )
                     }
                 case .operations:
                     NavigationStack {
@@ -319,10 +323,16 @@ struct ContentView: View {
                     }
                 case .none:
                     NavigationStack {
-                        DashboardView()
+                        DashboardView(
+                            onNavigateToTeam: { selectedSidebarItem = .team },
+                            onNavigateToExports: { showExportHistorySheet = true }
+                        )
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showExportHistorySheet) {
+            ExportHistoryOverviewView()
         }
         .navigationSplitViewStyle(.balanced)
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in

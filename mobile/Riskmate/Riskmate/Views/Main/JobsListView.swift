@@ -370,15 +370,17 @@ struct JobsListView: View {
                 }
             }
             .onAppear {
-                // Apply initial filter if provided
+                // Apply initial filter if provided (e.g. from Dashboard tap-to-drill)
                 if let filter = initialFilter {
                     switch filter {
                     case "active":
                         selectedStatus = "active"
                     case "highRisk":
                         selectedRiskLevel = "high"
+                        selectedQuickChip = .highRisk
+                    case "blockers":
+                        selectedQuickChip = .blockers
                     case "missingEvidence":
-                        // TODO: Add missing evidence filter when backend supports it
                         selectedStatus = "active"
                     default:
                         break

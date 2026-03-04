@@ -12,6 +12,17 @@ final class DashboardViewModel: ObservableObject {
     @Published var jobsAtRisk: [Job] = []
     @Published var missingEvidenceJobs: [Job] = []
     
+    /// Hero strip: 0–100 audit readiness (from compliance score)
+    @Published var readinessScore: Int = 0
+    /// Risk delta last 30d vs prev 30d (positive = more risk). Placeholder until API provides.
+    @Published var delta30d: Int = 0
+    /// Last sync time for "Last synced" ticker
+    @Published var lastSyncedAt: Date?
+    /// Top 6–10 cards for tap-to-drill grid
+    @Published var topCards: [DashboardCardItem] = []
+    /// Badges for shelf (streak, audit-ready week, proof packs — only non-empty)
+    @Published var badgeItems: [DashboardBadgeItem] = []
+    
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -77,6 +88,7 @@ final class DashboardViewModel: ObservableObject {
                     recentActivity = try await activityTask
                     topHazards = try await hazardsTask
                     
+                    applyHeroAndCards(kpis, jobsAtRisk: jobsAtRisk)
                     hasLoadedOnce = true
                     return
                 } catch {
@@ -102,6 +114,7 @@ final class DashboardViewModel: ObservableObject {
                     jobsAtRisk = await atRiskTask
                     missingEvidenceJobs = try await missingEvidenceTask
                     
+                    applyHeroAndCards(kpis, jobsAtRisk: jobsAtRisk)
                     hasLoadedOnce = true
                 }
                 
@@ -254,6 +267,49 @@ final class DashboardViewModel: ObservableObject {
                     )
                 }
         }
+    }
+    
+    /// Set hero strip and top cards from KPIs and jobs. Call after load.
+    private func applyHeroAndCards(_ kpis: DashboardKPIs?, jobsAtRisk: [Job]) {
+        if let k = kpis {
+            readinessScore = k.complianceScore
+            // delta30d: placeholder; API could provide "vs previous period"
+            switch k.risksTrend {
+            case .up(let amount): delta30d = amount
+            case .down(let amount): delta30d = -amount
+            case .neutral: delta30d = 0
+            }
+        }
+        lastSyncedAt = JobsStore.shared.lastSyncDate
+        topCards = buildTopCards(kpis: kpis, jobsAtRisk: jobsAtRisk)
+        badgeItems = buildBadgeItems()
+    }
+    
+    private func buildBadgeItems() -> [DashboardBadgeItem] {
+        var items: [DashboardBadgeItem] = []
+        let streak = UserDefaultsManager.Streaks.currentStreak()
+        if streak > 0 {
+            items.append(DashboardBadgeItem(
+                id: "streak",
+                title: streak == 1 ? "1 day" : "\(streak)-day streak",
+                subtitle: "Logging consistency",
+                icon: "flame.fill"
+            ))
+        }
+        // Optional: add "Audit-ready week" / "Proof Packs shipped" when we have counts
+        return items
+    }
+    
+    private func buildTopCards(kpis: DashboardKPIs?, jobsAtRisk: [Job]) -> [DashboardCardItem] {
+        let highRiskCount = jobsAtRisk.filter { ($0.riskScore ?? 0) >= 70 }.count
+        let blockersCount = jobsAtRisk.filter { ($0.riskScore ?? 0) >= 80 }.count
+        return [
+            DashboardCardItem(id: "highRisk", title: "High Risk", subtitle: "Jobs", icon: "exclamationmark.triangle.fill", value: "\(highRiskCount)", route: .highRisk),
+            DashboardCardItem(id: "blockers", title: "Blockers", subtitle: "", icon: "hand.raised.fill", value: "\(blockersCount)", route: .blockers),
+            DashboardCardItem(id: "ledger", title: "Ledger", subtitle: "Proof & receipts", icon: "list.bullet.rectangle", value: "—", route: .ledger),
+            DashboardCardItem(id: "exports", title: "Exports", subtitle: "History", icon: "square.and.arrow.up", value: "—", route: .exports),
+            DashboardCardItem(id: "team", title: "Team", subtitle: "", icon: "person.2.fill", value: "—", route: .team)
+        ]
     }
     
     /// Parse trend string to Trend enum

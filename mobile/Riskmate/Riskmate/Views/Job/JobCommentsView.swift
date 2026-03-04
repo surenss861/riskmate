@@ -312,7 +312,7 @@ struct JobCommentsView: View {
         return palette[hash % palette.count]
     }
 
-    private var isCurrentUser(_ comment: JobComment) -> Bool {
+    private func isCurrentUser(_ comment: JobComment) -> Bool {
         comment.authorId == currentUserId
     }
 
