@@ -995,7 +995,8 @@ final class JobCommentsRealtimeService: ObservableObject {
         let filter = "entity_id=eq.\(jobId)"
         let refresh: @Sendable () -> Void = { [weak self] in
             Task { [weak self] in
-                await MainActor.run { self?.needsRefresh = true }
+                guard let self else { return }
+                await self.setNeedsRefreshOnMain()
             }
         }
         subscription = ch.onPostgresChange(
@@ -1020,6 +1021,11 @@ final class JobCommentsRealtimeService: ObservableObject {
             try? await ch.subscribeWithError()
             self.channel = ch
         }
+    }
+
+    @MainActor
+    private func setNeedsRefreshOnMain() {
+        needsRefresh = true
     }
 
     func unsubscribe() async {

@@ -44,7 +44,8 @@ final class SyncEngine: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { [weak self] in
-                await MainActor.run { self?.refreshPendingOperations() }
+                guard let self else { return }
+                await self.refreshPendingOperationsOnMain()
             }
         }
         conflictHistoryObserver = NotificationCenter.default.addObserver(
@@ -53,7 +54,8 @@ final class SyncEngine: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { [weak self] in
-                await MainActor.run { self?.refreshPendingConflictsFromDB() }
+                guard let self else { return }
+                await self.refreshPendingConflictsFromDBOnMain()
             }
         }
         // Auto-sync when backend becomes reachable after being offline
@@ -84,6 +86,11 @@ final class SyncEngine: ObservableObject {
 
     func refreshPendingOperations() {
         pendingOperations = db.getSyncQueue()
+    }
+
+    @MainActor
+    private func refreshPendingOperationsOnMain() {
+        refreshPendingOperations()
     }
 
     /// Sync all pending operations: upload first, then download changes
@@ -361,6 +368,11 @@ final class SyncEngine: ObservableObject {
                 serverValueForMerge: serverForMerge
             )
         }
+    }
+
+    @MainActor
+    private func refreshPendingConflictsFromDBOnMain() {
+        refreshPendingConflictsFromDB()
     }
 
     /// Detect conflicts by comparing local and server data (divergent records during sync).
