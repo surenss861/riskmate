@@ -183,12 +183,10 @@ struct AuthView: View {
         GeometryReader { geo in
             let safeTop = geo.safeAreaInsets.top
             let safeBottom = geo.safeAreaInsets.bottom
-            let heroBandHeight = geo.size.height * 0.60
 
             ZStack {
                 RMBackground()
 
-                // Vignette only (no full-screen bloom — micro-bloom lives behind hero)
                 LinearGradient(
                     gradient: Gradient(stops: [
                         .init(color: .black.opacity(0.75), location: 0.0),
@@ -202,21 +200,14 @@ struct AuthView: View {
 
                 VStack(spacing: 0) {
                     if screen == .landing {
-                        // HERO REGION — 60% band, biased up
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 0)
-                            heroBlock
-                                .offset(y: -16)
-                            Spacer(minLength: 0)
-                        }
-                        .frame(height: heroBandHeight)
-                        .padding(.top, safeTop)
+                        // Hero pinned to top; middle intentionally empty; CTA pinned to bottom.
+                        heroBlock
+                            .padding(.top, safeTop + 24)
+                            .frame(maxWidth: .infinity)
 
-                        Spacer(minLength: 0)
+                        Spacer(minLength: 24)
 
-                        // CTA REGION — pull up so it feels connected to hero
                         landingCTAs(safeBottom: safeBottom)
-                            .padding(.top, -40)
                     }
 
                     // FORM (only when login/signup) — AuthRail centers card, scrolls with keyboard

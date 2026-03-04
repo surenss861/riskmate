@@ -3,6 +3,9 @@ import SwiftUI
 /// Top app bar for root tab screens: title on left, optional trailing content + notifications + account on right.
 /// Anchors the UI and makes the app feel native. Use at the top of Operations, Ledger, Work Records, Account.
 struct RMTopBar<Trailing: View>: View {
+    /// Height reserved for the top bar. Use for layout if needed (e.g. content top padding).
+    static let barHeight: CGFloat = 56
+
     let title: String
     /// Optional unread count for notification badge (0 = hide badge).
     var notificationBadge: Int = 0
@@ -70,14 +73,12 @@ struct RMTopBar<Trailing: View>: View {
             }
         }
         .padding(.horizontal, RMTheme.Spacing.md)
-        .padding(.vertical, RMTheme.Spacing.sm)
-        .background {
-            RMTheme.Colors.background
-        }
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(RMTheme.Colors.border)
-                .frame(height: 0.5)
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
         }
     }
 }
