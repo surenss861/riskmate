@@ -1286,14 +1286,14 @@ export const analyticsApi = {
     }>(`/api/analytics/compliance-rate${qs ? `?${qs}` : ''}`, {}, signal);
   },
 
-  /** Team performance KPIs per user. Maps to GET /api/analytics/team-performance. */
+  /** Team performance KPIs per user. Maps to GET /api/analytics/team-performance (Next.js route). */
   teamPerformance: async (params?: { period?: string; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       period: string;
       members: Array<{
         user_id: string;
@@ -1305,17 +1305,17 @@ export const analyticsApi = {
         name: string;
       }>;
       locked?: boolean;
-    }>(`/api/analytics/team-performance${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/team-performance${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
-  /** Risk heatmap by job_type and day_of_week. Maps to GET /api/analytics/risk-heatmap. */
+  /** Risk heatmap by job_type and day_of_week. Maps to GET /api/analytics/risk-heatmap (Next.js route). */
   riskHeatmap: async (params?: { period?: string; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       period: string;
       buckets: Array<{
         job_type: string;
@@ -1324,7 +1324,7 @@ export const analyticsApi = {
         count: number;
       }>;
       locked?: boolean;
-    }>(`/api/analytics/risk-heatmap${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/risk-heatmap${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
   /** Hazard frequency by type or location with trend. Maps to GET /api/analytics/hazard-frequency. */
@@ -1362,7 +1362,7 @@ export const analyticsApi = {
     }>(`/api/analytics/status-by-period${qs ? `?${qs}` : ''}`, {}, signal);
   },
 
-  /** Trends: jobs, risk, compliance, completion, or jobs_completed (real completed counts by completion date) by day/week/month. Maps to GET /api/analytics/trends. Pass since/until for custom range. */
+  /** Trends: jobs, risk, compliance, completion, or jobs_completed (real completed counts by completion date) by day/week/month. Maps to GET /api/analytics/trends (Next.js route). Pass since/until for custom range. */
   trends: async (params?: { period?: string; groupBy?: 'day' | 'week' | 'month'; metric?: 'jobs' | 'risk' | 'compliance' | 'completion' | 'jobs_completed'; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
@@ -1371,13 +1371,13 @@ export const analyticsApi = {
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       period: string;
       groupBy: string;
       metric: string;
       data: Array<{ period: string; value: number; label: string }>;
       locked?: boolean;
-    }>(`/api/analytics/trends${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/trends${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
   /** Top predictive insights (cached). Maps to GET /api/analytics/insights. Pass since/until to scope to period; limit for max items (default 5). */

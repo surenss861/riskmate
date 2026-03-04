@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { APP_ORIGIN } from '@/lib/config'
+import { APP_ORIGIN, APP_ORIGIN_ALLOWED_PATTERN, isAppOriginLocalhost, isProductionNonVercel } from '@/lib/config'
 
 export const runtime = 'nodejs'
 
@@ -66,6 +66,26 @@ async function forwardToBulkAction(
   canonicalAction: BulkAction,
   rest: Record<string, unknown>
 ): Promise<NextResponse> {
+  if (isProductionNonVercel() && isAppOriginLocalhost()) {
+    return NextResponse.json(
+      {
+        message:
+          'Bulk operations are unavailable: app origin is not configured for this environment. Set NEXT_PUBLIC_APP_URL to your app URL (e.g. https://riskmate.com.au) for non-Vercel deployments.',
+        code: 'APP_ORIGIN_MISCONFIGURED',
+      },
+      { status: 503 }
+    )
+  }
+  if (!APP_ORIGIN_ALLOWED_PATTERN.test(APP_ORIGIN)) {
+    return NextResponse.json(
+      {
+        message:
+          'Bulk operations are unavailable: app origin is not in the allowed set. Configure NEXT_PUBLIC_APP_URL to a trusted host (e.g. riskmate.com.au or *.vercel.app).',
+        code: 'APP_ORIGIN_NOT_ALLOWED',
+      },
+      { status: 500 }
+    )
+  }
   const targetUrl = `${APP_ORIGIN}/api/jobs/bulk/${canonicalAction}`
   const headers = buildForwardHeaders(request)
   const controller = new AbortController()
@@ -150,6 +170,14 @@ export async function POST(request: NextRequest) {
         message: `action must be one of: ${BULK_ACTIONS_ACCEPTED.join(', ')}`,
         allowed_actions: [...BULK_ACTIONS_ACCEPTED],
       },
+      { status: 400 }
+    )
+  }
+
+  const jobIds = body?.job_ids
+  if (!Array.isArray(jobIds) || jobIds.length === 0) {
+    return NextResponse.json(
+      { message: 'POST body must include job_ids (non-empty array)' },
       { status: 400 }
     )
   }

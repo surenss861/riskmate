@@ -10,6 +10,9 @@ const TRUSTED_ORIGIN = 'https://trusted.example.com'
 jest.mock('@/lib/config', () => ({
   ...jest.requireActual('@/lib/config'),
   APP_ORIGIN: TRUSTED_ORIGIN,
+  APP_ORIGIN_ALLOWED_PATTERN: /^https?:\/\/trusted\.example\.com(\/|$)/i,
+  isAppOriginLocalhost: () => false,
+  isProductionNonVercel: () => false,
 }))
 
 let fetchMock: jest.Mock
@@ -30,7 +33,7 @@ describe('POST /api/jobs/bulk – delegated fetch target', () => {
     const maliciousOrigin = 'https://evil-attacker.com'
     const request = new NextRequest(`${maliciousOrigin}/api/jobs/bulk`, {
       method: 'POST',
-      body: JSON.stringify({ action: 'status', job_ids: [] }),
+      body: JSON.stringify({ action: 'status', job_ids: ['job-1'] }),
       headers: {
         'Content-Type': 'application/json',
         Host: 'evil-attacker.com',
@@ -71,7 +74,7 @@ describe('POST /api/jobs/bulk – transport errors', () => {
     const { POST } = await import('@/app/api/jobs/bulk/route')
     const request = new NextRequest('https://any-host/api/jobs/bulk', {
       method: 'POST',
-      body: JSON.stringify({ action: 'status', job_ids: [] }),
+      body: JSON.stringify({ action: 'status', job_ids: ['job-1'] }),
       headers: { 'Content-Type': 'application/json' },
     })
 

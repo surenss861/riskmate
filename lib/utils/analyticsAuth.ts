@@ -17,6 +17,7 @@ const ORG_PLAN_CACHE_MAX_ENTRIES =
   typeof process !== 'undefined' && process.env?.ORG_PLAN_CACHE_MAX_ENTRIES != null
     ? Math.max(1, parseInt(process.env.ORG_PLAN_CACHE_MAX_ENTRIES, 10) || 1000)
     : 1000
+/** Cache key: userId:orgId so switching orgs or multi-org users get correct plan per org. */
 const orgPlanCache = new Map<
   string,
   { orgId: string; planCode: PlanCode; status: string; cachedAt: number }
@@ -42,11 +43,12 @@ function evictOldestOrgPlanEntryIfNeeded(): void {
   if (oldestKey !== null) orgPlanCache.delete(oldestKey)
 }
 
-function getCachedOrgPlan(userId: string): { orgId: string; planCode: PlanCode; status: string } | null {
-  const entry = orgPlanCache.get(userId)
+function getCachedOrgPlan(userId: string, orgId: string): { orgId: string; planCode: PlanCode; status: string } | null {
+  const key = `${userId}:${orgId}`
+  const entry = orgPlanCache.get(key)
   if (!entry) return null
   if (Date.now() - entry.cachedAt > ORG_PLAN_CACHE_TTL_MS) {
-    orgPlanCache.delete(userId)
+    orgPlanCache.delete(key)
     return null
   }
   return { orgId: entry.orgId, planCode: entry.planCode, status: entry.status }
@@ -55,7 +57,8 @@ function getCachedOrgPlan(userId: string): { orgId: string; planCode: PlanCode; 
 function setCachedOrgPlan(userId: string, orgId: string, planCode: PlanCode, status: string): void {
   pruneExpiredOrgPlanEntries()
   evictOldestOrgPlanEntryIfNeeded()
-  orgPlanCache.set(userId, { orgId, planCode, status, cachedAt: Date.now() })
+  const key = `${userId}:${orgId}`
+  orgPlanCache.set(key, { orgId, planCode, status, cachedAt: Date.now() })
 }
 
 /** Exposed for unit tests: current cache size. */
@@ -86,13 +89,14 @@ export type AnalyticsContext = {
  * Returns context with orgId, requestId, hasAnalytics, isActive, or a NextResponse on auth/query error.
  * Routes should then check !isActive || !hasAnalytics and return their own locked response body if needed.
  *
- * Auth semantics (stricter than organizationGuard.ts):
- * - If the request has *any* non-empty Authorization header, we treat it as bearer-intent and do **not**
- *   fall back to cookie auth. Non-Bearer schemes (e.g. Basic, Digest) result in 401 without trying cookies.
- *   Rationale: analytics is often called by API clients with Bearer; allowing cookie fallback when a
- *   non-Bearer header is present would be inconsistent and could surprise consumers. Other app routes
- *   use organizationGuard, which falls back to cookies when the header is absent or when Bearer
- *   parsing fails; analytics routes intentionally use bearer-only when any Authorization header exists.
+ * Multi-org: When users.organization_id is null, org is resolved from organization_members and the
+ * first row is used (ordered by organization_id ascending). So the effective org is the first org
+ * alphabetically by ID. Callers with multiple orgs should pass an explicit org context when supported.
+ *
+ * Auth semantics (aligned with organizationGuard for cookie clients; see JSDoc below):
+ * - Only requests whose Authorization header starts with "Bearer" (case-insensitive) are treated as
+ *   bearer-intent. For non-Bearer schemes (e.g. Basic) we fall back to cookie auth so web dashboard
+ *   users with cookies succeed even if a non-Bearer header is present.
  */
 export async function getAnalyticsContext(
   request: NextRequest,
@@ -106,13 +110,11 @@ export async function getAnalyticsContext(
 
   const authHeader = request.headers.get('authorization')
   const hasAuthHeader = authHeader != null && authHeader.trim().length > 0
+  const isBearerIntent = hasAuthHeader && /^\s*bearer\s*/i.test(authHeader!.trim())
 
-  if (hasAuthHeader) {
-    // Any present Authorization header is bearer-intent: never fall back to cookie.
-    const bearerMatch = /^\s*bearer\s+(.+)$/i.test(authHeader!)
-    const token = bearerMatch ? authHeader!.replace(/^\s*bearer\s+/i, '').trim() : null
-    const hasValidBearer = token != null && token.length > 0
-    if (!hasValidBearer) {
+  if (isBearerIntent) {
+    const token = authHeader!.replace(/^\s*bearer\s*/i, '').trim()
+    if (!token || token.length === 0) {
       const { response, errorId } = createErrorResponse(
         'Unauthorized: Please log in to access analytics',
         'UNAUTHORIZED',
@@ -144,7 +146,7 @@ export async function getAnalyticsContext(
       })
     }
   } else {
-    // No Authorization header: use cookie-based auth
+    // No Bearer header or non-Bearer scheme: use cookie-based auth (aligns with organizationGuard)
     const result = await supabase.auth.getUser()
     user = result.data.user
     authError = result.error
@@ -166,21 +168,6 @@ export async function getAnalyticsContext(
   }
 
   const admin = createSupabaseAdminClient()
-
-  const cached = getCachedOrgPlan(user.id)
-  if (cached) {
-    const isActive = ['active', 'trialing', 'free'].includes(cached.status)
-    const features = isActive ? planFeatures(cached.planCode) : []
-    const hasAnalytics = features.includes('analytics')
-    return {
-      orgId: cached.orgId,
-      requestId,
-      hasAnalytics,
-      isActive,
-      status: cached.status,
-      supabase: admin,
-    }
-  }
 
   const { data: userData, error: userError } = await admin
     .from('users')
@@ -241,6 +228,21 @@ export async function getAnalyticsContext(
       status: 500,
       headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
     })
+  }
+
+  const cached = getCachedOrgPlan(user.id, orgId)
+  if (cached) {
+    const isActive = ['active', 'trialing', 'free'].includes(cached.status)
+    const features = isActive ? planFeatures(cached.planCode) : []
+    const hasAnalytics = features.includes('analytics')
+    return {
+      orgId: cached.orgId,
+      requestId,
+      hasAnalytics,
+      isActive,
+      status: cached.status,
+      supabase: admin,
+    }
   }
 
   const { data: orgSub, error: orgSubError } = await admin

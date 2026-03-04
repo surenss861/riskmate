@@ -20,10 +20,6 @@ const ROUTE = '/api/analytics/trends'
 
 export async function GET(request: NextRequest) {
   try {
-    const ctx = await getAnalyticsContext(request, ROUTE)
-    if (ctx instanceof NextResponse) return ctx
-    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
-
     const { searchParams } = new URL(request.url)
     const parsedPeriod = parsePeriod(searchParams.get('period'))
     const periodLabelLocked = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
@@ -41,16 +37,11 @@ export async function GET(request: NextRequest) {
               ? 'jobs_completed'
               : 'jobs'
 
-    if (!isActive || !hasAnalytics) {
-      return NextResponse.json(
-        { period: periodLabelLocked, groupBy: groupByLocked, metric: metricLocked, data: [], locked: true },
-        { status: 200, headers: { 'X-Request-ID': requestId } }
-      )
-    }
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
     if (customRange && 'error' in customRange) {
+      const requestId = getRequestId(request)
       if (customRange.error === 'invalid_order') {
         const { response, errorId } = createErrorResponse(
           'Invalid date range: since must be before or equal to until',
@@ -100,6 +91,17 @@ export async function GET(request: NextRequest) {
       (parsedPeriod.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsedPeriod.days))
     const effectiveDays = customRangeValid ? effectiveDaysFromRange(since, until) : parsedPeriod.days
     const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDays) : (parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`)
+
+    const ctx = await getAnalyticsContext(request, ROUTE)
+    if (ctx instanceof NextResponse) return ctx
+    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
+
+    if (!isActive || !hasAnalytics) {
+      return NextResponse.json(
+        { period: periodLabel, groupBy: groupByLocked, metric: metricLocked, data: [], locked: true },
+        { status: 200, headers: { 'X-Request-ID': requestId } }
+      )
+    }
 
     const groupBy = groupByLocked
     const metric = metricLocked
@@ -410,6 +412,62 @@ export async function GET(request: NextRequest) {
         if (completedError) throw completedError
       }
 
+      if (metric === 'completion') {
+        const [createdRes, completedRes] = await Promise.all([
+          fetchAllPages<{ id: string; created_at: string }>(async (offset, limit) => {
+            const { data, error } = await supabase
+              .from('jobs')
+              .select('id, created_at')
+              .eq('organization_id', orgId)
+              .is('deleted_at', null)
+              .gte('created_at', since)
+              .lte('created_at', until)
+              .order('created_at', { ascending: false })
+              .range(offset, offset + limit - 1)
+            return { data, error }
+          }),
+          fetchAllPages<{ id: string; completed_at: string }>(async (offset, limit) => {
+            const { data, error } = await supabase
+              .from('jobs')
+              .select('id, completed_at')
+              .eq('organization_id', orgId)
+              .is('deleted_at', null)
+              .not('completed_at', 'is', null)
+              .gte('completed_at', since)
+              .lte('completed_at', until)
+              .order('completed_at', { ascending: false })
+              .range(offset, offset + limit - 1)
+            return { data, error }
+          }),
+        ])
+        if (!createdRes.error && !completedRes.error) {
+          const createdByBucket = new Map<string, number>()
+          for (const j of (createdRes.data ?? []) as { id: string; created_at: string }[]) {
+            const key = getBucketKey(new Date(j.created_at))
+            createdByBucket.set(key, (createdByBucket.get(key) ?? 0) + 1)
+          }
+          const completedByBucket = new Map<string, number>()
+          for (const j of (completedRes.data ?? []) as { id: string; completed_at: string }[]) {
+            const key = getBucketKey(new Date(j.completed_at))
+            completedByBucket.set(key, (completedByBucket.get(key) ?? 0) + 1)
+          }
+          const allPeriods = [...new Set([...createdByBucket.keys(), ...completedByBucket.keys()])].sort((a, b) => a.localeCompare(b))
+          const points: Point[] = allPeriods.map((period) => {
+            const created = createdByBucket.get(period) ?? 0
+            const completed = completedByBucket.get(period) ?? 0
+            const rate = created === 0 ? 0 : (completed / created) * 100
+            const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100))
+            return { period, value, label: period }
+          })
+          return NextResponse.json(
+            { period: periodLabel, groupBy, metric, data: points },
+            { status: 200, headers: { 'X-Request-ID': requestId } }
+          )
+        }
+        if (createdRes.error) throw createdRes.error
+        if (completedRes.error) throw completedRes.error
+      }
+
       const { data: jobs, error: jobsError } = await fetchAllPages<{
         id: string
         risk_score: number | null
@@ -440,23 +498,11 @@ export async function GET(request: NextRequest) {
 
       const bucketValues = new Map<string, number>()
       const bucketRiskSums = new Map<string, { sum: number; count: number }>()
-      const bucketCompleted = new Map<string, number>()
       const points: Point[] = []
 
       for (const j of jobList) {
         const keyCreated = getBucketKey(new Date(j.created_at))
-        const completed =
-          j.status?.toLowerCase() === 'completed' &&
-          j.completed_at != null &&
-          j.completed_at >= since &&
-          j.completed_at <= until
-
-        if (metric === 'completion') {
-          bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1)
-          if (completed) {
-            bucketCompleted.set(keyCreated, (bucketCompleted.get(keyCreated) ?? 0) + 1)
-          }
-        } else if (metric === 'jobs') {
+        if (metric === 'jobs') {
           bucketValues.set(keyCreated, (bucketValues.get(keyCreated) ?? 0) + 1)
         } else if (metric === 'risk' && j.risk_score != null) {
           const cur = bucketRiskSums.get(keyCreated) ?? { sum: 0, count: 0 }
@@ -466,15 +512,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (metric === 'completion') {
-        for (const period of [...bucketValues.keys()].sort((a, b) => a.localeCompare(b))) {
-          const created = bucketValues.get(period) ?? 0
-          const completed = bucketCompleted.get(period) ?? 0
-          const rate = created === 0 ? 0 : (completed / created) * 100
-          const value = Math.min(100, Math.max(0, Math.round(rate * 100) / 100))
-          points.push({ period, value, label: period })
-        }
-      } else if (metric === 'jobs') {
+      if (metric === 'jobs') {
         for (const [period] of [...bucketValues.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
           points.push({ period, value: bucketValues.get(period) ?? 0, label: period })
         }

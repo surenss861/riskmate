@@ -131,12 +131,13 @@ export function parseSinceUntil(
   return { since: sinceIso, until: untilNormalized }
 }
 
+/** Returns a date range in UTC: since at 00:00:00.000Z, until at 23:59:59.999Z. Safe across timezones. */
 export function dateRangeForDays(days: number): { since: string; until: string } {
   const until = new Date()
-  until.setHours(23, 59, 59, 999)
+  until.setUTCHours(23, 59, 59, 999)
   const since = new Date(until.getTime())
-  since.setDate(since.getDate() - (days - 1))
-  since.setHours(0, 0, 0, 0)
+  since.setUTCDate(since.getUTCDate() - (days - 1))
+  since.setUTCHours(0, 0, 0, 0)
   return { since: since.toISOString(), until: until.toISOString() }
 }
 

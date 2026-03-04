@@ -207,10 +207,10 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       expect(body.code).toBe('UNAUTHORIZED')
     })
 
-    it('returns 401 for Authorization: Basic ... and does not call cookie auth', async () => {
+    it('returns 401 for Authorization: Basic ... after cookie fallback (aligned with organizationGuard)', async () => {
       serverGetUserMock.mockImplementation(() =>
         Promise.resolve({
-          data: { user: { id: USER_ID } },
+          data: { user: null },
           error: null,
         })
       )
@@ -218,7 +218,7 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       const req = requestWithHeaders({ Authorization: 'Basic dXNlcjpwYXNz' })
       const result = await getAnalyticsContext(req, ROUTE)
 
-      expect(serverGetUserMock).not.toHaveBeenCalled()
+      expect(serverGetUserMock).toHaveBeenCalled()
       expect(result).toBeInstanceOf(Response)
       const res = result as Response
       expect(res.status).toBe(401)

@@ -4,7 +4,7 @@
  * missing_bound when only one of since/until is provided, and other error cases.
  */
 
-import { parseSinceUntil, effectiveDaysFromRange, isSinceUntilRange } from '@/lib/utils/analyticsDateRange'
+import { parseSinceUntil, effectiveDaysFromRange, isSinceUntilRange, dateRangeForDays } from '@/lib/utils/analyticsDateRange'
 
 describe('isSinceUntilRange', () => {
   it('returns true for valid range result', () => {
@@ -111,5 +111,21 @@ describe('parseSinceUntil', () => {
       const days = effectiveDaysFromRange(parsed.since, parsed.until)
       expect(days).toBe(15)
     }
+  })
+})
+
+describe('dateRangeForDays', () => {
+  it('returns since at start-of-day UTC and until at end-of-day UTC regardless of process timezone', () => {
+    const { since, until } = dateRangeForDays(7)
+    expect(since.endsWith('T00:00:00.000Z')).toBe(true)
+    expect(until.endsWith('T23:59:59.999Z')).toBe(true)
+  })
+  it('returns valid ISO strings for 1 day', () => {
+    const { since, until } = dateRangeForDays(1)
+    expect(since.endsWith('T00:00:00.000Z')).toBe(true)
+    expect(until.endsWith('T23:59:59.999Z')).toBe(true)
+    const sinceMs = new Date(since).getTime()
+    const untilMs = new Date(until).getTime()
+    expect(untilMs).toBeGreaterThanOrEqual(sinceMs)
   })
 })

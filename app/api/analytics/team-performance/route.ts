@@ -12,15 +12,13 @@ const ROUTE = '/api/analytics/team-performance'
 
 export async function GET(request: NextRequest) {
   try {
-    const ctx = await getAnalyticsContext(request, ROUTE)
-    if (ctx instanceof NextResponse) return ctx
-    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
     const { searchParams } = new URL(request.url)
     const parsedPeriod = parsePeriod(searchParams.get('period'))
     const sinceParam = searchParams.get('since')
     const untilParam = searchParams.get('until')
     const customRange = parseSinceUntil(sinceParam, untilParam)
     if (customRange && 'error' in customRange) {
+      const requestId = getRequestId(request)
       if (customRange.error === 'invalid_order') {
         const { response, errorId } = createErrorResponse(
           'Invalid date range: since must be before or equal to until',
@@ -65,16 +63,20 @@ export async function GET(request: NextRequest) {
       }
     }
     const customRangeValid = customRange && !('error' in customRange) ? customRange : null
-    const periodLabelLocked = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
-    if (!isActive || !hasAnalytics) {
-      return NextResponse.json(
-        { period: periodLabelLocked, members: [], locked: true },
-        { status: 200, headers: { 'X-Request-ID': requestId } }
-      )
-    }
     const { since, until } =
       customRangeValid ?? (parsedPeriod.key === '1y' ? calendarYearBounds() : dateRangeForDays(parsedPeriod.days))
     const periodLabel = customRangeValid ? periodLabelFromDays(effectiveDaysFromRange(since, until)) : (parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`)
+
+    const ctx = await getAnalyticsContext(request, ROUTE)
+    if (ctx instanceof NextResponse) return ctx
+    const { orgId, requestId, hasAnalytics, isActive, supabase } = ctx
+
+    if (!isActive || !hasAnalytics) {
+      return NextResponse.json(
+        { period: periodLabel, members: [], locked: true },
+        { status: 200, headers: { 'X-Request-ID': requestId } }
+      )
+    }
 
     const { data: kpiRows, error: rpcError } = await supabase.rpc('get_team_performance_kpis', {
       p_org_id: orgId,

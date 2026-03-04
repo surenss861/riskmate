@@ -64,6 +64,7 @@
 - [ ] `NEXT_PUBLIC_BACKEND_URL=https://api.riskmate.dev` (for legacy code)
 - [ ] `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=...`
 - [ ] `NODE_ENV=production`
+- [ ] **Non-Vercel only:** `NEXT_PUBLIC_APP_URL` set to your app URL (e.g. `https://riskmate.com.au`). Required for bulk job operations (status/assign/delete/export); without it, bulk actions return 503 in production.
 
 ### Domains
 - [ ] Add domain: `riskmate.dev`
@@ -168,6 +169,8 @@
 **API calls to `/api/*`**: Update code to use `NEXT_PUBLIC_API_URL`
 
 **www redirect doesn't work**: Check DNS CNAME, verify Vercel redirect settings
+
+**Bulk operations 503 (non-Vercel)**: Set `NEXT_PUBLIC_APP_URL` to your app origin (e.g. `https://riskmate.com.au`). Bulk delegation uses this for internal fetches; localhost fallback is blocked in production.
 
 ---
 
