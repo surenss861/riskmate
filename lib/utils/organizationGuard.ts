@@ -25,14 +25,18 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
   let user = null
   let authError = null
 
-  // Try Authorization header first (client-side sends this when using localStorage)
+  // Try Authorization header first (client-side sends this when using localStorage).
+  // Parse bearer case-insensitively per HTTP auth scheme rules (RFC 7235).
   if (request) {
     const authHeader = request.headers.get('authorization')
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7)
-      const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
-      user = tokenUser
-      authError = tokenError
+    if (authHeader) {
+      const parts = authHeader.trim().split(/\s+/, 2)
+      if (parts.length >= 2 && parts[0].toLowerCase() === 'bearer') {
+        const token = parts[1]
+        const { data: { user: tokenUser }, error: tokenError } = await supabase.auth.getUser(token)
+        user = tokenUser
+        authError = tokenError
+      }
     }
   }
 

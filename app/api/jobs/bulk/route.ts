@@ -83,6 +83,7 @@ async function forwardToBulkAction(
   res.headers.forEach((value, name) => {
     const lower = name.toLowerCase()
     if (lower === 'set-cookie') return
+    if (lower === 'content-type') return // already set above; avoid duplicate
     if (!BULK_RESPONSE_HEADERS_EXCLUDE.has(lower)) {
       outHeaders.append(name, value)
     }
