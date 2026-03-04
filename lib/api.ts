@@ -1248,14 +1248,14 @@ export const analyticsApi = {
     return apiRequest<AnalyticsSummaryResponse>(endpoint, {}, signal);
   },
 
-  /** Job completion KPIs: completion_rate, avg_days, on_time_rate, overdue counts. Maps to GET /api/analytics/job-completion. */
+  /** Job completion KPIs: completion_rate, avg_days, on_time_rate, overdue counts. Maps to GET /api/analytics/job-completion (Next.js route). */
   jobCompletion: async (params?: { period?: string; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       completion_rate: number;
       avg_days: number;
       on_time_rate: number;
@@ -1266,24 +1266,24 @@ export const analyticsApi = {
       period: string;
       avg_days_to_complete?: number;
       locked?: boolean;
-    }>(`/api/analytics/job-completion${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/job-completion${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
-  /** Compliance rate KPIs: signatures, photos, checklists, overall (0–100). Maps to GET /api/analytics/compliance-rate. */
+  /** Compliance rate KPIs: signatures, photos, checklists, overall (0–100). Maps to GET /api/analytics/compliance-rate (Next.js route). */
   complianceRate: async (params?: { period?: string; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       period: string;
       signatures: number;
       photos: number;
       checklists: number;
       overall: number;
       locked?: boolean;
-    }>(`/api/analytics/compliance-rate${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/compliance-rate${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
   /** Team performance KPIs per user. Maps to GET /api/analytics/team-performance (Next.js route). */
@@ -1327,7 +1327,7 @@ export const analyticsApi = {
     }>(`/api/analytics/risk-heatmap${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
-  /** Hazard frequency by type or location with trend. Maps to GET /api/analytics/hazard-frequency. */
+  /** Hazard frequency by type or location with trend. Maps to GET /api/analytics/hazard-frequency (Next.js route). */
   hazardFrequency: async (params?: { period?: string; groupBy?: 'type' | 'location'; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
@@ -1335,7 +1335,7 @@ export const analyticsApi = {
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       period: string;
       groupBy: string;
       items: Array<{
@@ -1345,10 +1345,10 @@ export const analyticsApi = {
         trend: 'up' | 'down' | 'neutral';
       }>;
       locked?: boolean;
-    }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/hazard-frequency${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
-  /** Status-by-period: weekly (or daily) job counts by status for Jobs-by-status chart. Returns rows with valid ISO period for drill-down. */
+  /** Status-by-period: weekly (or daily) job counts by status for Jobs-by-status chart. Maps to GET /api/analytics/status-by-period (Next.js route). */
   statusByPeriod: async (params?: { period?: string; groupBy?: 'day' | 'week'; since?: string; until?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
     if (params?.period) query.set('period', params.period);
@@ -1356,10 +1356,10 @@ export const analyticsApi = {
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
     const qs = query.toString();
-    return apiRequest<{
+    return nextApiRequest<{
       data: Array<{ period: string; [status: string]: string | number }>;
       locked?: boolean;
-    }>(`/api/analytics/status-by-period${qs ? `?${qs}` : ''}`, {}, signal);
+    }>(`/api/analytics/status-by-period${qs ? `?${qs}` : ''}`, { signal: signal ?? undefined });
   },
 
   /** Trends: jobs, risk, compliance, completion, or jobs_completed (real completed counts by completion date) by day/week/month. Maps to GET /api/analytics/trends (Next.js route). Pass since/until for custom range. */

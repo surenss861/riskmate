@@ -1078,13 +1078,13 @@ analyticsRouter.get(
       }
       const trend: { date: string; completion_rate: number }[] = [];
       const cursor = new Date(since);
-      cursor.setHours(0, 0, 0, 0);
+      cursor.setUTCHours(0, 0, 0, 0);
       const end = new Date(until);
-      end.setHours(23, 59, 59, 999);
+      end.setUTCHours(23, 59, 59, 999);
       while (cursor <= end) {
         const dateStr = cursor.toISOString().slice(0, 10);
         trend.push({ date: dateStr, completion_rate: trendByDate.get(dateStr) ?? 0 });
-        cursor.setDate(cursor.getDate() + 1);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
 
       res.json({

@@ -196,16 +196,16 @@ export async function GET(request: NextRequest) {
     }
     const trend: { date: string; completion_rate: number }[] = []
     const dateCursor = new Date(sinceIso)
-    dateCursor.setHours(0, 0, 0, 0)
+    dateCursor.setUTCHours(0, 0, 0, 0)
     const untilDate = new Date(untilIso)
-    untilDate.setHours(23, 59, 59, 999)
+    untilDate.setUTCHours(23, 59, 59, 999)
     while (dateCursor <= untilDate) {
       const dateKey = toDateKeyFromDateOrString(dateCursor)
       trend.push({
         date: dateKey,
         completion_rate: trendByDate.get(dateKey) ?? 0,
       })
-      dateCursor.setDate(dateCursor.getDate() + 1)
+      dateCursor.setUTCDate(dateCursor.getUTCDate() + 1)
     }
 
     const trendEmptyReason =

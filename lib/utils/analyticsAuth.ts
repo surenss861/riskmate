@@ -110,7 +110,7 @@ export async function getAnalyticsContext(
 
   const authHeader = request.headers.get('authorization')
   const hasAuthHeader = authHeader != null && authHeader.trim().length > 0
-  const isBearerIntent = hasAuthHeader && /^\s*bearer\s*/i.test(authHeader!.trim())
+  const isBearerIntent = hasAuthHeader && /^\s*bearer\s+/i.test(authHeader!.trim())
 
   if (isBearerIntent) {
     const token = authHeader!.replace(/^\s*bearer\s*/i, '').trim()

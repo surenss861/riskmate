@@ -18,9 +18,17 @@ export const APP_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
-/** Pattern for allowed app origins (dev localhost, riskmate.com.au, *.vercel.app). Used to guard bulk delegation. */
+/** Pattern for allowed app origins (dev localhost, riskmate.com.au, *.vercel.app). Used to guard bulk delegation.
+ * When NEXT_PUBLIC_APP_URL is explicitly set, the operator has consciously configured the origin (e.g. custom domain);
+ * in that case the pattern check is skipped in forwardToBulkAction so custom domains (e.g. app.riskmate.io) are allowed. */
 export const APP_ORIGIN_ALLOWED_PATTERN =
   /^(https?:\/\/)(localhost|127\.0\.0\.1|[\w.-]*riskmate\.com\.au|[\w.-]*\.vercel\.app)(:\d+)?(\/|$)/i
+
+/** True when the operator explicitly set NEXT_PUBLIC_APP_URL (e.g. custom domain). Bulk delegation skips pattern check in that case. */
+export function isAppOriginExplicitlySet(): boolean {
+  const url = process.env.NEXT_PUBLIC_APP_URL
+  return typeof url === 'string' && url.trim().length > 0
+}
 
 /** True when APP_ORIGIN is localhost/127.0.0.1 (unsafe for server-side delegation in production). */
 export function isAppOriginLocalhost(): boolean {
@@ -38,8 +46,8 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
     console.error('[Config] ❌ CRITICAL: APP_ORIGIN resolves to localhost in production. Bulk operations will fail.')
     console.error('[Config] Set NEXT_PUBLIC_APP_URL to your app URL (e.g. https://riskmate.com.au) for non-Vercel deployments.')
   }
-  if (!APP_ORIGIN_ALLOWED_PATTERN.test(APP_ORIGIN)) {
-    console.error('[Config] ⚠️ APP_ORIGIN may be misconfigured (unexpected host). Expected localhost (dev) or riskmate.com.au / *.vercel.app:', APP_ORIGIN)
+  if (!isAppOriginExplicitlySet() && !APP_ORIGIN_ALLOWED_PATTERN.test(APP_ORIGIN)) {
+    console.error('[Config] ⚠️ APP_ORIGIN may be misconfigured (unexpected host). Expected localhost (dev) or riskmate.com.au / *.vercel.app, or set NEXT_PUBLIC_APP_URL for custom domains:', APP_ORIGIN)
   }
 }
 

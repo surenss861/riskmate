@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { APP_ORIGIN, APP_ORIGIN_ALLOWED_PATTERN, isAppOriginLocalhost, isProductionNonVercel } from '@/lib/config'
+import { APP_ORIGIN, APP_ORIGIN_ALLOWED_PATTERN, isAppOriginExplicitlySet, isAppOriginLocalhost, isProductionNonVercel } from '@/lib/config'
 
 export const runtime = 'nodejs'
 
@@ -76,7 +76,7 @@ async function forwardToBulkAction(
       { status: 503 }
     )
   }
-  if (!APP_ORIGIN_ALLOWED_PATTERN.test(APP_ORIGIN)) {
+  if (!isAppOriginExplicitlySet() && !APP_ORIGIN_ALLOWED_PATTERN.test(APP_ORIGIN)) {
     return NextResponse.json(
       {
         message:

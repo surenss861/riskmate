@@ -72,6 +72,16 @@ describe('parseSinceUntil', () => {
     expect(result).toEqual({ error: 'invalid_order' })
   })
 
+  it('accepts same-day range when since is datetime and until is date-only (until normalized before order check)', () => {
+    const result = parseSinceUntil('2025-01-15T12:00:00Z', '2025-01-15')
+    expect(result).not.toBeNull()
+    expect('error' in (result ?? {})).toBe(false)
+    if (result && !('error' in result)) {
+      expect(result.since).toBe('2025-01-15T12:00:00.000Z')
+      expect(result.until).toBe('2025-01-15T23:59:59.999Z')
+    }
+  })
+
   it('returns invalid_format for invalid date strings', () => {
     expect(parseSinceUntil('2024-02-30', '2024-03-15')).toEqual({ error: 'invalid_format' })
     expect(parseSinceUntil('2025-13-01', '2025-12-31')).toEqual({ error: 'invalid_format' })

@@ -123,11 +123,11 @@ export function parseSinceUntil(
   const sinceIso = parseStrictDate(since)
   const untilIso = parseStrictDate(until)
   if (sinceIso === null || untilIso === null) return { error: 'invalid_format' }
-  const sinceMs = new Date(sinceIso).getTime()
-  const untilMs = new Date(untilIso).getTime()
-  if (sinceMs > untilMs) return { error: 'invalid_order' }
-  // Normalize date-only bounds: since is already start-of-day UTC; until → end-of-day UTC when date-only
+  // Normalize date-only until to end-of-day UTC before order check so same-day ranges (e.g. since=datetime, until=date) are valid
   const untilNormalized = ISO_DATE_REGEX.test(until) ? toEndOfDayUTC(untilIso) : untilIso
+  const sinceMs = new Date(sinceIso).getTime()
+  const untilMs = new Date(untilNormalized).getTime()
+  if (sinceMs > untilMs) return { error: 'invalid_order' }
   return { since: sinceIso, until: untilNormalized }
 }
 
