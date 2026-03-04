@@ -33,6 +33,7 @@ struct UserDefaultsManager {
     
     struct CoachMarks {
         private static let category = "\(prefix).coachmarks"
+        private static let operationsVisitCountKey = "\(category).operationsVisitCount"
         
         static func hasSeen(_ key: String) -> Bool {
             UserDefaults.standard.bool(forKey: "\(category).\(key)")
@@ -40,6 +41,15 @@ struct UserDefaultsManager {
         
         static func markAsSeen(_ key: String) {
             UserDefaults.standard.set(true, forKey: "\(category).\(key)")
+        }
+        
+        /// Operations screen visit count; show coach marks only when <= 2 (first 2 visits).
+        static func operationsVisitCount() -> Int {
+            UserDefaults.standard.integer(forKey: operationsVisitCountKey)
+        }
+        
+        static func incrementOperationsVisitCount() {
+            UserDefaults.standard.set(operationsVisitCount() + 1, forKey: operationsVisitCountKey)
         }
     }
     

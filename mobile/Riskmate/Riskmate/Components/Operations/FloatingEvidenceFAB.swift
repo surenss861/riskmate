@@ -21,6 +21,7 @@ struct FloatingEvidenceFAB: View {
     @State private var dragOffset: CGFloat = 0
     @State private var glowPulse: Double = 0.0
     @State private var highlightedIndex: Int? = nil
+    @State private var hasFiredExpandHapticThisGesture = false
     @Environment(\.scenePhase) private var scenePhase
 
     private let expandThreshold: CGFloat = 44
@@ -132,14 +133,17 @@ struct FloatingEvidenceFAB: View {
                         dragOffset = up
                         if effectiveUp > expandThreshold && !isExpanded {
                             withAnimation(RMMotion.spring) { isExpanded = true }
-                            Haptics.tap()
+                            if !hasFiredExpandHapticThisGesture {
+                                hasFiredExpandHapticThisGesture = true
+                                Haptics.tap()
+                            }
                         } else if isExpanded && value.translation.height > 24 {
                             withAnimation(RMMotion.spring) { isExpanded = false }
-                            Haptics.tap()
                         }
                     }
                     .onEnded { _ in
                         dragOffset = 0
+                        hasFiredExpandHapticThisGesture = false
                     }
             )
             .onLongPressGesture(minimumDuration: 0.35) {

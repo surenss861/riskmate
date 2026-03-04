@@ -23,9 +23,8 @@ struct OperationsCoachMarks: View {
                             title: "Tap + to add evidence",
                             message: "Capture photos, videos, or notes. Evidence is automatically linked to jobs and added to your ledger.",
                             anchor: anchor,
-                            onDismiss: {
-                                showNextMark()
-                            }
+                            primaryButtonTitle: "Next",
+                            onDismiss: { showNextMark() }
                         )
                     }
                 case .riskStrip:
@@ -34,9 +33,8 @@ struct OperationsCoachMarks: View {
                             title: "Risk strip shows urgency",
                             message: "The colored strip on the left indicates risk level. Green is low, red is critical. Tap a job to see details.",
                             anchor: anchor,
-                            onDismiss: {
-                                showNextMark()
-                            }
+                            primaryButtonTitle: "Next",
+                            onDismiss: { showNextMark() }
                         )
                     }
                 case .ledger:
@@ -45,9 +43,8 @@ struct OperationsCoachMarks: View {
                             title: "Ledger is your audit trail",
                             message: "Every action creates an immutable proof record. View your ledger to see all anchored proofs.",
                             anchor: anchor,
-                            onDismiss: {
-                                completeCoachMarks()
-                            }
+                            primaryButtonTitle: "Got it",
+                            onDismiss: { completeCoachMarks() }
                         )
                     }
                 }
@@ -62,6 +59,7 @@ struct OperationsCoachMarks: View {
     
     private func shouldShowCoachMarks() -> Bool {
         !CoachMarkManager.hasSeen(CoachMarkKey.fab.rawValue)
+        && UserDefaultsManager.CoachMarks.operationsVisitCount() <= 2
     }
     
     private func showFirstMark() {

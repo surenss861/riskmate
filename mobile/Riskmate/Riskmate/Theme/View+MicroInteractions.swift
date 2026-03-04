@@ -12,9 +12,9 @@ extension View {
         self.matchedGeometryEffect(id: id, in: namespace)
     }
     
-    /// Press feedback: scale + optional opacity + optional haptic. Use on buttons/cards.
-    func rmPressable(scale: CGFloat = 0.98, haptic: Bool = false) -> some View {
-        self.modifier(RMPressableModifier(scale: scale, haptic: haptic))
+    /// Press feedback: scale + optional haptic. Use on buttons/cards. Use lightImpact: true for cards to avoid "vibratey" feel.
+    func rmPressable(scale: CGFloat = 0.98, haptic: Bool = false, lightImpact: Bool = false) -> some View {
+        self.modifier(RMPressableModifier(scale: scale, haptic: haptic, lightImpact: lightImpact))
     }
     
     /// Staggered appear: opacity + y offset using RMMotion. Pass index for delay.
@@ -32,6 +32,7 @@ extension View {
 private struct RMPressableModifier: ViewModifier {
     let scale: CGFloat
     let haptic: Bool
+    let lightImpact: Bool
     @State private var isPressed = false
     
     func body(content: Content) -> some View {
@@ -42,7 +43,10 @@ private struct RMPressableModifier: ViewModifier {
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         if !isPressed {
-                            if haptic { Haptics.tap() }
+                            if haptic {
+                                if lightImpact { Haptics.impact(.light) }
+                                else { Haptics.tap() }
+                            }
                             isPressed = true
                         }
                     }

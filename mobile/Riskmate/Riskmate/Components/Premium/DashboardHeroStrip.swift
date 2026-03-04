@@ -53,7 +53,7 @@ struct DashboardHeroStrip: View {
                 if isSkeleton {
                     RMSkeletonView(width: 140, height: 14, cornerRadius: 4, shimmer: false)
                 } else if let last = lastSyncedAt {
-                    TimelineView(.periodic(from: Date(), by: 10)) { context in
+                    TimelineView(LastSyncedTickerSchedule(lastSynced: last)) { context in
                         Text("Last synced \(relativeTime(last, relativeTo: context.date))")
                             .font(RMTheme.Typography.caption)
                             .foregroundColor(RMTheme.Colors.textTertiary)
@@ -120,6 +120,26 @@ struct DashboardHeroStrip: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: now)
+    }
+}
+
+/// Tick every 30s when last synced < 10 min ago, every 60s after — less UI/battery churn.
+private struct LastSyncedTickerSchedule: TimelineSchedule {
+    let lastSynced: Date
+    func entries(from start: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {
+        LastSyncedTickerSequence(current: start, lastSynced: lastSynced)
+    }
+}
+
+private struct LastSyncedTickerSequence: Sequence, IteratorProtocol {
+    var current: Date
+    let lastSynced: Date
+    private let tenMinutes: TimeInterval = 600
+    mutating func next() -> Date? {
+        let nextDate = current
+        let age = current.timeIntervalSince(lastSynced)
+        current = current.addingTimeInterval(age < tenMinutes ? 30 : 60)
+        return nextDate
     }
 }
 

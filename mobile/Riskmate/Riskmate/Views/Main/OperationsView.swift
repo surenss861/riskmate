@@ -46,6 +46,10 @@ struct OperationsView: View {
         filteredJobs.filter { job in (job.riskScore ?? 0) >= 80 }
     }
     
+    var blockerCount: Int {
+        filteredJobs.filter { job in (job.riskScore ?? 0) >= 80 }.count
+    }
+    
     var missingEvidenceJobs: [Job] {
         // TODO: Wire to actual evidence check
         []
@@ -114,6 +118,24 @@ struct OperationsView: View {
                     .listRowBackground(Color.clear)
             }
         }
+        
+        Section {
+            OperationsTodayPanel(
+                blockerCount: blockerCount,
+                highRiskCount: highRiskJobs.count,
+                overdueTasksCount: 0,
+                lastUpdated: jobsStore.lastSyncDate,
+                onTapBlockers: { onKPINavigate?("blockers") },
+                onTapHighRisk: { onKPINavigate?("highRisk") }
+            )
+            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Today")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(RMTheme.Colors.textSecondary)
+        }
+        .listSectionSpacing(.compact)
 
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
@@ -256,6 +278,9 @@ struct OperationsView: View {
             .onAppear {
                 if entitlements.entitlements?.role.lowercased() == "executive" && selectedView == .dashboard {
                     selectedView = .defensibility
+                }
+                if entitlements.entitlements?.role.lowercased() != "executive" {
+                    UserDefaultsManager.CoachMarks.incrementOperationsVisitCount()
                 }
             }
             .sheet(isPresented: $showExportProofSheet, onDismiss: { exportProofJobId = nil }) {

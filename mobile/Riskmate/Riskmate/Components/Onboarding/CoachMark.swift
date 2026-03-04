@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Coach mark - one-time tooltip for first-time users
+/// Coach mark - one-time tooltip for first-time users. Dimmed overlay only (not full blackout); "Next" or "Got it".
 struct CoachMark: View {
     let title: String
     let message: String
     let anchor: Anchor<CGRect>?
+    /// "Next" for multi-step, "Got it" for last step
+    var primaryButtonTitle: String = "Got it"
     let onDismiss: () -> Void
     
     @State private var opacity: Double = 0
@@ -15,15 +17,15 @@ struct CoachMark: View {
                 let frame = geometry[anchor]
                 
                 ZStack {
-                    // Dark overlay (accessible - VoiceOver focuses on tooltip)
-                    Color.black.opacity(0.6)
+                    // Dimmed overlay only (not full blackout); tap to dismiss
+                    Color.black.opacity(0.35)
                         .ignoresSafeArea()
-                        .accessibilityHidden(true) // Overlay is decorative
+                        .accessibilityHidden(true)
                         .onTapGesture {
                             dismiss()
                         }
                     
-                    // Highlighted area (cutout)
+                    // Highlighted area (cutout) — dimmed around highlight
                     Path { path in
                         let rect = CGRect(
                             x: frame.minX - 8,
@@ -34,7 +36,7 @@ struct CoachMark: View {
                         path.addRoundedRect(in: rect, cornerSize: CGSize(width: 12, height: 12))
                         path.addRect(CGRect(origin: .zero, size: geometry.size))
                     }
-                    .fill(.black.opacity(0.8), style: FillStyle(eoFill: true))
+                    .fill(.black.opacity(0.5), style: FillStyle(eoFill: true))
                     
                     // Tooltip
                     VStack {
@@ -74,7 +76,7 @@ struct CoachMark: View {
             Button {
                 dismiss()
             } label: {
-                Text("Got it")
+                Text(primaryButtonTitle)
                     .font(RiskmateDesignSystem.Typography.bodySmallBold)
                     .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
@@ -82,7 +84,7 @@ struct CoachMark: View {
                     .background(RiskmateDesignSystem.Colors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: RiskmateDesignSystem.Radius.sm))
             }
-            .accessibilityLabel("Got it")
+            .accessibilityLabel(primaryButtonTitle)
             .accessibilityHint("Dismisses this tip")
             .padding(.top, RiskmateDesignSystem.Spacing.xs)
         }

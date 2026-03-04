@@ -17,7 +17,7 @@ struct DashboardCardGrid: View {
                     handleRoute(item.route)
                 }
                 .rmAppearIn(staggerIndex: min(index, 12))
-                .rmPressable(scale: 0.98, haptic: true)
+                .rmPressable(scale: 0.98, haptic: true, lightImpact: true)
             }
         }
     }
