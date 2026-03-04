@@ -42,7 +42,7 @@ export function SelectedOrganizationBootstrap() {
     if (authKey !== previousAuthKeyRef.current) {
       previousAuthKeyRef.current = authKey
       setRetryCount(0)
-      return // re-run when retryCount updates so new user gets full retries
+      // Do not return: run bootstrap immediately so first-session initialization always executes.
     }
     if (lastBootstrappedAuthKey.current === authKey) return
 
@@ -64,6 +64,7 @@ export function SelectedOrganizationBootstrap() {
     }
     run()
     return () => {
+      cancelled = true
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current)
         retryTimeoutRef.current = null
