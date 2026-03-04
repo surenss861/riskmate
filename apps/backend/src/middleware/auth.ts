@@ -170,14 +170,31 @@ async function authenticateInternal(
       return;
     }
 
-    if (!userRecord.organization_id) {
-      // User exists but has no organization_id
-      res.status(403).json({ 
-        message: "No organization assigned",
-        code: "NO_ORGANIZATION",
-        hint: "User account is missing organization assignment. Please contact support."
-      });
-      return;
+    let organizationId: string;
+    let role: string | undefined;
+
+    if (userRecord.organization_id) {
+      organizationId = userRecord.organization_id;
+      role = userRecord.role ?? undefined;
+    } else {
+      // Membership fallback: resolve org via organization_members (match getAnalyticsContext semantics)
+      const { data: memberRows, error: memberError } = await supabase
+        .from("organization_members")
+        .select("organization_id, role")
+        .eq("user_id", userId)
+        .order("organization_id", { ascending: true })
+        .limit(1);
+
+      if (memberError || !memberRows?.length) {
+        res.status(403).json({
+          message: "No organization assigned",
+          code: "NO_ORGANIZATION",
+          hint: "User account is missing organization assignment. Please contact support.",
+        });
+        return;
+      }
+      organizationId = memberRows[0].organization_id;
+      role = memberRows[0].role ?? userRecord.role ?? undefined;
     }
 
     if (userRecord.archived_at) {
@@ -185,9 +202,7 @@ async function authenticateInternal(
       return;
     }
 
-    const organizationId = userRecord.organization_id;
     const email = userRecord.email ?? authData.user.email ?? undefined;
-    const role = userRecord.role ?? undefined;
     const mustResetPassword = Boolean(userRecord.must_reset_password);
 
     const planInfo = await loadPlanForOrganization(organizationId);

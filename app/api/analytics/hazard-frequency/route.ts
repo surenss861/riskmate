@@ -3,7 +3,7 @@ import { createErrorResponse } from '@/lib/utils/apiResponse'
 import { logApiError } from '@/lib/utils/errorLogging'
 import { getRequestId } from '@/lib/utils/requestId'
 import { getAnalyticsContext } from '@/lib/utils/analyticsAuth'
-import { parsePeriod, parseSinceUntil } from '@/lib/utils/analyticsDateRange'
+import { parsePeriod, parseSinceUntil, effectiveDaysFromRange, periodLabelFromDays } from '@/lib/utils/analyticsDateRange'
 import { proxyToBackend } from '@/lib/api/proxy-helpers'
 
 export const runtime = 'nodejs'
@@ -62,6 +62,10 @@ export async function GET(request: NextRequest) {
         })
       }
     }
+    const customRangeValid = customRange && !('error' in customRange) ? customRange : null
+    const periodLabel = customRangeValid
+      ? periodLabelFromDays(effectiveDaysFromRange(customRangeValid.since, customRangeValid.until))
+      : (parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`)
 
     const ctx = await getAnalyticsContext(request, ROUTE)
     if (ctx instanceof NextResponse) return ctx
@@ -71,7 +75,6 @@ export async function GET(request: NextRequest) {
     const groupBy = groupByParam === 'location' ? 'location' : 'type'
 
     if (!isActive || !hasAnalytics) {
-      const periodLabel = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
       return NextResponse.json(
         { period: periodLabel, groupBy, items: [], locked: true },
         { status: 200, headers: { 'X-Request-ID': requestId } }
