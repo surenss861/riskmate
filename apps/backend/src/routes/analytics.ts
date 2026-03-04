@@ -561,8 +561,8 @@ analyticsRouter.get(
       const customRangeRaw = parseSinceUntilQuery(authReq.query as { since?: string | string[]; until?: string | string[] });
       if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
-      const { days } = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(days);
+      const parsed = parsePeriodQuery(authReq.query.period);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
       const groupByRaw = (authReq.query.groupBy as string) || "week";
       const groupBy = groupByRaw === "day" ? "day" : "week";
 

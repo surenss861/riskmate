@@ -13,8 +13,32 @@ import {
   monthStart,
   toDateKey,
 } from '@/lib/utils/analyticsTrends'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
+
+// Fallback refresh when pg_cron is unavailable: refresh MV at most once per hour before serving week/month trends (same semantics as backend ensureAnalyticsMvRefreshed).
+const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000
+let lastAnalyticsMvRefreshAt = 0
+let analyticsMvRefreshInFlight: Promise<void> | null = null
+
+async function ensureAnalyticsMvRefreshed(supabase: SupabaseClient): Promise<void> {
+  const now = Date.now()
+  if (now - lastAnalyticsMvRefreshAt < ANALYTICS_MV_REFRESH_COOLDOWN_MS) return
+  if (analyticsMvRefreshInFlight) {
+    await analyticsMvRefreshInFlight
+    return
+  }
+  analyticsMvRefreshInFlight = (async () => {
+    lastAnalyticsMvRefreshAt = Date.now()
+    const { error } = await supabase.rpc('refresh_analytics_weekly_job_stats')
+    if (error) {
+      console.warn('Analytics MV refresh failed (pg_cron may be unavailable):', error)
+    }
+  })()
+  await analyticsMvRefreshInFlight
+  analyticsMvRefreshInFlight = null
+}
 
 const ROUTE = '/api/analytics/trends'
 
@@ -186,6 +210,7 @@ export async function GET(request: NextRequest) {
       (metric === 'jobs' || metric === 'risk' || metric === 'completion' || metric === 'jobs_completed')
 
     if (useMv) {
+      await ensureAnalyticsMvRefreshed(supabase)
       const sinceWeek = weekStart(new Date(since))
       const untilWeek = weekStart(new Date(until))
       const points: Point[] = []
