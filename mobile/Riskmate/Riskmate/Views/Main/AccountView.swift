@@ -119,6 +119,25 @@ struct AccountView: View {
                     }
                 }
                 
+                if UserDefaultsManager.Streaks.currentStreak() > 0 {
+                    Section {
+                        let streak = UserDefaultsManager.Streaks.currentStreak()
+                        HStack {
+                            HolographicBadgeView(
+                                title: streak == 1 ? "1 day" : "\(streak)-day streak",
+                                subtitle: "Logging consistency",
+                                icon: "flame.fill"
+                            )
+                            Spacer()
+                        }
+                        .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                    } header: {
+                        Text("Streak")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                }
+                
                 Section {
                     NavigationLink {
                         SupportBundleView()

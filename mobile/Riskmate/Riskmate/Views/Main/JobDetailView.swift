@@ -9,6 +9,9 @@ struct JobDetailView: View {
     var initialTab: JobDetailTab? = nil
     /// When set (e.g. from riskmate://jobs/{id}/hazards/{hazardId}), scroll/focus this hazard when the hazards tab is shown.
     var initialHazardId: String? = nil
+    /// When set with namespace, card→detail matched geometry animates pill and score into this hero strip.
+    var initialJob: Job? = nil
+    var namespace: Namespace.ID? = nil
     @State private var selectedTab: JobDetailTab = .overview
     @State private var job: Job?
     @State private var isLoading = true
@@ -71,6 +74,10 @@ struct JobDetailView: View {
                     .padding(RMTheme.Spacing.pagePadding)
                 } else if let job = job {
                     VStack(spacing: 0) {
+                        // Matched-geometry hero strip (pill + title + score) when coming from list
+                        if let ns = namespace {
+                            jobDetailHeroStrip(job: job, namespace: ns)
+                        }
                         // Changes will sync banner when offline or when job has pending updates
                         if !statusManager.isOnline || !OfflineDatabase.shared.getPendingUpdates(entityType: "job", entityId: jobId).isEmpty {
                             HStack(spacing: RMTheme.Spacing.sm) {
@@ -233,6 +240,7 @@ struct JobDetailView: View {
             }
             .task(id: jobId) { // Use task(id:) to prevent re-fetch on unrelated re-renders
                 await loadJob()
+                UserDefaultsManager.Streaks.recordDayLogged()
             }
             .task(id: job?.id) {
                 guard job != nil else { return }
@@ -264,6 +272,48 @@ struct JobDetailView: View {
         await loadHazardsAndControlsCount()
         await loadEvidenceCountForExport()
         await checkForFailedExports()
+    }
+    
+    /// Hero strip at top of detail: pill + title + score with matched geometry (morphs from JobCard).
+    private func jobDetailHeroStrip(job: Job, namespace: Namespace.ID) -> some View {
+        let riskColor: Color = {
+            let level = (job.riskLevel ?? "").lowercased()
+            if level.contains("critical") { return RMSystemTheme.Colors.critical }
+            if level.contains("high") { return RMSystemTheme.Colors.high }
+            if level.contains("medium") { return RMSystemTheme.Colors.medium }
+            return RMSystemTheme.Colors.low
+        }()
+        let score = job.riskScore ?? 0
+        let gradient: LinearGradient = {
+            if score >= 90 { return LinearGradient(colors: [Color.red.opacity(0.15), Color.red.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            if score >= 70 { return LinearGradient(colors: [Color.orange.opacity(0.15), Color.orange.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            if score >= 40 { return LinearGradient(colors: [Color.yellow.opacity(0.15), Color.yellow.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            return LinearGradient(colors: [Color.green.opacity(0.15), Color.green.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }()
+        return HStack(spacing: RMTheme.Spacing.md) {
+            RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                .matchedGeometryEffect(id: "job-\(job.id)-pill", in: namespace)
+            Text(job.clientName.isEmpty ? "Untitled Job" : job.clientName)
+                .font(RMSystemTheme.Typography.headline)
+                .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(score)")
+                    .font(RMSystemTheme.Typography.title2)
+                    .foregroundStyle(RMSystemTheme.Colors.textPrimary)
+                Text("Risk")
+                    .font(RMSystemTheme.Typography.caption)
+                    .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: RMSystemTheme.Radius.sm).fill(gradient))
+            .matchedGeometryEffect(id: "job-\(job.id)-score", in: namespace)
+        }
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .padding(.vertical, RMTheme.Spacing.sm)
+        .background(VisualEffectBlur(style: .systemThinMaterial).opacity(0.6))
     }
     
     @ViewBuilder

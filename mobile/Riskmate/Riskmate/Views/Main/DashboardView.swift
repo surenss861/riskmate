@@ -49,6 +49,16 @@ struct DashboardView: View {
                             )
                             .padding(.vertical, RMTheme.Spacing.xxl)
                         } else if let kpis = viewModel.kpis {
+                            // Streak badge (local)
+                            if UserDefaultsManager.Streaks.currentStreak() > 0 {
+                                let streak = UserDefaultsManager.Streaks.currentStreak()
+                                HolographicBadgeView(
+                                    title: streak == 1 ? "1 day" : "\(streak)-day streak",
+                                    subtitle: "Logging consistency",
+                                    icon: "flame.fill"
+                                )
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            }
                             // KPI Cards
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: RMTheme.Spacing.md) {

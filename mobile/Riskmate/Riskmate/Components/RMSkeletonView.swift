@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Skeleton loader for premium loading states
+/// Skeleton loader for premium loading states. Align to final layout; subtle shimmer; use varied widths.
 struct RMSkeletonView: View {
     let width: CGFloat?
     let height: CGFloat
@@ -16,43 +16,34 @@ struct RMSkeletonView: View {
     
     var body: some View {
         Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        RMTheme.Colors.inputFill,
-                        RMTheme.Colors.inputFill.opacity(0.5),
-                        RMTheme.Colors.inputFill
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .fill(RMTheme.Colors.inputFill)
             .frame(width: width, height: height)
             .cornerRadius(cornerRadius)
-            .overlay {
-                // Shimmer effect
-                GeometryReader { geometry in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .white.opacity(0.1),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geometry.size.width * 2)
-                    .offset(x: isAnimating ? geometry.size.width : -geometry.size.width)
-                }
-            }
-            .onAppear {
-                withAnimation(
-                    Animation.linear(duration: 1.5)
-                        .repeatForever(autoreverses: false)
-                ) {
-                    isAnimating = true
-                }
-            }
+            .rmShimmer()
+    }
+}
+
+/// Skeleton with a fixed width multiplier (e.g. 0.7 = 70% of container) for varied, layout-aligned widths.
+struct RMSkeletonViewVaried: View {
+    let widthFraction: CGFloat?
+    let height: CGFloat
+    var cornerRadius: CGFloat = RMTheme.Radius.sm
+    
+    init(widthFraction: CGFloat? = nil, height: CGFloat, cornerRadius: CGFloat = RMTheme.Radius.sm) {
+        self.widthFraction = widthFraction
+        self.height = height
+        self.cornerRadius = cornerRadius
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            RMSkeletonView(
+                width: widthFraction.map { geo.size.width * $0 },
+                height: height,
+                cornerRadius: cornerRadius
+            )
+        }
+        .frame(height: height)
     }
 }
 
@@ -62,9 +53,10 @@ struct RMSkeletonCard: View {
     var body: some View {
         RMGlassCard {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                RMSkeletonView(width: 120, height: 16)
-                RMSkeletonView(width: 80, height: 24)
+                RMSkeletonView(width: 100, height: 14)
+                RMSkeletonView(width: 160, height: 22)
                 RMSkeletonView(width: nil, height: 12)
+                RMSkeletonView(width: 220, height: 12)
             }
             .padding(RMTheme.Spacing.md)
         }
@@ -72,21 +64,22 @@ struct RMSkeletonCard: View {
 }
 
 struct RMSkeletonListRow: View {
+    /// Title line width (varied per row so it doesn’t look like a template).
+    var titleWidth: CGFloat = 200
+    var subtitleWidth: CGFloat = 140
+    
     var body: some View {
         HStack(spacing: RMTheme.Spacing.md) {
-            RMSkeletonView(width: 40, height: 40, cornerRadius: 8)
-            
+            RMSkeletonView(width: 44, height: 44, cornerRadius: 10)
             VStack(alignment: .leading, spacing: RMTheme.Spacing.xs) {
-                RMSkeletonView(width: 200, height: 16)
-                RMSkeletonView(width: 150, height: 12)
+                RMSkeletonView(width: titleWidth, height: 16)
+                RMSkeletonView(width: subtitleWidth, height: 12)
             }
-            
-            Spacer()
-            
-            RMSkeletonView(width: 60, height: 20, cornerRadius: 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            RMSkeletonView(width: 52, height: 24, cornerRadius: 8)
         }
         .padding(RMTheme.Spacing.md)
-        .background(RMTheme.Colors.surface.opacity(0.3))
+        .background(RMTheme.Colors.surface.opacity(0.35))
         .cornerRadius(RMTheme.Radius.md)
     }
 }
@@ -114,10 +107,16 @@ struct RMSkeletonList: View {
         self.count = count
     }
     
+    private static let titleWidths: [CGFloat] = [220, 160, 190, 140, 205, 170, 180, 155]
+    private static let subtitleWidths: [CGFloat] = [150, 120, 130, 100, 140, 110, 125, 115]
+    
     var body: some View {
         VStack(spacing: RMTheme.Spacing.sm) {
-            ForEach(0..<count, id: \.self) { _ in
-                RMSkeletonListRow()
+            ForEach(0..<count, id: \.self) { i in
+                RMSkeletonListRow(
+                    titleWidth: Self.titleWidths[i % Self.titleWidths.count],
+                    subtitleWidth: Self.subtitleWidths[i % Self.subtitleWidths.count]
+                )
             }
         }
         .padding(.horizontal, RMTheme.Spacing.md)

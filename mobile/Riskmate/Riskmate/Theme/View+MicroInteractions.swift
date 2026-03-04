@@ -1,15 +1,95 @@
 import SwiftUI
 
-/// Micro-interactions for premium feel
+/// Micro-interactions for premium feel — uses Theme/Motion.swift for canonical timings.
 extension View {
     /// Subtle spring animation for pill selection
     func pillSpring() -> some View {
-        self.animation(.spring(response: 0.3, dampingFraction: 0.7), value: UUID())
+        self.animation(RMMotion.spring, value: UUID())
     }
     
     /// Matched geometry effect for segmented controls/chips
     func matchedGeometry(id: String, in namespace: Namespace.ID) -> some View {
         self.matchedGeometryEffect(id: id, in: namespace)
+    }
+    
+    /// Press feedback: scale + optional opacity + optional haptic. Use on buttons/cards.
+    func rmPressable(scale: CGFloat = 0.98, haptic: Bool = false) -> some View {
+        self.modifier(RMPressableModifier(scale: scale, haptic: haptic))
+    }
+    
+    /// Staggered appear: opacity + y offset using RMMotion. Pass index for delay.
+    func rmAppearIn(staggerIndex: Int = 0) -> some View {
+        self.modifier(RMAppearInModifier(staggerIndex: staggerIndex))
+    }
+    
+    /// Shimmer overlay for skeletons — subtle, uses RMMotion.shimmerDuration.
+    func rmShimmer() -> some View {
+        self.modifier(RMShimmerModifier())
+    }
+}
+
+// MARK: - Pressable (scale + haptic)
+private struct RMPressableModifier: ViewModifier {
+    let scale: CGFloat
+    let haptic: Bool
+    @State private var isPressed = false
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressed ? scale : 1.0)
+            .animation(RMMotion.springPress, value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPressed {
+                            if haptic { Haptics.tap() }
+                            isPressed = true
+                        }
+                    }
+                    .onEnded { _ in
+                        isPressed = false
+                    }
+            )
+    }
+}
+
+// MARK: - Staggered appear
+private struct RMAppearInModifier: ViewModifier {
+    let staggerIndex: Int
+    @State private var shown = false
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 8)
+            .animation(RMMotion.easeOut.delay(Double(staggerIndex) * RMMotion.staggerStep), value: shown)
+            .onAppear { shown = true }
+    }
+}
+
+// MARK: - Shimmer (for use on skeleton shapes)
+private struct RMShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(RMMotion.shimmerOpacity), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 1.5)
+                    .offset(x: phase * geo.size.width * 1.5 - geo.size.width * 0.5)
+                }
+                .allowsHitTesting(false)
+            )
+            .onAppear {
+                withAnimation(.linear(duration: RMMotion.shimmerDuration).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
     }
 }
 

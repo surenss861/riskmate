@@ -86,6 +86,45 @@ struct UserDefaultsManager {
         }
     }
     
+    // MARK: - Streaks (local-only; “days with at least 1 log” for holographic badges)
+    
+    struct Streaks {
+        private static let category = "\(prefix).streaks"
+        private static let lastLoggedKey = "\(category).lastLogged"
+        private static let streakCountKey = "\(category).streakCount"
+        private static let calendar = Calendar.current
+        
+        /// Call when user does a “log” action (e.g. added evidence, opened a job, completed a task).
+        static func recordDayLogged() {
+            let today = calendar.startOfDay(for: Date())
+            let stored = UserDefaults.standard.object(forKey: lastLoggedKey) as? Date
+            let count = UserDefaults.standard.integer(forKey: streakCountKey)
+            var newCount = count
+            if let last = stored {
+                let days = calendar.dateComponents([.day], from: last, to: today).day ?? 0
+                if days == 0 { return }
+                if days == 1 { newCount = count + 1 }
+                else { newCount = 1 }
+            } else {
+                newCount = 1
+            }
+            UserDefaults.standard.set(today, forKey: lastLoggedKey)
+            UserDefaults.standard.set(newCount, forKey: streakCountKey)
+        }
+        
+        /// Current consecutive days with at least one log (0 if none or streak broken).
+        static func currentStreak() -> Int {
+            let last = UserDefaults.standard.object(forKey: lastLoggedKey) as? Date
+            let count = UserDefaults.standard.integer(forKey: streakCountKey)
+            guard let last = last, count > 0 else { return 0 }
+            let today = calendar.startOfDay(for: Date())
+            let days = calendar.dateComponents([.day], from: last, to: today).day ?? 0
+            if days == 0 { return count }
+            if days == 1 { return count }
+            return 0
+        }
+    }
+    
     // MARK: - Production Toggles
     
     struct Production {

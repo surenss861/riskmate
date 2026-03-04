@@ -205,10 +205,12 @@ struct OperationsView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if !isAuditor {
-                FloatingEvidenceFAB {
-                    // Show job picker sheet first (evidence needs a job context)
-                    showJobPickerSheet = true
-                }
+                FloatingEvidenceFAB(
+                    action: { showJobPickerSheet = true },
+                    onTask: { quickAction.requestSwitchToWorkRecords(filter: nil) },
+                    onComment: { quickAction.requestSwitchToWorkRecords(filter: nil) },
+                    onIncident: { quickAction.requestSwitchToWorkRecords(filter: nil) }
+                )
                 .padding(RMSystemTheme.Spacing.lg)
             }
         }

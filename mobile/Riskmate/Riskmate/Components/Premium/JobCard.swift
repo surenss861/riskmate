@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// System-native job card with clear hierarchy and risk emphasis
+/// System-native job card with clear hierarchy and risk emphasis.
+/// Pass namespace for matched-geometry transition into JobDetailView.
 struct JobCard: View {
     let job: Job
     /// True when job was created offline (not yet on server)
     var isOffline: Bool = false
     /// True when job has pending edits queued for sync (online job with unsynced changes)
     var isUnsynced: Bool = false
+    /// When set, risk pill and score use matchedGeometryEffect for card→detail transition.
+    var namespace: Namespace.ID? = nil
     let onTap: () -> Void
 
     private var pendingBadge: (label: String, color: Color)? {
@@ -43,6 +46,7 @@ struct JobCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: RMTheme.Spacing.xs) {
                         RiskPill(text: (job.riskLevel ?? "RISK").uppercased(), color: riskColor)
+                            .modifier(ConditionalMatchedGeometry(present: namespace != nil, id: "job-\(job.id)-pill", namespace: namespace))
                         if let badge = pendingBadge {
                             HStack(spacing: 4) {
                                 Image(systemName: badge.label == "OFFLINE" ? "wifi.slash" : "arrow.triangle.2.circlepath")
@@ -109,6 +113,7 @@ struct JobCard: View {
                     RoundedRectangle(cornerRadius: RMSystemTheme.Radius.sm)
                         .fill(riskScoreBackgroundGradient)
                 )
+                .modifier(ConditionalMatchedGeometry(present: namespace != nil, id: "job-\(job.id)-score", namespace: namespace))
                 
                 // Chevron
                 Image(systemName: "chevron.right")
@@ -117,11 +122,26 @@ struct JobCard: View {
             }
         }
         .contentShape(Rectangle())
+        .rmPressable(scale: 0.98, haptic: false)
         .onTapGesture {
             Haptics.tap()
             onTap()
         }
         .appearIn()
+    }
+}
+
+// MARK: - Conditional matched geometry (for card→detail transition)
+private struct ConditionalMatchedGeometry: ViewModifier {
+    let present: Bool
+    let id: String
+    let namespace: Namespace.ID?
+    func body(content: Content) -> some View {
+        if present, let ns = namespace {
+            content.matchedGeometryEffect(id: id, in: ns)
+        } else {
+            content
+        }
     }
 }
 

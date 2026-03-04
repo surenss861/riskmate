@@ -83,8 +83,9 @@ struct EvidenceCaptureSheet: View {
                     if !trackedUploadIds.contains(upload.id) {
                         trackedUploadIds.insert(upload.id)
                         
-                        // Success moment: haptic + "Anchored" toast with timestamp + dismiss
+                        // Success moment: haptic + "Anchored" toast + streak
                         Haptics.success()
+                        UserDefaultsManager.Streaks.recordDayLogged()
                         Analytics.shared.trackEvidenceCaptureCompleted()
                         Analytics.shared.trackCapturePhotoSuccess()
                         

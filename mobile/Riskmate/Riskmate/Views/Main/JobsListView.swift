@@ -18,6 +18,7 @@ struct JobsListView: View {
     @State private var showExportProofSheet = false
     @State private var exportProofJobId: String? = nil
     @State private var showCreateJobSheet = false
+    @Namespace private var jobListNamespace
 
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
@@ -167,7 +168,8 @@ struct JobsListView: View {
                                 action: searchText.isEmpty && !isAuditor ? RMEmptyStateAction(
                                     title: "Create Job",
                                     action: { showCreateJobSheet = true }
-                                ) : nil
+                                ) : nil,
+                                voiceHint: searchText.isEmpty ? "Try saying: \"Show high risk jobs\"" : nil
                             )
                             if searchText.isEmpty && jobs.isEmpty {
                                 VStack(spacing: RMTheme.Spacing.sm) {
@@ -198,16 +200,18 @@ struct JobsListView: View {
                     } else {
                         List {
                             Section {
-                            ForEach(filteredJobs) { job in
+                            ForEach(Array(filteredJobs.enumerated()), id: \.element.id) { index, job in
                                 NavigationLink(value: job) {
                                     JobCard(
                                         job: job,
                                         isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
-                                        isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id)
+                                        isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
+                                        namespace: jobListNamespace
                                     ) {
                                         // Navigation handled by NavigationLink
                                     }
                                 }
+                                .rmAppearIn(staggerIndex: min(index, 12))
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(
@@ -373,7 +377,7 @@ struct JobsListView: View {
                 _ = try? await jobsStore.fetch(forceRefresh: true)
             }
             .navigationDestination(for: Job.self) { job in
-                JobDetailView(jobId: job.id)
+                JobDetailView(jobId: job.id, initialJob: job, namespace: jobListNamespace)
             }
             .sheet(isPresented: $showExportProofSheet, onDismiss: { exportProofJobId = nil }) {
                 if let id = exportProofJobId {
