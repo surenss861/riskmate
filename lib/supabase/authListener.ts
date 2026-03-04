@@ -65,6 +65,9 @@ export function ensureAuthListener() {
       // Clear any stale storage
       if (typeof window !== 'undefined') {
         try {
+          // Clear selected organization so next login starts fresh
+          const { setSelectedOrganizationId } = await import('@/lib/selectedOrganization')
+          setSelectedOrganizationId(null)
           // Clear the auth storage key
           localStorage.removeItem('riskmate.auth')
           // Also clear any Supabase-related keys

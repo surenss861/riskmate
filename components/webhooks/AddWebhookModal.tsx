@@ -7,6 +7,7 @@ import {
   GlassCard,
 } from '@/components/shared'
 import { EVENT_GROUPS } from '@/lib/webhooks/eventGroups'
+import { getSelectedOrganizationId, setSelectedOrganizationId as persistSelectedOrganizationId } from '@/lib/selectedOrganization'
 
 function CopySecretButton({ secret }: { secret: string }) {
   const [copied, setCopied] = useState(false)
@@ -53,10 +54,13 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     () => organizationId ?? organizationOptions[0]?.id ?? null,
     [organizationId, organizationOptions]
   )
-  // Multi-org: require explicit choice (no preselection). Single-org: use default.
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() =>
-    multiOrg ? null : defaultOrgId
-  )
+  // Multi-org: initialise from shared storage if valid; else require choice. Single-org: use default.
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() => {
+    if (!multiOrg) return defaultOrgId
+    const stored = typeof window !== 'undefined' ? getSelectedOrganizationId() : null
+    const validIds = new Set(organizationOptions.map((o) => o.id))
+    return stored && validIds.has(stored) ? stored : null
+  })
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set())
@@ -85,11 +89,15 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
     if (!open) return
     const justOpened = open && !wasOpen
     if (multiOrg) {
-      if (justOpened) setSelectedOrganizationId(null)
+      if (justOpened) {
+        const stored = getSelectedOrganizationId()
+        const validIds = new Set(organizationOptions.map((o) => o.id))
+        setSelectedOrganizationId(stored && validIds.has(stored) ? stored : null)
+      }
     } else {
       setSelectedOrganizationId(defaultOrgId)
     }
-  }, [open, multiOrg, defaultOrgId, resetForm])
+  }, [open, multiOrg, defaultOrgId, resetForm, organizationOptions])
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) => {
@@ -218,7 +226,9 @@ export function AddWebhookModal({ open, onClose, onCreated, organizationId, orga
                   onChange={(e) => {
                     const value = e.target.value || null
                     const validIds = new Set(organizationOptions.map((o) => o.id))
-                    setSelectedOrganizationId(value && validIds.has(value) ? value : null)
+                    const next = value && validIds.has(value) ? value : null
+                    setSelectedOrganizationId(next)
+                    persistSelectedOrganizationId(next)
                   }}
                   className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
                   required

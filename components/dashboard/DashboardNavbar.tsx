@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import RiskmateLogo from '@/components/RiskmateLogo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { getSelectedOrganizationId, setSelectedOrganizationId } from '@/lib/selectedOrganization'
 
 interface DashboardNavbarProps {
   email?: string | null
@@ -25,7 +26,10 @@ const ALL_NAV_ITEMS = [
 
 export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [memberships, setMemberships] = useState<{ id: string; name: string }[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [scrolled, setScrolled] = useState(false)
   const [navOpacity, setNavOpacity] = useState(0.4)
@@ -63,10 +67,13 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
         if (res.ok) {
-          const { user_role } = await res.json()
-          setUserRole(user_role ?? 'member')
+          const data = await res.json()
+          setUserRole(data.user_role ?? 'member')
+          setMemberships(Array.isArray(data.memberships) ? data.memberships : [])
+          setSelectedOrgId(getSelectedOrganizationId())
         } else {
           setUserRole('member')
+          setMemberships([])
         }
       } catch (error) {
         console.error('Failed to load user role:', error)
@@ -129,6 +136,26 @@ export function DashboardNavbar({ email, onLogout }: DashboardNavbarProps) {
         </div>
 
         <div className="flex items-center justify-between gap-3 sm:justify-end">
+          {!loading && memberships.length > 1 && (
+            <select
+              value={selectedOrgId ?? ''}
+              onChange={(e) => {
+                const id = e.target.value || null
+                setSelectedOrganizationId(id)
+                setSelectedOrgId(id)
+                router.refresh()
+              }}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 min-w-[140px]"
+              aria-label="Switch organization"
+            >
+              <option value="">Select organization</option>
+              {memberships.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          )}
           {email && <span className="truncate text-sm text-white/60">{email}</span>}
           {onLogout && (
             <button

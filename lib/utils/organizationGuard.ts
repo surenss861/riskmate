@@ -113,6 +113,46 @@ export async function getOrganizationContext(request?: Request): Promise<Organiz
   }
 }
 
+export interface OrganizationContextWithMemberships extends OrganizationContext {
+  /** All organizations the user belongs to (for multi-org selector and bootstrap). */
+  memberships: { id: string; name: string }[]
+}
+
+/**
+ * Get organization context plus full memberships list (for session bootstrap and org switcher).
+ * Uses same auth as getOrganizationContext; returns default org (first when multi) and all memberships with names.
+ */
+export async function getOrganizationContextWithMemberships(request?: Request): Promise<OrganizationContextWithMemberships> {
+  const base = await getOrganizationContext(request)
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/admin')
+  const serviceSupabase = createSupabaseAdminClient()
+
+  const orgIds = new Set<string>([base.organization_id])
+  const { data: memberRows } = await serviceSupabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', base.user_id)
+  for (const row of memberRows ?? []) {
+    if (row.organization_id) orgIds.add(row.organization_id)
+  }
+  const sortedIds = Array.from(orgIds).sort()
+  if (sortedIds.length === 0) {
+    return { ...base, memberships: [] }
+  }
+
+  const { data: orgRows } = await serviceSupabase
+    .from('organizations')
+    .select('id, name')
+    .in('id', sortedIds)
+  const byId = new Map((orgRows ?? []).map((r: { id: string; name: string | null }) => [r.id, r.name ?? r.id]))
+  const memberships = sortedIds.map((id) => ({ id, name: byId.get(id) ?? id }))
+
+  return {
+    ...base,
+    memberships,
+  }
+}
+
 /**
  * Webhook-specific org context aligned with webhook_user_org_ids().
  * Returns all org IDs the user belongs to (users.organization_id + organization_members)

@@ -915,6 +915,9 @@ export default function AccountPage() {
                           setUpdating(true)
                           setError(null)
                           try {
+                            // Clear selected organization before sign-out so next login starts fresh
+                            const { setSelectedOrganizationId } = await import('@/lib/selectedOrganization')
+                            setSelectedOrganizationId(null)
                             // Call server-side signout route to properly clear cookies
                             const res = await fetch('/api/auth/signout', { 
                               method: 'POST',

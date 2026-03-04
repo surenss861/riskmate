@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { legalApi } from '@/lib/api'
 import LegalModal from '@/components/LegalModal'
+import { SelectedOrganizationBootstrap } from '@/components/SelectedOrganizationBootstrap'
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -146,6 +147,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   return (
     <>
+      <SelectedOrganizationBootstrap />
       {children}
       <LegalModal
         open={legalChecked && !legalAccepted}
