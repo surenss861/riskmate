@@ -24,13 +24,16 @@ struct ContentView: View {
     @State private var showNotificationCenterFromDeepLink = false
     @State private var showCommentFromDeepLink = false
     @State private var deepLinkCommentId: String?
+    @Namespace private var tabBarNamespace
+    @StateObject private var motionObserver = RMMotionObserver.shared
 
     private var isAuditor: Bool {
         entitlements.isAuditor()
     }
     
     var body: some View {
-        ZStack {
+        let _ = motionObserver.reduceMotion
+        return ZStack {
             RMBackground()
             
             // Backend health check gate (show error if backend unavailable)
@@ -202,62 +205,37 @@ struct ContentView: View {
         backendHealthCheckComplete = true
     }
     
-    // MARK: - iPhone Navigation (TabView)
+    // MARK: - iPhone Navigation (custom tab bar + ZStack for premium lift/blur/spring)
     
     private var iPhoneNavigation: some View {
-        TabView(selection: $selectedTab) {
-            // Operations (Dashboard) - First tab (always visible)
-            NavigationStack {
+        ZStack(alignment: .bottom) {
+            // One visible screen at a time (no system TabView)
+            tabScreen(.operations) {
                 OperationsView(onKPINavigate: { filter in
                     quickAction.requestSwitchToWorkRecords(filter: filter)
                 })
-                    .rmNavigationBar(title: "Operations")
+                .rmNavigationBar(title: "Operations")
             }
-            .tabItem {
-                Label("Operations", systemImage: "briefcase.fill")
-            }
-            .tag(MainTab.operations)
-            
-            // Ledger (Audit Feed) - Second tab
-            NavigationStack {
+            tabScreen(.ledger) {
                 AuditFeedView()
-                    .rmNavigationBar(title: "Ledger")
+                .rmNavigationBar(title: "Ledger")
             }
-            .tabItem {
-                Label("Ledger", systemImage: "list.bullet.rectangle")
-            }
-            .tag(MainTab.ledger)
-            
-            // Work Records (Jobs) - Third tab
-            NavigationStack {
+            tabScreen(.workRecords) {
                 JobsListView(initialFilter: workRecordsFilter)
-                    .rmNavigationBar(title: "Work Records")
+                .rmNavigationBar(title: "Work Records")
             }
-            .tabItem {
-                Label("Work Records", systemImage: "doc.text.fill")
-            }
-            .tag(MainTab.workRecords)
-            
-            // Settings (Account) - Fourth tab
-            NavigationStack {
+            tabScreen(.settings) {
                 AccountView()
             }
-            .tabItem {
-                Label("Settings", systemImage: "gearshape.fill")
-            }
-            .tag(MainTab.settings)
-        }
-        .tint(RMTheme.Colors.accent)
-        .onChange(of: selectedTab) { _, _ in
-            Haptics.tap()
+
+            RMTabBar(selection: $selectedTab, namespace: tabBarNamespace)
         }
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
             guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
             workRecordsFilter = filter
-            selectedTab = tab
+            withAnimation(RMMotion.spring) { selectedTab = tab }
         }
         .overlay(alignment: .bottomTrailing) {
-            // FAB only on Work Records (Operations has its own FloatingEvidenceFAB)
             if !entitlements.isAuditor() && selectedTab == .workRecords {
                 Button {
                     quickAction.presentEvidence(jobId: nil)
@@ -271,18 +249,24 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 100) // Above tab bar
+                .padding(.bottom, 100)
             }
         }
         .task {
-            // Set initial tab based on role (deterministic, runs once)
-            // Auditors start on Ledger, operators start on Operations
             if entitlements.isAuditor() {
                 selectedTab = .ledger
             } else {
                 selectedTab = .operations
             }
         }
+    }
+
+    @ViewBuilder
+    private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
+        NavigationStack { content() }
+            .opacity(selectedTab == tab ? 1 : 0)
+            .allowsHitTesting(selectedTab == tab)
+            .zIndex(selectedTab == tab ? 1 : 0)
     }
     
     // MARK: - iPad Navigation (NavigationSplitView)

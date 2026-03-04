@@ -1,11 +1,35 @@
 import SwiftUI
 
+/// Observable source for Reduce Motion so we react when the user toggles it in Settings while app is open.
+final class RMMotionObserver: ObservableObject {
+    static let shared = RMMotionObserver()
+    @Published private(set) var reduceMotion: Bool
+
+    private init() {
+        reduceMotion = UIAccessibility.isReduceMotionEnabled
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reduceMotionStatusDidChange),
+            name: UIAccessibility.reduceMotionStatusDidChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func reduceMotionStatusDidChange() {
+        let newValue = UIAccessibility.isReduceMotionEnabled
+        if newValue != reduceMotion {
+            reduceMotion = newValue
+        }
+    }
+}
+
 /// Canonical motion tokens — same language across the app (and shareable with web via docs/MOTION_TOKENS.md).
 /// Guardrails: Reduce Motion shortens durations and disables offset/shimmer; one canonical style per interaction.
 enum RMMotion {
     /// When true, use shorter durations and no y-offset / no shimmer sweep (prevents jank and respects accessibility).
+    /// Reads from RMMotionObserver.shared so toggling Reduce Motion in Settings updates the app without restart.
     static var reduceMotion: Bool {
-        UIAccessibility.isReduceMotionEnabled
+        RMMotionObserver.shared.reduceMotion
     }
     
     // MARK: - Canonical styles (one per interaction — don’t mix)

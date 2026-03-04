@@ -78,13 +78,13 @@ struct HolographicBadgeView: View {
             }
             .frame(maxWidth: 140)
             .offset(x: dragOffset.width * 0.15, y: dragOffset.height * 0.1)
-            .gesture(
-                DragGesture(minimumDistance: 0)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 14)
                     .onChanged { value in
                         dragOffset = value.translation
                     }
                     .onEnded { _ in
-                        withAnimation(.easeOut(duration: 0.25)) {
+                        withAnimation(RMMotion.easeOut) {
                             dragOffset = .zero
                         }
                     }

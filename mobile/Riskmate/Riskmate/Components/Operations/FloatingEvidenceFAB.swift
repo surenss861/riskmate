@@ -125,7 +125,7 @@ struct FloatingEvidenceFAB: View {
             }
             .buttonStyle(.plain)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 8)
+                DragGesture(minimumDistance: 8) // so vertical scroll in scroll views isn’t stolen
                     .onChanged { value in
                         let up = -value.translation.height
                         let effectiveUp = up * dragResistance
