@@ -232,13 +232,13 @@ export function useAnalyticsDashboard(
       ? { since: since!, until: until!, groupBy: statusByPeriodGroupBy }
       : { period, groupBy: statusByPeriodGroupBy };
 
-    // Wave 1: KPI-critical endpoints (summary, jobCompletion, complianceRate) for fast above-the-fold metrics
+    // Wave 1: KPI-critical endpoints (summary, jobCompletion, complianceRate). Awaited first to reduce peak concurrency and avoid rate limiting / connection pool exhaustion.
     const wave1Promises = [
       useExplicitRange ? analyticsApi.summary({ since: since!, until: until! }, signal) : analyticsApi.summary({ range: rangeForSummary! }, signal),
       useExplicitRange ? analyticsApi.jobCompletion({ since: since!, until: until! }, signal) : analyticsApi.jobCompletion({ period }, signal),
       useExplicitRange ? analyticsApi.complianceRate({ since: since!, until: until! }, signal) : analyticsApi.complianceRate({ period }, signal),
     ];
-    // Wave 2: Team, hazards, heatmap, trends, insights, statusByPeriod, prior-period
+    // Wave 2: Team, hazards, heatmap, trends, insights, statusByPeriod, prior-period. Fired only after wave 1 resolves (max concurrency ~3 then ~15 instead of 18).
     const wave2Promises = [
       useExplicitRange ? analyticsApi.teamPerformance({ since: since!, until: until! }, signal) : analyticsApi.teamPerformance({ period }, signal),
       useExplicitRange ? analyticsApi.hazardFrequency({ since: since!, until: until!, groupBy: 'type' }, signal) : analyticsApi.hazardFrequency({ period, groupBy: 'type' }, signal),
@@ -261,10 +261,9 @@ export function useAnalyticsDashboard(
     ];
 
     try {
-      const [wave1Results, wave2Results] = await Promise.all([
-        Promise.allSettled(wave1Promises),
-        Promise.allSettled(wave2Promises),
-      ]);
+      const wave1Results = await Promise.allSettled(wave1Promises);
+      if (gen !== fetchGenRef.current) return;
+      const wave2Results = await Promise.allSettled(wave2Promises);
       const results = [...wave1Results, ...wave2Results];
 
       if (gen !== fetchGenRef.current) return;

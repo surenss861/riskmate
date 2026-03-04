@@ -67,6 +67,7 @@ struct SignatureCaptureSheet: View {
         RMSheetShell(
             title: "Sign as \(role.displayTitle)",
             subtitle: nil,
+            detents: [.large],
             onClose: { onCancel(); dismiss() }
         ) {
             ScrollView(showsIndicators: false) {

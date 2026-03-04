@@ -3,11 +3,13 @@ import SwiftUI
 /// Unified sheet container: material background, RMSheetHeader, consistent enter motion, safe area.
 /// Use for all bottom sheets so header spacing, blur, and close affordance are identical.
 /// Reduce Motion: no y-offset on content enter. No haptic on open/close (only on meaningful actions).
+/// Pass `detents: [.large]` for sheets that must not be dragged to a smaller size (e.g. signature pad, camera).
 struct RMSheetShell<Content: View>: View {
     let title: String
     var subtitle: String? = nil
     var currentStep: Int? = nil
     var totalSteps: Int? = nil
+    var detents: [PresentationDetent] = [.medium, .large]
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -31,7 +33,7 @@ struct RMSheetShell<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RMTheme.Colors.background)
         .presentationDragIndicator(.visible)
-        .presentationDetents([.medium, .large])
+        .presentationDetents(Set(detents))
         .onAppear {
             contentAppeared = true
             Analytics.shared.trackSheetOpen(sheet: title)

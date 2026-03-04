@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { MotionTokens } from '@/lib/motionTokens'
-import { prefersReducedMotion } from '@/lib/reduceMotion'
 
 type Phase = 0 | 1 | 2 // 0 hashing, 1 locked, 2 verified
 
@@ -12,8 +11,8 @@ type Phase = 0 | 1 | 2 // 0 hashing, 1 locked, 2 verified
  * Reduce Motion: jump to Verified.
  */
 export function ProofSealStatus({ start }: { start: boolean }) {
-  const reduce = prefersReducedMotion()
-  const [phase, setPhase] = useState<Phase>(2)
+  const reduce = useReducedMotion() ?? false
+  const [phase, setPhase] = useState<Phase>(reduce ? 2 : (start ? 0 : 2))
 
   useEffect(() => {
     if (!start) return

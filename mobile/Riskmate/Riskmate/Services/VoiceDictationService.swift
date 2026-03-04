@@ -4,6 +4,8 @@ import AVFoundation
 
 /// Voice dictation for search (e.g. RMSearchBar). Uses SFSpeechRecognizer + AVAudioEngine.
 /// Reduce Motion: no waveform; just state changes + text.
+/// @MainActor ensures @Published mutations are safe and observable from SwiftUI.
+@MainActor
 final class VoiceDictationService: ObservableObject {
     @Published private(set) var isListening = false
     @Published private(set) var transcript = ""
@@ -22,17 +24,17 @@ final class VoiceDictationService: ObservableObject {
     func requestPermission() async -> Bool {
         await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { status in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     switch status {
                     case .authorized:
                         cont.resume(returning: true)
                     case .denied:
                         self.errorMessage = "Speech recognition denied"
-                        Task { @MainActor in Analytics.shared.trackVoicePermissionDenied() }
+                        Analytics.shared.trackVoicePermissionDenied()
                         cont.resume(returning: false)
                     case .restricted:
                         self.errorMessage = "Speech recognition restricted"
-                        Task { @MainActor in Analytics.shared.trackVoicePermissionDenied() }
+                        Analytics.shared.trackVoicePermissionDenied()
                         cont.resume(returning: false)
                     case .notDetermined:
                         cont.resume(returning: false)
@@ -84,7 +86,7 @@ final class VoiceDictationService: ObservableObject {
         }
 
         task = recognizer?.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 if let result = result {
                     self?.transcript = result.bestTranscription.formattedString
                     if result.isFinal {

@@ -1,9 +1,8 @@
 'use client'
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { usePathname } from 'next/navigation'
 import { MotionTokens } from '@/lib/motionTokens'
-import { prefersReducedMotion } from '@/lib/reduceMotion'
 
 /**
  * Page enter: opacity 0→1, y 8→0 (Reduce Motion: opacity only).
@@ -11,7 +10,7 @@ import { prefersReducedMotion } from '@/lib/reduceMotion'
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const reduce = prefersReducedMotion()
+  const reduce = useReducedMotion() ?? false
 
   const enter = reduce ? { opacity: 0 } : { opacity: 0, y: 8 }
   const center = { opacity: 1, y: 0 }

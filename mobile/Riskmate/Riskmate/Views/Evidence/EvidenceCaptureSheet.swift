@@ -27,6 +27,7 @@ struct EvidenceCaptureSheet: View {
             subtitle: nil,
             currentStep: 1,
             totalSteps: 3,
+            detents: [.large],
             onClose: { onComplete?(); dismiss() }
         ) {
             VStack(spacing: 0) {

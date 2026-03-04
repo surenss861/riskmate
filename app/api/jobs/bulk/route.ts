@@ -303,5 +303,6 @@ export async function DELETE(request: NextRequest) {
     )
   }
 
-  return forwardToBulkAction(request, 'delete', { job_ids: jobIds })
+  const { action: _drop, ...rest } = body
+  return forwardToBulkAction(request, 'delete', { ...rest, job_ids: jobIds })
 }

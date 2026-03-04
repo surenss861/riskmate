@@ -17,7 +17,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
-// Fallback refresh when pg_cron is unavailable: refresh MV at most once per hour before serving week/month trends (same semantics as backend ensureAnalyticsMvRefreshed).
+// Fallback refresh when pg_cron is unavailable (see migration 20260230100034_analytics_weekly_job_stats_cron.sql).
+// In production with pg_cron enabled, the MV is refreshed hourly by cron; this in-process path is only active when
+// pg_cron is not available. In serverless (e.g. Vercel), module-level state is not shared across invocations, so the
+// cooldown is not enforced across requests—each cold start may trigger a refresh. Wrap in try/catch and never throw
+// so the hot analytics path always returns data; size Supabase connection pool accordingly.
 const ANALYTICS_MV_REFRESH_COOLDOWN_MS = 60 * 60 * 1000
 let lastAnalyticsMvRefreshAt = 0
 let analyticsMvRefreshInFlight: Promise<void> | null = null

@@ -1,8 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { MotionTokens } from '@/lib/motionTokens'
-import { prefersReducedMotion } from '@/lib/reduceMotion'
 
 /**
  * Card hover (translateY -2px) + press (scale 0.98). Reduce Motion: no motion.
@@ -18,7 +17,7 @@ export function PressableCard({
   className?: string
   onClick?: () => void
 } & Omit<React.ComponentPropsWithoutRef<typeof motion.div>, 'children' | 'className'>) {
-  const reduce = prefersReducedMotion()
+  const reduce = useReducedMotion() ?? false
 
   return (
     <motion.div
