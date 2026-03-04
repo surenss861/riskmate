@@ -106,7 +106,18 @@ export async function fetchWithIdempotency<T = any>(
 
   // Get client metadata (consistent across all requests)
   const clientMetadata = getClientMetadata();
-  
+
+  // Selected organization for multi-membership users (forwarded to Next.js/backend)
+  let orgId: string | null = null;
+  if (typeof window !== 'undefined') {
+    try {
+      const { getSelectedOrganizationId } = await import('@/lib/selectedOrganization');
+      orgId = getSelectedOrganizationId();
+    } catch {
+      // Ignore
+    }
+  }
+
   // Prepare headers
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
@@ -114,9 +125,12 @@ export async function fetchWithIdempotency<T = any>(
   headers.set('x-client', clientMetadata.client);
   headers.set('x-app-version', clientMetadata.appVersion);
   headers.set('x-device-id', clientMetadata.deviceId);
-  
+
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (orgId) {
+    headers.set('X-Organization-Id', orgId);
   }
 
   // Make request (input can be string, URL, or Request object - fetch handles it)

@@ -49,9 +49,12 @@ jest.mock('@/lib/supabase/admin', () => ({
   }),
 }))
 
-function requestWithHeaders(headers: Record<string, string>): NextRequest {
-  const url = 'http://localhost/api/analytics/trends'
-  return new NextRequest(url, { headers })
+function requestWithHeaders(headers: Record<string, string>, searchParams?: Record<string, string>): NextRequest {
+  const url = new URL('http://localhost/api/analytics/trends')
+  if (searchParams) {
+    Object.entries(searchParams).forEach(([k, v]) => url.searchParams.set(k, v))
+  }
+  return new NextRequest(url.toString(), { headers })
 }
 
 describe('getAnalyticsContext (analytics route auth)', () => {
@@ -71,7 +74,8 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       data: { plan_code: 'business', status: 'active' },
       error: null,
     })
-    mockOrgMembersChain.limit.mockResolvedValue({ data: [], error: null })
+    // Chain ends at .order() (no .limit(1)); resolve with empty by default
+    mockOrgMembersChain.order.mockResolvedValue({ data: [], error: null })
   })
 
   describe('valid bearer, no cookie', () => {
@@ -155,12 +159,12 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       resetOrgPlanCacheForTesting()
     })
 
-    it('returns context when user has no users.organization_id but has organization_members row', async () => {
+    it('returns context when user has no users.organization_id but has single organization_members row', async () => {
       mockUsersChain.maybeSingle.mockResolvedValue({
         data: { organization_id: null },
         error: null,
       })
-      mockOrgMembersChain.limit.mockResolvedValue({
+      mockOrgMembersChain.order.mockResolvedValue({
         data: [{ organization_id: ORG_ID }],
         error: null,
       })
@@ -178,6 +182,7 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       const result = await getAnalyticsContext(req, ROUTE)
 
       expect(mockOrgMembersChain.eq).toHaveBeenCalledWith('user_id', USER_ID)
+      expect(mockOrgMembersChain.order).toHaveBeenCalledWith('organization_id', { ascending: true })
       expect(result).not.toBeInstanceOf(Response)
       if (typeof result === 'object' && result !== null && 'orgId' in result) {
         expect(result.orgId).toBe(ORG_ID)
@@ -253,7 +258,7 @@ describe('getAnalyticsContext (analytics route auth)', () => {
             error: null,
           })
         })
-        mockOrgMembersChain.limit.mockResolvedValue({ data: [], error: null })
+        mockOrgMembersChain.order.mockResolvedValue({ data: [], error: null })
 
         const req = requestWithHeaders({ Authorization: 'Bearer token-expiry-test' })
         await getAnalyticsContext(req, ROUTE)
@@ -293,7 +298,7 @@ describe('getAnalyticsContext (analytics route auth)', () => {
           data: { plan_code: 'business', status: 'active' },
           error: null,
         })
-        mockOrgMembersChain.limit.mockResolvedValue({ data: [], error: null })
+        mockOrgMembersChain.order.mockResolvedValue({ data: [], error: null })
 
         const url = 'http://localhost/api/analytics/trends'
         await getCtx(new NextRequest(url, { headers: { Authorization: 'Bearer t1' } }), ROUTE)
@@ -304,6 +309,80 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       })
 
       process.env.ORG_PLAN_CACHE_MAX_ENTRIES = prev
+    })
+  })
+
+  describe('multi-membership (explicit org selector)', () => {
+    const ORG_A = 'org-aaa'
+    const ORG_B = 'org-bbb'
+
+    beforeEach(() => {
+      resetOrgPlanCacheForTesting()
+      serverGetUserMock.mockImplementation((token?: string) => {
+        if (token !== undefined) {
+          return Promise.resolve({
+            data: { user: { id: USER_ID } },
+            error: null,
+          })
+        }
+        return Promise.resolve({ data: { user: null }, error: null })
+      })
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: null },
+        error: null,
+      })
+      mockOrgMembersChain.order.mockResolvedValue({
+        data: [{ organization_id: ORG_A }, { organization_id: ORG_B }],
+        error: null,
+      })
+    })
+
+    it('returns 403 ORGANIZATION_SELECTION_REQUIRED when multiple memberships and no selector', async () => {
+      const req = requestWithHeaders({ Authorization: 'Bearer valid-token' })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(403)
+      const body = await res.json()
+      expect(body.code).toBe('ORGANIZATION_SELECTION_REQUIRED')
+      expect(body.hint).toMatch(/multiple organizations|X-Organization-Id|organization_id/)
+    })
+
+    it('returns context when X-Organization-Id header matches a membership', async () => {
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': ORG_B,
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).not.toBeInstanceOf(Response)
+      if (typeof result === 'object' && result !== null && 'orgId' in result) {
+        expect(result.orgId).toBe(ORG_B)
+      }
+    })
+
+    it('returns context when organization_id query param matches a membership', async () => {
+      const req = requestWithHeaders(
+        { Authorization: 'Bearer valid-token' },
+        { organization_id: ORG_A }
+      )
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).not.toBeInstanceOf(Response)
+      if (typeof result === 'object' && result !== null && 'orgId' in result) {
+        expect(result.orgId).toBe(ORG_A)
+      }
+    })
+
+    it('returns 403 ORGANIZATION_NOT_ACCESSIBLE when selector is not a membership', async () => {
+      const req = requestWithHeaders({
+        Authorization: 'Bearer valid-token',
+        'X-Organization-Id': 'org-not-my-org',
+      })
+      const result = await getAnalyticsContext(req, ROUTE)
+      expect(result).toBeInstanceOf(Response)
+      const res = result as Response
+      expect(res.status).toBe(403)
+      const body = await res.json()
+      expect(body.code).toBe('ORGANIZATION_NOT_ACCESSIBLE')
     })
   })
 })

@@ -3,7 +3,10 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 // Server-only: BACKEND_URL should never be exposed to client
 // NEXT_PUBLIC_BACKEND_URL is only for fallback in local dev
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173'
+// Read at runtime so tests can set process.env.BACKEND_URL
+function getBackendUrl(): string {
+  return process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5173'
+}
 
 // Validate BACKEND_URL is set (fail fast in production)
 if (process.env.NODE_ENV === 'production' && !process.env.BACKEND_URL) {
@@ -81,9 +84,10 @@ export async function proxyToBackend(
     timeout?: number // Optional timeout in ms (default 25s for file downloads, 10s for JSON)
   } = {}
 ): Promise<NextResponse> {
+  const BACKEND_URL = getBackendUrl()
   // Declare backendUrl outside try block so it's accessible in catch
   let backendUrl = `${BACKEND_URL}${endpoint}`
-  
+
   // Validate BACKEND_URL is set
   if (!BACKEND_URL || BACKEND_URL === 'http://localhost:5173') {
     const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
@@ -119,8 +123,8 @@ export async function proxyToBackend(
 
     const { method = 'GET', body, isFileDownload = false, timeout } = options
 
-    // Build URL with query params for GET requests
-    backendUrl = `${BACKEND_URL}${endpoint}`
+    // Build URL with query params for GET requests (include organization_id for multi-membership users)
+    backendUrl = `${getBackendUrl()}${endpoint}`
     if (method === 'GET' && request.nextUrl.searchParams.toString()) {
       backendUrl += `?${request.nextUrl.searchParams.toString()}`
     }
@@ -137,7 +141,12 @@ export async function proxyToBackend(
 
     // Get client metadata (consistent across all requests)
     const clientMetadata = getClientMetadata();
-    
+
+    // Forward organization selector for multi-membership users (backend auth requires X-Organization-Id or organization_id query)
+    const headerOrgId = request.headers.get('x-organization-id')?.trim() || undefined
+    const queryOrgId = request.nextUrl.searchParams.get('organization_id')?.trim() || undefined
+    const organizationId = headerOrgId || queryOrgId
+
     const fetchOptions: RequestInit = {
       method,
       headers: {
@@ -146,6 +155,7 @@ export async function proxyToBackend(
         'x-client': clientMetadata.client,
         'x-app-version': clientMetadata.appVersion,
         'x-device-id': clientMetadata.deviceId,
+        ...(organizationId && { 'X-Organization-Id': organizationId }),
       },
       cache: 'no-store',
       signal: controller.signal, // Enable timeout/abort
@@ -347,5 +357,6 @@ export async function proxyToBackend(
   }
 }
 
-export { BACKEND_URL }
+export { getBackendUrl }
+export const BACKEND_URL = getBackendUrl()
 

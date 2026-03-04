@@ -89,9 +89,9 @@ export type AnalyticsContext = {
  * Returns context with orgId, requestId, hasAnalytics, isActive, or a NextResponse on auth/query error.
  * Routes should then check !isActive || !hasAnalytics and return their own locked response body if needed.
  *
- * Multi-org: When users.organization_id is null, org is resolved from organization_members and the
- * first row is used (ordered by organization_id ascending). So the effective org is the first org
- * alphabetically by ID. Callers with multiple orgs should pass an explicit org context when supported.
+ * Multi-org: When users.organization_id is null, org is resolved from organization_members.
+ * Single membership: use that org. Multiple memberships: require explicit org selector (header or query),
+ * aligned with backend auth middleware. Accept X-Organization-Id header or organization_id query.
  *
  * Auth semantics (aligned with organizationGuard for cookie clients; see JSDoc below):
  * - Only requests whose Authorization header starts with "Bearer" (case-insensitive) are treated as
@@ -198,22 +198,68 @@ export async function getAnalyticsContext(
       .select('organization_id')
       .eq('user_id', user.id)
       .order('organization_id', { ascending: true })
-      .limit(1)
     if (memberError || !memberRows?.length) {
       const { response, errorId } = createErrorResponse(
-        'Failed to get organization ID',
-        'QUERY_ERROR',
-        { requestId, statusCode: 500 }
+        'No organization assigned',
+        'NO_ORGANIZATION',
+        { requestId, statusCode: 403 }
       )
-      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
-        category: 'internal', severity: 'error', route,
+      logApiError(403, 'NO_ORGANIZATION', errorId, requestId, undefined, response.message, {
+        category: 'auth', severity: 'warn', route,
       })
       return NextResponse.json(response, {
-        status: 500,
+        status: 403,
         headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
       })
     }
-    orgId = memberRows[0].organization_id
+    if (memberRows.length === 1) {
+      orgId = memberRows[0].organization_id
+    } else {
+      // Multiple memberships: require explicit org selector (aligned with backend auth)
+      const headerOrgId = request.headers.get('x-organization-id')?.trim() || undefined
+      const queryOrgId = request.nextUrl?.searchParams?.get('organization_id')?.trim() || undefined
+      const requestedOrgId = headerOrgId || queryOrgId
+      if (!requestedOrgId) {
+        const { response, errorId } = createErrorResponse(
+          'Organization selection required',
+          'ORGANIZATION_SELECTION_REQUIRED',
+          {
+            requestId,
+            statusCode: 403,
+            error_hint: 'User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.',
+            hint: 'User belongs to multiple organizations. Provide X-Organization-Id header or organization_id query parameter.',
+          }
+        )
+        logApiError(403, 'ORGANIZATION_SELECTION_REQUIRED', errorId, requestId, undefined, response.message, {
+          category: 'auth', severity: 'warn', route,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      const membership = memberRows.find((m: { organization_id: string }) => m.organization_id === requestedOrgId)
+      if (!membership) {
+        const { response, errorId } = createErrorResponse(
+          'Organization not accessible',
+          'ORGANIZATION_NOT_ACCESSIBLE',
+          {
+            requestId,
+            statusCode: 403,
+            error_hint: 'The specified organization is not one of your memberships.',
+            hint: 'The specified organization is not one of your memberships.',
+          }
+        )
+        logApiError(403, 'ORGANIZATION_NOT_ACCESSIBLE', errorId, requestId, undefined, response.message, {
+          category: 'auth', severity: 'warn', route,
+        })
+        return NextResponse.json(response, {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+        })
+      }
+      orgId = membership.organization_id
+    }
   }
 
   if (!orgId) {

@@ -6,6 +6,7 @@ import { JobReportData } from '@/types/report'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { fetchWithIdempotency, generateBulkIdempotencyKey } from './api/fetchWithIdempotency'
 import { BACKEND_URL } from '@/lib/config'
+import { getSelectedOrganizationId } from '@/lib/selectedOrganization'
 
 // Use centralized backend URL - always call backend directly (like iOS)
 // This ensures consistency and avoids hitting Next.js API routes
@@ -179,15 +180,29 @@ async function getAuthToken(): Promise<string | null> {
   }
 }
 
+/** Default headers for API requests, including X-Organization-Id when selected (multi-membership users). */
+function getApiRequestHeaders(): Record<string, string> {
+  const orgId = typeof window !== 'undefined' ? getSelectedOrganizationId() : null;
+  return {
+    'Content-Type': 'application/json',
+    ...(orgId && { 'X-Organization-Id': orgId }),
+  };
+}
+
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
   signal?: AbortSignal
 ): Promise<T> {
   const token = await getAuthToken();
-  
+  const orgId = typeof window !== 'undefined' ? getSelectedOrganizationId() : null;
+
   // Always use BACKEND_URL - ensure endpoint starts with / if it doesn't already
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  let normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (orgId) {
+    const sep = normalizedEndpoint.includes('?') ? '&' : '?';
+    normalizedEndpoint = `${normalizedEndpoint}${sep}organization_id=${encodeURIComponent(orgId)}`;
+  }
   const url = `${API_URL}${normalizedEndpoint}`;
   const effectiveSignal = signal ?? options.signal;
 
@@ -195,7 +210,7 @@ async function apiRequest<T>(
     ...options,
     ...(effectiveSignal && { signal: effectiveSignal }),
     headers: {
-      'Content-Type': 'application/json',
+      ...getApiRequestHeaders(),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
@@ -1254,6 +1269,8 @@ export const analyticsApi = {
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       completion_rate: number;
@@ -1275,6 +1292,8 @@ export const analyticsApi = {
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       period: string;
@@ -1292,6 +1311,8 @@ export const analyticsApi = {
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       period: string;
@@ -1314,6 +1335,8 @@ export const analyticsApi = {
     if (params?.period) query.set('period', params.period);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       period: string;
@@ -1334,6 +1357,8 @@ export const analyticsApi = {
     if (params?.groupBy) query.set('groupBy', params.groupBy);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       period: string;
@@ -1355,6 +1380,8 @@ export const analyticsApi = {
     if (params?.groupBy) query.set('groupBy', params.groupBy);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       data: Array<{ period: string; [status: string]: string | number }>;
@@ -1370,6 +1397,8 @@ export const analyticsApi = {
     if (params?.metric) query.set('metric', params.metric);
     if (params?.since) query.set('since', params.since);
     if (params?.until) query.set('until', params.until);
+    const selectedOrg = getSelectedOrganizationId();
+    if (selectedOrg) query.set('organization_id', selectedOrg);
     const qs = query.toString();
     return nextApiRequest<{
       period: string;
@@ -1423,12 +1452,14 @@ export const analyticsApi = {
 // Legal API - uses Next.js API routes (relative paths)
 async function nextApiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = await getAuthToken();
-  
+  const orgId = typeof window !== 'undefined' ? getSelectedOrganizationId() : null;
+
   const response = await fetch(endpoint, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...(orgId && { 'X-Organization-Id': orgId }),
       ...options.headers,
     },
   });

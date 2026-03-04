@@ -1,10 +1,10 @@
 /**
- * Unit tests for proxy-helpers: getSessionToken Authorization parsing.
- * Covers Bearer (case-insensitive), bearer, BEARER, whitespace trimming, and malformed headers.
+ * Unit tests for proxy-helpers: getSessionToken Authorization parsing and proxyToBackend forwarding.
+ * Covers Bearer (case-insensitive), X-Organization-Id forwarding, and malformed headers.
  */
 
 import { NextRequest } from 'next/server'
-import { getSessionToken } from '../proxy-helpers'
+import { getSessionToken, proxyToBackend } from '../proxy-helpers'
 
 const mockGetSession = jest.fn()
 jest.mock('@/lib/supabase/server', () => ({
@@ -110,6 +110,71 @@ describe('getSessionToken', () => {
       const req = requestWithAuth(null)
       const token = await getSessionToken(req)
       expect(token).toBeNull()
+    })
+  })
+
+  describe('proxyToBackend organization selector forwarding', () => {
+    const originalFetch = globalThis.fetch
+    let fetchMock: jest.Mock
+    const savedBackendUrl = process.env.BACKEND_URL
+
+    beforeAll(() => {
+      process.env.BACKEND_URL = 'https://backend.test'
+      fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({}),
+        text: async () => '',
+      })
+      globalThis.fetch = fetchMock
+    })
+
+    afterAll(() => {
+      globalThis.fetch = originalFetch
+      if (savedBackendUrl !== undefined) process.env.BACKEND_URL = savedBackendUrl
+      else delete process.env.BACKEND_URL
+    })
+
+    beforeEach(() => {
+      fetchMock.mockClear()
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({}),
+        text: async () => '',
+      })
+      mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
+    })
+
+    it('forwards X-Organization-Id from request to backend fetch', async () => {
+      const req = new NextRequest('http://localhost/api/sync/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer token-xyz',
+          'X-Organization-Id': 'org-selected-123',
+        },
+      })
+      await proxyToBackend(req, '/api/sync/batch', { method: 'POST', body: {} })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [, init] = fetchMock.mock.calls[0]
+      expect(init?.headers).toBeDefined()
+      const headers = init.headers as Record<string, string>
+      expect(headers['X-Organization-Id']).toBe('org-selected-123')
+    })
+
+    it('forwards organization_id from query to backend as X-Organization-Id when present', async () => {
+      const req = new NextRequest('http://localhost/api/analytics/trends?organization_id=org-query-456', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer token-xyz' },
+      })
+      await proxyToBackend(req, '/api/analytics/trends', { method: 'GET' })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(url).toContain('organization_id=org-query-456')
+      const headers = init?.headers as Record<string, string>
+      expect(headers['X-Organization-Id']).toBe('org-query-456')
     })
   })
 })
