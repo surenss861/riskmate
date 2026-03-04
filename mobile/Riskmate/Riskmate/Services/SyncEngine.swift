@@ -43,14 +43,18 @@ final class SyncEngine: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.refreshPendingOperations() }
+            Task { [weak self] in
+                await MainActor.run { self?.refreshPendingOperations() }
+            }
         }
         conflictHistoryObserver = NotificationCenter.default.addObserver(
             forName: .syncConflictHistoryDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.refreshPendingConflictsFromDB() }
+            Task { [weak self] in
+                await MainActor.run { self?.refreshPendingConflictsFromDB() }
+            }
         }
         // Auto-sync when backend becomes reachable after being offline
         reachabilityCancellable = ServerStatusManager.shared.$isOnline

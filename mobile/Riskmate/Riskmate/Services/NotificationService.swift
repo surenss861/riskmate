@@ -146,8 +146,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
         if let deepLink = deepLinkString,
            let url = URL(string: deepLink) {
-            _ = await MainActor.run {
-                DeepLinkRouter.shared.handle(url)
+            await MainActor.run {
+                _ = DeepLinkRouter.shared.handle(url)
             }
         }
     }

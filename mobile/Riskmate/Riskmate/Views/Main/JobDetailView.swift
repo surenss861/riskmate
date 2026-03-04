@@ -87,7 +87,7 @@ struct JobDetailView: View {
                 } else if let job = job {
                     VStack(spacing: 0) {
                         // Matched-geometry hero strip (stable IDs; render with job or initialJob so destination exists on first frame)
-                        if let ns = namespace, let displayJob = job ?? initialJob {
+                        if let ns = namespace, let displayJob = job {
                             jobDetailHeroStrip(job: displayJob, namespace: ns)
                         }
                         // Changes will sync banner when offline or when job has pending updates

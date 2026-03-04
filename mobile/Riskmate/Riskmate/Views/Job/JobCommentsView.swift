@@ -481,7 +481,7 @@ struct JobCommentsView: View {
             if justPosted {
                 Task {
                     try? await Task.sleep(nanoseconds: 50_000_000)
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                         newlyPostedIds.remove(comment.id)
                     }
                 }
@@ -994,8 +994,8 @@ final class JobCommentsRealtimeService: ObservableObject {
         let ch = client.channel(channelName)
         let filter = "entity_id=eq.\(jobId)"
         let refresh: @Sendable () -> Void = { [weak self] in
-            Task { @MainActor in
-                self?.needsRefresh = true
+            Task { [weak self] in
+                await MainActor.run { self?.needsRefresh = true }
             }
         }
         subscription = ch.onPostgresChange(
@@ -1004,13 +1004,13 @@ final class JobCommentsRealtimeService: ObservableObject {
             table: "comments",
             filter: filter
         ) { _ in refresh() }
-        ch.onPostgresChange(
+        _ = ch.onPostgresChange(
             UpdateAction.self,
             schema: "public",
             table: "comments",
             filter: filter
         ) { _ in refresh() }
-        ch.onPostgresChange(
+        _ = ch.onPostgresChange(
             DeleteAction.self,
             schema: "public",
             table: "comments",

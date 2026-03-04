@@ -1020,7 +1020,7 @@ class APIClient {
 
     /// Get replies for a comment (GET /api/comments/:id/replies)
     func getReplies(commentId: String, limit: Int = 50, offset: Int = 0) async throws -> [JobComment] {
-        var query = "limit=\(limit)&offset=\(offset)"
+        let query = "limit=\(limit)&offset=\(offset)"
         let response: CommentsListResponse = try await request(
             endpoint: "/api/comments/\(commentId)/replies?\(query)"
         )
