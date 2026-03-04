@@ -13,31 +13,25 @@ struct DeleteAccountSheet: View {
     }
     
     var body: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Delete Account",
+            subtitle: "This action cannot be undone.",
+            onClose: { isPresented = false }
+        ) {
             VStack(spacing: RMTheme.Spacing.xl) {
-                // Warning icon
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 64))
                     .foregroundColor(RMTheme.Colors.error)
-                    .padding(.top, RMTheme.Spacing.xl)
-                
-                VStack(spacing: RMTheme.Spacing.md) {
-                    Text("Delete Account")
-                        .font(RMTheme.Typography.title)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    
-                    Text("This will permanently delete your account and all associated data. This action cannot be undone.")
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, RMTheme.Spacing.lg)
-                }
-                
+                    .padding(.top, RMTheme.Spacing.sm)
+                Text("This will permanently delete your account and all associated data.")
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, RMTheme.Spacing.lg)
                 VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
                     Text("Type DELETE to confirm:")
                         .font(RMTheme.Typography.caption)
                         .foregroundColor(RMTheme.Colors.textTertiary)
-                    
                     TextField("DELETE", text: $confirmationText)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
@@ -52,9 +46,7 @@ struct DeleteAccountSheet: View {
                         .focused($isTextFieldFocused)
                 }
                 .padding(.horizontal, RMTheme.Spacing.lg)
-                
                 Spacer()
-                
                 VStack(spacing: RMTheme.Spacing.md) {
                     Button {
                         Haptics.warning()
@@ -76,7 +68,6 @@ struct DeleteAccountSheet: View {
                     .foregroundColor(.white)
                     .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
                     .disabled(!canDelete || isDeleting)
-                    
                     Button {
                         Haptics.tap()
                         isPresented = false
@@ -91,25 +82,13 @@ struct DeleteAccountSheet: View {
                     .disabled(isDeleting)
                 }
                 .padding(.horizontal, RMTheme.Spacing.lg)
-                .padding(.bottom, RMTheme.Spacing.lg)
+                .padding(.bottom, RMTheme.Spacing.xxl)
             }
-            .background(RMBackground())
-            .navigationTitle("Delete Account")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
-                        Haptics.tap()
-                        isPresented = false
-                    }
-                    .disabled(isDeleting)
-                }
-            }
-            .onAppear {
-                // Focus text field when sheet appears
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isTextFieldFocused = true
-                }
+        }
+        .background(RMBackground())
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isTextFieldFocused = true
             }
         }
         .preferredColorScheme(.dark)

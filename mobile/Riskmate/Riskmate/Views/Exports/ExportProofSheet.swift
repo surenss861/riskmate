@@ -88,7 +88,11 @@ struct ExportProofSheet: View {
     }
     
     var body: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Export",
+            subtitle: nil,
+            onClose: { isPresented = false }
+        ) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: RMTheme.Spacing.sectionSpacing) {
                     ExportCard(
@@ -146,39 +150,29 @@ struct ExportProofSheet: View {
                     }
                 }
                 .padding(RMTheme.Spacing.pagePadding)
+                .padding(.bottom, RMTheme.Spacing.xxl)
             }
-            .background(RMBackground())
-            .navigationTitle("Export")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        Haptics.tap()
-                        isPresented = false
-                    }
-                    .foregroundColor(RMTheme.Colors.accent)
-                }
+        }
+        .background(RMBackground())
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: exportManager.exports) { _, _ in
+            checkForCompletedExport()
+        }
+        .sheet(isPresented: $showExportReceipt) {
+            if let export = completedExport {
+                ExportReceiptView(export: export)
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
-            }
-            .onChange(of: exportManager.exports) { _, _ in
-                checkForCompletedExport()
-            }
-            .sheet(isPresented: $showExportReceipt) {
-                if let export = completedExport {
-                    ExportReceiptView(export: export)
-                }
-            }
-            .task {
-                await loadEvidenceCountIfNeeded()
-            }
-            .onChange(of: proofPackUnlocked) { _, unlocked in
-                if unlocked && !useProvidedCount {
-                    Haptics.success()
-                }
+        }
+        .task {
+            await loadEvidenceCountIfNeeded()
+        }
+        .onChange(of: proofPackUnlocked) { _, unlocked in
+            if unlocked && !useProvidedCount {
+                Haptics.success()
             }
         }
         .preferredColorScheme(.dark)

@@ -6,6 +6,10 @@
 	<string>AppIcon</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Riskmate needs camera access to capture safety evidence and document hazards on site.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Riskmate uses the microphone for voice search so you can say things like &quot;high risk jobs&quot; or &quot;blockers&quot;.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Riskmate uses speech recognition to turn your voice into search text for jobs and hazards.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Riskmate needs photo library access to attach existing images as safety evidence.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

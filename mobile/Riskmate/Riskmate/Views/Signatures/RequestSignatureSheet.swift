@@ -20,17 +20,15 @@ struct RequestSignatureSheet: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            RMSheetHeader(
-                title: "Request signature",
-                subtitle: stepSubtitle,
-                onClose: { onDismiss(); dismiss() },
-                currentStep: step,
-                totalSteps: totalSteps
-            )
+        RMSheetShell(
+            title: "Request signature",
+            subtitle: stepSubtitle,
+            currentStep: step,
+            totalSteps: totalSteps,
+            onClose: { onDismiss(); dismiss() }
+        ) {
             contentForStep
         }
-        .background(RMTheme.Colors.background)
     }
     
     private var stepSubtitle: String {

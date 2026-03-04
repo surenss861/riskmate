@@ -22,42 +22,28 @@ struct EvidenceCaptureSheet: View {
     }
     
     var body: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Add Evidence",
+            subtitle: nil,
+            currentStep: 1,
+            totalSteps: 3,
+            onClose: { onComplete?(); dismiss() }
+        ) {
             VStack(spacing: 0) {
-                // Step indicator dots (visual progress)
-                StepIndicator(currentStep: 1, totalSteps: 3)
-                    .padding(.top, RMSystemTheme.Spacing.md)
-                    .padding(.horizontal, RMSystemTheme.Spacing.md)
-                
-                // Quick capture bar at top
                 EvidenceQuickBar(selectedType: $selectedMode)
+                    .padding(.horizontal, RMSystemTheme.Spacing.md)
                     .padding(.top, RMSystemTheme.Spacing.sm)
-                
-                // Offline upload status (if any uploads are queued/uploading/failed)
                 if !jobUploads.isEmpty {
                     EvidenceUploadStatusBar(uploads: jobUploads, jobId: effectiveJobId)
                         .padding(.horizontal, RMSystemTheme.Spacing.md)
                         .padding(.top, RMSystemTheme.Spacing.xs)
                 }
-                
                 RMEvidenceCapture(
                     jobId: effectiveJobId,
                     jobStatus: jobsStore.jobs.first { $0.id == effectiveJobId }?.status ?? ""
                 )
             }
-            .navigationTitle("Add Evidence")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        onComplete?()
-                        dismiss()
-                    }
-                }
-            }
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(false)
         .onAppear {
             // Restore last used mode

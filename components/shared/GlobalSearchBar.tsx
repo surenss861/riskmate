@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDebounce } from '@/hooks/useDebounce'
 import { jobsApi } from '@/lib/api'
+import { isSpeechRecognitionSupported, startDictation } from '@/lib/voiceDictation'
 
 const RECENT_KEY = 'riskmate_global_search_recent'
 const MAX_RECENT = 8
@@ -90,9 +91,12 @@ export function GlobalSearchBar() {
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [isListening, setIsListening] = useState(false)
+  const stopDictationRef = useRef<(() => void) | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const voiceSupported = isSpeechRecognitionSupported()
 
   const debouncedQuery = useDebounce(query.trim(), 300)
 
@@ -242,6 +246,31 @@ export function GlobalSearchBar() {
     ? `/operations/jobs?q=${encodeURIComponent(query.trim())}`
     : '/operations/jobs'
 
+  const handleMicClick = useCallback(() => {
+    if (!voiceSupported) return
+    if (isListening && stopDictationRef.current) {
+      stopDictationRef.current()
+      stopDictationRef.current = null
+      setIsListening(false)
+      return
+    }
+    setIsListening(true)
+    stopDictationRef.current = startDictation({
+      onResult: (text) => {
+        setQuery((q) => (q ? `${q} ${text}` : text))
+        inputRef.current?.focus()
+      },
+      onError: () => {
+        stopDictationRef.current = null
+        setIsListening(false)
+      },
+      onEnd: () => {
+        stopDictationRef.current = null
+        setIsListening(false)
+      },
+    })
+  }, [voiceSupported, isListening])
+
   return (
     <>
       <button
@@ -283,7 +312,21 @@ export function GlobalSearchBar() {
                 className="flex-1 h-14 px-3 bg-transparent text-white placeholder:text-white/40 outline-none"
                 autoComplete="off"
               />
-              {loading && (
+              {voiceSupported && (
+                <button
+                  type="button"
+                  onClick={handleMicClick}
+                  disabled={isListening}
+                  className="shrink-0 p-2 rounded-lg text-white/60 hover:text-[#F97316] hover:bg-white/5 disabled:opacity-50"
+                  aria-label={isListening ? 'Listening…' : 'Voice search'}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                  </svg>
+                </button>
+              )}
+              {loading && !isListening && (
                 <div className="w-5 h-5 shrink-0 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
               )}
             </div>

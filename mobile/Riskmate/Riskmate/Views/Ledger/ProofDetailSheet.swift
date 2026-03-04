@@ -6,8 +6,12 @@ struct ProofDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        RMSheetShell(
+            title: "Proof Details",
+            subtitle: nil,
+            onClose: { dismiss() }
+        ) {
+            ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     EventSummaryCard(event: event)
                     CryptoProofCard(event: event)
@@ -17,19 +21,8 @@ struct ProofDetailSheet: View {
                     }
                     ProofActionsCard(event: event)
                 }
-                .padding()
-            }
-            .background(RMTheme.Colors.background)
-            .navigationTitle("Proof Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        Haptics.tap()
-                        dismiss()
-                    }
-                    .foregroundColor(RMTheme.Colors.accent)
-                }
+                .padding(RMTheme.Spacing.pagePadding)
+                .padding(.bottom, RMTheme.Spacing.xxl)
             }
         }
     }

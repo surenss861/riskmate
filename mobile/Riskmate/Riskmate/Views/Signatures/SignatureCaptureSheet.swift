@@ -64,49 +64,48 @@ struct SignatureCaptureSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Sign as \(role.displayTitle)",
+            subtitle: nil,
+            onClose: { onCancel(); dismiss() }
+        ) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: RMTheme.Spacing.lg) {
                     if let reportRunId = reportRunId, reportRunHash != nil || reportRunCreatedAt != nil {
                         runInfoSection(reportRunId: reportRunId)
                     }
-
                     attestationSection
                     signaturePadSection
                     signerFieldsSection
+                    HStack(spacing: RMTheme.Spacing.md) {
+                        Button("Cancel") {
+                            Haptics.tap()
+                            onCancel()
+                            dismiss()
+                        }
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                        Spacer()
+                        Button("Sign & Lock") {
+                            submitSignature()
+                        }
+                        .font(RMTheme.Typography.bodyBold)
+                        .foregroundColor(canSubmit ? .black : RMTheme.Colors.textTertiary)
+                        .disabled(!canSubmit)
+                    }
+                    .padding(.top, RMTheme.Spacing.sm)
                 }
                 .padding(RMTheme.Spacing.pagePadding)
+                .padding(.bottom, RMTheme.Spacing.xxl)
             }
-            .background(RMTheme.Colors.background)
-            .navigationTitle("Sign as \(role.displayTitle)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        Haptics.tap()
-                        onCancel()
-                        dismiss()
-                    }
-                    .foregroundColor(RMTheme.Colors.textSecondary)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign & Lock") {
-                        submitSignature()
-                    }
-                    .font(RMTheme.Typography.bodyBold)
-                    .foregroundColor(canSubmit ? .black : RMTheme.Colors.textTertiary)
-                    .disabled(!canSubmit)
-                }
-            }
-            .alert("Signature", isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK") { errorMessage = nil }
-            } message: {
-                if let msg = errorMessage {
-                    Text(msg)
-                }
+        }
+        .alert("Signature", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            if let msg = errorMessage {
+                Text(msg)
             }
         }
     }

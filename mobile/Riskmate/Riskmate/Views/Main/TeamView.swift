@@ -194,7 +194,11 @@ struct TeamView: View {
     
     @ViewBuilder
     private var inviteSheetContent: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Invite member",
+            subtitle: nil,
+            onClose: { showingInviteSheet = false }
+        ) {
             if let data = teamData {
                 InviteFormCard(
                     email: $inviteEmail,
@@ -205,18 +209,7 @@ struct TeamView: View {
                     }
                 )
                 .padding(RMTheme.Spacing.pagePadding)
-                .navigationTitle("Invite member")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Done") {
-                            Haptics.tap()
-                            showingInviteSheet = false
-                        }
-                        .foregroundColor(RMTheme.Colors.accent)
-                    }
-                }
-                .background(RMTheme.Colors.background)
+                .padding(.bottom, RMTheme.Spacing.xxl)
             }
         }
     }

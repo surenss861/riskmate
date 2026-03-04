@@ -14,7 +14,11 @@ struct ExportHistorySheet: View {
     @State private var loadToken = UUID()
 
     var body: some View {
-        NavigationStack {
+        RMSheetShell(
+            title: "Export History",
+            subtitle: nil,
+            onClose: { dismiss() }
+        ) {
             Group {
                 if loading {
                     loadingState
@@ -27,21 +31,10 @@ struct ExportHistorySheet: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RMBackground())
-            .navigationTitle("Export History")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        Haptics.tap()
-                        dismiss()
-                    }
-                    .foregroundColor(RMTheme.Colors.accent)
-                }
-            }
-            .sheet(item: $selectedFailedExport) { export in
-                failedSheet(for: export)
-            }
+        }
+        .background(RMBackground())
+        .sheet(item: $selectedFailedExport) { export in
+            failedSheet(for: export)
         }
         .task {
             await loadExports()

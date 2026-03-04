@@ -13,7 +13,8 @@ Run these checks before release to keep iOS and web aligned.
 - **B7 Account:** Header card; streak badge or empty state; entitlements card + skeleton; recent exports; danger zone + type DELETE.
 - **B8 Notifications:** Today / This Week / Older; swipe read + pin; new insert animation; Reduce Motion = fade only.
 - **Reduce Motion:** No slide offsets; no shimmer when reduced; fades only where specified.
-- **Sheets:** Consistent header; no jank on open/close.
+- **Sheets:** RMSheetShell everywhere (Evidence, Signature, ExportProof, ProofDetail, ExportHistory, RequestSignature, Invite, DeleteAccount). Same header spacing, blur, close affordance; no random nav bars; Reduce Motion = no y-offset on enter; no double haptics on open/close.
+- **Voice (iOS):** RMSearchBar mic opens dictation sheet (RMSheetShell); transcript lands in search field; Stop works; permission prompts handled; one light haptic on start/stop.
 
 ## Web
 
@@ -22,6 +23,7 @@ Run these checks before release to keep iOS and web aligned.
 - **Skeleton shimmer:** Duration 1.25, opacity 0.22; only on content blocks; disabled when Reduce Motion.
 - **Proof seal demo:** Hashing → Locked → Verified (0.5s / 0.5s); Reduce Motion = final state.
 - **Reduce Motion:** prefers-reduced-motion respected; no decorative motion when reduced.
+- **Voice (web):** Global search (Cmd+K) mic button when SpeechRecognition supported; transcript fills search field; Stop on second mic tap or when recognition ends; if unsupported, mic hidden.
 
 ## Cross-platform
 
