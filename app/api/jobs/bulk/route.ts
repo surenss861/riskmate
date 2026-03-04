@@ -39,7 +39,11 @@ const BULK_FORWARD_ALLOWED_HEADERS = [
   'x-client',
   'x-app-version',
   'x-device-id',
+  'x-organization-id',
 ] as const
+
+/** Query params we propagate to the delegated sub-route for organization/selector context. */
+const BULK_FORWARD_SELECTOR_QUERY_PARAMS = ['organization_id'] as const
 
 function buildForwardHeaders(request: NextRequest): Headers {
   const out = new Headers()
@@ -86,7 +90,14 @@ async function forwardToBulkAction(
       { status: 500 }
     )
   }
-  const targetUrl = `${APP_ORIGIN}/api/jobs/bulk/${canonicalAction}`
+  const selectorParams = new URLSearchParams()
+  const url = request.nextUrl
+  for (const name of BULK_FORWARD_SELECTOR_QUERY_PARAMS) {
+    const value = url.searchParams.get(name)
+    if (value != null && value.trim() !== '') selectorParams.set(name, value.trim())
+  }
+  const queryString = selectorParams.toString()
+  const targetUrl = `${APP_ORIGIN}/api/jobs/bulk/${canonicalAction}${queryString ? `?${queryString}` : ''}`
   const headers = buildForwardHeaders(request)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), BULK_FORWARD_TIMEOUT_MS)

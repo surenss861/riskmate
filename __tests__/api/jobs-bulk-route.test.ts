@@ -106,3 +106,103 @@ describe('POST /api/jobs/bulk – transport errors', () => {
     expect(body.message).toBeDefined()
   })
 })
+
+describe('POST /api/jobs/bulk – organization selector forwarding', () => {
+  it('forwards X-Organization-Id header to delegated sub-route', async () => {
+    const { POST } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'status', job_ids: ['job-1'] }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Organization-Id': 'org-selected-123',
+      },
+    })
+
+    await POST(request)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [targetUrl, opts] = fetchMock.mock.calls[0]
+    expect(targetUrl).toBe(`${TRUSTED_ORIGIN}/api/jobs/bulk/status`)
+    expect(opts?.headers?.get?.('x-organization-id') ?? opts?.headers?.['x-organization-id']).toBe('org-selected-123')
+  })
+
+  it('propagates organization_id query param to delegated target URL', async () => {
+    const { POST } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk?organization_id=org-query-456', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete', job_ids: ['job-1'] }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    await POST(request)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [targetUrl] = fetchMock.mock.calls[0]
+    expect(targetUrl).toBe(`${TRUSTED_ORIGIN}/api/jobs/bulk/delete?organization_id=org-query-456`)
+  })
+
+  it('forwards both X-Organization-Id and organization_id when present (POST)', async () => {
+    const { POST } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk?organization_id=org-query-789', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'assign', job_ids: ['j1'], worker_id: 'w1' }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Organization-Id': 'org-header-789',
+      },
+    })
+
+    await POST(request)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [targetUrl, opts] = fetchMock.mock.calls[0]
+    expect(targetUrl).toContain('organization_id=org-query-789')
+    const headerVal = opts?.headers?.get?.('x-organization-id') ?? opts?.headers?.['x-organization-id']
+    expect(headerVal).toBe('org-header-789')
+  })
+})
+
+describe('PATCH /api/jobs/bulk – organization selector forwarding', () => {
+  it('forwards X-Organization-Id and organization_id to delegated sub-route', async () => {
+    const { PATCH } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk?organization_id=org-patch-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'status', job_ids: ['job-1'], status: 'in_progress' }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Organization-Id': 'org-patch-header',
+      },
+    })
+
+    await PATCH(request)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [targetUrl, opts] = fetchMock.mock.calls[0]
+    expect(targetUrl).toBe(`${TRUSTED_ORIGIN}/api/jobs/bulk/status?organization_id=org-patch-1`)
+    const headerVal = opts?.headers?.get?.('x-organization-id') ?? opts?.headers?.['x-organization-id']
+    expect(headerVal).toBe('org-patch-header')
+  })
+})
+
+describe('DELETE /api/jobs/bulk – organization selector forwarding', () => {
+  it('forwards organization_id query and X-Organization-Id to delegated sub-route', async () => {
+    const { DELETE } = await import('@/app/api/jobs/bulk/route')
+    const request = new NextRequest('https://any-host/api/jobs/bulk?organization_id=org-delete-1', {
+      method: 'DELETE',
+      body: JSON.stringify({ job_ids: ['job-1'] }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Organization-Id': 'org-delete-header',
+      },
+    })
+
+    await DELETE(request)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [targetUrl, opts] = fetchMock.mock.calls[0]
+    expect(targetUrl).toBe(`${TRUSTED_ORIGIN}/api/jobs/bulk/delete?organization_id=org-delete-1`)
+    const headerVal = opts?.headers?.get?.('x-organization-id') ?? opts?.headers?.['x-organization-id']
+    expect(headerVal).toBe('org-delete-header')
+  })
+})
