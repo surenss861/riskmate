@@ -67,10 +67,13 @@ export async function GET(request: NextRequest) {
     if (ctx instanceof NextResponse) return ctx
     const { requestId, hasAnalytics, isActive } = ctx
 
+    const groupByParam = searchParams.get('groupBy')
+    const groupBy = groupByParam === 'location' ? 'location' : 'type'
+
     if (!isActive || !hasAnalytics) {
       const periodLabel = parsedPeriod.key === '1y' ? '1y' : `${parsedPeriod.days}d`
       return NextResponse.json(
-        { period: periodLabel, groupBy: 'type', items: [], locked: true },
+        { period: periodLabel, groupBy, items: [], locked: true },
         { status: 200, headers: { 'X-Request-ID': requestId } }
       )
     }

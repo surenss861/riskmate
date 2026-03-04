@@ -110,7 +110,8 @@ export async function getAnalyticsContext(
 
   const authHeader = request.headers.get('authorization')
   const hasAuthHeader = authHeader != null && authHeader.trim().length > 0
-  const isBearerIntent = hasAuthHeader && /^\s*bearer\s+/i.test(authHeader!.trim())
+  // Treat "Bearer" (exactly) or "Bearer ..." as bearer-intent; no cookie fallback for malformed Bearer
+  const isBearerIntent = hasAuthHeader && /^bearer(\s|$)/i.test(authHeader!.trim())
 
   if (isBearerIntent) {
     const token = authHeader!.replace(/^\s*bearer\s*/i, '').trim()
