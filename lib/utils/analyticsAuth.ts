@@ -107,9 +107,9 @@ export async function getAnalyticsContext(
     .from('users')
     .select('organization_id')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (userError || !userData?.organization_id) {
+  if (userError) {
     const { response, errorId } = createErrorResponse(
       'Failed to get organization ID',
       'QUERY_ERROR',
@@ -124,7 +124,45 @@ export async function getAnalyticsContext(
     })
   }
 
-  const orgId = userData.organization_id
+  let orgId: string | null = userData?.organization_id ?? null
+  if (!orgId) {
+    const { data: memberRows, error: memberError } = await admin
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .order('organization_id', { ascending: true })
+      .limit(1)
+    if (memberError || !memberRows?.length) {
+      const { response, errorId } = createErrorResponse(
+        'Failed to get organization ID',
+        'QUERY_ERROR',
+        { requestId, statusCode: 500 }
+      )
+      logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+        category: 'internal', severity: 'error', route,
+      })
+      return NextResponse.json(response, {
+        status: 500,
+        headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+      })
+    }
+    orgId = memberRows[0].organization_id
+  }
+
+  if (!orgId) {
+    const { response, errorId } = createErrorResponse(
+      'Failed to get organization ID',
+      'QUERY_ERROR',
+      { requestId, statusCode: 500 }
+    )
+    logApiError(500, 'QUERY_ERROR', errorId, requestId, undefined, response.message, {
+      category: 'internal', severity: 'error', route,
+    })
+    return NextResponse.json(response, {
+      status: 500,
+      headers: { 'X-Request-ID': requestId, 'X-Error-ID': errorId },
+    })
+  }
 
   const { data: orgSub, error: orgSubError } = await admin
     .from('org_subscriptions')

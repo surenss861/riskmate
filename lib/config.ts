@@ -13,6 +13,11 @@
 // Development: Set NEXT_PUBLIC_API_URL=http://localhost:5173 in .env.local (never in production)
 export const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.riskmate.dev';
 
+/** Canonical app origin for server-side delegation (e.g. bulk action proxy). Never derived from request URL. */
+export const APP_ORIGIN =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
 // Validate: Never use localhost in production
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   if (BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1')) {

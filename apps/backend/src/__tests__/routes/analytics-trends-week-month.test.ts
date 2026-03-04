@@ -121,6 +121,36 @@ describe("GET /api/analytics/trends (groupBy=week|month)", () => {
     });
   });
 
+  it("period=1y uses calendar-year bounds (Jan 1 .. today)", async () => {
+    mockRpc.mockImplementation((name: string, params?: { p_since?: string; p_until?: string }) => {
+      if (name === "get_trends_day_buckets" && params?.p_since && params?.p_until) {
+        const year = new Date().getUTCFullYear();
+        expect(params.p_since).toMatch(new RegExp(`^${year}-01-01`));
+        const untilDate = new Date(params.p_until);
+        expect(untilDate.getUTCFullYear()).toBe(year);
+        expect(untilDate.getTime()).toBeLessThanOrEqual(Date.now() + 86400000);
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    const res = await request(app)
+      .get("/api/analytics/trends")
+      .query({ period: "1y", groupBy: "day", metric: "jobs" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe("1y");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "get_trends_day_buckets",
+      expect.objectContaining({
+        p_org_id: "org-1",
+        p_metric: "jobs",
+      })
+    );
+    const rpcCall = mockRpc.mock.calls.find((c) => c[0] === "get_trends_day_buckets");
+    expect(rpcCall).toBeDefined();
+    const year = new Date().getUTCFullYear();
+    expect(rpcCall![1].p_since.startsWith(`${year}-01-01`)).toBe(true);
+  });
+
   it("30d + groupBy=week + metric=completion returns data array (0-100 values)", async () => {
     const res = await request(app)
       .get("/api/analytics/trends")

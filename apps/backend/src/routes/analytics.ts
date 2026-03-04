@@ -138,7 +138,7 @@ analyticsRouter.get(
       if (rejectInvalidDateRange(res, customRangeRaw)) return;
       const customRange = customRangeRaw && !("error" in customRangeRaw) ? customRangeRaw : null;
       const parsed = parsePeriodQuery(authReq.query.period);
-      const { since, until } = customRange ?? dateRangeForDays(parsed.days);
+      const { since, until } = customRange ?? (parsed.key === "1y" ? calendarYearBounds() : dateRangeForDays(parsed.days));
       const effectiveDays = customRange ? effectiveDaysFromRange(since, until) : parsed.days;
       const periodLabel = customRange ? periodLabelFromDays(effectiveDays) : (parsed.key === "1y" ? "1y" : `${parsed.days}d`);
 

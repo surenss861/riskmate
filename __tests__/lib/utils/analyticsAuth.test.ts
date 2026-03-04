@@ -19,28 +19,38 @@ jest.mock('@/lib/supabase/server', () => ({
   }),
 }))
 
+const mockUsersChain = {
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  single: jest.fn(),
+  maybeSingle: jest.fn(),
+}
+const mockOrgSubChain = {
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  maybeSingle: jest.fn().mockResolvedValue({
+    data: { plan_code: 'business', status: 'active' },
+    error: null,
+  }),
+}
+const mockOrgMembersChain = {
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  order: jest.fn().mockReturnThis(),
+  limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+}
+
 jest.mock('@/lib/supabase/admin', () => ({
   createSupabaseAdminClient: jest.fn().mockReturnValue({
     from: (table: string) => {
       if (table === 'users') {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({
-            data: { organization_id: ORG_ID },
-            error: null,
-          }),
-        }
+        return mockUsersChain
       }
       if (table === 'org_subscriptions') {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: { plan_code: 'business', status: 'active' },
-            error: null,
-          }),
-        }
+        return mockOrgSubChain
+      }
+      if (table === 'organization_members') {
+        return mockOrgMembersChain
       }
       return {}
     },
@@ -58,6 +68,11 @@ describe('getAnalyticsContext (analytics route auth)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     serverGetUserMock = jest.fn()
+    mockUsersChain.maybeSingle.mockResolvedValue({
+      data: { organization_id: ORG_ID },
+      error: null,
+    })
+    mockOrgMembersChain.limit.mockResolvedValue({ data: [], error: null })
   })
 
   describe('valid bearer, no cookie', () => {
@@ -132,6 +147,38 @@ describe('getAnalyticsContext (analytics route auth)', () => {
       if (typeof result === 'object' && result !== null && 'orgId' in result) {
         expect(result.orgId).toBe(ORG_ID)
         expect(result.hasAnalytics).toBe(true)
+      }
+    })
+  })
+
+  describe('membership-fallback success path', () => {
+    it('returns context when user has no users.organization_id but has organization_members row', async () => {
+      mockUsersChain.maybeSingle.mockResolvedValue({
+        data: { organization_id: null },
+        error: null,
+      })
+      mockOrgMembersChain.limit.mockResolvedValue({
+        data: [{ organization_id: ORG_ID }],
+        error: null,
+      })
+      serverGetUserMock.mockImplementation((token?: string) => {
+        if (token !== undefined) {
+          return Promise.resolve({
+            data: { user: { id: USER_ID } },
+            error: null,
+          })
+        }
+        return Promise.resolve({ data: { user: null }, error: null })
+      })
+
+      const req = requestWithHeaders({ Authorization: 'Bearer valid-token' })
+      const result = await getAnalyticsContext(req, ROUTE)
+
+      expect(result).not.toBeInstanceOf(Response)
+      if (typeof result === 'object' && result !== null && 'orgId' in result) {
+        expect(result.orgId).toBe(ORG_ID)
+        expect(result.hasAnalytics).toBe(true)
+        expect(result.isActive).toBe(true)
       }
     })
   })

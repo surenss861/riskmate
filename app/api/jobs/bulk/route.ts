@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { APP_ORIGIN } from '@/lib/config'
 
 export const runtime = 'nodejs'
 
@@ -52,17 +53,16 @@ function buildForwardHeaders(request: NextRequest): Headers {
 
 /**
  * Forward to the bulk sub-route (POST) and return the response.
- * Sub-routes (e.g. /api/jobs/bulk/status, /assign, /delete) must be accessible at the same
- * origin; the cookie header is forwarded so session auth is preserved for the internal request.
- * If those sub-routes move behind middleware that blocks internal requests, this pattern will break.
+ * Target URL is built from server-controlled APP_ORIGIN only; request Host/URL are never used,
+ * so delegated fetch cannot be influenced by client headers (credential exfiltration protection).
+ * Cookie header is forwarded so session auth is preserved for the internal request.
  */
 async function forwardToBulkAction(
   request: NextRequest,
   canonicalAction: BulkAction,
   rest: Record<string, unknown>
 ): Promise<NextResponse> {
-  const origin = new URL(request.url).origin
-  const targetUrl = `${origin}/api/jobs/bulk/${canonicalAction}`
+  const targetUrl = `${APP_ORIGIN}/api/jobs/bulk/${canonicalAction}`
   const headers = buildForwardHeaders(request)
   const res = await fetch(targetUrl, {
     method: 'POST',
