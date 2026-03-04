@@ -15,6 +15,11 @@ enum WebAppURL {
         baseURL.appendingPathComponent("jobs").appendingPathComponent(jobId)
     }
 
+    /// Billing / manage plan (opens in browser).
+    static var billingURL: URL {
+        baseURL.appendingPathComponent("settings").appendingPathComponent("billing")
+    }
+
     /// Opens the web app URL, optionally for a specific job. Shows "Couldn't open link" toast on failure.
     static func openWebApp(jobId: String? = nil) {
         let url = jobId.map { jobURL(jobId: $0) } ?? baseURL

@@ -69,13 +69,16 @@ Phase A (global layer) is implemented: custom tab bar (`RMTabBar`), reactive Red
 | Toolbar | `TeamView` | Primary = Request signature; trailing = Invite (sheet) | ✅ |
 | **QA** | | Cards with role pills; request signature sheet has header + steps; success toast + haptic; Reduce Motion fades only; no gesture conflicts | |
 
-### B7) AccountView — Productized
+### B7) AccountView — Productized ✅ Package 8 done
 
-| Task | File(s) | Acceptance criteria |
-|------|--------|---------------------|
-| Streak section | `Views/Main/AccountView.swift` | Already planned; ensure UTC + meaningful events only |
-| Plan + entitlement card | `AccountView` + `EntitlementsManager` | Single card for plan / entitlement |
-| Danger zone | `AccountView` | Confirm sheet; strong typography; no jank |
+| Task | File(s) | Acceptance criteria | Status |
+|------|--------|---------------------|--------|
+| Account header | `AccountHeaderCard.swift`, `AccountView` | Avatar, name, email, org; quick actions: Support bundle, Notification prefs, Sign out; rmAppearIn(0), rmPressable | ✅ |
+| Streak section | `AccountView`, `HolographicBadgeView` | Holographic badge when streak > 0; calm empty state when 0 (“Start by logging…”); meaningful-event logic | ✅ |
+| Plan + entitlements | `EntitlementCard.swift`, `EntitlementsManager` | Plan name, renewal, limits (seats, jobs/month), features; skeleton while loading; “Manage plan” → web billing URL | ✅ |
+| Recent exports | `AccountView`, `BackgroundExportManager` | “Recent proof packs” top 3; “View all” opens `ExportHistoryOverviewView`; tap row opens sheet | ✅ |
+| Danger zone | `DangerZoneCard.swift`, `DeleteAccountSheet` | Delete opens sheet; type DELETE to confirm; Haptics.warning on open, success on completion | ✅ |
+| **QA** | | Header + quick actions; streak badge or empty; entitlements card + skeleton; recent exports + view all; danger zone deliberate; Reduce Motion | |
 
 ### B8) Notifications — Modern list ✅ Package 6 done
 

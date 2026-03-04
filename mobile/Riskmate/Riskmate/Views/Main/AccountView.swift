@@ -2,7 +2,9 @@ import SwiftUI
 
 struct AccountView: View {
     @StateObject private var sessionManager = SessionManager.shared
-    
+    @StateObject private var entitlementsManager = EntitlementsManager.shared
+    @StateObject private var exportManager = BackgroundExportManager.shared
+
     @State private var isEditingOrgName = false
     @State private var editedOrgName = ""
     @State private var showError = false
@@ -12,7 +14,12 @@ struct AccountView: View {
     @State private var showDeleteAccountConfirmation = false
     @State private var deleteConfirmationText = ""
     @State private var isDeletingAccount = false
-    
+    @State private var showExportHistorySheet = false
+
+    private var recentExports: [ExportTask] {
+        Array(exportManager.exports.sorted { $0.createdAt > $1.createdAt }.prefix(3))
+    }
+
     private var versionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
@@ -34,8 +41,157 @@ struct AccountView: View {
     var body: some View {
         ZStack {
             RMBackground()
-            
-            List {
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: RMTheme.Spacing.lg) {
+                    // 1) Account header (identity + quick actions)
+                    if let user = sessionManager.currentUser {
+                        AccountHeaderCard(
+                            userName: user.full_name ?? user.email ?? "Account",
+                            userEmail: user.email,
+                            organizationName: sessionManager.currentOrganization?.name,
+                            onSupportBundle: { /* NavigationLink handled below */ },
+                            onNotificationPrefs: { /* NavigationLink handled below */ },
+                            onSignOut: {
+                                showSignOutConfirmation = true
+                            }
+                        )
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    }
+
+                    // 2) Streak section
+                    streakSection
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+
+                    // 3) Plan + entitlements
+                    EntitlementCard(
+                        entitlements: entitlementsManager.entitlements,
+                        isLoading: entitlementsManager.isLoading,
+                        onManagePlan: {
+                            UIApplication.shared.open(WebAppURL.billingURL)
+                        }
+                    )
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+
+                    // 4) Recent exports
+                    recentExportsSection
+                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+
+                    // Organization, Privacy/Terms, Danger zone, Version
+                    accountListContent
+                }
+                .padding(.bottom, 100)
+            }
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.large)
+            .refreshable {
+                await sessionManager.refreshOrganization()
+                await entitlementsManager.refresh(force: true)
+            }
+            .confirmationDialog("Sign Out", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+                Button("Sign Out", role: .destructive) {
+                    Haptics.warning()
+                    Task { await sessionManager.logout() }
+                }
+                Button("Cancel", role: .cancel) { Haptics.tap() }
+            } message: {
+                Text("You can sign back in anytime. Your data is securely stored.")
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .sheet(isPresented: $showDeleteAccountConfirmation) {
+                DeleteAccountSheet(
+                    isPresented: $showDeleteAccountConfirmation,
+                    onConfirm: { Task { await deleteAccount() } },
+                    isDeleting: isDeletingAccount
+                )
+                .onAppear { Haptics.warning() }
+            }
+            .sheet(isPresented: $showExportHistorySheet) {
+                ExportHistoryOverviewView()
+            }
+            .task {
+                await entitlementsManager.refresh(force: false)
+            }
+        }
+        .rmNavigationBar(title: "Account")
+        .preferredColorScheme(.dark)
+    }
+
+    private var streakSection: some View {
+        Group {
+            if UserDefaultsManager.Streaks.currentStreak() > 0 {
+                let streak = UserDefaultsManager.Streaks.currentStreak()
+                HolographicBadgeView(
+                    title: streak == 1 ? "1 day" : "\(streak)-day streak",
+                    subtitle: "Logging consistency",
+                    icon: "flame.fill"
+                )
+            } else {
+                VStack(spacing: RMTheme.Spacing.sm) {
+                    Image(systemName: "flame")
+                        .font(.system(size: 32))
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                    Text("Start a streak")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.textSecondary)
+                    Text("Log evidence, complete tasks, or add comments to build your streak.")
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(RMTheme.Spacing.lg)
+                .background(RMTheme.Colors.surface.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
+            }
+        }
+    }
+
+    private var recentExportsSection: some View {
+        VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+            HStack {
+                Text("Recent proof packs")
+                    .font(RMTheme.Typography.title3)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                Spacer()
+                Button {
+                    Haptics.impact(.light)
+                    showExportHistorySheet = true
+                } label: {
+                    Text("View all")
+                        .font(RMTheme.Typography.captionBold)
+                        .foregroundColor(RMTheme.Colors.accent)
+                }
+            }
+            if recentExports.isEmpty {
+                Text("No exports yet")
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(RMTheme.Spacing.md)
+                    .background(RMTheme.Colors.surface.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+            } else {
+                VStack(spacing: RMTheme.Spacing.sm) {
+                    ForEach(recentExports) { task in
+                        RecentExportRow(task: task)
+                            .onTapGesture {
+                                Haptics.impact(.light)
+                                showExportHistorySheet = true
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+    private var accountListContent: some View {
+        List {
                 if let org = sessionManager.currentOrganization {
                     Section {
                         // Organization badge/icon
@@ -119,48 +275,7 @@ struct AccountView: View {
                     }
                 }
                 
-                if UserDefaultsManager.Streaks.currentStreak() > 0 {
-                    Section {
-                        let streak = UserDefaultsManager.Streaks.currentStreak()
-                        HStack {
-                            HolographicBadgeView(
-                                title: streak == 1 ? "1 day" : "\(streak)-day streak",
-                                subtitle: "Logging consistency",
-                                icon: "flame.fill"
-                            )
-                            Spacer()
-                        }
-                        .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
-                    } header: {
-                        Text("Streak")
-                            .font(RMTheme.Typography.caption)
-                            .foregroundColor(RMTheme.Colors.textTertiary)
-                    }
-                }
-                
                 Section {
-                    NavigationLink {
-                        SupportBundleView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "questionmark.circle")
-                            Text("Support")
-                        }
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    }
-                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
-                    
-                    NavigationLink {
-                        NotificationPreferencesView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "bell.badge.fill")
-                            Text("Notification preferences")
-                        }
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    }
-                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
-                    
                     NavigationLink {
                         PrivacyPolicyView()
                     } label: {
@@ -249,47 +364,12 @@ struct AccountView: View {
                 }
                 #endif
                 
-                // Sign Out - own section, destructive style with confirmation
                 Section {
-                    Divider()
-                        .background(RMTheme.Colors.divider.opacity(0.3))
-                        .padding(.vertical, 4)
-                    
-                    Button("Sign Out", role: .destructive) {
-                        Haptics.warning()
-                        showSignOutConfirmation = true
-                    }
-                    .listRowBackground(Color.clear)
-                    .confirmationDialog("Sign Out", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
-                        Button("Sign Out", role: .destructive) {
-                            Haptics.warning()
-                            Task {
-                                await sessionManager.logout()
-                            }
-                        }
-                        Button("Cancel", role: .cancel) {
-                            Haptics.tap()
-                        }
-                    } message: {
-                        Text("You can sign back in anytime. Your data is securely stored.")
-                    }
-                }
-                
-                // Delete Account - separate section, most destructive action
-                Section {
-                    Button("Delete Account", role: .destructive) {
-                        Haptics.warning()
+                    DangerZoneCard(onDeleteTapped: {
                         showDeleteAccountConfirmation = true
-                    }
+                    })
                     .listRowBackground(Color.clear)
-                    .disabled(isDeletingAccount)
-                } header: {
-                    Text("Danger Zone")
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textTertiary)
-                } footer: {
-                    Text("Deleting your account will permanently remove all your data. This action cannot be undone.")
-                        .foregroundColor(RMTheme.Colors.textTertiary)
+                    .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: 0, bottom: RMTheme.Spacing.sm, trailing: 0))
                 }
                 
                 // Version info (subtle, professional)
@@ -325,39 +405,16 @@ struct AccountView: View {
                     .listRowBackground(RMTheme.Colors.surface.opacity(0.3))
                 }
                 
-                // Bottom spacer so Sign Out / Danger Zone clear the tab bar
+                // Bottom spacer
                 Section {
                     Color.clear
-                        .frame(height: 88)
+                        .frame(height: 24)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
             }
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
-                .navigationTitle("Settings")
-                .navigationBarTitleDisplayMode(.large)
-            .refreshable {
-                await sessionManager.refreshOrganization()
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
-            }
-            .sheet(isPresented: $showDeleteAccountConfirmation) {
-                DeleteAccountSheet(
-                    isPresented: $showDeleteAccountConfirmation,
-                    onConfirm: {
-                        Task {
-                            await deleteAccount()
-                        }
-                    },
-                    isDeleting: isDeletingAccount
-                )
-            }
-        }
-        .rmNavigationBar(title: "Settings")
-        .preferredColorScheme(.dark)
     }
     
     private func saveOrganizationName() {
@@ -377,18 +434,57 @@ struct AccountView: View {
     
     private func deleteAccount() async {
         isDeletingAccount = true
-        Haptics.warning()
-        
         do {
             _ = try await APIClient.shared.deactivateAccount(confirmation: "DELETE")
-            // Account deletion successful - sign out user
+            Haptics.success()
             await sessionManager.logout()
-            // Show success message (optional, since we're logging out)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
             isDeletingAccount = false
         }
+    }
+}
+
+// MARK: - Recent export row (Package 8)
+
+private struct RecentExportRow: View {
+    let task: ExportTask
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.md) {
+            Image(systemName: task.type == .proofPack ? "archivebox.fill" : "doc.text.fill")
+                .font(.system(size: 18))
+                .foregroundColor(RMTheme.Colors.accent)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.type.displayName)
+                    .font(RMTheme.Typography.bodySmallBold)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                Text("Job \(task.jobId.prefix(8))… • \(stateText)")
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            }
+            Spacer()
+            Text(formatDate(task.createdAt))
+                .font(RMTheme.Typography.caption2)
+                .foregroundColor(RMTheme.Colors.textTertiary)
+        }
+        .padding(RMTheme.Spacing.md)
+        .background(RMTheme.Colors.surface.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm, style: .continuous))
+    }
+    private var stateText: String {
+        switch task.state {
+        case .queued: return "Queued"
+        case .preparing, .downloading: return "In progress"
+        case .ready: return "Ready"
+        case .failed: return "Failed"
+        }
+    }
+    private func formatDate(_ date: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: Date())
     }
 }
 
