@@ -42,22 +42,33 @@ struct AuditFeedView: View {
         return min(1, (amount - 18) / 24)
     }
 
-    /// Events sorted by timestamp desc, grouped by calendar day
-    private var groupedByDay: [(day: Date, label: String, events: [AuditEvent])] {
+    /// Day group for sticky section headers (id = startOfDay for identity).
+    private struct LedgerDayGroup: Identifiable {
+        let id: Date
+        let title: String
+        let events: [AuditEvent]
+    }
+
+    private func dayLabel(for day: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(day) { return "Today" }
+        if cal.isDateInYesterday(day) { return "Yesterday" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: day)
+    }
+
+    /// Events sorted by timestamp desc, grouped by calendar day (for ScrollView + pinned headers).
+    private var grouped: [LedgerDayGroup] {
         let cal = Calendar.current
         let sorted = events.sorted { $0.timestamp > $1.timestamp }
-        let grouped = Dictionary(grouping: sorted) { cal.startOfDay(for: $0.timestamp) }
-        return grouped.keys.sorted(by: >).map { day in
-            let dayEvents = grouped[day] ?? []
-            let label: String
-            if cal.isDateInToday(day) { label = "Today" }
-            else if cal.isDateInYesterday(day) { label = "Yesterday" }
-            else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMM d"
-                label = formatter.string(from: day)
-            }
-            return (day: day, label: label, events: dayEvents)
+        let byDay = Dictionary(grouping: sorted) { cal.startOfDay(for: $0.timestamp) }
+        return byDay.keys.sorted(by: >).map { day in
+            LedgerDayGroup(
+                id: day,
+                title: dayLabel(for: day),
+                events: byDay[day] ?? []
+            )
         }
     }
 
@@ -232,28 +243,43 @@ struct AuditFeedView: View {
     }
 
     private var ledgerTimelineList: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(spacing: 0) {
                 Color.clear
                     .frame(height: 1)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                     .trackScrollY(in: ledgerScrollSpace)
-            }
-            ForEach(groupedByDay, id: \.day) { group in
-                Section {
-                    ForEach(group.events) { event in
-                        ledgerRow(for: event)
+                LazyVStack(spacing: RMTheme.Spacing.sectionSpacing, pinnedViews: [.sectionHeaders]) {
+                    ForEach(grouped) { group in
+                        Section {
+                            VStack(spacing: 10) {
+                                ForEach(group.events) { event in
+                                    ledgerRow(for: event)
+                                        .padding(.vertical, 6)
+                                        .contextMenu {
+                                            Button {
+                                                copyEventId(event.id)
+                                            } label: {
+                                                Label("Copy Event ID", systemImage: "doc.on.doc")
+                                            }
+                                            Button {
+                                                selectedEvent = event
+                                                showingDetail = true
+                                            } label: {
+                                                Label("View Details", systemImage: "eye")
+                                            }
+                                        }
+                                }
+                            }
+                        } header: {
+                            LedgerPinnedDayHeader(title: group.title, count: group.events.count)
+                        }
                     }
-                } header: {
-                    LedgerDaySectionHeader(title: group.label, eventCount: group.events.count)
                 }
-                .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
+                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                .padding(.top, 12)
+                .padding(.bottom, 120)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .coordinateSpace(name: ledgerScrollSpace)
         .refreshable { await loadEvents() }
     }
@@ -276,22 +302,6 @@ struct AuditFeedView: View {
             isVerified: !isBlocked,
             onTap: { selectedEvent = event; showingDetail = true }
         )
-        .listRowInsets(EdgeInsets(top: 6, leading: RMTheme.Spacing.pagePadding, bottom: 6, trailing: RMTheme.Spacing.pagePadding))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .contextMenu {
-            Button {
-                copyEventId(event.id)
-            } label: {
-                Label("Copy Event ID", systemImage: "doc.on.doc")
-            }
-            Button {
-                selectedEvent = event
-                showingDetail = true
-            } label: {
-                Label("View Details", systemImage: "eye")
-            }
-        }
     }
 
     private func loadEvents() async {
@@ -313,6 +323,36 @@ struct AuditFeedView: View {
     private func copyEventId(_ id: String) {
         UIPasteboard.general.string = id
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+}
+
+// MARK: - Pinned day header (solid surface + bottom divider; Wallet/Health-style)
+private struct LedgerPinnedDayHeader: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(RMTheme.Typography.sectionTitle)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+            Spacer()
+            Text("\(count) event\(count == 1 ? "" : "s")")
+                .font(RMTheme.Typography.secondaryLabelLarge)
+                .foregroundColor(RMTheme.Colors.textTertiary)
+        }
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RMTheme.Colors.surface2.opacity(0.92)
+        )
+        .overlay(
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1),
+            alignment: .bottom
+        )
     }
 }
 
