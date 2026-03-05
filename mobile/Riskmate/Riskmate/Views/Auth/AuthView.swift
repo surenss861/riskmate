@@ -375,6 +375,8 @@ struct AuthView: View {
                         // Hero in visual middle; CTA anchored at bottom (Apple/Wallet-style).
                         Spacer(minLength: 20)
                         heroBlock
+                            .padding(.top, safeTop + 24)
+                            .padding(.bottom, 8)
                             .frame(maxWidth: .infinity)
                         Spacer(minLength: 20)
                         landingCTAs(safeBottom: safeBottom)

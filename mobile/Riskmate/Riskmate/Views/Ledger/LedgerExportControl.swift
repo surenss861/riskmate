@@ -31,11 +31,11 @@ struct LedgerExportControl: View {
             }) {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(RMTheme.Colors.accent)
                     Text("Export Proof Pack")
                         .font(RMTheme.Typography.sectionTitle)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
                     Spacer(minLength: 0)
                     // Reserve space so layout is stable; reveal via opacity only (no shift).
                     HStack(spacing: 6) {
@@ -50,7 +50,7 @@ struct LedgerExportControl: View {
                     .allowsHitTesting(chromeT > revealThreshold)
                     .transaction { $0.animation = .easeOut(duration: 0.2) }
                 }
-                .frame(height: 48)
+                .frame(height: 44)
                 .padding(.horizontal, RMTheme.Spacing.cardPadding)
             }
             .buttonStyle(.plain)
@@ -73,7 +73,7 @@ struct LedgerExportControl: View {
             )
             .shadow(color: .black.opacity(shadowOpacity), radius: 16, x: 0, y: shadowY)
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
-            .padding(.top, RMTheme.Spacing.sm)
+            .padding(.top, RMTheme.Spacing.sm + 2)
             .padding(.bottom, 8)
 
             Rectangle()

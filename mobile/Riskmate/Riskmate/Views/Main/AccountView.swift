@@ -138,7 +138,7 @@ struct AccountView: View {
                 )
             } else {
                 RMCard(useSolidSurface: true) {
-                    VStack(spacing: RMTheme.Spacing.sm) {
+                    VStack(spacing: 6) {
                         Image(systemName: "flame")
                             .font(.system(size: 32))
                             .foregroundColor(RMTheme.Colors.textTertiary)

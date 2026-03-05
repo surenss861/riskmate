@@ -511,6 +511,22 @@ struct JobsListView: View {
         showExportProofSheet = true
     }
 
+    /// One-line proof pipeline for job row: Evidence X/Y · Signatures 0/1 · Export status.
+    private func proofStatusLine(for job: Job) -> String {
+        let ev = job.evidenceRequired ?? 0
+        let evidencePart = ev > 0 ? "Evidence: \(job.evidenceCount ?? 0)/\(ev)" : "Evidence: —"
+        let signaturesPart = "Signatures: 0/1"
+        let exportPart: String
+        if let last = BackgroundExportManager.shared.getLastExport(jobId: job.id, type: .proofPack) {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            exportPart = "Export: \(formatter.localizedString(for: last.generatedAt, relativeTo: Date()))"
+        } else {
+            exportPart = "Export: Not generated"
+        }
+        return "\(evidencePart) · \(signaturesPart) · \(exportPart)"
+    }
+
     /// Reason labels for Needs action section only. Use "Open job" until we have real signature signal (e.g. signatureRequired && signatureCount == 0).
     private func needsActionReasons(for job: Job) -> [String] {
         var r: [String] = []
@@ -529,7 +545,8 @@ struct JobsListView: View {
                     job: job,
                     isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
                     isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
-                    namespace: jobListNamespace
+                    namespace: jobListNamespace,
+                    proofStatusLine: proofStatusLine(for: job)
                 ) {
                     // Navigation handled by NavigationLink
                 }

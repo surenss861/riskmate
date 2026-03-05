@@ -10,6 +10,8 @@ struct JobCard: View {
     var isUnsynced: Bool = false
     /// When set, risk pill and score use matchedGeometryEffect for card→detail transition.
     var namespace: Namespace.ID? = nil
+    /// One-line proof pipeline: "Evidence: 2/5 · Signatures: 0/1 · Export: Not generated" (or "Last exported 2h ago").
+    var proofStatusLine: String? = nil
     let onTap: () -> Void
 
     private var pendingBadge: (label: String, color: Color)? {
@@ -78,6 +80,14 @@ struct JobCard: View {
                         .lineLimit(1)
                     
                     StatusChip(text: job.status.uppercased())
+                    
+                    if let line = proofStatusLine {
+                        Text(line)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(RMTheme.Colors.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                     
                     // Contextual action hint for critical jobs — stronger contrast
                     if (job.riskScore ?? 0) >= 90 {

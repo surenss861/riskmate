@@ -332,7 +332,7 @@ private struct LedgerPinnedDayHeader: View {
     let count: Int
     var pinnedT: CGFloat = 0
 
-    private var fillOpacity: CGFloat { 0.92 + (0.95 - 0.92) * pinnedT }
+    private var fillOpacity: CGFloat { 0.92 + (0.955 - 0.92) * pinnedT }
     private var bottomDividerOpacity: CGFloat { pinnedT > 0.01 ? 0.075 : 0.06 }
 
     var body: some View {
@@ -351,7 +351,7 @@ private struct LedgerPinnedDayHeader: View {
         .background(
             Rectangle()
                 .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
-                .overlay(Color.black.opacity(0.04 * min(1, pinnedT)))
+                .overlay(Color.black.opacity(0.03 * min(1, pinnedT)))
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.white.opacity(0.06))

@@ -17,7 +17,7 @@ struct EntitlementCard: View {
                 .rmShimmer()
             } else if let data = entitlements {
                 RMCard(useSolidSurface: true) {
-                    VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(planDisplayName(data.plan_code))
                                 .font(RMTheme.Typography.title3)
@@ -69,6 +69,7 @@ struct EntitlementCard: View {
                                 .font(RMTheme.Typography.caption2)
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
+                        .padding(.top, 10)
                     }
                     .frame(minHeight: 92)
                 }

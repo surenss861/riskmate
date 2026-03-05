@@ -40,7 +40,7 @@ private struct RMPressableModifier: ViewModifier {
         content
             .scaleEffect(isPressed ? scale : 1.0)
             .opacity(pressOpacity != nil ? (isPressed ? pressOpacity! : 1.0) : 1.0)
-            .animation(.easeOut(duration: 0.1), value: isPressed)
+            .animation(.easeOut(duration: 0.08), value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
