@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var deepLinkCommentId: String?
     @State private var showExportHistorySheet = false
     @Namespace private var tabBarNamespace
+    @State private var tabDragOffset: CGFloat = 0
     @StateObject private var motionObserver = RMMotionObserver.shared
 
     private var isAuditor: Bool {
@@ -218,6 +219,7 @@ struct ContentView: View {
 
     private var iPhoneNavigation: some View {
         GeometryReader { geo in
+            let width = geo.size.width
             ZStack {
                 ZStack {
                     tabScreen(.operations) {
@@ -226,7 +228,7 @@ struct ContentView: View {
                         })
                         .rmNavigationBar(title: "Operations")
                     }
-                    .offset(x: CGFloat(tabIndex(.operations) - tabIndex(selectedTab)) * geo.size.width)
+                    .offset(x: CGFloat(tabIndex(.operations) - tabIndex(selectedTab)) * width + tabDragOffset)
                     .scaleEffect(selectedTab == .operations ? 1.0 : 0.985)
                     .opacity(selectedTab == .operations ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .operations)
@@ -235,7 +237,7 @@ struct ContentView: View {
                         AuditFeedView()
                             .rmNavigationBar(title: "Ledger")
                     }
-                    .offset(x: CGFloat(tabIndex(.ledger) - tabIndex(selectedTab)) * geo.size.width)
+                    .offset(x: CGFloat(tabIndex(.ledger) - tabIndex(selectedTab)) * width + tabDragOffset)
                     .scaleEffect(selectedTab == .ledger ? 1.0 : 0.985)
                     .opacity(selectedTab == .ledger ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .ledger)
@@ -244,7 +246,7 @@ struct ContentView: View {
                         JobsListView(initialFilter: workRecordsFilter)
                             .rmNavigationBar(title: "Work Records")
                     }
-                    .offset(x: CGFloat(tabIndex(.workRecords) - tabIndex(selectedTab)) * geo.size.width)
+                    .offset(x: CGFloat(tabIndex(.workRecords) - tabIndex(selectedTab)) * width + tabDragOffset)
                     .scaleEffect(selectedTab == .workRecords ? 1.0 : 0.985)
                     .opacity(selectedTab == .workRecords ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .workRecords)
@@ -252,13 +254,47 @@ struct ContentView: View {
                     tabScreen(.settings) {
                         AccountView()
                     }
-                    .offset(x: CGFloat(tabIndex(.settings) - tabIndex(selectedTab)) * geo.size.width)
+                    .offset(x: CGFloat(tabIndex(.settings) - tabIndex(selectedTab)) * width + tabDragOffset)
                     .scaleEffect(selectedTab == .settings ? 1.0 : 0.985)
                     .opacity(selectedTab == .settings ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .settings)
                 }
                 .animation(Self.tabSpring, value: selectedTab)
+                .animation(Self.tabSpring, value: tabDragOffset)
                 .clipped()
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 20)
+                        .onChanged { value in
+                            let tx = value.translation.width
+                            let idx = tabIndex(selectedTab)
+                            let maxDrag: CGFloat = width * 0.6
+                            if tx > 0, idx == 0 { tabDragOffset = tx * 0.4 }
+                            else if tx < 0, idx == tabOrder.count - 1 { tabDragOffset = tx * 0.4 }
+                            else { tabDragOffset = min(max(tx, -maxDrag), maxDrag) }
+                        }
+                        .onEnded { value in
+                            let threshold = width * 0.28
+                            let idx = tabIndex(selectedTab)
+                            if value.translation.width < -threshold, idx < tabOrder.count - 1 {
+                                Haptics.tap()
+                                withAnimation(Self.tabSpring) {
+                                    selectedTab = tabOrder[idx + 1]
+                                    tabDragOffset = 0
+                                }
+                            } else if value.translation.width > threshold, idx > 0 {
+                                Haptics.tap()
+                                withAnimation(Self.tabSpring) {
+                                    selectedTab = tabOrder[idx - 1]
+                                    tabDragOffset = 0
+                                }
+                            } else {
+                                withAnimation(Self.tabSpring) {
+                                    tabDragOffset = 0
+                                }
+                            }
+                        }
+                )
             }
         }
         .safeAreaInset(edge: .bottom) {

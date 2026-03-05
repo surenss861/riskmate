@@ -140,7 +140,7 @@ struct OperationsView: View {
         } header: {
             sectionHeader("Today")
         }
-        .listSectionSpacing(8)
+        .listSectionSpacing(6)
 
         Section {
             QuickActionsStrip(
@@ -153,7 +153,7 @@ struct OperationsView: View {
         } header: {
             sectionHeader("Quick actions")
         }
-        .listSectionSpacing(8)
+        .listSectionSpacing(6)
 
         Section {
             OpenIssuesPlaceholder(onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) })
@@ -162,7 +162,7 @@ struct OperationsView: View {
         } header: {
             sectionHeader("This week")
         }
-        .listSectionSpacing(8)
+        .listSectionSpacing(6)
 
         Section {
             RecentActivityRow(hasActivity: false)
@@ -171,7 +171,7 @@ struct OperationsView: View {
         } header: {
             sectionHeader("Recent activity")
         }
-        .listSectionSpacing(8)
+        .listSectionSpacing(6)
 
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
@@ -235,7 +235,7 @@ struct OperationsView: View {
             operationsListSections
         }
         .listStyle(.insetGrouped)
-        .listSectionSpacing(8)
+        .listSectionSpacing(6)
         .searchable(text: $searchQuery, prompt: "Search jobs")
         .anchoringRefresh(isRefreshing: $isRefreshing) {
             _ = try? await jobsStore.fetch(forceRefresh: true)

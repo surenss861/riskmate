@@ -109,16 +109,40 @@ struct AuthView: View {
             .blur(radius: 18)
             .allowsHitTesting(false)
         )
+        .overlay {
+            RadialGradient(
+                gradient: Gradient(stops: [
+                    .init(color: .clear, location: 0.5),
+                    .init(color: .black.opacity(0.12), location: 0.85),
+                    .init(color: .black.opacity(0.2), location: 1.0)
+                ]),
+                center: .center,
+                startRadius: 60,
+                endRadius: 320
+            )
+            .allowsHitTesting(false)
+        }
     }
 
     /// Small "Proof Pack sample" card: hash + Verified + PDF badge — anchors hero to brand.
     private var proofPackSampleCard: some View {
         ZStack {
-            // Faint PDF/receipt thumbnail behind card (hero artifact)
+            // Faint PDF/receipt thumbnail behind card (4–5% opacity, fades toward CTA)
             Image(systemName: "doc.richtext.fill")
                 .font(.system(size: 120))
-                .foregroundStyle(Color.white.opacity(0.08))
+                .foregroundStyle(Color.white.opacity(0.045))
                 .offset(y: 8)
+                .mask(
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .white, location: 0.0),
+                            .init(color: .white.opacity(0.4), location: 0.5),
+                            .init(color: .clear, location: 1.0)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Proof Pack sample")
@@ -133,6 +157,7 @@ struct AuthView: View {
                 Text("Verified")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(RMTheme.Colors.accent)
+                proofCardReceiptLine
             }
             .padding(12)
             .frame(maxWidth: 320)
@@ -140,6 +165,19 @@ struct AuthView: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
             .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 8)
         }
+    }
+
+    /// Mini receipt line inside proof card — one more piece of metadata.
+    private var proofCardReceiptLine: some View {
+        HStack(spacing: 6) {
+            Rectangle()
+                .fill(Color.white.opacity(0.2))
+                .frame(height: 1)
+            Text("Verified · 2F3A…9C")
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.5))
+        }
+        .padding(.top, 2)
     }
 
     /// Tiny PDF badge with check — breaks text-only hero, reinforces "exportable proof."
