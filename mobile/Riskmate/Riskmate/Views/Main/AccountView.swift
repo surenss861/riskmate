@@ -137,22 +137,22 @@ struct AccountView: View {
                     icon: "flame.fill"
                 )
             } else {
-                VStack(spacing: RMTheme.Spacing.sm) {
-                    Image(systemName: "flame")
-                        .font(.system(size: 32))
-                        .foregroundColor(RMTheme.Colors.textTertiary)
-                    Text("Start a streak")
-                        .font(RMTheme.Typography.bodySmallBold)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
-                    Text("Log evidence, complete tasks, or add comments to build your streak.")
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textTertiary)
-                        .multilineTextAlignment(.center)
+                RMCard(useSolidSurface: true) {
+                    VStack(spacing: RMTheme.Spacing.sm) {
+                        Image(systemName: "flame")
+                            .font(.system(size: 32))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                        Text("Start a streak")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                        Text("Log evidence, complete tasks, or add comments to build your streak.")
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(RMTheme.Spacing.lg)
-                .background(RMTheme.Colors.surface.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
             }
         }
     }

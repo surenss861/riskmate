@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftDate
 import CryptoKit
+import Combine
 
 /// Audit feed with native list, category pills, and detail sheets
 struct AuditFeedView: View {
@@ -291,7 +292,7 @@ struct AuditFeedView: View {
         let timeText = formatter.localizedString(for: event.timestamp, relativeTo: Date())
         let hashPreview = String(event.id.prefix(12)) + "…"
 
-        LedgerTimelineRow(
+        return LedgerTimelineRow(
             title: isBlocked ? "Action Blocked" : event.summary,
             subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
             hashPreview: hashPreview,
@@ -704,7 +705,7 @@ struct LedgerExportSheet: View {
                 .background(RMTheme.Colors.background)
             }
             .sheet(isPresented: $showingExportHistory) {
-                ExportHistorySheet()
+                LedgerExportHistorySheet()
             }
         }
     }
@@ -800,7 +801,8 @@ final class ExportHistoryStore: ObservableObject {
     }
 }
 
-struct ExportHistorySheet: View {
+/// Ledger proof-pack export history (local list); distinct from job-level ExportHistorySheet in Exports folder.
+struct LedgerExportHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var store = ExportHistoryStore.shared
     @State private var shareItem: IdentifiableURL?

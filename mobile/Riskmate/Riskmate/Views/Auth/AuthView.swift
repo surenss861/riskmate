@@ -80,18 +80,6 @@ struct AuthView: View {
 
             proofPackSampleCard
                 .padding(.top, -4)
-
-            Text("Ledger Contract v1.0 • Frozen")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.42))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 0.5))
-                )
-                .padding(.top, 2)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -156,25 +144,54 @@ struct AuthView: View {
                     proofThumbnailBadge
                 }
                 .padding(.bottom, 8)
-                // Fake PDF snapshot: section headers as faint lines (Job Summary, Evidence, Signatures)
+                // PDF page snapshot: light page surface, doc header, left-aligned blocks, signature bottom-right
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.white.opacity(0.06))
                     .overlay(
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 1)
+                                .frame(maxWidth: .infinity)
                             HStack {
                                 Spacer()
                                 Text("page 1/2")
-                                    .font(RMTheme.Typography.metadataSmall)
-                                    .foregroundColor(Color.white.opacity(0.45))
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundColor(Color.white.opacity(0.4))
                             }
-                            sectionLine("Job Summary")
-                            sectionLine("Evidence")
-                            sectionLine("Signatures")
-                            Spacer()
+                            .padding(.horizontal, 6)
+                            .padding(.top, 4)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Proof Pack Summary")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(Color.white.opacity(0.5))
+                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                                Text("Evidence and controls recorded.")
+                                    .font(.system(size: 8, weight: .regular))
+                                    .foregroundColor(Color.white.opacity(0.4))
+                                Text("Signatures and audit trail attached.")
+                                    .font(.system(size: 8, weight: .regular))
+                                    .foregroundColor(Color.white.opacity(0.4))
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Spacer(minLength: 0)
+                            HStack {
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    Rectangle()
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 24, height: 1)
+                                    Text("Signed")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(Color.white.opacity(0.4))
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 6)
                         }
-                        .padding(8)
                     )
-                    .frame(height: 64)
+                    .frame(height: 72)
                     .padding(.bottom, 8)
                 Text("SHA-256")
                     .font(RMTheme.Typography.metadataSmall)
@@ -207,18 +224,6 @@ struct AuthView: View {
                     }
                 }
             }
-        }
-    }
-
-    /// Faint section line for proof card PDF snapshot (Job Summary, Evidence, Signatures).
-    private func sectionLine(_ title: String) -> some View {
-        HStack(spacing: 6) {
-            Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(height: 1)
-            Text(title)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.4))
         }
     }
 
@@ -361,13 +366,11 @@ struct AuthView: View {
 
                 VStack(spacing: 0) {
                     if screen == .landing {
-                        // Hero pinned to top; middle intentionally empty; CTA pinned to bottom.
+                        // Hero in visual middle; CTA anchored at bottom (Apple/Wallet-style).
+                        Spacer(minLength: 20)
                         heroBlock
-                            .padding(.top, safeTop + 24)
                             .frame(maxWidth: .infinity)
-
-                        Spacer(minLength: 24)
-
+                        Spacer(minLength: 20)
                         landingCTAs(safeBottom: safeBottom)
                     }
 

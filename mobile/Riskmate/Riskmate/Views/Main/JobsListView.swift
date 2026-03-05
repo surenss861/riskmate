@@ -70,12 +70,12 @@ struct JobsListView: View {
     
     var filteredJobs: [Job] {
         var filtered = jobs
-        
+
         // Quick chip (applied first for instant feedback)
         if let chip = selectedQuickChip {
             filtered = applyQuickFilter(chip, to: filtered)
         }
-        
+
         // Search filter (use debounced text)
         if !debouncedSearchText.isEmpty {
             filtered = filtered.filter { job in
@@ -84,18 +84,36 @@ struct JobsListView: View {
                 job.location.localizedCaseInsensitiveContains(debouncedSearchText)
             }
         }
-        
+
         // Status filter
         if selectedStatus != "all" {
             filtered = filtered.filter { $0.status == selectedStatus }
         }
-        
+
         // Risk level filter
         if selectedRiskLevel != "all" {
             filtered = filtered.filter { $0.riskLevel?.lowercased() == selectedRiskLevel.lowercased() }
         }
-        
+
         return filtered
+    }
+
+    /// Jobs that need action: missing signatures (active), missing evidence, or high risk. For "Needs action" section.
+    private var needsActionJobs: [Job] {
+        filteredJobs.filter { job in
+            if job.status.lowercased() == "active" { return true }
+            if let req = job.evidenceRequired, req > 0, (job.evidenceCount ?? 0) < req { return true }
+            let level = (job.riskLevel ?? "").lowercased()
+            if level == "high" || level == "critical" { return true }
+            if (job.riskScore ?? 0) >= 80 { return true }
+            return false
+        }
+    }
+
+    /// Jobs not in Needs action; shown in "Recent jobs" section.
+    private var recentJobs: [Job] {
+        let needIds = Set(needsActionJobs.map(\.id))
+        return filteredJobs.filter { !needIds.contains($0.id) }
     }
     
     private func applyQuickFilter(_ chip: JobsQuickFilter, to list: [Job]) -> [Job] {
@@ -204,85 +222,26 @@ struct JobsListView: View {
                                     .listRowSeparator(.hidden)
                                     .trackScrollY(in: scrollSpace)
                             }
-                            Section {
-                            ForEach(Array(filteredJobs.enumerated()), id: \.element.id) { index, job in
-                                NavigationLink(value: job) {
-                                    JobCard(
-                                        job: job,
-                                        isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
-                                        isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
-                                        namespace: jobListNamespace
-                                    ) {
-                                        // Navigation handled by NavigationLink
+                            if !needsActionJobs.isEmpty {
+                                Section {
+                                    ForEach(Array(needsActionJobs.enumerated()), id: \.element.id) { index, job in
+                                        jobRowLink(index: index, job: job, isLastInSection: job.id == needsActionJobs.last?.id)
                                     }
-                                }
-                                .rmAppearIn(staggerIndex: min(index, 12))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(
-                                    top: RMTheme.Spacing.xs,
-                                    leading: RMTheme.Spacing.md,
-                                    bottom: RMTheme.Spacing.xs,
-                                    trailing: RMTheme.Spacing.md
-                                ))
-                                .jobCardLongPressActions(
-                                    job: job,
-                                    onAddEvidence: isAuditor ? nil : { quickAction.presentEvidence(jobId: job.id) },
-                                    onViewLedger: { quickAction.requestSwitchToLedger() },
-                                    onExportProof: { presentExportSheet(for: job) }
-                                )
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button {
-                                        Haptics.success()
-                                        copyJobId(job.id)
-                                    } label: {
-                                        Label("Copy ID", systemImage: "doc.on.doc")
-                                    }
-                                    .tint(RMTheme.Colors.accent)
-                                    
-                                    Button {
-                                        Haptics.success()
-                                        presentExportSheet(for: job)
-                                    } label: {
-                                        Label("Export", systemImage: "square.and.arrow.up")
-                                    }
-                                    .tint(RMTheme.Colors.categoryAccess)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        Haptics.success()
-                                        copyJobId(job.id)
-                                    } label: {
-                                        Label("Copy Job ID", systemImage: "doc.on.doc")
-                                    }
-                                    Button {
-                                        Haptics.success()
-                                        presentExportSheet(for: job)
-                                    } label: {
-                                        Label("Export PDF", systemImage: "square.and.arrow.up")
-                                    }
-                                }
-                                .onAppear {
-                                    // Load more when scrolling near bottom
-                                    if job.id == filteredJobs.last?.id, jobsStore.hasMore, !jobsStore.isLoadingMore {
-                                        Task {
-                                            try? await jobsStore.loadMore()
-                                        }
-                                    }
-                                }
-                            }
-                            } header: {
-                                HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
-                                    Text("Proof Records")
+                                } header: {
+                                    Text("Needs action")
                                         .font(RMTheme.Typography.sectionTitle)
                                         .foregroundColor(RMTheme.Colors.textPrimary)
-                                    Text("Not yet anchored")
-                                        .font(RMTheme.Typography.metadata)
-                                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(RMTheme.Colors.surface1.opacity(0.8))
-                                        .clipShape(Capsule())
+                                }
+                            }
+                            Section {
+                                ForEach(Array(recentJobs.enumerated()), id: \.element.id) { index, job in
+                                    jobRowLink(index: index, job: job, isLastInSection: job.id == recentJobs.last?.id)
+                                }
+                            } header: {
+                                HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
+                                    Text("Recent jobs")
+                                        .font(RMTheme.Typography.sectionTitle)
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
                                     if !jobsStore.pendingJobIds.isEmpty {
                                         Text("\(jobsStore.pendingJobIds.count) pending")
                                             .font(RMTheme.Typography.caption)
@@ -304,7 +263,6 @@ struct JobsListView: View {
                                 }
                                 .listRowBackground(Color.clear)
                             }
-                            
                             // End of list indicator
                             if !jobsStore.hasMore && !filteredJobs.isEmpty {
                                 HStack {
@@ -354,6 +312,25 @@ struct JobsListView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     VStack(spacing: 8) {
+                        // Today control strip (mini command center)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                workRecordActionChip(icon: "plus.circle.fill", title: "Create Job") {
+                                    showCreateJobSheet = true
+                                }
+                                workRecordActionChip(icon: "camera.fill", title: "Add Evidence") {
+                                    quickAction.presentEvidence(jobId: nil)
+                                }
+                                workRecordActionChip(icon: "signature", title: "Request Signatures") {
+                                    quickAction.requestSwitchToLedger()
+                                }
+                                workRecordActionChip(icon: "square.and.arrow.up", title: "Export") {
+                                    quickAction.requestSwitchToLedger()
+                                }
+                            }
+                            .padding(.horizontal, 2)
+                        }
+                        .padding(.bottom, 2)
                         HStack(spacing: RMTheme.Spacing.sm) {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(RMTheme.Colors.textTertiary)
@@ -497,6 +474,109 @@ struct JobsListView: View {
     private func presentExportSheet(for job: Job) {
         exportProofJobId = job.id
         showExportProofSheet = true
+    }
+
+    @ViewBuilder
+    private func jobRowLink(index: Int, job: Job, isLastInSection: Bool) -> some View {
+        NavigationLink(value: job) {
+            JobCard(
+                job: job,
+                isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
+                isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
+                namespace: jobListNamespace
+            ) {
+                // Navigation handled by NavigationLink
+            }
+        }
+        .rmAppearIn(staggerIndex: min(index, 12))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(
+            top: RMTheme.Spacing.xs,
+            leading: RMTheme.Spacing.md,
+            bottom: RMTheme.Spacing.xs,
+            trailing: RMTheme.Spacing.md
+        ))
+        .jobCardLongPressActions(
+            job: job,
+            onAddEvidence: isAuditor ? nil : { quickAction.presentEvidence(jobId: job.id) },
+            onViewLedger: { quickAction.requestSwitchToLedger() },
+            onExportProof: { presentExportSheet(for: job) }
+        )
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !isAuditor {
+                Button {
+                    Haptics.tap()
+                    quickAction.presentEvidence(jobId: job.id)
+                } label: {
+                    Label("Add evidence", systemImage: "camera.fill")
+                }
+                .tint(RMTheme.Colors.accent)
+            }
+            Button {
+                Haptics.success()
+                presentExportSheet(for: job)
+            } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .tint(RMTheme.Colors.categoryAccess)
+            Button {
+                Haptics.success()
+                copyJobId(job.id)
+            } label: {
+                Label("Copy ID", systemImage: "doc.on.doc")
+            }
+            .tint(RMTheme.Colors.accent)
+        }
+        .contextMenu {
+            if !isAuditor {
+                Button {
+                    quickAction.presentEvidence(jobId: job.id)
+                } label: {
+                    Label("Add evidence", systemImage: "camera.fill")
+                }
+            }
+            Button {
+                Haptics.success()
+                presentExportSheet(for: job)
+            } label: {
+                Label("Export PDF", systemImage: "square.and.arrow.up")
+            }
+            Button {
+                Haptics.success()
+                copyJobId(job.id)
+            } label: {
+                Label("Copy Job ID", systemImage: "doc.on.doc")
+            }
+        }
+        .onAppear {
+            if job.id == filteredJobs.last?.id, jobsStore.hasMore, !jobsStore.isLoadingMore {
+                Task {
+                    try? await jobsStore.loadMore()
+                }
+            }
+        }
+    }
+
+    private func workRecordActionChip(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                Text(title)
+                    .font(RMTheme.Typography.captionBold)
+            }
+            .foregroundColor(RMTheme.Colors.textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RMTheme.Colors.surface1.opacity(0.8))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
     
     // Note: loadJobs() removed - now using JobsStore.shared

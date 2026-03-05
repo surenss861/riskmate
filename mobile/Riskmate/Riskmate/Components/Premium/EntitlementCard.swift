@@ -34,13 +34,16 @@ struct EntitlementCard: View {
                             Text("Included")
                                 .font(RMTheme.Typography.captionBold)
                                 .foregroundColor(RMTheme.Colors.textTertiary)
-                            HStack(spacing: RMTheme.Spacing.xs) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
                                 ForEach(data.features, id: \.self) { feature in
                                     Text(featureDisplayName(feature))
                                         .font(RMTheme.Typography.caption2)
                                         .foregroundColor(RMTheme.Colors.textSecondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
                                         .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
+                                        .frame(height: 28)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                         .background(RMTheme.Colors.surface.opacity(0.6))
                                         .clipShape(Capsule())
                                 }

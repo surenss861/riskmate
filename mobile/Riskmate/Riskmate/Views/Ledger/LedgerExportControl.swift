@@ -27,26 +27,23 @@ struct LedgerExportControl: View {
                 Haptics.tap()
                 onExportTapped()
             }) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(RMTheme.Colors.accent)
-                        Text("Export Proof Pack")
-                            .font(RMTheme.Typography.sectionTitle)
-                            .foregroundColor(RMTheme.Colors.textPrimary)
-                    }
-                    Text("Includes SHA-256 hashes · PDF ready")
-                        .font(RMTheme.Typography.secondaryLabelLarge)
-                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
-                    if let text = lastExportedText {
-                        Text(text)
-                            .font(RMTheme.Typography.metadataSmall)
-                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
-                    }
+                HStack(spacing: 10) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.accent)
+                    Text("Export Proof Pack")
+                        .font(RMTheme.Typography.sectionTitle)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    Spacer(minLength: 0)
+                    Text("Generate")
+                        .font(RMTheme.Typography.bodySmallBold)
+                        .foregroundColor(RMTheme.Colors.accent)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.textTertiary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(RMTheme.Spacing.cardPadding)
+                .frame(height: 48)
+                .padding(.horizontal, RMTheme.Spacing.cardPadding)
             }
             .buttonStyle(.plain)
             .background(
