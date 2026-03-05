@@ -33,11 +33,11 @@ struct AuditFeedView: View {
         return 0.075 * (amount - 16) / 12
     }
 
-    /// 0...1 over same 16pt window; drives pinned chrome "attach" (fill + shadow).
+    /// 0...1 over 18→42pt window (24pt); drives pinned chrome "attach" (fill + shadow). Feels physical, not snappy.
     private var chromeT: CGFloat {
         let amount = scrollAmount
-        if amount < 16 { return 0 }
-        return min(1, (amount - 16) / 16)
+        if amount < 18 { return 0 }
+        return min(1, (amount - 18) / 24)
     }
 
     /// Events sorted by timestamp desc, grouped by calendar day
@@ -524,10 +524,25 @@ struct LedgerExportSheet: View {
                     Text("Scope")
                 }
                 Section {
-                    Toggle("Include signatures", isOn: $includeSignatures)
-                        .tint(RMTheme.Colors.accent)
-                    Toggle("Include photos", isOn: $includePhotos)
-                        .tint(RMTheme.Colors.accent)
+                    VStack(spacing: 0) {
+                        Toggle("Include signatures", isOn: $includeSignatures)
+                            .tint(RMTheme.Colors.accent)
+                        Divider()
+                            .background(RMTheme.Colors.border.opacity(0.5))
+                        Toggle("Include photos", isOn: $includePhotos)
+                            .tint(RMTheme.Colors.accent)
+                    }
+                    .padding(.horizontal, RMTheme.Spacing.cardPadding)
+                    .padding(.vertical, RMTheme.Spacing.sm)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
+                            .fill(RMTheme.Colors.surface2.opacity(0.92))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
+                                    .stroke(RMTheme.Colors.border.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1)
+                            )
+                    )
                 }
                 if isGenerating {
                     Section {

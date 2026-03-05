@@ -74,7 +74,7 @@ struct LedgerTimelineRow: View {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary)
-                                .opacity(0.28)
+                                .opacity(isVerified ? 0.18 : 0.28)
                         }
                     }
 
