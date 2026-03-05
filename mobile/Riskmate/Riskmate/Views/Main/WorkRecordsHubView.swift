@@ -128,6 +128,7 @@ struct WorkRecordsHubView: View {
                                         do {
                                             try await uploadManager.retryUpload(upload)
                                         } catch {
+                                            if (error as? APIError)?.isAuthExpired == true { return }
                                             ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
                                         }
                                     }
@@ -156,6 +157,7 @@ struct WorkRecordsHubView: View {
                                             do {
                                                 try await exportManager.export(jobId: task.jobId, type: task.type)
                                             } catch {
+                                                if (error as? APIError)?.isAuthExpired == true { return }
                                                 ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
                                             }
                                         }
@@ -233,6 +235,7 @@ struct WorkRecordsHubView: View {
                                         do {
                                             try await exportManager.export(jobId: task.jobId, type: .proofPack)
                                         } catch {
+                                            if (error as? APIError)?.isAuthExpired == true { return }
                                             ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
                                         }
                                     }

@@ -121,7 +121,7 @@ class APIClient {
         } catch let authError as AuthError where authError == .expiredToken {
             print("[APIClient] ❌ Session token expired; logging out")
             await SessionManager.shared.logout()
-            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
+            throw APIError.authExpired
         } catch {
             print("[APIClient] ❌ Failed to get valid auth token: \(error.localizedDescription)")
             if let nsError = error as NSError? {
@@ -1556,7 +1556,7 @@ class APIClient {
             }
         } catch let authError as AuthError where authError == .expiredToken {
             await SessionManager.shared.logout()
-            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
+            throw APIError.authExpired
         } catch {
             print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
         }
@@ -1592,7 +1592,7 @@ class APIClient {
             }
         } catch let authError as AuthError where authError == .expiredToken {
             await SessionManager.shared.logout()
-            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
+            throw APIError.authExpired
         } catch {
             print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
         }
@@ -2784,7 +2784,9 @@ enum APIError: LocalizedError {
     case httpError(statusCode: Int, message: String)
     case networkError(category: ErrorCategory, message: String, underlyingError: URLError)
     case decodingError
-    
+    /// Thrown after SessionManager.logout() was already triggered (e.g. expired token). UI should not show an error toast — logout UX is the message.
+    case authExpired
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -2799,6 +2801,8 @@ enum APIError: LocalizedError {
             return message
         case .decodingError:
             return "Failed to decode response"
+        case .authExpired:
+            return "Session expired"
         }
     }
 }
@@ -2811,20 +2815,27 @@ struct APIErrorResponse: Codable {
 // MARK: - Error Categorization
 
 extension APIError {
-    /// User-facing message (e.g. for Create Job error banner).
+    /// User-facing message (e.g. for Create Job error banner). Nil for .authExpired so UI can skip toasts (logout is the feedback).
     var message: String? {
         switch self {
         case .httpError(_, let m): return m
         case .networkError(_, let m, _): return m
+        case .authExpired: return nil
         default: return errorDescription
         }
+    }
+
+    /// True when logout was already triggered; callers should not show an error toast.
+    var isAuthExpired: Bool {
+        if case .authExpired = self { return true }
+        return false
     }
 
     var category: ErrorCategory {
         switch self {
         case .invalidURL, .invalidResponse:
             return .client
-        case .unauthorized:
+        case .unauthorized, .authExpired:
             return .auth
         case .httpError(let statusCode, _):
             return errorCategory(for: statusCode)

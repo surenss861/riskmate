@@ -207,6 +207,7 @@ struct CreateJobSheet: View {
             dismiss()
             Analytics.shared.trackJobCreated(jobId: job.id, wasOffline: isOffline)
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             errorMessage = (error as? APIError)?.message ?? error.localizedDescription
             ToastCenter.shared.show(
                 errorMessage ?? "Couldn't create job.",

@@ -144,6 +144,7 @@ struct EditJobSheet: View {
             }
             dismiss()
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             errorMessage = error.localizedDescription
             ToastCenter.shared.show(
                 error.localizedDescription,

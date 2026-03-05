@@ -15,7 +15,9 @@ class SessionManager: ObservableObject {
     
     private let authService: AuthService
     private let apiClient: APIClient
-    
+    private var isLoggingOut = false
+    private let logoutLock = NSLock()
+
     private init() {
         self.authService = AuthService.shared
         self.apiClient = APIClient.shared
@@ -131,12 +133,27 @@ class SessionManager: ObservableObject {
     }
     
     /// Logout. Does not require a valid token — best effort: clears local session (Supabase signOut), unregisters push, clears state.
+    /// De-duped: concurrent callers (e.g. multiple requests hitting expired token) only run logout once.
     func logout() async {
+        logoutLock.lock()
+        if isLoggingOut {
+            logoutLock.unlock()
+            return
+        }
+        isLoggingOut = true
+        logoutLock.unlock()
+
+        defer {
+            logoutLock.lock()
+            isLoggingOut = false
+            logoutLock.unlock()
+        }
+
         isLoading = true
         defer { isLoading = false }
-        
+
         await RealtimeEventService.shared.unsubscribe()
-        
+
         if let token = NotificationService.shared.lastDeviceToken {
             do {
                 try await NotificationService.shared.unregisterDeviceToken(token)
@@ -145,7 +162,7 @@ class SessionManager: ObservableObject {
                 // Benign: e.g. network, token already removed; don't fail logout
             }
         }
-        
+
         await authService.signOut()
         isAuthenticated = false
         currentUser = nil

@@ -8,6 +8,8 @@ struct RetryManager {
         // Don't retry auth errors (401/403) - force re-auth
         if let apiError = error as? APIError {
             switch apiError {
+            case .authExpired, .unauthorized:
+                return false // Logout already triggered or force re-auth
             case .httpError(let statusCode, _):
                 if statusCode == 401 || statusCode == 403 {
                     return false // Force re-authentication
