@@ -13,7 +13,7 @@ struct JobActivityView: View {
     @State private var isLoading = true
     @State private var isLoadingMore = false
     @State private var hasMore = true
-    @State private var offset = 0
+    @State private var nextCursor: String?
     private let pageSize = 50
     @State private var showFilterSheet = false
     @State private var filterActorId: String?
@@ -77,7 +77,6 @@ struct JobActivityView: View {
             guard eventMatchesFilters(event, appliedFilters) else { return }
             guard !events.contains(where: { $0.id == event.id }) else { return }
             events.insert(event, at: 0)
-            offset += 1
             Task { await loadActorsIfNeeded() }
             if lastPulsedEventId != event.id {
                 lastPulsedEventId = event.id
@@ -314,29 +313,28 @@ struct JobActivityView: View {
             return
         }
         isLoading = true
-        offset = 0
+        nextCursor = nil
         hasMore = true
         defer { isLoading = false }
         do {
-            let (fetched, more) = try await APIClient.shared.getJobActivity(
+            let (fetched, more, cursor) = try await APIClient.shared.getAuditEventsForJob(
                 jobId: jobId,
                 limit: pageSize,
-                offset: 0,
+                cursor: nil,
+                timeRange: "30d",
                 actorId: appliedFilters.actorId,
-                eventTypes: appliedFilters.eventTypes.isEmpty ? nil : appliedFilters.eventTypes,
-                category: nil,
                 startDate: appliedFilters.startDate.flatMap { isoDate($0) },
                 endDate: appliedFilters.endDate.flatMap { isoDate($0) }
             )
             events = fetched
             hasMore = more
-            offset = fetched.count
+            nextCursor = cursor
             await loadActorsIfNeeded()
         } catch {
             let message = userFacingErrorMessage(error)
             loadError = message
             events = []
-            offset = 0
+            nextCursor = nil
             hasMore = false
             loadMoreError = nil
             isLoadingMore = false
@@ -349,7 +347,7 @@ struct JobActivityView: View {
     }
 
     private func loadMore() async {
-        guard !isLoadingMore, hasMore else { return }
+        guard !isLoadingMore, hasMore, let cursor = nextCursor else { return }
         if let start = appliedFilters.startDate, let end = appliedFilters.endDate, start > end {
             let message = "Start date must be before end date"
             loadMoreError = message
@@ -359,26 +357,24 @@ struct JobActivityView: View {
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let (fetched, more) = try await APIClient.shared.getJobActivity(
+            let (fetched, more, newCursor) = try await APIClient.shared.getAuditEventsForJob(
                 jobId: jobId,
                 limit: pageSize,
-                offset: offset,
+                cursor: cursor,
+                timeRange: "30d",
                 actorId: appliedFilters.actorId,
-                eventTypes: appliedFilters.eventTypes.isEmpty ? nil : appliedFilters.eventTypes,
-                category: nil,
                 startDate: appliedFilters.startDate.flatMap { isoDate($0) },
                 endDate: appliedFilters.endDate.flatMap { isoDate($0) }
             )
             events.append(contentsOf: fetched)
             hasMore = more
-            offset += fetched.count
+            nextCursor = newCursor
             loadMoreError = nil
             await loadActorsIfNeeded()
         } catch {
             let message = userFacingErrorMessage(error)
             loadMoreError = message
             ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
-            // Do not set hasMore = false so retryLoadMore() can re-attempt pagination
         }
     }
 

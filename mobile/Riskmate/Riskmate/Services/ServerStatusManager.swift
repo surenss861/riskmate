@@ -9,6 +9,8 @@ class ServerStatusManager: ObservableObject {
     @Published var isOnline: Bool = true
     @Published var lastCheck: Date?
     @Published var backendDown: Bool = false
+    /// Set when any API returns 5xx; cleared when health check passes. Use for "Some features temporarily unavailable" banner.
+    @Published var recentlyDegraded: Bool = false
     
     private let healthCheckURL: String
     private var checkTimer: Timer?
@@ -40,6 +42,7 @@ class ServerStatusManager: ObservableObject {
                 isOnline = isHealthy
                 
                 if isHealthy {
+                    recentlyDegraded = false
                     // Try to decode health response
                     if let healthData = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                         lastCheck = Date()
@@ -60,6 +63,11 @@ class ServerStatusManager: ObservableObject {
         return nil
     }
     
+    /// Call when an API returns 5xx so the app can show a "Backend degraded" banner.
+    func record5xx() {
+        recentlyDegraded = true
+    }
+
     /// Check health and throw if backend is unavailable (for startup gate)
     func requireHealthyBackend() async throws {
         let health = await checkHealth()

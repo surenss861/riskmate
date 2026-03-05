@@ -169,6 +169,11 @@ class APIClient {
             
             // Don't attempt to decode non-2xx responses (they're likely error pages or JSON errors)
             guard (200...299).contains(statusCode) else {
+                if (500...599).contains(statusCode) {
+                    Task { @MainActor in
+                        ServerStatusManager.shared.record5xx()
+                    }
+                }
                 // Special handling for 401: force logout and set auth state
                 if statusCode == 401 {
                     print("[APIClient] ❌ 401 Unauthorized — forcing logout")
@@ -426,6 +431,42 @@ class APIClient {
         let query = "?\(queryItems.joined(separator: "&"))"
         let response: AuditEventsResponse = try await request(endpoint: "/api/audit/events\(query)")
         return response.data.events.map { $0.toAuditEvent() }
+    }
+
+    /// Get audit events for a job (Activity tab). Uses GET /api/audit/events?job_id=... so Activity works without /api/jobs/{id}/activity.
+    func getAuditEventsForJob(
+        jobId: String,
+        limit: Int = 50,
+        cursor: String? = nil,
+        timeRange: String = "30d",
+        actorId: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil
+    ) async throws -> (events: [ActivityEvent], hasMore: Bool, nextCursor: String?) {
+        var queryItems: [String] = []
+        queryItems.append("job_id=\(jobId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? jobId)")
+        let useCustomRange = startDate != nil && !(startDate?.isEmpty ?? true) && endDate != nil && !(endDate?.isEmpty ?? true)
+        queryItems.append("time_range=\(useCustomRange ? "custom" : timeRange)")
+        queryItems.append("limit=\(min(max(1, limit), 100))")
+        if let cursor = cursor, !cursor.isEmpty {
+            queryItems.append("cursor=\(cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor)")
+        }
+        if let actorId = actorId, !actorId.isEmpty {
+            queryItems.append("actor_id=\(actorId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? actorId)")
+        }
+        if let startDate = startDate, !startDate.isEmpty {
+            queryItems.append("start_date=\(startDate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? startDate)")
+        }
+        if let endDate = endDate, !endDate.isEmpty {
+            queryItems.append("end_date=\(endDate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? endDate)")
+        }
+        let query = "?\(queryItems.joined(separator: "&"))"
+        let response: AuditEventsResponse = try await request(endpoint: "/api/audit/events\(query)")
+        let events = response.data.events.compactMap { ActivityEvent(from: $0) }
+        let pagination = response.data.pagination
+        let hasMore = pagination?.hasMore ?? false
+        let nextCursor = pagination?.nextCursor
+        return (events, hasMore, nextCursor)
     }
     
     // MARK: - Executive API
@@ -2078,6 +2119,25 @@ struct ActivityEvent: Identifiable, Codable, Equatable {
         metadata = other.metadata
     }
 
+    /// Build from audit event API (GET /api/audit/events?job_id=...) for Activity tab.
+    init?(from api: AuditEventAPI) {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: api.createdAt) ?? ISO8601DateFormatter().date(from: api.createdAt) else { return nil }
+        id = api.id
+        actorId = api.actorId
+        eventName = api.eventName
+        eventType = api.eventName
+        actorName = api.actorName
+        actorRole = api.actorRole
+        createdAt = date
+        category = api.category
+        severity = api.severity
+        outcome = api.outcome
+        summary = api.summary
+        metadata = nil
+    }
+
     static func == (lhs: ActivityEvent, rhs: ActivityEvent) -> Bool {
         lhs.id == rhs.id
     }
@@ -2456,9 +2516,10 @@ struct AuditEventsData: Codable {
     let pagination: AuditPagination?
 }
 
-// API response structure for audit events
+// API response structure for audit events (GET /api/audit/events; backend returns actor_id, event_name, etc.)
 struct AuditEventAPI: Codable {
     let id: String
+    let actorId: String?
     let category: String?
     let eventName: String?
     let summary: String?
@@ -2472,6 +2533,7 @@ struct AuditEventAPI: Codable {
     
     enum CodingKeys: String, CodingKey {
         case id
+        case actorId = "actor_id"
         case category
         case eventName = "event_name"
         case summary
@@ -2488,6 +2550,7 @@ struct AuditEventAPI: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
+        actorId = try container.decodeIfPresent(String.self, forKey: .actorId)
         category = try container.decodeIfPresent(String.self, forKey: .category)
         eventName = try container.decodeIfPresent(String.self, forKey: .eventName)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
