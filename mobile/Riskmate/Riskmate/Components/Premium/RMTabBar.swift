@@ -3,7 +3,7 @@ import SwiftUI
 /// Premium tab bar: blur, spring selection, haptic. Use with ZStack of screens (not system TabView).
 struct RMTabBar: View {
     /// Height reserved for the tab bar (content + safe area). Use for bottom padding on tab screens.
-    static let barHeight: CGFloat = 64
+    static let barHeight: CGFloat = 56
 
     @Binding var selection: MainTab
     var namespace: Namespace.ID
@@ -24,10 +24,10 @@ struct RMTabBar: View {
             }
         }
         .padding(.horizontal, RMTheme.Spacing.xs)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background {
             VisualEffectBlur(style: .systemThinMaterial)
-                .overlay(RMTheme.Colors.surface.opacity(0.5))
+                .overlay(RMTheme.Colors.surface.opacity(0.45))
                 .ignoresSafeArea(edges: .bottom)
         }
         .overlay(alignment: .top) {
@@ -47,11 +47,11 @@ struct RMTabBar: View {
                 selection = tab
             }
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
-                        .font(.system(size: isSelected ? 20 : 18, weight: isSelected ? .semibold : .regular))
-                        .opacity(isSelected ? 1.0 : 0.75)
+                        .font(.system(size: isSelected ? 18 : 17, weight: isSelected ? .semibold : .regular))
+                        .opacity(isSelected ? 1.0 : 0.62)
                     if count > 0 {
                         Text(count > 99 ? "99+" : "\(count)")
                             .font(.system(size: 9, weight: .bold))
@@ -68,11 +68,12 @@ struct RMTabBar: View {
             }
             .foregroundColor(isSelected ? RMTheme.Colors.accent : RMTheme.Colors.textSecondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background {
+            .padding(.vertical, 6)
+            .overlay(alignment: .bottom) {
                 if isSelected {
-                    Capsule()
-                        .fill(RMTheme.Colors.accent.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(RMTheme.Colors.accent)
+                        .frame(width: 28, height: 2)
                         .matchedGeometryEffect(id: "tabSelection", in: namespace)
                 }
             }

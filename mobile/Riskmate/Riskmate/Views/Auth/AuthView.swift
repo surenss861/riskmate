@@ -74,11 +74,11 @@ struct AuthView: View {
                 .foregroundColor(Color.white.opacity(0.72))
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
-                .padding(.top, 2)
+                .padding(.top, 0)
 
-            // Proof Pack Sample — product hint so it feels like RiskMate, not a template
+            // Proof Pack Sample + pill as one unit (artifact header + metadata)
             proofPackSampleCard
-                .padding(.top, 6)
+                .padding(.top, 2)
 
             Text("Ledger Contract v1.0 • Frozen")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -90,7 +90,7 @@ struct AuthView: View {
                         .fill(Color.white.opacity(0.04))
                         .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.5))
                 )
-                .padding(.top, 4)
+                .padding(.top, 2)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -111,24 +111,46 @@ struct AuthView: View {
         )
     }
 
-    /// Small "Proof Pack sample" card: hash + Verified — anchors hero to brand.
+    /// Small "Proof Pack sample" card: hash + Verified + PDF badge — anchors hero to brand.
     private var proofPackSampleCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Proof Pack sample")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.white.opacity(0.85))
-            Text("hash: 2F3A…9C")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.62))
-            Text("Verified")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(RMTheme.Colors.accent)
+        ZStack {
+            // Faint PDF/receipt thumbnail behind card (hero artifact)
+            Image(systemName: "doc.richtext.fill")
+                .font(.system(size: 120))
+                .foregroundStyle(Color.white.opacity(0.08))
+                .offset(y: 8)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Proof Pack sample")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.85))
+                    Spacer()
+                    proofThumbnailBadge
+                }
+                Text("hash: 2F3A…9C")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.62))
+                Text("Verified")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(RMTheme.Colors.accent)
+            }
+            .padding(12)
+            .frame(maxWidth: 320)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 8)
         }
-        .padding(12)
-        .frame(maxWidth: 320)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
-        .shadow(color: .black.opacity(0.30), radius: 18, x: 0, y: 12)
+    }
+
+    /// Tiny PDF badge with check — breaks text-only hero, reinforces "exportable proof."
+    private var proofThumbnailBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "doc.fill")
+                .font(.system(size: 12))
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 10))
+        }
+        .foregroundColor(RMTheme.Colors.accent.opacity(0.9))
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
@@ -182,27 +204,27 @@ struct AuthView: View {
     }
 
     private var credibilityRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             credibilityItem(icon: "lock.shield", text: "Tamper-evident logs")
             Text("·")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.4))
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(Color.white.opacity(0.35))
             credibilityItem(icon: "doc.richtext", text: "Export-ready PDFs")
             Text("·")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.4))
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(Color.white.opacity(0.35))
             credibilityItem(icon: "person.2", text: "Team signatures")
         }
         .font(.system(size: 11, weight: .medium))
-        .foregroundColor(Color.white.opacity(0.58))
+        .foregroundColor(Color.white.opacity(0.65))
         .lineLimit(1)
         .minimumScaleFactor(0.82)
     }
 
     private func credibilityItem(icon: String, text: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 10))
+                .font(.system(size: 12))
             Text(text)
         }
     }

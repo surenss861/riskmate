@@ -303,7 +303,7 @@ struct ContentView: View {
     private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
             content()
-                .padding(.bottom, 82) // tab bar height + breathing room
+                .padding(.bottom, 74) // tab bar 56pt + breathing room
         }
     }
     

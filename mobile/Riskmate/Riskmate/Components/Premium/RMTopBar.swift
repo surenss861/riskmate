@@ -19,18 +19,18 @@ struct RMTopBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Riskmate")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.45))
                 Text(title)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white.opacity(0.95))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: RMTheme.Spacing.sm) {
+            HStack(spacing: 4) {
                 trailingContent()
                 Button {
                     Haptics.tap()
@@ -38,7 +38,7 @@ struct RMTopBar: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 16))
                             .foregroundColor(RMTheme.Colors.textPrimary)
                         if notificationBadge > 0 {
                             Text(notificationBadge > 99 ? "99+" : "\(notificationBadge)")
@@ -59,15 +59,15 @@ struct RMTopBar: View {
                     quickAction.requestSwitchToSettings()
                 } label: {
                     Image(systemName: "person.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 20))
                         .foregroundColor(RMTheme.Colors.textPrimary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .frame(height: Self.barHeight, alignment: .bottom)
         .background(.ultraThinMaterial)
         .overlay(Color.black.opacity(0.22))

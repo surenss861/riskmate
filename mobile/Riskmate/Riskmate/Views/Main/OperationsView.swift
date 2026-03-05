@@ -110,6 +110,13 @@ struct OperationsView: View {
     }
 
     @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(RMTheme.Colors.textSecondary)
+    }
+
+    @ViewBuilder
     private var operationsListSections: some View {
         if isAuditor {
             Section {
@@ -131,11 +138,9 @@ struct OperationsView: View {
             .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
             .listRowBackground(Color.clear)
         } header: {
-            Text("Today")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(RMTheme.Colors.textSecondary)
+            sectionHeader("Today")
         }
-        .listSectionSpacing(.compact)
+        .listSectionSpacing(8)
 
         Section {
             QuickActionsStrip(
@@ -143,25 +148,30 @@ struct OperationsView: View {
                 onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) },
                 onExport: { Haptics.tap(); quickAction.requestSwitchToLedger() }
             )
-            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+            .listRowInsets(EdgeInsets(top: 6, leading: RMTheme.Spacing.pagePadding, bottom: 6, trailing: RMTheme.Spacing.pagePadding))
             .listRowBackground(Color.clear)
         } header: {
-            Text("Quick actions")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(RMTheme.Colors.textSecondary)
+            sectionHeader("Quick actions")
         }
-        .listSectionSpacing(.compact)
+        .listSectionSpacing(8)
+
+        Section {
+            OpenIssuesPlaceholder(onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) })
+                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+                .listRowBackground(Color.clear)
+        } header: {
+            sectionHeader("This week")
+        }
+        .listSectionSpacing(8)
 
         Section {
             RecentActivityRow(hasActivity: false)
                 .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
                 .listRowBackground(Color.clear)
         } header: {
-            Text("Recent activity")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(RMTheme.Colors.textSecondary)
+            sectionHeader("Recent activity")
         }
-        .listSectionSpacing(.compact)
+        .listSectionSpacing(8)
 
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
@@ -225,7 +235,7 @@ struct OperationsView: View {
             operationsListSections
         }
         .listStyle(.insetGrouped)
-        .listSectionSpacing(.compact)
+        .listSectionSpacing(8)
         .searchable(text: $searchQuery, prompt: "Search jobs")
         .anchoringRefresh(isRefreshing: $isRefreshing) {
             _ = try? await jobsStore.fetch(forceRefresh: true)
@@ -330,7 +340,7 @@ private struct QuickActionsStrip: View {
     var onExport: () -> Void
 
     var body: some View {
-        HStack(spacing: RMTheme.Spacing.sm) {
+        HStack(spacing: 6) {
             QuickActionChip(title: "Add Evidence", icon: "camera.fill", action: onAddEvidence)
             QuickActionChip(title: "Create Job", icon: "doc.badge.plus", action: onCreateJob)
             QuickActionChip(title: "Export", icon: "square.and.arrow.up", action: onExport)
@@ -345,19 +355,49 @@ private struct QuickActionChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(RMTheme.Colors.textPrimary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(height: 32)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct OpenIssuesPlaceholder: View {
+    var onCreateJob: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                Text("Open issues")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                Spacer(minLength: 0)
+            }
+            Text("No open issues this week. Add evidence or create a job to stay on track.")
+                .font(.system(size: 13))
+                .foregroundColor(RMTheme.Colors.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onCreateJob) {
+                Text("Create your first job")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(RMTheme.Colors.accent)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 4)
     }
 }
 
