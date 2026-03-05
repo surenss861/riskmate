@@ -125,55 +125,64 @@ struct OperationsView: View {
                     .listRowBackground(Color.clear)
             }
         }
-        
-        Section {
-            OperationsTodayPanel(
-                blockerCount: blockerCount,
-                highRiskCount: highRiskJobs.count,
-                overdueTasksCount: 0,
-                lastUpdated: jobsStore.lastSyncDate,
-                onTapBlockers: { onKPINavigate?("blockers") },
-                onTapHighRisk: { onKPINavigate?("highRisk") }
-            )
-            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
-            .listRowBackground(Color.clear)
-        } header: {
-            sectionHeader("Today")
-        }
-        .listSectionSpacing(6)
 
+        // 1) Needs attention — only when there’s something to do
+        if blockerCount > 0 || highRiskJobs.count > 0 {
+            Section {
+                OperationsNeedsAttentionCard(
+                    blockerCount: blockerCount,
+                    highRiskCount: highRiskJobs.count,
+                    onReview: { blockerCount > 0 ? onKPINavigate?("blockers") : onKPINavigate?("highRisk") }
+                )
+                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+                .listRowBackground(Color.clear)
+            }
+            .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
+        }
+
+        // 2) Quick actions — always present, horizontal chips
         Section {
             QuickActionsStripHorizontal(
                 onAddEvidence: { Haptics.tap(); quickAction.presentEvidence(jobId: nil) },
                 onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) },
                 onExport: { Haptics.tap(); quickAction.requestSwitchToLedger() }
             )
-            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.inner, leading: 0, bottom: RMTheme.Spacing.inner, trailing: 0))
             .listRowBackground(Color.clear)
         } header: {
             sectionHeader("Quick actions")
         }
-        .listSectionSpacing(6)
+        .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
 
+        // 3) Work stream — one list: Recent + Jobs
         Section {
-            HStack(spacing: 6) {
-                Text("Last updated · \(relativeTime(jobsStore.lastSyncDate ?? Date()))")
-                Text("·")
-                Text(blockerCount == 0 ? "0 open issues" : "\(blockerCount) need attention")
+            HStack(spacing: RMTheme.Spacing.sm) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 14))
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                Text("No recent activity yet")
+                    .font(RMTheme.Typography.secondaryLabelLarge)
+                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
             }
-            .font(.system(size: 12))
-            .foregroundColor(RMTheme.Colors.textTertiary)
-            .listRowInsets(EdgeInsets(top: 4, leading: RMTheme.Spacing.pagePadding, bottom: 4, trailing: RMTheme.Spacing.pagePadding))
-            .listRowBackground(Color.clear)
+            .padding(.vertical, RMTheme.Spacing.sm)
+            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+            .listRowBackground(RMTheme.Colors.surface2.opacity(0.92))
+        } header: {
+            Text("Recent")
+                .font(RMTheme.Typography.sectionTitle)
+                .foregroundColor(RMTheme.Colors.textPrimary)
         }
-        .listSectionSpacing(6)
+        .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
 
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
                 OperationsLoadingSkeleton()
             } header: {
-                Text("Active Jobs")
+                Text("Jobs")
+                    .font(RMTheme.Typography.sectionTitle)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
             }
+            .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
         } else if !activeJobs.isEmpty {
             Section {
                 ForEach(activeJobs) { job in
@@ -192,40 +201,52 @@ struct OperationsView: View {
                     )
                 }
             } header: {
-                VStack(alignment: .leading, spacing: 6) {
+                HStack {
                     Text("Jobs")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(RMTheme.Typography.sectionTitle)
                         .foregroundColor(RMTheme.Colors.textPrimary)
-                    OperationsHeaderView(
-                        activeCount: activeJobs.count,
-                        highRiskCount: highRiskJobs.count,
-                        missingEvidenceCount: missingEvidenceJobs.count,
-                        lastSync: jobsStore.lastSyncDate,
-                        onKPITap: handleKPITap
-                    )
-                    recentActivityOneLine(hasActivity: false)
+                    Spacer()
+                    Text("Last updated · \(relativeTime(jobsStore.lastSyncDate ?? Date())) · \(blockerCount) open")
+                        .font(RMTheme.Typography.metadata)
+                        .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
                 }
             } footer: {
                 if activeJobs.count < filteredJobs.count {
                     Text("Showing \(activeJobs.count) of \(filteredJobs.count) jobs")
-                        .font(RMSystemTheme.Typography.caption)
-                        .foregroundStyle(RMSystemTheme.Colors.textTertiary)
+                        .font(RMTheme.Typography.metadata)
+                        .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
                 }
             }
-        } else if !jobsStore.isLoading {
+            .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
+        } else {
             Section {
-                OperationsEmptySection(
-                    searchQuery: searchQuery,
-                    jobsEmpty: jobsStore.jobs.isEmpty
-                )
-            } header: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Jobs")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    recentActivityOneLine(hasActivity: false)
+                Button {
+                    Haptics.tap()
+                    quickAction.requestSwitchToWorkRecords(filter: nil)
+                } label: {
+                    HStack(spacing: RMTheme.Spacing.sm) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: 16))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                        Text("No activity yet — create your first job")
+                            .font(RMTheme.Typography.secondaryLabelLarge)
+                            .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                    .padding(.vertical, RMTheme.Spacing.md)
                 }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+                .listRowBackground(RMTheme.Colors.surface2.opacity(0.92))
+            } header: {
+                Text("Jobs")
+                    .font(RMTheme.Typography.sectionTitle)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
             }
+            .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
         }
     }
 
@@ -239,6 +260,27 @@ struct OperationsView: View {
                 .font(.system(size: 12, weight: .regular))
                 .foregroundColor(RMTheme.Colors.textTertiary)
         }
+    }
+
+    private var operationsSearchControl: some View {
+        HStack(spacing: RMTheme.Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(RMTheme.Colors.textTertiary)
+            TextField("Search jobs...", text: $searchQuery)
+                .font(RMTheme.Typography.body)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+        }
+        .padding(.horizontal, RMTheme.Spacing.md)
+        .frame(height: 44)
+        .background(RMTheme.Colors.inputFill)
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+        .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(RMTheme.Colors.inputStroke, lineWidth: 1))
+        .padding(RMTheme.Spacing.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RMTheme.Colors.surface2)
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .padding(.top, RMTheme.Spacing.sm)
+        .padding(.bottom, 0)
     }
 
     private var fieldOperationsContent: some View {
@@ -308,8 +350,13 @@ struct OperationsView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 RMTopBar(title: "Operations", notificationBadge: 0)
             }
-            // Keep .searchable on root (not on inner List) so the drawer isn’t hidden under chrome; .toolbar(.hidden) + root placement avoids search disappearing on some iOS versions.
-            .searchable(text: $searchQuery, prompt: "Search jobs", placement: .navigationBarDrawer(displayMode: .always))
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Group {
+                    if entitlements.entitlements?.role.lowercased() != "executive" {
+                        operationsSearchControl
+                    }
+                }
+            }
             .task {
                 // Refresh entitlements on view load
                 await entitlements.refresh()
@@ -353,7 +400,7 @@ private struct QuickActionsStripHorizontal: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: RMTheme.Spacing.sm) {
                 QuickActionChip(title: "Add Evidence", icon: "camera.fill", action: onAddEvidence)
                 QuickActionChip(title: "Create Job", icon: "doc.badge.plus", action: onCreateJob)
                 QuickActionChip(title: "Export", icon: "square.and.arrow.up", action: onExport)
@@ -370,18 +417,17 @@ private struct QuickActionChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(RMTheme.Typography.secondaryLabelLarge)
             }
             .foregroundColor(RMTheme.Colors.textPrimary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(height: 32)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -468,6 +514,14 @@ private struct OperationsLoadingSkeleton: View {
     }
 }
 
+private func operationsRowStatusColor(_ job: Job) -> Color {
+    let level = (job.riskLevel ?? "").lowercased()
+    if level.contains("critical") { return RMTheme.Colors.error }
+    if level.contains("high") { return RMTheme.Colors.warning }
+    if level.contains("medium") { return RMTheme.Colors.warning }
+    return RMTheme.Colors.accent
+}
+
 private struct OperationsJobRow: View {
     let job: Job
     let isAuditor: Bool
@@ -482,12 +536,33 @@ private struct OperationsJobRow: View {
             JobDetailView(jobId: job.id)
                 .onAppear { Haptics.tap() }
         } label: {
-            JobRow(
-                job: job,
-                onAddEvidence: isAuditor ? nil : onAddEvidence,
-                onMarkComplete: isAuditor ? nil : onMarkComplete
-            )
+            HStack(spacing: RMTheme.Spacing.sm) {
+                Circle()
+                    .fill(operationsRowStatusColor(job))
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(job.clientName.isEmpty ? "Untitled Job" : job.clientName)
+                        .font(RMTheme.Typography.bodyBold)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    Text("\(job.jobType) · \(job.location)")
+                        .font(RMTheme.Typography.secondaryLabelLarge)
+                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(jobTimestampText)
+                    .font(RMTheme.Typography.metadata)
+                    .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+            }
+            .padding(.vertical, RMTheme.Spacing.inner)
+            .frame(minHeight: 64)
         }
+        .listRowBackground(RMTheme.Colors.surface2.opacity(0.92))
+        .listRowInsets(EdgeInsets(top: RMTheme.Spacing.xs, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.xs, trailing: RMTheme.Spacing.pagePadding))
         .jobCardLongPressActions(
             job: job,
             onAddEvidence: isAuditor ? nil : onAddEvidence,
@@ -502,16 +577,26 @@ private struct OperationsJobRow: View {
                 } label: {
                     Label("Add Evidence", systemImage: "camera.fill")
                 }
-                .tint(RMSystemTheme.Colors.accent)
+                .tint(RMTheme.Colors.accent)
                 Button {
                     Haptics.tap()
                     ToastCenter.shared.show("Marked complete", systemImage: "checkmark.circle", style: .success)
                 } label: {
                     Label("Complete", systemImage: "checkmark.circle.fill")
                 }
-                .tint(RMSystemTheme.Colors.success)
+                .tint(RMTheme.Colors.success)
             }
         }
+    }
+
+    private var jobTimestampText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        guard let dateStr = job.updatedAt ?? job.createdAt,
+              let date = ISO8601DateFormatter().date(from: dateStr) ?? ISO8601DateFormatter().date(from: dateStr + "Z") else {
+            return "—"
+        }
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

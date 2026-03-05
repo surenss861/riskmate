@@ -125,10 +125,10 @@ struct AuthView: View {
         }
     }
 
-    /// Small "Proof Pack sample" card: hash + Verified + PDF badge — anchors hero to brand.
+    /// Proof card as "artifact preview": PDF badge top-left, fake preview thumbnail, hash + timestamp under.
     private var proofPackSampleCard: some View {
         ZStack {
-            // Faint PDF/receipt thumbnail behind card (4–5% opacity, fades toward CTA)
+            // Faint doc icon behind (kept for depth)
             Image(systemName: "doc.richtext.fill")
                 .font(.system(size: 120))
                 .foregroundStyle(Color.white.opacity(0.045))
@@ -144,14 +144,28 @@ struct AuthView: View {
                         endPoint: .bottom
                     )
                 )
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Proof Pack sample")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.85))
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    Text("PDF")
+                        .font(RMTheme.Typography.metadataSmall)
+                        .foregroundColor(Color.white.opacity(0.7))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     Spacer()
                     proofThumbnailBadge
                 }
+                .padding(.bottom, 8)
+                // Fake preview thumbnail (blurred mini page)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        Image(systemName: "doc.richtext.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(Color.white.opacity(0.12))
+                    )
+                    .frame(height: 56)
+                    .padding(.bottom, 8)
                 Text("SHA-256")
                     .font(RMTheme.Typography.metadataSmall)
                     .foregroundColor(Color.white.opacity(0.55))

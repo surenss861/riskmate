@@ -1,6 +1,53 @@
 import SwiftUI
 
-/// Today panel: calm / attention / warning. Animates background tint + subtle icon shift. Tap → JobsList with chip.
+/// Needs-attention hero block: solid card, one sentence + one CTA. Only show when there’s something to do.
+struct OperationsNeedsAttentionCard: View {
+    let blockerCount: Int
+    let highRiskCount: Int
+    let onReview: () -> Void
+
+    private var hasBlockers: Bool { blockerCount > 0 }
+    private var bodyText: String {
+        var parts: [String] = []
+        if blockerCount > 0 { parts.append("\(blockerCount) blocker\(blockerCount == 1 ? "" : "s")") }
+        if highRiskCount > 0 { parts.append("\(highRiskCount) high-risk") }
+        if parts.isEmpty { return "Items need your review." }
+        return parts.joined(separator: " and ") + " need review."
+    }
+
+    var body: some View {
+        RMCard(useSolidSurface: true) {
+            HStack(alignment: .top, spacing: 0) {
+                if hasBlockers {
+                    RoundedRectangle(cornerRadius: 999)
+                        .fill(RMTheme.Colors.accent)
+                        .frame(width: 4)
+                        .padding(.trailing, RMTheme.Spacing.sm)
+                }
+                VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
+                    Text("Needs attention")
+                        .font(RMTheme.Typography.sectionTitle)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    Text(bodyText)
+                        .font(RMTheme.Typography.secondaryLabelLarge)
+                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
+                    Button(action: {
+                        Haptics.tap()
+                        onReview()
+                    }) {
+                        Text(blockerCount > 0 ? "Review blockers" : "Review high risk")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// Today panel: calm / attention / warning. Used when we still need the legacy multi-line panel.
 struct OperationsTodayPanel: View {
     let blockerCount: Int
     let highRiskCount: Int
@@ -53,7 +100,7 @@ struct OperationsTodayPanel: View {
                 .padding(.top, RMTheme.Spacing.sm)
             }
         }
-        .padding(RMTheme.Spacing.md)
+        .padding(RMTheme.Spacing.cardPadding)
         .background(
             ZStack {
                 backgroundTint
