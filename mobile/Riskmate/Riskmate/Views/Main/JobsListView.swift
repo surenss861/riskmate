@@ -225,7 +225,7 @@ struct JobsListView: View {
                             if !needsActionJobs.isEmpty {
                                 Section {
                                     ForEach(Array(needsActionJobs.enumerated()), id: \.element.id) { index, job in
-                                        jobRowLink(index: index, job: job, isLastInSection: job.id == needsActionJobs.last?.id)
+                                        jobRowLink(index: index, job: job, isLastInSection: job.id == needsActionJobs.last?.id, reasons: needsActionReasons(for: job))
                                     }
                                 } header: {
                                     Text("Needs action")
@@ -235,7 +235,7 @@ struct JobsListView: View {
                             }
                             Section {
                                 ForEach(Array(recentJobs.enumerated()), id: \.element.id) { index, job in
-                                    jobRowLink(index: index, job: job, isLastInSection: job.id == recentJobs.last?.id)
+                                    jobRowLink(index: index, job: job, isLastInSection: job.id == recentJobs.last?.id, reasons: [])
                                 }
                             } header: {
                                 HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
@@ -476,16 +476,41 @@ struct JobsListView: View {
         showExportProofSheet = true
     }
 
+    /// Reason labels for Needs action section only (e.g. "Missing evidence", "Needs signature", "High risk").
+    private func needsActionReasons(for job: Job) -> [String] {
+        var r: [String] = []
+        if let req = job.evidenceRequired, req > 0, (job.evidenceCount ?? 0) < req { r.append("Missing evidence") }
+        if job.status.lowercased() == "active" { r.append("Needs signature") }
+        let level = (job.riskLevel ?? "").lowercased()
+        if level == "high" || level == "critical" || (job.riskScore ?? 0) >= 80 { r.append("High risk") }
+        return r
+    }
+
     @ViewBuilder
-    private func jobRowLink(index: Int, job: Job, isLastInSection: Bool) -> some View {
+    private func jobRowLink(index: Int, job: Job, isLastInSection: Bool, reasons: [String] = []) -> some View {
         NavigationLink(value: job) {
-            JobCard(
-                job: job,
-                isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
-                isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
-                namespace: jobListNamespace
-            ) {
-                // Navigation handled by NavigationLink
+            VStack(alignment: .leading, spacing: 6) {
+                JobCard(
+                    job: job,
+                    isOffline: jobsStore.pendingCreatedJobIds.contains(job.id),
+                    isUnsynced: jobsStore.pendingUpdateJobIds.contains(job.id) && !jobsStore.pendingCreatedJobIds.contains(job.id),
+                    namespace: jobListNamespace
+                ) {
+                    // Navigation handled by NavigationLink
+                }
+                if !reasons.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(reasons, id: \.self) { reason in
+                            Text(reason)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(RMTheme.Colors.surface1.opacity(0.7))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
             }
         }
         .rmAppearIn(staggerIndex: min(index, 12))

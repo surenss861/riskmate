@@ -144,8 +144,8 @@ struct AuthView: View {
                     proofThumbnailBadge
                 }
                 .padding(.bottom, 8)
-                // PDF page snapshot: light page surface, doc header, left-aligned blocks, signature bottom-right
-                RoundedRectangle(cornerRadius: 6)
+                // PDF page snapshot: light page surface, inner border, doc header, left-aligned blocks, signature bottom-right
+                RoundedRectangle(cornerRadius: 8)
                     .fill(Color.white.opacity(0.06))
                     .overlay(
                         VStack(alignment: .leading, spacing: 0) {
@@ -191,6 +191,10 @@ struct AuthView: View {
                             .padding(.bottom, 6)
                         }
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    )
                     .frame(height: 72)
                     .padding(.bottom, 8)
                 Text("SHA-256")
@@ -212,7 +216,7 @@ struct AuthView: View {
                 proofCardReceiptLine
             }
             .padding(12)
-            .frame(maxWidth: 320)
+            .frame(maxWidth: 280)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RMTheme.Radius.card))
             .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
             .themeShadow(RMTheme.Shadow.card)

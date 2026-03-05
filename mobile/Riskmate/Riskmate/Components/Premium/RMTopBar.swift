@@ -51,6 +51,7 @@ struct RMTopBar: View {
                         }
                     }
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -62,6 +63,7 @@ struct RMTopBar: View {
                         .font(.system(size: 20))
                         .foregroundColor(RMTheme.Colors.textPrimary)
                         .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

@@ -35,12 +35,14 @@ struct LedgerExportControl: View {
                         .font(RMTheme.Typography.sectionTitle)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     Spacer(minLength: 0)
-                    Text("Generate")
-                        .font(RMTheme.Typography.bodySmallBold)
-                        .foregroundColor(RMTheme.Colors.accent)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(RMTheme.Colors.textTertiary)
+                    if chromeT > 0.2 {
+                        Text("Generate")
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
                 }
                 .frame(height: 48)
                 .padding(.horizontal, RMTheme.Spacing.cardPadding)

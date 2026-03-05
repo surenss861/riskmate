@@ -54,13 +54,17 @@ struct EntitlementCard: View {
                                 Haptics.impact(.light)
                                 onManagePlan()
                             } label: {
-                                Label("Manage plan", systemImage: "arrow.up.right")
-                                    .labelStyle(.titleAndIcon)
-                                    .font(RMTheme.Typography.bodySmallBold)
-                                    .foregroundColor(RMTheme.Colors.accent)
+                                HStack(spacing: 6) {
+                                    Text("Manage plan")
+                                        .font(RMTheme.Typography.bodySmallBold)
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(RMTheme.Colors.accent.opacity(0.8))
+                                }
                             }
                             .rmPressable(scale: 0.98, haptic: true, lightImpact: true)
-                            Text("Opens riskmate.dev")
+                            Text("Opens web portal")
                                 .font(RMTheme.Typography.caption2)
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
