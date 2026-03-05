@@ -332,6 +332,7 @@ private struct LedgerPinnedDayHeader: View {
     var pinnedT: CGFloat = 0
 
     private var fillOpacity: CGFloat { 0.92 + (0.95 - 0.92) * pinnedT }
+    private var bottomDividerOpacity: CGFloat { pinnedT > 0.01 ? 0.075 : 0.06 }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -357,13 +358,13 @@ private struct LedgerPinnedDayHeader: View {
                 }
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(Color.white.opacity(bottomDividerOpacity))
                         .frame(height: 1)
                 }
         )
         .shadow(color: .black.opacity(pinnedT > 0.01 ? 0.08 : 0), radius: 8, x: 0, y: 2)
         .zIndex(10)
-        .animation(.easeOut(duration: 0.15), value: pinnedT)
+        .transaction { $0.animation = .easeOut(duration: 0.15) }
     }
 }
 
