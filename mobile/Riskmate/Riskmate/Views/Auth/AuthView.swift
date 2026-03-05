@@ -64,9 +64,10 @@ struct AuthView: View {
             Text("Audit-ready proof packs\nfrom everyday field work")
                 .font(.system(size: 36, weight: .semibold, design: .serif))
                 .tracking(-0.6)
-                .lineSpacing(4)
+                .lineSpacing(2)
                 .multilineTextAlignment(.center)
                 .foregroundColor(Color.white.opacity(0.95))
+                .frame(maxWidth: 380)
 
             Text("Turn site activity into compliance you can defend — fast.")
                 .font(.system(size: 15, weight: .regular))
@@ -131,7 +132,8 @@ struct AuthView: View {
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
+            credibilityRow
             Button {
                 clearFormState()
                 withAnimation(RMTheme.Animation.spring) { screen = .signup }
@@ -177,6 +179,32 @@ struct AuthView: View {
         .padding(.horizontal, 22)
         .padding(.bottom, safeBottom + 18)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var credibilityRow: some View {
+        HStack(spacing: 10) {
+            credibilityItem(icon: "lock.shield", text: "Tamper-evident logs")
+            Text("·")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color.white.opacity(0.4))
+            credibilityItem(icon: "doc.richtext", text: "Export-ready PDFs")
+            Text("·")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color.white.opacity(0.4))
+            credibilityItem(icon: "person.2", text: "Team signatures")
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundColor(Color.white.opacity(0.58))
+        .lineLimit(1)
+        .minimumScaleFactor(0.82)
+    }
+
+    private func credibilityItem(icon: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+            Text(text)
+        }
     }
 
     var body: some View {

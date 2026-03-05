@@ -2,42 +2,36 @@ import SwiftUI
 
 /// Top app bar for root tab screens: title on left, optional trailing content + notifications + account on right.
 /// Anchors the UI and makes the app feel native. Use at the top of Operations, Ledger, Work Records, Account.
-struct RMTopBar<Trailing: View>: View {
+struct RMTopBar: View {
     /// Height reserved for the top bar. Use for layout if needed (e.g. content top padding).
     static let barHeight: CGFloat = 56
 
     let title: String
     /// Optional unread count for notification badge (0 = hide badge).
     var notificationBadge: Int = 0
-    @ViewBuilder var trailing: () -> Trailing
+    @ViewBuilder var trailingContent: () -> AnyView
     @EnvironmentObject private var quickAction: QuickActionRouter
 
-    init(title: String, notificationBadge: Int = 0, @ViewBuilder trailing: @escaping () -> Trailing) {
+    init<Trailing: View>(title: String, notificationBadge: Int = 0, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.title = title
         self.notificationBadge = notificationBadge
-        self.trailing = trailing
+        self.trailingContent = { AnyView(trailing()) }
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: RiskMate mark + screen title
-            HStack(spacing: 6) {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Riskmate")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(RMTheme.Colors.textSecondary)
-                    .tracking(0.4)
-                Text("·")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(RMTheme.Colors.textTertiary)
+                    .foregroundColor(.white.opacity(0.45))
                 Text(title)
-                    .font(RMTheme.Typography.headline)
-                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.95))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Right: Optional trailing (e.g. Ledger menu) + Notifications + Account
             HStack(spacing: RMTheme.Spacing.sm) {
-                trailing()
+                trailingContent()
                 Button {
                     Haptics.tap()
                     quickAction.openNotificationCenter()
@@ -72,10 +66,11 @@ struct RMTopBar<Trailing: View>: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, RMTheme.Spacing.md)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(height: Self.barHeight, alignment: .bottom)
         .background(.ultraThinMaterial)
-        .overlay(Color.black.opacity(0.25))
+        .overlay(Color.black.opacity(0.22))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.06))
@@ -84,7 +79,7 @@ struct RMTopBar<Trailing: View>: View {
     }
 }
 
-extension RMTopBar where Trailing == EmptyView {
+extension RMTopBar {
     init(title: String, notificationBadge: Int = 0) {
         self.init(title: title, notificationBadge: notificationBadge, trailing: { EmptyView() })
     }

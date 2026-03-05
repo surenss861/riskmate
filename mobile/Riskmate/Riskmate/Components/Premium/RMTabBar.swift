@@ -3,7 +3,7 @@ import SwiftUI
 /// Premium tab bar: blur, spring selection, haptic. Use with ZStack of screens (not system TabView).
 struct RMTabBar: View {
     /// Height reserved for the tab bar (content + safe area). Use for bottom padding on tab screens.
-    static let barHeight: CGFloat = 80
+    static let barHeight: CGFloat = 64
 
     @Binding var selection: MainTab
     var namespace: Namespace.ID
@@ -23,16 +23,16 @@ struct RMTabBar: View {
                 tabButton(tab: item.tab, title: item.title, icon: item.icon)
             }
         }
-        .padding(.horizontal, RMTheme.Spacing.sm)
-        .padding(.vertical, RMTheme.Spacing.xs)
+        .padding(.horizontal, RMTheme.Spacing.xs)
+        .padding(.vertical, 6)
         .background {
             VisualEffectBlur(style: .systemThinMaterial)
-                .overlay(RMTheme.Colors.surface.opacity(0.6))
+                .overlay(RMTheme.Colors.surface.opacity(0.5))
                 .ignoresSafeArea(edges: .bottom)
         }
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(RMTheme.Colors.border)
+                .fill(Color.white.opacity(0.06))
                 .frame(height: 1)
         }
     }
@@ -47,31 +47,32 @@ struct RMTabBar: View {
                 selection = tab
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                        .font(.system(size: isSelected ? 20 : 18, weight: isSelected ? .semibold : .regular))
+                        .opacity(isSelected ? 1.0 : 0.75)
                     if count > 0 {
                         Text(count > 99 ? "99+" : "\(count)")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 4)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(RMTheme.Colors.accent))
-                            .offset(x: 8, y: -6)
+                            .offset(x: 6, y: -5)
                     }
                 }
                 Text(title)
-                    .font(RMTheme.Typography.caption2)
+                    .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundColor(isSelected ? RMTheme.Colors.accent : RMTheme.Colors.textSecondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, RMTheme.Spacing.sm)
+            .padding(.vertical, 8)
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(RMTheme.Colors.accent.opacity(0.15))
+                        .fill(RMTheme.Colors.accent.opacity(0.12))
                         .matchedGeometryEffect(id: "tabSelection", in: namespace)
                 }
             }

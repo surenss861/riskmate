@@ -206,26 +206,59 @@ struct ContentView: View {
         backendHealthCheckComplete = true
     }
     
-    // MARK: - iPhone Navigation (custom tab bar + safeAreaInset so bar is never covered)
-    
+    // MARK: - iPhone Navigation (sliding tab transition + safeAreaInset for tab bar)
+
+    private let tabOrder: [MainTab] = [.operations, .ledger, .workRecords, .settings]
+
+    private func tabIndex(_ tab: MainTab) -> Int {
+        tabOrder.firstIndex(of: tab) ?? 0
+    }
+
+    private static let tabSpring = Animation.interactiveSpring(response: 0.40, dampingFraction: 0.88, blendDuration: 0.2)
+
     private var iPhoneNavigation: some View {
-        ZStack {
-            tabScreen(.operations) {
-                OperationsView(onKPINavigate: { filter in
-                    quickAction.requestSwitchToWorkRecords(filter: filter)
-                })
-                .rmNavigationBar(title: "Operations")
-            }
-            tabScreen(.ledger) {
-                AuditFeedView()
-                    .rmNavigationBar(title: "Ledger")
-            }
-            tabScreen(.workRecords) {
-                JobsListView(initialFilter: workRecordsFilter)
-                    .rmNavigationBar(title: "Work Records")
-            }
-            tabScreen(.settings) {
-                AccountView()
+        GeometryReader { geo in
+            ZStack {
+                ZStack {
+                    tabScreen(.operations) {
+                        OperationsView(onKPINavigate: { filter in
+                            quickAction.requestSwitchToWorkRecords(filter: filter)
+                        })
+                        .rmNavigationBar(title: "Operations")
+                    }
+                    .offset(x: CGFloat(tabIndex(.operations) - tabIndex(selectedTab)) * geo.size.width)
+                    .scaleEffect(selectedTab == .operations ? 1.0 : 0.985)
+                    .opacity(selectedTab == .operations ? 1.0 : 0.92)
+                    .allowsHitTesting(selectedTab == .operations)
+
+                    tabScreen(.ledger) {
+                        AuditFeedView()
+                            .rmNavigationBar(title: "Ledger")
+                    }
+                    .offset(x: CGFloat(tabIndex(.ledger) - tabIndex(selectedTab)) * geo.size.width)
+                    .scaleEffect(selectedTab == .ledger ? 1.0 : 0.985)
+                    .opacity(selectedTab == .ledger ? 1.0 : 0.92)
+                    .allowsHitTesting(selectedTab == .ledger)
+
+                    tabScreen(.workRecords) {
+                        JobsListView(initialFilter: workRecordsFilter)
+                            .rmNavigationBar(title: "Work Records")
+                    }
+                    .offset(x: CGFloat(tabIndex(.workRecords) - tabIndex(selectedTab)) * geo.size.width)
+                    .scaleEffect(selectedTab == .workRecords ? 1.0 : 0.985)
+                    .opacity(selectedTab == .workRecords ? 1.0 : 0.92)
+                    .allowsHitTesting(selectedTab == .workRecords)
+
+                    tabScreen(.settings) {
+                        AccountView()
+                    }
+                    .offset(x: CGFloat(tabIndex(.settings) - tabIndex(selectedTab)) * geo.size.width)
+                    .scaleEffect(selectedTab == .settings ? 1.0 : 0.985)
+                    .opacity(selectedTab == .settings ? 1.0 : 0.92)
+                    .allowsHitTesting(selectedTab == .settings)
+                }
+                .animation(Self.tabSpring, value: selectedTab)
+                .clipped()
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -235,7 +268,7 @@ struct ContentView: View {
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
             guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
             workRecordsFilter = filter
-            withAnimation(RMMotion.spring) { selectedTab = tab }
+            withAnimation(Self.tabSpring) { selectedTab = tab }
         }
         .overlay(alignment: .bottomTrailing) {
             if !entitlements.isAuditor() && selectedTab == .workRecords {
@@ -248,9 +281,9 @@ struct ContentView: View {
                         .frame(width: 56, height: 56)
                         .background(RMTheme.Colors.accent)
                         .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 6)
                 }
-                .padding(.trailing, 20)
+                .padding(.trailing, 18)
                 .padding(.bottom, RMTabBar.barHeight + 18)
             }
         }
@@ -262,11 +295,7 @@ struct ContentView: View {
             }
         }
         .task {
-            if entitlements.isAuditor() {
-                selectedTab = .ledger
-            } else {
-                selectedTab = .operations
-            }
+            selectedTab = entitlements.isAuditor() ? .ledger : .operations
         }
     }
 
@@ -274,11 +303,8 @@ struct ContentView: View {
     private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
             content()
-                .padding(.bottom, 90) // tab bar height + breathing room
+                .padding(.bottom, 82) // tab bar height + breathing room
         }
-        .opacity(selectedTab == tab ? 1 : 0)
-        .allowsHitTesting(selectedTab == tab)
-        .zIndex(selectedTab == tab ? 1 : 0)
     }
     
     // MARK: - iPad Navigation (NavigationSplitView)

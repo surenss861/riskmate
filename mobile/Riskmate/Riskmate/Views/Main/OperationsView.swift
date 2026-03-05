@@ -137,6 +137,32 @@ struct OperationsView: View {
         }
         .listSectionSpacing(.compact)
 
+        Section {
+            QuickActionsStrip(
+                onAddEvidence: { Haptics.tap(); quickAction.presentEvidence(jobId: nil) },
+                onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) },
+                onExport: { Haptics.tap(); quickAction.requestSwitchToLedger() }
+            )
+            .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Quick actions")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(RMTheme.Colors.textSecondary)
+        }
+        .listSectionSpacing(.compact)
+
+        Section {
+            RecentActivityRow(hasActivity: false)
+                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
+                .listRowBackground(Color.clear)
+        } header: {
+            Text("Recent activity")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(RMTheme.Colors.textSecondary)
+        }
+        .listSectionSpacing(.compact)
+
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
                 OperationsLoadingSkeleton()
@@ -297,6 +323,71 @@ struct OperationsView: View {
 }
 
 // MARK: - Operations helpers (split out to avoid type-checker timeout)
+
+private struct QuickActionsStrip: View {
+    var onAddEvidence: () -> Void
+    var onCreateJob: () -> Void
+    var onExport: () -> Void
+
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.sm) {
+            QuickActionChip(title: "Add Evidence", icon: "camera.fill", action: onAddEvidence)
+            QuickActionChip(title: "Create Job", icon: "doc.badge.plus", action: onCreateJob)
+            QuickActionChip(title: "Export", icon: "square.and.arrow.up", action: onExport)
+        }
+    }
+}
+
+private struct QuickActionChip: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(RMTheme.Colors.textPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct RecentActivityRow: View {
+    var hasActivity: Bool
+
+    var body: some View {
+        HStack(spacing: RMTheme.Spacing.md) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 18))
+                .foregroundColor(RMTheme.Colors.textTertiary)
+            if hasActivity {
+                Text("Recent activity items will appear here")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No recent activity yet")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    Text("Evidence, comments, and updates will show here")
+                        .font(.system(size: 13))
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
 
 private struct OperationsLoadingSkeleton: View {
     var body: some View {
