@@ -268,7 +268,7 @@ struct ContentView: View {
                     tabScreen(.workRecords, bottomPadding: bottomPad) {
                         Group {
                             if workRecordsFilter != nil {
-                                JobsListView(initialFilter: workRecordsFilter)
+                                JobsListView(initialFilter: workRecordsFilter, onBackToHub: { workRecordsFilter = nil })
                                     .rmNavigationBar(title: "Work Records")
                             } else {
                                 WorkRecordsHubView()
@@ -407,7 +407,7 @@ struct ContentView: View {
                     }
                 case .jobs:
                     NavigationStack {
-                        JobsListView(initialFilter: workRecordsFilter)
+                        JobsListView(initialFilter: workRecordsFilter, onBackToHub: workRecordsFilter != nil ? { workRecordsFilter = nil } : nil)
                             .rmNavigationBar(title: "Work Records")
                     }
                 case .audit:

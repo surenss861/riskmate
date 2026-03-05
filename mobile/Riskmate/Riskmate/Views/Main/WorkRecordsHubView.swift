@@ -9,7 +9,7 @@ struct WorkRecordsHubView: View {
     @EnvironmentObject private var quickAction: QuickActionRouter
     @State private var isRetryingExport = false
 
-    /// Pending/uploading/failed evidence uploads (same logic as SyncQueueView)
+    /// Pending/uploading/failed evidence uploads. Excludes .synced. Sort by createdAt (non-optional on UploadTask).
     private var pendingUploads: [UploadTask] {
         uploadManager.uploads.filter { upload in
             switch upload.state {
@@ -20,21 +20,28 @@ struct WorkRecordsHubView: View {
         .sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// Failed or in-progress exports (proof pack + PDF) for "Needs action"
+    /// Failed or in-progress exports for "Needs action". Excludes .ready.
     private var pendingOrFailedExports: [ExportTask] {
         exportManager.exports.filter { task in
             switch task.state {
-            case .queued, .preparing, .downloading: return true
+            case .queued, .preparing, .downloading, .failed: return true
             case .ready: return false
-            case .failed: return true
             }
         }
         .sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// Last 10 uploads (any state) for "Recent evidence"
+    /// Last 10 uploads (any state) for "Recent evidence", newest first.
     private var recentEvidence: [UploadTask] {
         Array(uploadManager.uploads.sorted { $0.createdAt > $1.createdAt }.prefix(10))
+    }
+
+    /// True if any export for this job+type is already in-flight (prevents double-trigger retry).
+    private func hasInFlightExport(jobId: String, type: ExportType) -> Bool {
+        exportManager.exports.contains { task in
+            task.jobId == jobId && task.type == type &&
+            (task.state == .queued || task.state == .preparing || task.state == .downloading)
+        }
     }
 
     /// Last 5 proof packs (ready or failed for retry)
@@ -120,17 +127,23 @@ struct WorkRecordsHubView: View {
                     if !pendingOrFailedExports.isEmpty {
                         VStack(spacing: RMTheme.Spacing.xs) {
                             ForEach(pendingOrFailedExports.prefix(3)) { task in
-                                WorkRecordsExportRow(export: task, isRetrying: isRetryingExport) {
-                                    Task {
-                                        isRetryingExport = true
-                                        defer { isRetryingExport = false }
-                                        do {
-                                            try await exportManager.export(jobId: task.jobId, type: task.type)
-                                        } catch {
-                                            ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                                WorkRecordsExportRow(
+                                    export: task,
+                                    isRetrying: isRetryingExport,
+                                    canRetry: (task.state == .failed) && !hasInFlightExport(jobId: task.jobId, type: task.type),
+                                    onRetry: {
+                                        guard task.state == .failed, !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
+                                        Task {
+                                            isRetryingExport = true
+                                            defer { isRetryingExport = false }
+                                            do {
+                                                try await exportManager.export(jobId: task.jobId, type: task.type)
+                                            } catch {
+                                                ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                                            }
                                         }
                                     }
-                                }
+                                )
                             }
                         }
                     }
@@ -190,17 +203,23 @@ struct WorkRecordsHubView: View {
                             }
                             .buttonStyle(.plain)
                         } else {
-                            WorkRecordsExportRow(export: task, isRetrying: isRetryingExport) {
-                                Task {
-                                    isRetryingExport = true
-                                    defer { isRetryingExport = false }
-                                    do {
-                                        try await exportManager.export(jobId: task.jobId, type: .proofPack)
-                                    } catch {
-                                        ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                            WorkRecordsExportRow(
+                                export: task,
+                                isRetrying: isRetryingExport,
+                                canRetry: !hasInFlightExport(jobId: task.jobId, type: task.type),
+                                onRetry: {
+                                    guard !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
+                                    Task {
+                                        isRetryingExport = true
+                                        defer { isRetryingExport = false }
+                                        do {
+                                            try await exportManager.export(jobId: task.jobId, type: .proofPack)
+                                        } catch {
+                                            ToastCenter.shared.show(error.localizedDescription, systemImage: "exclamationmark.triangle", style: .error)
+                                        }
                                     }
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -338,12 +357,14 @@ private struct WorkRecordsUploadRow: View {
 private struct WorkRecordsExportRow: View {
     let export: ExportTask
     let isRetrying: Bool
+    /// When false, show status only (no Retry) so we don't double-trigger if already in-flight.
+    var canRetry: Bool = true
     var onRetry: (() -> Void)?
 
     private var statusLabel: String {
         switch export.state {
         case .queued: return "Queued"
-        case .preparing, .downloading: return "In progress"
+        case .preparing, .downloading: return "In progress…"
         case .ready: return "Ready"
         case .failed: return "Failed"
         }
@@ -372,7 +393,7 @@ private struct WorkRecordsExportRow: View {
             Text(statusLabel)
                 .font(RMTheme.Typography.caption2)
                 .foregroundColor(statusColor)
-            if case .failed = export.state, onRetry != nil {
+            if canRetry, onRetry != nil {
                 Button {
                     Haptics.tap()
                     onRetry?()

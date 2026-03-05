@@ -1,9 +1,12 @@
 import SwiftUI
 import SwiftDate
 
-/// Jobs List View with search, filters, and premium interactions
+/// Jobs List View with search, filters, and premium interactions.
+/// When shown as Work Records tab root with a filter (e.g. from Operations "Review blockers"), pass onBackToHub so user can return to the hub.
 struct JobsListView: View {
     let initialFilter: String?
+    /// When non-nil, show "Back to hub" in header; call to clear filter and show Work Records hub.
+    var onBackToHub: (() -> Void)? = nil
     
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var entitlements = EntitlementsManager.shared
@@ -55,8 +58,9 @@ struct JobsListView: View {
 
     private let maxDividerOpacity: CGFloat = 0.075
 
-    init(initialFilter: String? = nil) {
+    init(initialFilter: String? = nil, onBackToHub: (() -> Void)? = nil) {
         self.initialFilter = initialFilter
+        self.onBackToHub = onBackToHub
     }
     
     private var isAuditor: Bool { entitlements.isAuditor() }
@@ -345,21 +349,34 @@ struct JobsListView: View {
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
                 RMTopBar(title: "Work Records", notificationBadge: 0) {
-                    if !isAuditor {
-                        Button {
-                            Haptics.tap()
-                            showCreateJobSheet = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(RMTheme.Colors.textPrimary)
-                                .frame(width: 40, height: 40)
-                                .background(RMTheme.Colors.surface2)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
-                                .themeShadow(RMTheme.Shadow.cardLight)
+                    HStack(spacing: 8) {
+                        if onBackToHub != nil {
+                            Button {
+                                Haptics.tap()
+                                onBackToHub?()
+                            } label: {
+                                Text("Back to hub")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                            .accessibilityLabel("Back to Work Records hub")
                         }
-                        .accessibilityLabel("Create new job")
+                        if !isAuditor {
+                            Button {
+                                Haptics.tap()
+                                showCreateJobSheet = true
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                    .frame(width: 40, height: 40)
+                                    .background(RMTheme.Colors.surface2)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+                                    .themeShadow(RMTheme.Shadow.cardLight)
+                            }
+                            .accessibilityLabel("Create new job")
+                        }
                     }
                 }
             }
