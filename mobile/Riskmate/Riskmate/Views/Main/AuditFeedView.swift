@@ -678,14 +678,19 @@ private enum ExportPersistence {
         return f
     }()
 
-    /// Copy temp export to Application Support/Exports/ with human-readable unique filename. Returns (persistentURL, sizeBytes, sha256Hex) or nil.
+    /// Copy temp export to Application Support/Exports/ with human-readable unique filename. Extension matches format (json/pdf/csv). Returns (persistentURL, sizeBytes, sha256Hex) or nil.
     static func copyToExports(tempURL: URL, format: String) -> (URL, Int64, String?)? {
         guard let data = try? Data(contentsOf: tempURL) else { return nil }
         let fileManager = FileManager.default
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         let exportsDir = appSupport.appendingPathComponent(exportsSubfolder, isDirectory: true)
         try? fileManager.createDirectory(at: exportsDir, withIntermediateDirectories: true)
-        let ext = format.lowercased() == "json" ? "json" : "json"
+        let ext: String
+        switch format.lowercased() {
+        case "pdf": ext = "pdf"
+        case "csv": ext = "csv"
+        default: ext = "json"
+        }
         let dateStr = dateFormatter.string(from: Date())
         let filename = "\(filenamePrefix)-\(dateStr).\(ext)"
         let destURL = exportsDir.appendingPathComponent(filename)
@@ -737,6 +742,10 @@ final class ExportHistoryStore: ObservableObject {
         entries.insert(entry, at: 0)
         if entries.count > maxEntries { entries.removeLast() }
     }
+
+    func remove(id: UUID) {
+        entries.removeAll { $0.id == id }
+    }
 }
 
 struct ExportHistorySheet: View {
@@ -760,6 +769,8 @@ struct ExportHistorySheet: View {
                                 if let url = entry.fileURL {
                                     shareItem = IdentifiableURL(url: url)
                                 }
+                            }, onDelete: {
+                                deleteExport(entry)
                             })
                         }
                     }
@@ -781,6 +792,20 @@ struct ExportHistorySheet: View {
             }
         }
     }
+
+    private func deleteExport(_ entry: ExportHistoryEntry) {
+        ExportHistoryStore.shared.remove(id: entry.id)
+        if let url = entry.fileURL {
+            do {
+                try FileManager.default.removeItem(at: url)
+                ToastCenter.shared.show("Deleted export", systemImage: "trash", style: .success)
+            } catch {
+                ToastCenter.shared.show("Removed from history", systemImage: "doc.badge.clock", style: .success)
+            }
+        } else {
+            ToastCenter.shared.show("Removed from history", systemImage: "doc.badge.clock", style: .success)
+        }
+    }
 }
 
 private struct IdentifiableURL: Identifiable {
@@ -791,6 +816,7 @@ private struct IdentifiableURL: Identifiable {
 private struct ExportHistoryRow: View {
     let entry: ExportHistoryEntry
     let onShare: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
@@ -854,6 +880,14 @@ private struct ExportHistoryRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 6)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                Haptics.impact(.light)
+                onDelete()
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 }
 
