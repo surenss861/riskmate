@@ -248,7 +248,7 @@ struct AuditFeedView: View {
                 Color.clear
                     .frame(height: 1)
                     .trackScrollY(in: ledgerScrollSpace)
-                LazyVStack(spacing: RMTheme.Spacing.sectionSpacing, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: 14, pinnedViews: [.sectionHeaders]) {
                     ForEach(grouped) { group in
                         Section {
                             VStack(spacing: 10) {
@@ -270,7 +270,7 @@ struct AuditFeedView: View {
                                 }
                             }
                         } header: {
-                            LedgerPinnedDayHeader(title: group.title, count: group.events.count)
+                            LedgerPinnedDayHeader(title: group.title, count: group.events.count, pinnedT: chromeT)
                         }
                     }
                 }
@@ -325,10 +325,13 @@ struct AuditFeedView: View {
     }
 }
 
-// MARK: - Pinned day header (solid surface + top/bottom edge; Wallet/Health-style, attached when stuck)
+// MARK: - Pinned day header (solid surface + top/bottom edge; darker when pinned for "lock in" feel)
 private struct LedgerPinnedDayHeader: View {
     let title: String
     let count: Int
+    var pinnedT: CGFloat = 0
+
+    private var fillOpacity: CGFloat { 0.92 + (0.95 - 0.92) * pinnedT }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -345,7 +348,7 @@ private struct LedgerPinnedDayHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             Rectangle()
-                .fill(RMTheme.Colors.surface2.opacity(0.92))
+                .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.white.opacity(0.05))

@@ -45,66 +45,65 @@ struct LedgerTimelineRow: View {
                 }
                 .frame(width: 16)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text(title)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                                    .lineLimit(2)
-                                if isVerified {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(Color.white.opacity(0.9))
-                                }
-                                if status == .warning || status == .error {
-                                    Text("Needs review")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.9))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(RMTheme.Colors.surface1.opacity(0.5), in: Capsule())
-                                }
+                VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                                .lineLimit(2)
+                            if isVerified {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color.white.opacity(0.9))
                             }
-                            Text(subtitle)
-                                .font(RMTheme.Typography.secondaryLabelLarge)
-                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
-                                .lineLimit(1)
+                            if status == .warning || status == .error {
+                                Text("Needs review")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.9))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(RMTheme.Colors.surface1.opacity(0.5), in: Capsule())
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(subtitle)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
+                    // Time + hash pill on same row for fast scan ("what happened + when" at a glance)
+                    HStack(alignment: .center, spacing: RMTheme.Spacing.sm) {
                         Text(timeText)
                             .font(RMTheme.Typography.metadataSmall)
                             .foregroundColor(RMTheme.Colors.textTertiary)
-
+                        Button {
+                            copyHash(fullHashToast: false)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("SHA-256 · \(hashPreview)")
+                                    .font(RMTheme.Typography.metadata)
+                                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .onLongPressGesture(minimumDuration: 0.4) {
+                            copyHash(fullHashToast: true)
+                        }
+                        Spacer(minLength: 0)
                         if onTap != nil {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                                 .opacity(isVerified ? 0.15 : 0.28)
                         }
-                    }
-
-                    // Hash pill: tap = copy + "Copied"; long-press = copy + "Copied full hash"
-                    Button {
-                        copyHash(fullHashToast: false)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("SHA-256 · \(hashPreview)")
-                                .font(RMTheme.Typography.metadata)
-                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(RMTheme.Colors.textTertiary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .onLongPressGesture(minimumDuration: 0.4) {
-                        copyHash(fullHashToast: true)
                     }
                 }
                 .padding(.leading, RMTheme.Spacing.sm)
