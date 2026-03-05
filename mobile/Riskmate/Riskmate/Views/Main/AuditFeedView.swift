@@ -26,11 +26,12 @@ struct AuditFeedView: View {
         max(0, (scrollBaselineY ?? 0) - scrollY)
     }
 
+    /// Same window as chrome (18→42, 24pt) so divider and card settle feel like one physical interaction.
     private var dividerOpacity: CGFloat {
         let amount = scrollAmount
-        if amount < 16 { return 0 }
-        if amount > 28 { return 0.075 }
-        return 0.075 * (amount - 16) / 12
+        if amount < 18 { return 0 }
+        if amount > 42 { return 0.075 }
+        return 0.075 * (amount - 18) / 24
     }
 
     /// 0...1 over 18→42pt window (24pt); drives pinned chrome "attach" (fill + shadow). Feels physical, not snappy.
@@ -198,8 +199,19 @@ struct AuditFeedView: View {
                 eventCount: events.count,
                 onExport: {
                     showingExportSheet = false
-                    exportURL = try? AuditExporter.exportJSON(events: events)
-                    if exportURL != nil { lastExportedAt = Date() }
+                    let url = try? AuditExporter.exportJSON(events: events)
+                    exportURL = url
+                    if let u = url {
+                        lastExportedAt = Date()
+                        let size = (try? FileManager.default.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0
+                        ExportHistoryStore.shared.add(
+                            filename: u.lastPathComponent,
+                            date: Date(),
+                            format: "JSON",
+                            sizeBytes: size,
+                            fileURL: u
+                        )
+                    }
                 },
                 onDismiss: { showingExportSheet = false }
             )
@@ -506,6 +518,7 @@ struct LedgerExportSheet: View {
     @State private var includeSignatures = true
     @State private var includePhotos = true
     @State private var isGenerating = false
+    @State private var showingExportHistory = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -558,8 +571,7 @@ struct LedgerExportSheet: View {
                 Section {
                     Button {
                         Haptics.tap()
-                        onDismiss()
-                        dismiss()
+                        showingExportHistory = true
                     } label: {
                         Label("View export history", systemImage: "clock.arrow.circlepath")
                             .font(RMTheme.Typography.body)
@@ -581,21 +593,216 @@ struct LedgerExportSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Generate") {
-                        Haptics.tap()
-                        isGenerating = true
-                        onExport()
-                        ToastCenter.shared.show("Proof Pack exported", systemImage: "checkmark.circle", style: .success)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
-                            isGenerating = false
-                            dismiss()
-                        }
+                        triggerExport()
                     }
                     .fontWeight(.semibold)
                     .foregroundColor(RMTheme.Colors.accent)
                     .disabled(isGenerating)
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(RMTheme.Colors.border.opacity(0.5))
+                        .frame(height: 1)
+                    Button {
+                        Haptics.tap()
+                        triggerExport()
+                    } label: {
+                        Group {
+                            if isGenerating {
+                                HStack(spacing: RMTheme.Spacing.sm) {
+                                    ProgressView()
+                                        .tint(.black)
+                                    Text("Generating…")
+                                        .font(RMTheme.Typography.bodyBold)
+                                        .foregroundColor(.black.opacity(0.8))
+                                }
+                            } else {
+                                Text("Generate Proof Pack")
+                                    .font(RMTheme.Typography.bodyBold)
+                                    .foregroundColor(.black)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(RMTheme.Colors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isGenerating)
+                    .opacity(isGenerating ? 0.7 : 1)
+                    .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                    .padding(.top, RMTheme.Spacing.sm)
+                    .padding(.bottom, RMTheme.Spacing.sm)
+                }
+                .background(RMTheme.Colors.background)
+            }
+            .sheet(isPresented: $showingExportHistory) {
+                ExportHistorySheet()
+            }
         }
+    }
+
+    private func triggerExport() {
+        isGenerating = true
+        onExport()
+        ToastCenter.shared.show("Proof Pack exported", systemImage: "checkmark.circle", style: .success)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            isGenerating = false
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Export history (local list: filename, time, format, size, copy hash, Share)
+struct ExportHistoryEntry: Identifiable {
+    let id: UUID
+    let filename: String
+    let date: Date
+    let format: String
+    let sizeBytes: Int64
+    let fileURL: URL?
+    init(id: UUID = UUID(), filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil) {
+        self.id = id
+        self.filename = filename
+        self.date = date
+        self.format = format
+        self.sizeBytes = sizeBytes
+        self.fileURL = fileURL
+    }
+    var sizeDisplay: String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: sizeBytes)
+    }
+}
+
+final class ExportHistoryStore: ObservableObject {
+    static let shared = ExportHistoryStore()
+    @Published private(set) var entries: [ExportHistoryEntry] = []
+    private let maxEntries = 50
+
+    func add(filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil) {
+        let entry = ExportHistoryEntry(filename: filename, date: date, format: format, sizeBytes: sizeBytes, fileURL: fileURL)
+        entries.insert(entry, at: 0)
+        if entries.count > maxEntries { entries.removeLast() }
+    }
+}
+
+struct ExportHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var store = ExportHistoryStore.shared
+    @State private var shareItem: IdentifiableURL?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if store.entries.isEmpty {
+                    ContentUnavailableView(
+                        "No exports yet",
+                        systemImage: "doc.badge.clock",
+                        description: Text("Export a Proof Pack from the Ledger to see it here.")
+                    )
+                } else {
+                    List {
+                        ForEach(store.entries) { entry in
+                            ExportHistoryRow(entry: entry, onShare: {
+                                if let url = entry.fileURL {
+                                    shareItem = IdentifiableURL(url: url)
+                                }
+                            })
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Export History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        Haptics.tap()
+                        dismiss()
+                    }
+                    .foregroundColor(RMTheme.Colors.accent)
+                }
+            }
+            .sheet(item: $shareItem) { item in
+                ShareSheet(items: [item.url])
+            }
+        }
+    }
+}
+
+private struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ExportHistoryRow: View {
+    let entry: ExportHistoryEntry
+    let onShare: () -> Void
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(entry.filename)
+                    .font(RMTheme.Typography.bodyBold)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Text(entry.format)
+                    .font(RMTheme.Typography.caption)
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+            }
+            HStack(spacing: RMTheme.Spacing.sm) {
+                Text(entry.date, style: .relative)
+                    .font(RMTheme.Typography.metadataSmall)
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                Text("·")
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+                Text(entry.sizeDisplay)
+                    .font(RMTheme.Typography.metadataSmall)
+                    .foregroundColor(RMTheme.Colors.textTertiary)
+            }
+            HStack(spacing: 8) {
+                Button {
+                    Haptics.impact(.light)
+                    UIPasteboard.general.string = entry.filename
+                    ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(entry.filename)
+                            .font(RMTheme.Typography.metadata)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 10))
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                if let url = entry.fileURL, FileManager.default.fileExists(atPath: url.path) {
+                    Button {
+                        Haptics.tap()
+                        onShare()
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(RMTheme.Typography.captionBold)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
