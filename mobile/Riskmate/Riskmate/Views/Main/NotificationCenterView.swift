@@ -104,8 +104,8 @@ struct NotificationCenterView: View {
                     }
                     RMEmptyState(
                         icon: "bell.badge.fill",
-                        title: "Notifications",
-                    message: "You’re all caught up. New alerts will appear here.",
+                        title: "No alerts yet",
+                    message: "You'll see exports, blockers, and signature requests here.",
                     action: nil
                     )
                     .padding(RMTheme.Spacing.pagePadding)

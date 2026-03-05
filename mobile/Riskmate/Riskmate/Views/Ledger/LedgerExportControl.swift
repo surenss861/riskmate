@@ -21,6 +21,8 @@ struct LedgerExportControl: View {
 
     private let radius = RMTheme.Radius.card
 
+    private let revealThreshold: CGFloat = 0.28
+
     var body: some View {
         VStack(spacing: 0) {
             Button(action: {
@@ -35,7 +37,8 @@ struct LedgerExportControl: View {
                         .font(RMTheme.Typography.sectionTitle)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     Spacer(minLength: 0)
-                    if chromeT > 0.2 {
+                    // Reserve space so layout is stable; reveal via opacity only (no shift).
+                    HStack(spacing: 6) {
                         Text("Generate")
                             .font(RMTheme.Typography.bodySmallBold)
                             .foregroundColor(RMTheme.Colors.accent)
@@ -43,6 +46,9 @@ struct LedgerExportControl: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(RMTheme.Colors.textTertiary)
                     }
+                    .opacity(chromeT > revealThreshold ? 1 : 0)
+                    .allowsHitTesting(chromeT > revealThreshold)
+                    .animation(.easeOut(duration: 0.2), value: chromeT)
                 }
                 .frame(height: 48)
                 .padding(.horizontal, RMTheme.Spacing.cardPadding)
@@ -68,6 +74,7 @@ struct LedgerExportControl: View {
             .shadow(color: .black.opacity(shadowOpacity), radius: 16, x: 0, y: shadowY)
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm)
+            .padding(.bottom, 8)
 
             Rectangle()
                 .fill(.ultraThinMaterial)

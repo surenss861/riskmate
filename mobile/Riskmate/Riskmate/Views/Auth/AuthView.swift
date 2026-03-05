@@ -166,12 +166,6 @@ struct AuthView: View {
                                     .font(.system(size: 9, weight: .medium))
                                     .foregroundColor(Color.white.opacity(0.5))
                                 Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                                Text("Evidence and controls recorded.")
-                                    .font(.system(size: 8, weight: .regular))
-                                    .foregroundColor(Color.white.opacity(0.4))
-                                Text("Signatures and audit trail attached.")
-                                    .font(.system(size: 8, weight: .regular))
-                                    .foregroundColor(Color.white.opacity(0.4))
                             }
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -216,7 +210,7 @@ struct AuthView: View {
                 proofCardReceiptLine
             }
             .padding(12)
-            .frame(maxWidth: 280)
+            .frame(maxWidth: min(320, UIScreen.main.bounds.width - 64))
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RMTheme.Radius.card))
             .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
             .themeShadow(RMTheme.Shadow.card)

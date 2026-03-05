@@ -57,14 +57,18 @@ struct JobsListView: View {
         filteredJobs.filter { ($0.riskScore ?? 0) >= 80 }.count
     }
     
-    private var resultsCountNeedsSignature: Int {
-        filteredJobs.filter { $0.status.lowercased() == "active" }.count
+    private var resultsCountNeedEvidence: Int {
+        filteredJobs.filter { job in
+            let req = job.evidenceRequired ?? 0
+            return req > 0 && (job.evidenceCount ?? 0) < req
+        }.count
     }
-    
+
+    /// Quick insight line under controls: "Showing 12 jobs · 3 need evidence · 1 high risk"
     private var resultsCountLine: String {
         var parts: [String] = ["Showing \(filteredJobs.count) jobs"]
+        if resultsCountNeedEvidence > 0 { parts.append("\(resultsCountNeedEvidence) need evidence") }
         if resultsCountHighRisk > 0 { parts.append("\(resultsCountHighRisk) high risk") }
-        if resultsCountNeedsSignature > 0 { parts.append("\(resultsCountNeedsSignature) need signature") }
         return parts.joined(separator: " · ")
     }
     
@@ -476,11 +480,11 @@ struct JobsListView: View {
         showExportProofSheet = true
     }
 
-    /// Reason labels for Needs action section only (e.g. "Missing evidence", "Needs signature", "High risk").
+    /// Reason labels for Needs action section only. Use "Open job" until we have real signature signal (e.g. signatureRequired && signatureCount == 0).
     private func needsActionReasons(for job: Job) -> [String] {
         var r: [String] = []
         if let req = job.evidenceRequired, req > 0, (job.evidenceCount ?? 0) < req { r.append("Missing evidence") }
-        if job.status.lowercased() == "active" { r.append("Needs signature") }
+        if job.status.lowercased() == "active" { r.append("Open job") }
         let level = (job.riskLevel ?? "").lowercased()
         if level == "high" || level == "critical" || (job.riskScore ?? 0) >= 80 { r.append("High risk") }
         return r
