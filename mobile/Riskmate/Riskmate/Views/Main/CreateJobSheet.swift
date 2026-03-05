@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Create Job enums (backend client_type / job_type)
 
@@ -47,8 +48,9 @@ struct CreateJobSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var jobsStore = JobsStore.shared
-    @StateObject private var statusManager = ServerStatusManager.shared
+    /// Singletons: use @ObservedObject so SwiftUI doesn't "own" lifecycle (avoids duplicate subscriptions).
+    @ObservedObject private var jobsStore = JobsStore.shared
+    @ObservedObject private var statusManager = ServerStatusManager.shared
 
     @State private var clientName = ""
     @State private var location = ""
@@ -124,6 +126,7 @@ struct CreateJobSheet: View {
                             }
                             .pickerStyle(.menu)
                         }
+                        .onTapGesture { focusedField = nil }
 
                         LabeledContent("Job type") {
                             Picker("Job type", selection: $jobType) {
@@ -133,6 +136,7 @@ struct CreateJobSheet: View {
                             }
                             .pickerStyle(.menu)
                         }
+                        .onTapGesture { focusedField = nil }
                     } header: {
                         Text("Job Details")
                     }
@@ -194,8 +198,10 @@ struct CreateJobSheet: View {
                 location: trimmedLocation,
                 title: trimmedTitle.isEmpty ? nil : trimmedTitle
             )
-            Haptics.success()
-            if !isOffline {
+            if isOffline {
+                Haptics.impact(.light)
+            } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 ToastCenter.shared.show("Job created", systemImage: "checkmark.circle.fill", style: .success)
             }
             dismiss()
