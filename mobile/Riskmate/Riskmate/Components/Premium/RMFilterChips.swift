@@ -69,7 +69,7 @@ struct RMFilterChips: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .rmPressable(scale: 0.98, haptic: true)
+                    .rmPressable(scale: 0.98, haptic: true, pressOpacity: 0.92)
                 }
             }
         }

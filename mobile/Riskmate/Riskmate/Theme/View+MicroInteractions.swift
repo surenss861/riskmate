@@ -12,9 +12,9 @@ extension View {
         self.matchedGeometryEffect(id: id, in: namespace)
     }
     
-    /// Press feedback: scale + optional haptic. Use on buttons/cards. Use lightImpact: true for cards to avoid "vibratey" feel.
-    func rmPressable(scale: CGFloat = 0.98, haptic: Bool = false, lightImpact: Bool = false) -> some View {
-        self.modifier(RMPressableModifier(scale: scale, haptic: haptic, lightImpact: lightImpact))
+    /// Press feedback: scale + optional haptic. Use on buttons/cards. Use lightImpact: true for cards to avoid "vibratey" feel. Use pressOpacity for chips (e.g. 0.92) for subtle tactile feedback.
+    func rmPressable(scale: CGFloat = 0.98, haptic: Bool = false, lightImpact: Bool = false, pressOpacity: CGFloat? = nil) -> some View {
+        self.modifier(RMPressableModifier(scale: scale, haptic: haptic, lightImpact: lightImpact, pressOpacity: pressOpacity))
     }
     
     /// Staggered appear: opacity + y offset using RMMotion. Pass index for delay.
@@ -28,17 +28,19 @@ extension View {
     }
 }
 
-// MARK: - Pressable (scale + haptic)
+// MARK: - Pressable (scale + haptic + optional press opacity)
 private struct RMPressableModifier: ViewModifier {
     let scale: CGFloat
     let haptic: Bool
     let lightImpact: Bool
+    var pressOpacity: CGFloat?
     @State private var isPressed = false
     
     func body(content: Content) -> some View {
         content
             .scaleEffect(isPressed ? scale : 1.0)
-            .animation(RMMotion.springPress, value: isPressed)
+            .opacity(pressOpacity != nil ? (isPressed ? pressOpacity! : 1.0) : 1.0)
+            .animation(.easeOut(duration: 0.1), value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
