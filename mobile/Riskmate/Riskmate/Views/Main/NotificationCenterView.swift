@@ -121,9 +121,6 @@ struct NotificationCenterView: View {
         }
         .rmNavigationBar(title: navigationTitle)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                typeFilterMenu
-            }
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     showMentionsList = true
@@ -132,6 +129,17 @@ struct NotificationCenterView: View {
                         .font(RMTheme.Typography.bodySmall)
                         .foregroundColor(RMTheme.Colors.accent)
                 }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                typeFilterMenu
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    Haptics.tap()
+                    dismiss()
+                }
+                .font(RMTheme.Typography.bodySmallBold)
+                .foregroundColor(RMTheme.Colors.accent)
             }
         }
         .sheet(isPresented: $showMentionsList) {

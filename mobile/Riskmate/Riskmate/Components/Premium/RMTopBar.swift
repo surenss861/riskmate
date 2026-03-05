@@ -58,7 +58,7 @@ struct RMTopBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .rmPressable(scale: 0.98, pressOpacity: 0.90, haptic: true)
+                .rmPressable(scale: 0.98, haptic: true, pressOpacity: 0.90)
                 .zIndex(1000)
 
                 Button {
@@ -76,7 +76,7 @@ struct RMTopBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .rmPressable(scale: 0.98, pressOpacity: 0.90, haptic: true)
+                .rmPressable(scale: 0.98, haptic: true, pressOpacity: 0.90)
                 .zIndex(1000)
             }
         }

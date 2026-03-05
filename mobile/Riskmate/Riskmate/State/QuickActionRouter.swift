@@ -9,6 +9,9 @@ final class QuickActionRouter: ObservableObject {
     
     @Published var isEvidenceSheetPresented: Bool = false
     @Published var evidenceJobId: String? = nil
+
+    /// When true, ContentView presents Create Job sheet (so Operations can open it without switching tabs).
+    @Published var showCreateJobSheet: Bool = false
     
     /// Tab/sidebar switch request (observed by ContentView). Cleared after handling.
     @Published var requestedTab: MainTab? = nil
@@ -43,6 +46,16 @@ final class QuickActionRouter: ObservableObject {
     func requestSwitchToWorkRecords(filter: String? = nil) {
         requestedTab = .workRecords
         workRecordsFilter = filter
+    }
+
+    /// Present Create Job sheet from anywhere (e.g. Operations). ContentView presents the sheet; no tab switch.
+    func presentCreateJobSheet() {
+        showCreateJobSheet = true
+    }
+
+    /// Dismiss Create Job sheet (called when sheet is dismissed).
+    func dismissCreateJobSheet() {
+        showCreateJobSheet = false
     }
     
     /// Consume and clear tab request. Returns (tab, workRecordsFilter) if any.

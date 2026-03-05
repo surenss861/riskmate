@@ -66,11 +66,14 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     // MARK: - Device token registration
 
     /// Register the APNs device token with the backend. Call from AppDelegate after receiving token.
+    /// Backend expects 64-char hex for APNs; do not register in Simulator (no deliverable token).
     func registerDeviceToken(_ token: Data) async throws {
-        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined()
-        guard !tokenString.isEmpty else { return }
-
-        try await APIClient.shared.registerPushToken(token: tokenString, platform: "ios")
+        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined().lowercased()
+        guard tokenString.count == 64, tokenString.allSatisfy({ $0.isHexDigit }) else { return }
+        #if targetEnvironment(simulator)
+        return
+        #endif
+        try await APIClient.shared.registerPushToken(token: tokenString, platform: "apns")
     }
 
     /// Register device token only if user is authenticated (e.g. after token arrives at launch).
@@ -96,10 +99,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Unregister current device token on logout.
+    /// Unregister current device token on logout. Use same 64-char hex format as register.
     func unregisterDeviceToken(_ token: Data) async throws {
-        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined()
-        guard !tokenString.isEmpty else { return }
+        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined().lowercased()
+        guard tokenString.count == 64, tokenString.allSatisfy({ $0.isHexDigit }) else { return }
         try await APIClient.shared.unregisterPushToken(token: tokenString)
     }
 

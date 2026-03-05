@@ -144,7 +144,7 @@ struct OperationsView: View {
         Section {
             QuickActionsStripHorizontal(
                 onAddEvidence: { Haptics.tap(); quickAction.presentEvidence(jobId: nil) },
-                onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) },
+                onCreateJob: { Haptics.tap(); quickAction.presentCreateJobSheet() },
                 onExport: { Haptics.tap(); quickAction.requestSwitchToLedger() }
             )
             .listRowInsets(EdgeInsets(top: RMTheme.Spacing.inner, leading: 0, bottom: RMTheme.Spacing.inner, trailing: 0))
@@ -276,9 +276,10 @@ struct OperationsView: View {
                         .font(RMTheme.Typography.body)
                         .foregroundColor(RMTheme.Colors.textPrimary)
                 }
-                .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                .padding(.horizontal, 14)
+                .frame(height: 46)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RMTheme.Colors.surface2)
+                .background(RMTheme.Colors.inputFill)
                 .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                 .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(RMTheme.Colors.inputStroke, lineWidth: 1))
             }

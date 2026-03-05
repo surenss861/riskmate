@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showCommentFromDeepLink = false
     @State private var deepLinkCommentId: String?
     @State private var showExportHistorySheet = false
+    @State private var showCreateJobSheet = false
     @Namespace private var tabBarNamespace
     @State private var tabDragOffset: CGFloat = 0
     @StateObject private var motionObserver = RMMotionObserver.shared
@@ -319,6 +320,17 @@ struct ContentView: View {
                 showNotificationCenterFromDeepLink = true
                 quickAction.dismissNotificationCenterRequest()
             }
+        }
+        .onChange(of: quickAction.showCreateJobSheet) { _, show in
+            if show {
+                showCreateJobSheet = true
+                quickAction.dismissCreateJobSheet()
+            }
+        }
+        .sheet(isPresented: $showCreateJobSheet, onDismiss: {
+            quickAction.dismissCreateJobSheet()
+        }) {
+            CreateJobSheet()
         }
         .task {
             selectedTab = entitlements.isAuditor() ? .ledger : .operations

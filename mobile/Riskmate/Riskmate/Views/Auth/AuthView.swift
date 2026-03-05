@@ -76,10 +76,10 @@ struct AuthView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.top, 0)
-                .padding(.bottom, -8)
+                .padding(.bottom, 4)
 
             proofArtifactReceipt()
-                .padding(.top, -4)
+                .padding(.top, 12)
         }
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, alignment: .center)

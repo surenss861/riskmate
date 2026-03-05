@@ -78,8 +78,8 @@ struct JobTasksView: View {
             } else if let loadError = loadError, tasks.isEmpty {
                 RMEmptyState(
                     icon: "exclamationmark.triangle",
-                    title: "Couldn't load tasks",
-                    message: loadError,
+                    title: tasksUnavailableTitle(loadError),
+                    message: tasksUnavailableMessage(loadError),
                     action: RMEmptyStateAction(
                         title: "Retry",
                         action: { Task { await loadTasks() } }
@@ -185,15 +185,18 @@ struct JobTasksView: View {
                     } label: {
                         Label("Add Task", systemImage: "plus")
                     }
+                    .disabled(loadError != nil)
                     Button {
                         showTemplateSheet = true
                     } label: {
                         Label("From template", systemImage: "list.bullet.rectangle")
                     }
+                    .disabled(loadError != nil)
                 } label: {
                     Image(systemName: "plus")
-                        .foregroundColor(RMTheme.Colors.accent)
+                        .foregroundColor(loadError != nil ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
                 }
+                .disabled(loadError != nil)
             }
         }
         .sheet(isPresented: $showTemplateSheet) {
@@ -372,6 +375,22 @@ struct JobTasksView: View {
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    private func tasksUnavailableTitle(_ error: String) -> String {
+        let lower = error.lowercased()
+        if lower.contains("500") || lower.contains("query_error") || lower.contains("failed to list") {
+            return "Tasks temporarily unavailable"
+        }
+        return "Couldn't load tasks"
+    }
+
+    private func tasksUnavailableMessage(_ error: String) -> String {
+        let lower = error.lowercased()
+        if lower.contains("500") || lower.contains("query_error") || lower.contains("failed to list") {
+            return "We're having trouble loading tasks. Tap Retry or try again later."
+        }
+        return error
     }
 
     private func createTask() async {

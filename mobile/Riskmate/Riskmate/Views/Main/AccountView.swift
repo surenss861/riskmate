@@ -152,7 +152,7 @@ struct AccountView: View {
                             Text("Start a streak")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(RMTheme.Colors.textPrimary)
-                            Text("Post 3 logs this week to build your audit trail.")
+                            Text("Streaks help you maintain an audit trail.")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.70))
                                 .lineLimit(2)
