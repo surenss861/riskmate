@@ -82,7 +82,7 @@ class SessionManager: ObservableObject {
             if let orgId = currentOrganization?.id {
                 await RealtimeEventService.shared.subscribe(organizationId: orgId)
             }
-            // Re-register stored device token after login
+            // Re-register device token after login (backend association is user-scoped; token is device-scoped).
             await NotificationService.shared.registerStoredTokenIfNeeded()
         } catch {
             errorMessage = error.localizedDescription

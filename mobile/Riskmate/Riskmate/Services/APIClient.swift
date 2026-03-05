@@ -210,6 +210,9 @@ class APIClient {
                 }
             }
             
+            Task { @MainActor in
+                ServerStatusManager.shared.recordRequestSuccess()
+            }
             // Only attempt decode for 2xx responses
             let decoder = JSONDecoder()
             // Use default key decoding strategy (no automatic snake_case conversion)
@@ -305,7 +308,9 @@ class APIClient {
             
             print("[APIClient] ❌ Network error: \(urlError.code.rawValue) - \(urlError.localizedDescription)")
             print("[APIClient] Error category: \(errorCategory)")
-            
+            Task { @MainActor in
+                ServerStatusManager.shared.recordNetworkError()
+            }
             throw APIError.networkError(category: errorCategory, message: errorMessage, underlyingError: urlError)
         } catch {
             // Re-throw APIError as-is

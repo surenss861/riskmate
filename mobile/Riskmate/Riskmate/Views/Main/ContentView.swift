@@ -85,7 +85,16 @@ struct ContentView: View {
                         }
                     }
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        if serverStatus.showDegradedBanner {
+                        if serverStatus.isOffline {
+                            Text("You're offline")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                                .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                                .background(RMTheme.Colors.surface2.opacity(0.95))
+                                .overlay(Rectangle().frame(height: 1).foregroundColor(RMTheme.Colors.border.opacity(0.5)), alignment: .bottom)
+                        } else if serverStatus.showDegradedBanner {
                             Text("Some features are temporarily unavailable.")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textSecondary)

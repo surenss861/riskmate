@@ -14,12 +14,15 @@ class ServerStatusManager: ObservableObject {
     /// Time of last 5xx; used for 10-minute cooldown so one fluke 502 doesn't keep banner on forever.
     @Published private(set) var last5xxAt: Date?
 
-    /// Show "Backend degraded" banner only if we had a 5xx recently and it's within the cooldown window (or health hasn't cleared it yet).
+    /// Show "Backend degraded" banner only when we have a 5xx timestamp within the last 10 minutes. Nil last5xxAt → off.
     var showDegradedBanner: Bool {
         guard recentlyDegraded else { return false }
-        guard let at = last5xxAt else { return true }
+        guard let at = last5xxAt else { return false }
         return Date().timeIntervalSince(at) < 600 // 10 min
     }
+
+    /// Set when a request fails with a network error (URLError); cleared on next successful API response. Use for "You're offline" banner.
+    @Published var isOffline: Bool = false
 
     private let healthCheckURL: String
     private var checkTimer: Timer?
@@ -53,6 +56,7 @@ class ServerStatusManager: ObservableObject {
                 if isHealthy {
                     recentlyDegraded = false
                     last5xxAt = nil
+                    isOffline = false
                     // Try to decode health response
                     if let healthData = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                         lastCheck = Date()
@@ -77,6 +81,16 @@ class ServerStatusManager: ObservableObject {
     func record5xx() {
         recentlyDegraded = true
         last5xxAt = Date()
+    }
+
+    /// Call when a request fails due to network (URLError). Banner clears on next successful request.
+    func recordNetworkError() {
+        isOffline = true
+    }
+
+    /// Call when any API request succeeds (2xx). Clears offline banner.
+    func recordRequestSuccess() {
+        isOffline = false
     }
 
     /// Check health and throw if backend is unavailable (for startup gate)

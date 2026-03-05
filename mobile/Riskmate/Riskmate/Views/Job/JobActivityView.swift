@@ -14,6 +14,8 @@ struct JobActivityView: View {
     @State private var isLoadingMore = false
     @State private var hasMore = true
     @State private var nextCursor: String?
+    /// Cursors we've already requested; if backend repeats a cursor, stop pagination (safety net).
+    @State private var seenCursors: Set<String> = []
     private let pageSize = 50
     @State private var showFilterSheet = false
     @State private var filterActorId: String?
@@ -321,6 +323,7 @@ struct JobActivityView: View {
         isLoading = true
         nextCursor = nil
         hasMore = true
+        seenCursors = []
         defer { isLoading = false }
         do {
             let (fetched, more, cursor) = try await APIClient.shared.getAuditEventsForJob(
@@ -335,6 +338,7 @@ struct JobActivityView: View {
             events = fetched
             hasMore = more && (cursor != nil)
             nextCursor = cursor
+            if let c = cursor { seenCursors.insert(c) }
             await loadActorsIfNeeded()
         } catch {
             let message = userFacingErrorMessage(error)
@@ -342,6 +346,7 @@ struct JobActivityView: View {
             events = []
             nextCursor = nil
             hasMore = false
+            seenCursors = []
             loadMoreError = nil
             isLoadingMore = false
             ToastCenter.shared.show(message, systemImage: "exclamationmark.triangle", style: .error)
@@ -354,6 +359,12 @@ struct JobActivityView: View {
 
     private func loadMore() async {
         guard !isLoadingMore, hasMore, let cursor = nextCursor else { return }
+        if seenCursors.contains(cursor) {
+            hasMore = false
+            nextCursor = nil
+            return
+        }
+        seenCursors.insert(cursor)
         if let start = appliedFilters.startDate, let end = appliedFilters.endDate, start > end {
             let message = "Start date must be before end date"
             loadMoreError = message
@@ -375,6 +386,7 @@ struct JobActivityView: View {
             let existingIds = Set(events.map(\.id))
             let newEvents = fetched.filter { !existingIds.contains($0.id) }
             events.append(contentsOf: newEvents)
+            if let c = newCursor { seenCursors.insert(c) }
             hasMore = more && (newCursor != nil)
             nextCursor = newCursor
             loadMoreError = nil
@@ -620,7 +632,7 @@ struct ActivityCardView: View {
 /// Subscribes to audit_log INSERTs for a job and publishes new events for the view to prepend.
 /// Uses POST /api/jobs/{id}/activity/subscribe for channelId/organizationId, then Supabase postgres_changes with filter.
 /// Authenticates the Supabase client with the current user JWT so RLS on audit_logs allows the feed.
-/// On 404/501 from subscribe endpoint, disables realtime for 24h to avoid log spam and battery drain (Activity still uses audit events list).
+/// On 404/410/501 from subscribe endpoint, disables realtime for 24h to avoid log spam and battery drain (Activity still uses audit events list).
 @MainActor
 final class JobActivityRealtimeService: ObservableObject {
     private static let activityRealtimeDisabledUntilKey = "activityRealtimeDisabledUntil"
@@ -639,7 +651,7 @@ final class JobActivityRealtimeService: ObservableObject {
     private(set) var actorCache: [String: (name: String, role: String?)] = [:]
 
     /// Subscribe to job-specific audit_log inserts, then wait until cancelled. Call unsubscribe() on cancel.
-    /// Uses the current user session JWT so RLS on audit_logs allows postgres_changes. On 404/501, fails silently and disables realtime for 24h.
+    /// Uses the current user session JWT so RLS on audit_logs allows postgres_changes. On 404/410/501, fails silently and disables realtime for 24h.
     func subscribeAndWait(jobId: String) async {
         subscriptionUnavailableReason = nil
 
@@ -652,7 +664,7 @@ final class JobActivityRealtimeService: ObservableObject {
         do {
             subscribeResult = try await APIClient.shared.subscribeToJobActivity(jobId: jobId)
         } catch {
-            if let apiError = error as? APIError, case .httpError(let code, _) = apiError, code == 404 || code == 501 {
+            if let apiError = error as? APIError, case .httpError(let code, _) = apiError, [404, 410, 501].contains(code) {
                 UserDefaults.standard.set(Date().addingTimeInterval(Self.activityRealtimeDisableInterval), forKey: Self.activityRealtimeDisabledUntilKey)
             }
             return
