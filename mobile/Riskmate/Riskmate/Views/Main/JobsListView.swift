@@ -29,9 +29,9 @@ struct JobsListView: View {
     private var dividerOpacity: CGFloat {
         let raw = (scrollBaselineY ?? 0) - scrollY
         let amount = max(0, raw)
-        if amount < 12 { return 0 }
+        if amount < 16 { return 0 }
         if amount > 28 { return maxDividerOpacity }
-        let t = (amount - 12) / (28 - 12)
+        let t = (amount - 16) / (28 - 16)
         return maxDividerOpacity * t
     }
 

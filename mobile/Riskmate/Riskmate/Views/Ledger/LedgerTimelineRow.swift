@@ -18,7 +18,7 @@ struct LedgerTimelineRow: View {
 
         var dotColor: Color {
             switch self {
-            case .verified: return RMTheme.Colors.accent
+            case .verified: return Color.white.opacity(0.9)
             case .warning: return RMTheme.Colors.warning
             case .error: return RMTheme.Colors.error
             }
@@ -59,7 +59,7 @@ struct LedgerTimelineRow: View {
                                     if isVerified {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(RMTheme.Colors.accent)
+                                            .foregroundColor(Color.white.opacity(0.9))
                                     }
                                 }
                                 Text(subtitle)
@@ -74,9 +74,9 @@ struct LedgerTimelineRow: View {
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
 
-                        // Hash pill: SHA-256 · 2F3A…9C + copy (tap = copy; long-press also copies)
+                        // Hash pill: tap = copy + "Copied"; long-press = copy + "Copied full hash"
                         Button {
-                            copyHash()
+                            copyHash(fullHashToast: false)
                         } label: {
                             HStack(spacing: 6) {
                                 Text("SHA-256 · \(hashPreview)")
@@ -91,8 +91,8 @@ struct LedgerTimelineRow: View {
                             .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .onLongPressGesture(minimumDuration: 0.5) {
-                            copyHash()
+                        .onLongPressGesture(minimumDuration: 0.4) {
+                            copyHash(fullHashToast: true)
                         }
                     }
                     .padding(.leading, RMTheme.Spacing.sm)
@@ -104,10 +104,14 @@ struct LedgerTimelineRow: View {
         .buttonStyle(.plain)
     }
 
-    private func copyHash() {
+    private func copyHash(fullHashToast: Bool) {
         UIPasteboard.general.string = fullHash
         Haptics.impact(.light)
-        ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
+        ToastCenter.shared.show(
+            fullHashToast ? "Copied full hash" : "Copied",
+            systemImage: "doc.on.doc",
+            style: .success
+        )
     }
 }
 

@@ -24,9 +24,9 @@ struct AuditFeedView: View {
 
     private var dividerOpacity: CGFloat {
         let amount = max(0, (scrollBaselineY ?? 0) - scrollY)
-        if amount < 12 { return 0 }
+        if amount < 16 { return 0 }
         if amount > 28 { return 0.075 }
-        return 0.075 * (amount - 12) / 16
+        return 0.075 * (amount - 16) / 12
     }
 
     /// Events sorted by timestamp desc, grouped by calendar day
@@ -557,7 +557,7 @@ struct LedgerExportSheet: View {
                         isGenerating = true
                         onExport()
                         ToastCenter.shared.show("Proof Pack exported", systemImage: "checkmark.circle", style: .success)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
                             isGenerating = false
                             dismiss()
                         }
