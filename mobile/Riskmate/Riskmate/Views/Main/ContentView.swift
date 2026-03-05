@@ -251,7 +251,7 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 110) // keeps it above the tab bar
+                .padding(.bottom, RMTabBar.barHeight + 18)
             }
         }
         .onChange(of: quickAction.showNotificationCenter) { _, show in

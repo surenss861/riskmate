@@ -75,6 +75,7 @@ struct RMTopBar<Trailing: View>: View {
         .padding(.horizontal, RMTheme.Spacing.md)
         .padding(.vertical, 12)
         .background(.ultraThinMaterial)
+        .overlay(Color.black.opacity(0.25))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.06))
