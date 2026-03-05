@@ -21,6 +21,18 @@ struct JobsListView: View {
     @Namespace private var jobListNamespace
     @Namespace private var filterChipNamespace
     @State private var selectedQuickChip: JobsQuickFilter?
+    @State private var scrollY: CGFloat = 0
+    @State private var scrollBaselineY: CGFloat?
+
+    private let scrollSpace = "workRecordsScroll"
+
+    private var dividerOpacity: CGFloat {
+        let amount = max(0, (scrollBaselineY ?? 0) - scrollY)
+        if amount < 8 { return 0 }
+        if amount > 28 { return 0.06 }
+        let t = (amount - 8) / (28 - 8)
+        return 0.06 * t
+    }
 
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
@@ -182,6 +194,14 @@ struct JobsListView: View {
                     } else {
                         List {
                             Section {
+                                Color.clear
+                                    .frame(height: 0)
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                                    .trackScrollY(in: scrollSpace)
+                            }
+                            Section {
                             ForEach(Array(filteredJobs.enumerated()), id: \.element.id) { index, job in
                                 NavigationLink(value: job) {
                                     JobCard(
@@ -298,8 +318,13 @@ struct JobsListView: View {
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                         .scrollDismissesKeyboard(.interactively)
+                        .coordinateSpace(name: scrollSpace)
                     }
                 }
+            }
+            .onPreferenceChange(ScrollYKey.self) { value in
+                if scrollBaselineY == nil { scrollBaselineY = value }
+                scrollY = value
             }
             .rmNavigationBar(title: "Work Records")
             .toolbar(.hidden, for: .navigationBar)
@@ -397,8 +422,10 @@ struct JobsListView: View {
                         .padding(.top, 6)
                         .padding(.bottom, 8)
                     Rectangle()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(Color.white)
+                        .opacity(dividerOpacity)
                         .frame(height: 1)
+                        .animation(.easeOut(duration: 0.15), value: dividerOpacity)
                 }
                 .background(RMTheme.Colors.background)
             }
@@ -766,5 +793,33 @@ struct DetailRow: View {
                 .font(RMTheme.Typography.body)
                 .foregroundColor(RMTheme.Colors.textSecondary)
         }
+    }
+}
+
+// MARK: - Scroll Y preference (divider fade-in)
+
+private struct ScrollYKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct TrackScrollY: ViewModifier {
+    let space: String
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: ScrollYKey.self, value: proxy.frame(in: .named(space)).minY)
+                }
+            )
+    }
+}
+
+private extension View {
+    func trackScrollY(in space: String) -> some View {
+        modifier(TrackScrollY(space: space))
     }
 }
