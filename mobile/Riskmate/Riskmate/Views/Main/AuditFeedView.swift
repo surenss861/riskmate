@@ -254,7 +254,6 @@ struct AuditFeedView: View {
                             VStack(spacing: 10) {
                                 ForEach(group.events) { event in
                                     ledgerRow(for: event)
-                                        .padding(.vertical, 6)
                                         .contextMenu {
                                             Button {
                                                 copyEventId(event.id)
@@ -326,7 +325,7 @@ struct AuditFeedView: View {
     }
 }
 
-// MARK: - Pinned day header (solid surface + bottom divider; Wallet/Health-style)
+// MARK: - Pinned day header (solid surface + top/bottom edge; Wallet/Health-style, attached when stuck)
 private struct LedgerPinnedDayHeader: View {
     let title: String
     let count: Int
@@ -334,25 +333,31 @@ private struct LedgerPinnedDayHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(RMTheme.Typography.sectionTitle)
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(RMTheme.Colors.textPrimary)
             Spacer()
             Text("\(count) event\(count == 1 ? "" : "s")")
-                .font(RMTheme.Typography.secondaryLabelLarge)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(RMTheme.Colors.textTertiary)
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RMTheme.Colors.surface2.opacity(0.92)
-        )
-        .overlay(
             Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(height: 1),
-            alignment: .bottom
+                .fill(RMTheme.Colors.surface2.opacity(0.92))
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 1)
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 1)
+                }
         )
+        .zIndex(10)
     }
 }
 
