@@ -428,6 +428,11 @@ struct JobsListView: View {
                             .tint(RMTheme.Colors.accent)
                         }
                         .padding(.top, 2)
+                        Text("Queue for evidence, risk, and exports.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.65))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 6)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 FilterPill(
@@ -577,11 +582,11 @@ struct JobsListView: View {
         showExportProofSheet = true
     }
 
-    /// One-line proof pipeline for job row: Evidence X/Y · Signatures 0/1 · Export status.
+    /// One-line proof pipeline for job row: Evidence X/Y · Signatures — · Export status.
     private func proofStatusLine(for job: Job) -> String {
         let ev = job.evidenceRequired ?? 0
         let evidencePart = ev > 0 ? "Evidence \(job.evidenceCount ?? 0)/\(ev)" : "Evidence —"
-        let signaturesPart = "Sign 0/1"
+        let signaturesPart = "Signatures —"
         let exportPart: String
         if let last = BackgroundExportManager.shared.getLastExport(jobId: job.id, type: .proofPack) {
             let formatter = RelativeDateTimeFormatter()

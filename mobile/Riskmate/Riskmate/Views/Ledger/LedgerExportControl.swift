@@ -51,6 +51,12 @@ struct LedgerExportControl: View {
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm + 2)
             .padding(.bottom, 8)
+            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 1)
+            }
 
             Rectangle()
                 .fill(.ultraThinMaterial)

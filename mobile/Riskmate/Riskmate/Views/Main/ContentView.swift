@@ -264,6 +264,7 @@ struct ContentView: View {
                 .animation(Self.tabSpring, value: tabDragOffset)
                 .clipped()
                 .contentShape(Rectangle())
+                // Swipe-between-tabs: gesture only on sliding content so top bar taps are never intercepted
                 .gesture(
                     DragGesture(minimumDistance: 20)
                         .onChanged { value in

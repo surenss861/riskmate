@@ -138,7 +138,7 @@ struct AccountView: View {
                 )
             } else {
                 RMCard(useSolidSurface: true) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.white.opacity(0.06))
                             .frame(width: 44, height: 44)
@@ -147,6 +147,7 @@ struct AccountView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(Color.white.opacity(0.18))
                             )
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Start a streak")
                                 .font(.system(size: 14, weight: .semibold))
@@ -156,7 +157,7 @@ struct AccountView: View {
                                 .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.70))
                                 .lineLimit(2)
                         }
-                        Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         Button {
                             Haptics.tap()
                             ToastCenter.shared.show("Coming soon", systemImage: "clock", style: .info)
