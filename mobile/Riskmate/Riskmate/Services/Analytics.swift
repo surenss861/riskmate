@@ -131,6 +131,12 @@ class Analytics {
         trackEvent("critical_banner_clicked", metadata: ["job_id": jobId])
     }
     
+    // MARK: - Operations
+    
+    func trackOperationsNeedsAttentionOpened(filter: String) {
+        trackEvent("operations_needs_attention_opened", metadata: ["filter": filter])
+    }
+    
     // MARK: - Long-Press Actions
     
     func trackLongPressActionsUsed(action: String, jobId: String) {

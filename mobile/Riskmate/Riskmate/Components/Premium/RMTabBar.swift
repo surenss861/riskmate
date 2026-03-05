@@ -9,6 +9,8 @@ struct RMTabBar: View {
     var namespace: Namespace.ID
     /// Optional badge counts per tab (e.g. notifications, pending sync).
     var badgeCounts: [MainTab: Int] = [:]
+    /// Called when user taps the currently selected tab (re-tap). Use to e.g. clear Work Records filter and return to hub.
+    var onSameTabTapped: ((MainTab) -> Void)? = nil
 
     private static let items: [(tab: MainTab, title: String, icon: String)] = [
         (.operations, "Operations", "briefcase.fill"),
@@ -41,7 +43,10 @@ struct RMTabBar: View {
         let isSelected = selection == tab
         let count = badgeCounts[tab] ?? 0
         return Button {
-            guard selection != tab else { return }
+            if selection == tab {
+                onSameTabTapped?(tab)
+                return
+            }
             Haptics.tap()
             withAnimation(RMMotion.spring) {
                 selection = tab

@@ -75,6 +75,18 @@ struct JobsListView: View {
         selectedStatus != "all" || selectedRiskLevel != "all" || !searchText.isEmpty || selectedQuickChip != nil
     }
     
+    /// Display subtitle when list is shown with a filter (e.g. from Operations "Review blockers").
+    private var workRecordsFilterDisplayName: String? {
+        guard let f = initialFilter else { return nil }
+        switch f {
+        case "blockers": return "Jobs with blockers"
+        case "highRisk": return "High risk jobs"
+        case "active": return "Active jobs"
+        case "missingEvidence": return "Jobs needing evidence"
+        default: return nil
+        }
+    }
+    
     private var resultsCountHighRisk: Int {
         filteredJobs.filter { ($0.riskScore ?? 0) >= 80 }.count
     }
@@ -348,35 +360,44 @@ struct JobsListView: View {
             .rmNavigationBar(title: "Work Records")
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
-                RMTopBar(title: "Work Records", notificationBadge: 0) {
-                    HStack(spacing: 8) {
-                        if onBackToHub != nil {
-                            Button {
-                                Haptics.tap()
-                                onBackToHub?()
-                            } label: {
-                                Text("Back to hub")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(RMTheme.Colors.accent)
+                VStack(spacing: 4) {
+                    RMTopBar(title: "Work Records", notificationBadge: 0) {
+                        HStack(spacing: 8) {
+                            if onBackToHub != nil {
+                                Button {
+                                    Haptics.tap()
+                                    onBackToHub?()
+                                } label: {
+                                    Text("Back to hub")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(RMTheme.Colors.accent)
+                                }
+                                .accessibilityLabel("Back to Work Records hub")
                             }
-                            .accessibilityLabel("Back to Work Records hub")
-                        }
-                        if !isAuditor {
-                            Button {
-                                Haptics.tap()
-                                showCreateJobSheet = true
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                                    .frame(width: 40, height: 40)
-                                    .background(RMTheme.Colors.surface2)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
-                                    .themeShadow(RMTheme.Shadow.cardLight)
+                            if !isAuditor {
+                                Button {
+                                    Haptics.tap()
+                                    showCreateJobSheet = true
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                        .frame(width: 40, height: 40)
+                                        .background(RMTheme.Colors.surface2)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+                                        .themeShadow(RMTheme.Shadow.cardLight)
+                                }
+                                .accessibilityLabel("Create new job")
                             }
-                            .accessibilityLabel("Create new job")
                         }
+                    }
+                    if let filterName = workRecordsFilterDisplayName {
+                        Text(filterName)
+                            .font(.subheadline)
+                            .foregroundStyle(RMTheme.Colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
                     }
                 }
             }

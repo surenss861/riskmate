@@ -332,7 +332,11 @@ struct ContentView: View {
                 if !entitlements.isAuditor() && selectedTab == .workRecords {
                     AddEvidenceDockedBar(onTap: { quickAction.presentEvidence(jobId: nil) })
                 }
-                RMTabBar(selection: $selectedTab, namespace: tabBarNamespace)
+                RMTabBar(selection: $selectedTab, namespace: tabBarNamespace, onSameTabTapped: { tab in
+                    if tab == .workRecords && selectedTab == .workRecords {
+                        workRecordsFilter = nil
+                    }
+                })
                     .zIndex(999)
             }
         }

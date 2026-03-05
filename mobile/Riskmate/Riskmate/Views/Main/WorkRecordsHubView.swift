@@ -60,14 +60,18 @@ struct WorkRecordsHubView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: RMTheme.Spacing.lg) {
-                // Needs action (queue)
-                needsActionSection
-                // Recent evidence (last 10)
-                recentEvidenceSection
-                // Recent proof packs (last 5)
-                recentProofPacksSection
-                // Browse all jobs
-                browseJobsSection
+                if jobsStore.isLoading {
+                    hubLoadingSkeleton
+                } else {
+                    // Needs action (queue)
+                    needsActionSection
+                    // Recent evidence (last 10)
+                    recentEvidenceSection
+                    // Recent proof packs (last 5)
+                    recentProofPacksSection
+                    // Browse all jobs
+                    browseJobsSection
+                }
             }
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm)
@@ -87,6 +91,18 @@ struct WorkRecordsHubView: View {
         }
         .navigationDestination(for: WorkRecordsJobRoute.self) { route in
             JobDetailView(jobId: route.jobId, initialTab: route.initialTab)
+        }
+    }
+
+    /// Skeleton shown while jobs (and thus hub context) are loading; makes the screen feel intentional.
+    private var hubLoadingSkeleton: some View {
+        VStack(alignment: .leading, spacing: RMTheme.Spacing.lg) {
+            sectionHeader(title: "Needs action", count: 0)
+            RMSkeletonList(count: 2)
+            sectionHeader(title: "Recent evidence", count: 0)
+            RMSkeletonList(count: 3)
+            sectionHeader(title: "Recent proof packs", count: 0)
+            RMSkeletonList(count: 2)
         }
     }
 
@@ -131,6 +147,7 @@ struct WorkRecordsHubView: View {
                                     export: task,
                                     isRetrying: isRetryingExport,
                                     canRetry: (task.state == .failed) && !hasInFlightExport(jobId: task.jobId, type: task.type),
+                                    isInFlight: hasInFlightExport(jobId: task.jobId, type: task.type),
                                     onRetry: {
                                         guard task.state == .failed, !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
                                         Task {
@@ -199,7 +216,7 @@ struct WorkRecordsHubView: View {
                     ForEach(recentProofPacks) { task in
                         if case .ready = task.state {
                             NavigationLink(value: WorkRecordsJobRoute(jobId: task.jobId, initialTab: .exports)) {
-                                WorkRecordsExportRow(export: task, isRetrying: false, onRetry: nil)
+                                WorkRecordsExportRow(export: task, isRetrying: false, isInFlight: false, onRetry: nil)
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -207,6 +224,7 @@ struct WorkRecordsHubView: View {
                                 export: task,
                                 isRetrying: isRetryingExport,
                                 canRetry: !hasInFlightExport(jobId: task.jobId, type: task.type),
+                                isInFlight: hasInFlightExport(jobId: task.jobId, type: task.type),
                                 onRetry: {
                                     guard !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
                                     Task {
@@ -359,6 +377,8 @@ private struct WorkRecordsExportRow: View {
     let isRetrying: Bool
     /// When false, show status only (no Retry) so we don't double-trigger if already in-flight.
     var canRetry: Bool = true
+    /// When true, show Retry but disabled (prevents rapid taps while request is in flight).
+    var isInFlight: Bool = false
     var onRetry: (() -> Void)?
 
     private var statusLabel: String {
@@ -393,7 +413,7 @@ private struct WorkRecordsExportRow: View {
             Text(statusLabel)
                 .font(RMTheme.Typography.caption2)
                 .foregroundColor(statusColor)
-            if canRetry, onRetry != nil {
+            if (canRetry || isInFlight), onRetry != nil {
                 Button {
                     Haptics.tap()
                     onRetry?()
@@ -404,10 +424,10 @@ private struct WorkRecordsExportRow: View {
                     } else {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 12))
-                            .foregroundColor(RMTheme.Colors.accent)
+                            .foregroundColor(isInFlight ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
                     }
                 }
-                .disabled(isRetrying)
+                .disabled(isRetrying || isInFlight)
             }
         }
         .padding(RMTheme.Spacing.sm)

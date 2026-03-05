@@ -132,7 +132,11 @@ struct OperationsView: View {
                 OperationsNeedsAttentionCard(
                     blockerCount: blockerCount,
                     highRiskCount: highRiskJobs.count,
-                    onReview: { blockerCount > 0 ? onKPINavigate?("blockers") : onKPINavigate?("highRisk") }
+                    onReview: {
+                        let filter = blockerCount > 0 ? "blockers" : "highRisk"
+                        Analytics.shared.trackOperationsNeedsAttentionOpened(filter: filter)
+                        onKPINavigate?(filter)
+                    }
                 )
                 .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
                 .listRowBackground(Color.clear)
