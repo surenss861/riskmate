@@ -118,9 +118,12 @@ class APIClient {
             print("[APIClient] ✅ Auth token attached (length: \(token.count), preview: \(preview)…)")
             print("[APIClient] ✅ Token format verified: JWT (3 parts, starts with eyJ)")
             #endif
+        } catch let authError as AuthError where authError == .expiredToken {
+            print("[APIClient] ❌ Session token expired; logging out")
+            await SessionManager.shared.logout()
+            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
         } catch {
             print("[APIClient] ❌ Failed to get valid auth token: \(error.localizedDescription)")
-            // Re-throw AuthService errors as-is (they have better messages)
             if let nsError = error as NSError? {
                 throw APIError.httpError(statusCode: 401, message: nsError.localizedDescription)
             }
@@ -1551,6 +1554,9 @@ class APIClient {
             if let token = try await authService.getAccessToken() {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
+        } catch let authError as AuthError where authError == .expiredToken {
+            await SessionManager.shared.logout()
+            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
         } catch {
             print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
         }
@@ -1584,6 +1590,9 @@ class APIClient {
             if let token = try await authService.getAccessToken() {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
+        } catch let authError as AuthError where authError == .expiredToken {
+            await SessionManager.shared.logout()
+            throw APIError.httpError(statusCode: 401, message: "Session expired. Please sign in again.")
         } catch {
             print("[APIClient] ⚠️ Could not get auth token for download, proceeding without it")
         }

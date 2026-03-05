@@ -3,6 +3,17 @@ import Foundation
 // If that fails, the package isn't added correctly
 import Supabase
 
+/// Auth-specific errors so callers can act (e.g. force logout on expired token) without parsing strings.
+enum AuthError: LocalizedError {
+    case expiredToken
+
+    var errorDescription: String? {
+        switch self {
+        case .expiredToken: return "Session token is expired"
+        }
+    }
+}
+
 /// Wraps Supabase authentication
 class AuthService {
     static let shared = AuthService()
@@ -112,14 +123,10 @@ class AuthService {
                 )
             }
 
-            // Never return an expired token; callers should treat as no session.
+            // Never return an expired token; callers can catch AuthError.expiredToken and force logout.
             if JWTExpiry.isExpired(token) {
                 print("[AuthService] ⚠️ Access token is expired; not returning")
-                throw NSError(
-                    domain: "AuthService",
-                    code: 4,
-                    userInfo: [NSLocalizedDescriptionKey: "Session token is expired"]
-                )
+                throw AuthError.expiredToken
             }
             
             // Logging (safe): only log in DEBUG builds

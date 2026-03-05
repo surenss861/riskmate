@@ -130,21 +130,19 @@ class SessionManager: ObservableObject {
         }
     }
     
-    /// Logout
+    /// Logout. Does not require a valid token — best effort: clears local session (Supabase signOut), unregisters push, clears state.
     func logout() async {
         isLoading = true
         defer { isLoading = false }
         
-        // Unsubscribe from realtime events
         await RealtimeEventService.shared.unsubscribe()
         
-        // Unregister device token before signing out; clear cached token after success to prevent reuse
         if let token = NotificationService.shared.lastDeviceToken {
             do {
                 try await NotificationService.shared.unregisterDeviceToken(token)
                 NotificationService.shared.clearStoredToken()
             } catch {
-                // Benign: e.g. network, token already removed
+                // Benign: e.g. network, token already removed; don't fail logout
             }
         }
         
