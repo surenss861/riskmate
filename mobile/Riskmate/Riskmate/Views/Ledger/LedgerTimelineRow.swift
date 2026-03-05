@@ -58,6 +58,14 @@ struct LedgerTimelineRow: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.white.opacity(0.9))
                                 }
+                                if status == .warning || status == .error {
+                                    Text("Needs review")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.9))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(RMTheme.Colors.surface1.opacity(0.5), in: Capsule())
+                                }
                             }
                             Text(subtitle)
                                 .font(RMTheme.Typography.secondaryLabelLarge)
@@ -74,7 +82,7 @@ struct LedgerTimelineRow: View {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary)
-                                .opacity(isVerified ? 0.18 : 0.28)
+                                .opacity(isVerified ? 0.15 : 0.28)
                         }
                     }
 

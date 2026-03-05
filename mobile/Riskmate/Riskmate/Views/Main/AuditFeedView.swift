@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftDate
+import CryptoKit
 
 /// Audit feed with native list, category pills, and detail sheets
 struct AuditFeedView: View {
@@ -199,17 +200,29 @@ struct AuditFeedView: View {
                 eventCount: events.count,
                 onExport: {
                     showingExportSheet = false
-                    let url = try? AuditExporter.exportJSON(events: events)
-                    exportURL = url
-                    if let u = url {
+                    let tempURL = try? AuditExporter.exportJSON(events: events)
+                    exportURL = tempURL
+                    if let temp = tempURL, let (persistentURL, size, hash) = ExportPersistence.copyToExports(tempURL: temp, format: "json") {
                         lastExportedAt = Date()
-                        let size = (try? FileManager.default.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0
                         ExportHistoryStore.shared.add(
-                            filename: u.lastPathComponent,
+                            filename: persistentURL.lastPathComponent,
                             date: Date(),
                             format: "JSON",
                             sizeBytes: size,
-                            fileURL: u
+                            fileURL: persistentURL,
+                            hash: hash
+                        )
+                        exportURL = persistentURL
+                    } else if let temp = tempURL {
+                        lastExportedAt = Date()
+                        let size = (try? FileManager.default.attributesOfItem(atPath: temp.path)[.size] as? Int64) ?? 0
+                        ExportHistoryStore.shared.add(
+                            filename: temp.lastPathComponent,
+                            date: Date(),
+                            format: "JSON",
+                            sizeBytes: size,
+                            fileURL: nil,
+                            hash: nil
                         )
                     }
                 },
@@ -655,6 +668,39 @@ struct LedgerExportSheet: View {
     }
 }
 
+// MARK: - Persistent export (Application Support/Exports); Share always works
+private enum ExportPersistence {
+    static let exportsSubfolder = "Exports"
+    static let filenamePrefix = "riskmate-proof-pack"
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd-HHmm"
+        return f
+    }()
+
+    /// Copy temp export to Application Support/Exports/ with human-readable unique filename. Returns (persistentURL, sizeBytes, sha256Hex) or nil.
+    static func copyToExports(tempURL: URL, format: String) -> (URL, Int64, String?)? {
+        guard let data = try? Data(contentsOf: tempURL) else { return nil }
+        let fileManager = FileManager.default
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let exportsDir = appSupport.appendingPathComponent(exportsSubfolder, isDirectory: true)
+        try? fileManager.createDirectory(at: exportsDir, withIntermediateDirectories: true)
+        let ext = format.lowercased() == "json" ? "json" : "json"
+        let dateStr = dateFormatter.string(from: Date())
+        let filename = "\(filenamePrefix)-\(dateStr).\(ext)"
+        let destURL = exportsDir.appendingPathComponent(filename)
+        do {
+            try data.write(to: destURL, options: .atomic)
+        } catch {
+            return nil
+        }
+        let size = (try? fileManager.attributesOfItem(atPath: destURL.path)[.size] as? Int64) ?? Int64(data.count)
+        let digest = SHA256.hash(data: data)
+        let hash = digest.map { String(format: "%02x", $0) }.joined()
+        return (destURL, size, hash)
+    }
+}
+
 // MARK: - Export history (local list: filename, time, format, size, copy hash, Share)
 struct ExportHistoryEntry: Identifiable {
     let id: UUID
@@ -663,19 +709,22 @@ struct ExportHistoryEntry: Identifiable {
     let format: String
     let sizeBytes: Int64
     let fileURL: URL?
-    init(id: UUID = UUID(), filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil) {
+    let hash: String?
+    init(id: UUID = UUID(), filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil, hash: String? = nil) {
         self.id = id
         self.filename = filename
         self.date = date
         self.format = format
         self.sizeBytes = sizeBytes
         self.fileURL = fileURL
+        self.hash = hash
     }
     var sizeDisplay: String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: sizeBytes)
     }
+    var hashPreview: String? { hash.map { String($0.prefix(12)) + "…" } }
 }
 
 final class ExportHistoryStore: ObservableObject {
@@ -683,8 +732,8 @@ final class ExportHistoryStore: ObservableObject {
     @Published private(set) var entries: [ExportHistoryEntry] = []
     private let maxEntries = 50
 
-    func add(filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil) {
-        let entry = ExportHistoryEntry(filename: filename, date: date, format: format, sizeBytes: sizeBytes, fileURL: fileURL)
+    func add(filename: String, date: Date, format: String, sizeBytes: Int64, fileURL: URL? = nil, hash: String? = nil) {
+        let entry = ExportHistoryEntry(filename: filename, date: date, format: format, sizeBytes: sizeBytes, fileURL: fileURL, hash: hash)
         entries.insert(entry, at: 0)
         if entries.count > maxEntries { entries.removeLast() }
     }
@@ -742,67 +791,69 @@ private struct IdentifiableURL: Identifiable {
 private struct ExportHistoryRow: View {
     let entry: ExportHistoryEntry
     let onShare: () -> Void
-    @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
+            Image(systemName: "doc.fill")
+                .font(.system(size: 20))
+                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.8))
+                .frame(width: 40, height: 40)
+                .background(RMTheme.Colors.surface1.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 4) {
                 Text(entry.filename)
                     .font(RMTheme.Typography.bodyBold)
                     .foregroundColor(RMTheme.Colors.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer()
-                Text(entry.format)
-                    .font(RMTheme.Typography.caption)
+                Text("\(entry.format) • \(entry.sizeDisplay)")
+                    .font(RMTheme.Typography.metadataSmall)
                     .foregroundColor(RMTheme.Colors.textTertiary)
-            }
-            HStack(spacing: RMTheme.Spacing.sm) {
                 Text(entry.date, style: .relative)
                     .font(RMTheme.Typography.metadataSmall)
-                    .foregroundColor(RMTheme.Colors.textTertiary)
-                Text("·")
-                    .foregroundColor(RMTheme.Colors.textTertiary)
-                Text(entry.sizeDisplay)
-                    .font(RMTheme.Typography.metadataSmall)
-                    .foregroundColor(RMTheme.Colors.textTertiary)
-            }
-            HStack(spacing: 8) {
-                Button {
-                    Haptics.impact(.light)
-                    UIPasteboard.general.string = entry.filename
-                    ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(entry.filename)
-                            .font(RMTheme.Typography.metadata)
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 10))
-                            .foregroundColor(RMTheme.Colors.textTertiary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                if let url = entry.fileURL, FileManager.default.fileExists(atPath: url.path) {
+                    .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.85))
+                HStack(spacing: 8) {
                     Button {
-                        Haptics.tap()
-                        onShare()
+                        Haptics.impact(.light)
+                        if let h = entry.hash {
+                            UIPasteboard.general.string = h
+                            ToastCenter.shared.show("Copied hash", systemImage: "doc.on.doc", style: .success)
+                        } else {
+                            UIPasteboard.general.string = entry.filename
+                            ToastCenter.shared.show("Copied name", systemImage: "doc.on.doc", style: .success)
+                        }
                     } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                            .font(RMTheme.Typography.captionBold)
-                            .foregroundColor(RMTheme.Colors.accent)
+                        HStack(spacing: 4) {
+                            Text(entry.hashPreview ?? entry.filename)
+                                .font(RMTheme.Typography.metadata)
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 10))
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    if let url = entry.fileURL, FileManager.default.fileExists(atPath: url.path) {
+                        Button {
+                            Haptics.tap()
+                            onShare()
+                        } label: {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                                .font(RMTheme.Typography.captionBold)
+                                .foregroundColor(RMTheme.Colors.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
                 }
-                Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 }
 
