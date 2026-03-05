@@ -22,11 +22,22 @@ struct AuditFeedView: View {
     private let ledgerScrollSpace = "ledgerScroll"
     private var rbac: RBAC { RBAC(role: entitlements.entitlements?.role) }
 
+    private var scrollAmount: CGFloat {
+        max(0, (scrollBaselineY ?? 0) - scrollY)
+    }
+
     private var dividerOpacity: CGFloat {
-        let amount = max(0, (scrollBaselineY ?? 0) - scrollY)
+        let amount = scrollAmount
         if amount < 16 { return 0 }
         if amount > 28 { return 0.075 }
         return 0.075 * (amount - 16) / 12
+    }
+
+    /// 0...1 over same 16pt window; drives pinned chrome "attach" (fill + shadow).
+    private var chromeT: CGFloat {
+        let amount = scrollAmount
+        if amount < 16 { return 0 }
+        return min(1, (amount - 16) / 16)
     }
 
     /// Events sorted by timestamp desc, grouped by calendar day
@@ -138,6 +149,7 @@ struct AuditFeedView: View {
             LedgerExportControl(
                 lastExportedAt: lastExportedAt,
                 dividerOpacity: dividerOpacity,
+                chromeT: chromeT,
                 onExportTapped: { showingExportSheet = true }
             )
         }

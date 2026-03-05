@@ -1,10 +1,15 @@
 import SwiftUI
 
 /// Pinned Export control: one CTA + metadata. Optional "Last exported…" and divider below.
+/// chromeT (0...1) drives "attach to scroll": fill 0.92→0.96, shadow 0.35→0.20.
 struct LedgerExportControl: View {
     var lastExportedAt: Date?
     var dividerOpacity: CGFloat = 0
+    var chromeT: CGFloat = 0
     let onExportTapped: () -> Void
+
+    private var fillOpacity: CGFloat { 0.92 + (0.96 - 0.92) * chromeT }
+    private var shadowOpacity: CGFloat { 0.35 + (0.20 - 0.35) * chromeT }
 
     private var lastExportedText: String? {
         guard let date = lastExportedAt else { return nil }
@@ -45,7 +50,7 @@ struct LedgerExportControl: View {
             .buttonStyle(.plain)
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(RMTheme.Colors.surface2.opacity(0.92))
+                    .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -60,7 +65,7 @@ struct LedgerExportControl: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             )
-            .themeShadow(RMTheme.Shadow.card)
+            .shadow(color: .black.opacity(shadowOpacity), radius: 16, x: 0, y: 6)
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm)
 

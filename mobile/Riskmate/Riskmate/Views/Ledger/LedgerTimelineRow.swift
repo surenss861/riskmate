@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Timeline row: left rail + status dot + title/subtitle + hash pill + time. Solid surface, tap affordance.
+/// When onTap is non-nil, shows chevron and row tap opens detail; hash pill tap/long-press copy unchanged.
 struct LedgerTimelineRow: View {
     let title: String
     let subtitle: String
@@ -9,7 +10,7 @@ struct LedgerTimelineRow: View {
     let timeText: String
     let status: LedgerEventStatus
     let isVerified: Bool
-    let onTap: () -> Void
+    var onTap: (() -> Void)? = nil
 
     enum LedgerEventStatus {
         case verified
@@ -26,82 +27,90 @@ struct LedgerTimelineRow: View {
     }
 
     var body: some View {
-        Button(action: {
-            Haptics.tap()
-            onTap()
-        }) {
-            RMCard(useSolidSurface: true) {
-                HStack(alignment: .top, spacing: 0) {
-                    // Timeline rail (1pt) + dot (8pt); rail starts 6pt above dot, runs through dot center
-                    ZStack(alignment: .top) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 1)
-                            .frame(maxHeight: .infinity)
-                            .padding(.top, 6)
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: 6)
-                            Circle()
-                                .fill(status.dotColor)
-                                .frame(width: 8, height: 8)
+        RMCard(useSolidSurface: true) {
+            HStack(alignment: .top, spacing: 0) {
+                // Timeline rail (1pt) + dot (8pt); rail starts 6pt above dot, runs through dot center
+                ZStack(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, 6)
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: 6)
+                        Circle()
+                            .fill(status.dotColor)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Text(title)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(RMTheme.Colors.textPrimary)
+                                    .lineLimit(2)
+                                if isVerified {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color.white.opacity(0.9))
+                                }
+                            }
+                            Text(subtitle)
+                                .font(RMTheme.Typography.secondaryLabelLarge)
+                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Text(timeText)
+                            .font(RMTheme.Typography.metadataSmall)
+                            .foregroundColor(RMTheme.Colors.textTertiary)
+
+                        if onTap != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(RMTheme.Colors.textTertiary)
+                                .opacity(0.28)
                         }
                     }
-                    .frame(width: 16)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 4) {
-                                    Text(title)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(RMTheme.Colors.textPrimary)
-                                        .lineLimit(2)
-                                    if isVerified {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(Color.white.opacity(0.9))
-                                    }
-                                }
-                                Text(subtitle)
-                                    .font(RMTheme.Typography.secondaryLabelLarge)
-                                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Text(timeText)
-                                .font(RMTheme.Typography.metadataSmall)
+                    // Hash pill: tap = copy + "Copied"; long-press = copy + "Copied full hash"
+                    Button {
+                        copyHash(fullHashToast: false)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("SHA-256 · \(hashPreview)")
+                                .font(RMTheme.Typography.metadata)
+                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
-
-                        // Hash pill: tap = copy + "Copied"; long-press = copy + "Copied full hash"
-                        Button {
-                            copyHash(fullHashToast: false)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text("SHA-256 · \(hashPreview)")
-                                    .font(RMTheme.Typography.metadata)
-                                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(RMTheme.Colors.textTertiary)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .onLongPressGesture(minimumDuration: 0.4) {
-                            copyHash(fullHashToast: true)
-                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
                     }
-                    .padding(.leading, RMTheme.Spacing.sm)
+                    .buttonStyle(.plain)
+                    .onLongPressGesture(minimumDuration: 0.4) {
+                        copyHash(fullHashToast: true)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, RMTheme.Spacing.sm)
             }
-            .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let onTap = onTap {
+                Haptics.tap()
+                onTap()
+            }
+        }
+        .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
     }
 
     private func copyHash(fullHashToast: Bool) {
