@@ -21,7 +21,7 @@ struct RMTopBar: View {
     var body: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Riskmate")
+                Text("RiskMate")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.45))
                 Text(title)
@@ -78,6 +78,7 @@ struct RMTopBar: View {
                 .buttonStyle(.plain)
                 .rmPressable(scale: 0.98, haptic: true, pressOpacity: 0.90)
                 .zIndex(1000)
+                .accessibilityLabel("Account")
             }
         }
         .padding(.horizontal, 12)

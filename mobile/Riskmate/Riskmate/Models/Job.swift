@@ -1,9 +1,20 @@
 import Foundation
 
+/// Request body for POST /api/jobs (backend expects client_name, client_type, job_type, location; optional title).
+struct CreateJobRequest: Encodable {
+    let client_name: String
+    let client_type: String
+    let job_type: String
+    let location: String
+    let title: String?
+}
+
 /// Job/Work Record model
 struct Job: Identifiable, Codable, Hashable {
     let id: String
     let clientName: String
+    /// Backend client_type (e.g. residential, commercial). Required for create; optional in list/detail responses.
+    let clientType: String?
     let jobType: String
     let location: String
     let status: String
@@ -23,6 +34,7 @@ struct Job: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id
         case clientName = "client_name"
+        case clientType = "client_type"
         case jobType = "job_type"
         case location
         case status
@@ -42,6 +54,7 @@ struct Job: Identifiable, Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         clientName = try container.decode(String.self, forKey: .clientName)
+        clientType = try container.decodeIfPresent(String.self, forKey: .clientType)
         jobType = try container.decode(String.self, forKey: .jobType)
         location = try container.decode(String.self, forKey: .location)
         status = try container.decode(String.self, forKey: .status)
@@ -60,6 +73,7 @@ struct Job: Identifiable, Codable, Hashable {
     init(
         id: String,
         clientName: String,
+        clientType: String? = nil,
         jobType: String,
         location: String,
         status: String = "draft",
@@ -75,6 +89,7 @@ struct Job: Identifiable, Codable, Hashable {
     ) {
         self.id = id
         self.clientName = clientName
+        self.clientType = clientType
         self.jobType = jobType
         self.location = location
         self.status = status

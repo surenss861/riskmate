@@ -615,16 +615,22 @@ class APIClient {
         return response.data
     }
     
-    /// Create a new job
-    func createJob(_ job: Job) async throws -> Job {
-        let body = try JSONEncoder().encode(job)
+    /// Create a new job (backend requires client_name, client_type, job_type, location).
+    func createJob(clientName: String, clientType: String, jobType: String, location: String, title: String? = nil) async throws -> Job {
+        let titleTrimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let req = CreateJobRequest(
+            client_name: clientName.trimmingCharacters(in: .whitespacesAndNewlines),
+            client_type: clientType,
+            job_type: jobType,
+            location: location.trimmingCharacters(in: .whitespacesAndNewlines),
+            title: titleTrimmed.flatMap { $0.isEmpty ? nil : $0 }
+        )
+        let body = try JSONEncoder().encode(req)
         let response: JobResponse = try await request(
             endpoint: "/api/jobs",
             method: "POST",
             body: body
         )
-        
-        // Log event for iOS ↔ web parity
         Task {
             _ = try? await logEvent(
                 eventType: "job.created",
@@ -632,13 +638,22 @@ class APIClient {
                 entityId: response.data.id,
                 metadata: ["job_id": response.data.id]
             )
-            // Refresh entitlements after job creation (in case limits changed)
             await EntitlementsManager.shared.refresh()
         }
-        
         return response.data
     }
-    
+
+    /// Create a new job from a Job value (e.g. offline sync replay). Uses clientType from job or defaults to "residential".
+    func createJob(_ job: Job) async throws -> Job {
+        try await createJob(
+            clientName: job.clientName,
+            clientType: job.clientType ?? "residential",
+            jobType: job.jobType,
+            location: job.location,
+            title: nil
+        )
+    }
+
     /// Update an existing job
     func updateJob(_ job: Job) async throws -> Job {
         let body = try JSONEncoder().encode(job)
@@ -2787,6 +2802,15 @@ struct APIErrorResponse: Codable {
 // MARK: - Error Categorization
 
 extension APIError {
+    /// User-facing message (e.g. for Create Job error banner).
+    var message: String? {
+        switch self {
+        case .httpError(_, let m): return m
+        case .networkError(_, let m, _): return m
+        default: return errorDescription
+        }
+    }
+
     var category: ErrorCategory {
         switch self {
         case .invalidURL, .invalidResponse:

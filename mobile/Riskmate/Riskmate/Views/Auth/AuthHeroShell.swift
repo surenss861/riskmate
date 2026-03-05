@@ -77,7 +77,7 @@ struct AuthHeroShell<Content: View, BottomContent: View>: View {
 
     private var heroRegion: some View {
         VStack(alignment: .center, spacing: 14) {
-            Text("Riskmate")
+            Text("RiskMate")
                 .font(.system(size: 15, weight: .semibold, design: .default))
                 .foregroundColor(RMHeroColors.subtext)
                 .tracking(0.6)

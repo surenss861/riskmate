@@ -81,6 +81,7 @@ struct AccountView: View {
                     // Organization, Privacy/Terms, Danger zone, Version
                     accountListContent
                 }
+                .padding(.top, 12)
                 .padding(.bottom, 100)
             }
             .scrollContentBackground(.hidden)
@@ -389,6 +390,28 @@ struct AccountView: View {
                         .foregroundColor(RMTheme.Colors.textTertiary)
                 }
                 #endif
+                
+                Section {
+                    Button(role: .destructive) {
+                        Haptics.warning()
+                        showSignOutConfirmation = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Sign Out")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .listRowBackground(RMTheme.Colors.surface.opacity(0.5))
+                } header: {
+                    Text("Account")
+                        .font(RMTheme.Typography.caption)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                } footer: {
+                    Text("You'll be signed out on this device.")
+                        .font(RMTheme.Typography.caption2)
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                }
                 
                 Section {
                     DangerZoneCard(onDeleteTapped: {

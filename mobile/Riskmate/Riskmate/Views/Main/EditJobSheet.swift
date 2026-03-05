@@ -118,6 +118,7 @@ struct EditJobSheet: View {
         let updatedJob = Job(
             id: job.id,
             clientName: name,
+            clientType: job.clientType,
             jobType: type,
             location: loc,
             status: status,

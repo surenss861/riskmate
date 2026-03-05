@@ -250,6 +250,7 @@ final class JobsStore: ObservableObject {
         let serverJob = Job(
             id: serverId,
             clientName: job.clientName,
+            clientType: job.clientType,
             jobType: job.jobType,
             location: job.location,
             status: job.status,
@@ -267,14 +268,15 @@ final class JobsStore: ObservableObject {
         OfflineCache.shared.cacheJobs(jobs)
     }
 
-    /// Create job - online: API; offline: save to OfflineDatabase, add to store, queue sync
-    func createJob(clientName: String, jobType: String, location: String) async throws -> Job {
+    /// Create job - online: API (client_name, client_type, job_type, location); offline: save to store, queue sync.
+    func createJob(clientName: String, clientType: String, jobType: String, location: String, title: String? = nil) async throws -> Job {
         let isOffline = !ServerStatusManager.shared.isOnline
         let now = ISO8601DateFormatter().string(from: Date())
         let jobId = UUID().uuidString
         let job = Job(
             id: jobId,
             clientName: clientName,
+            clientType: clientType,
             jobType: jobType,
             location: location,
             status: "draft",
@@ -299,7 +301,13 @@ final class JobsStore: ObservableObject {
             return job
         }
 
-        let created = try await APIClient.shared.createJob(job)
+        let created = try await APIClient.shared.createJob(
+            clientName: clientName,
+            clientType: clientType,
+            jobType: jobType,
+            location: location,
+            title: title
+        )
         addJob(created)
         OfflineCache.shared.cacheJobs(jobs)
         return created

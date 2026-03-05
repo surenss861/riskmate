@@ -1,21 +1,52 @@
 import SwiftUI
 
-/// Sheet for creating a new job - works offline (saves to pending) or online (API)
+// MARK: - Create Job enums (backend client_type / job_type)
+
+enum CreateJobClientType: String, CaseIterable, Identifiable {
+    case residential
+    case commercial
+    case propertyManagement = "property_management"
+    case unknown = "other"
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .residential: return "Residential"
+        case .commercial: return "Commercial"
+        case .propertyManagement: return "Property Mgmt"
+        case .unknown: return "Other"
+        }
+    }
+}
+
+enum CreateJobJobType: String, CaseIterable, Identifiable {
+    case repair
+    case install
+    case maintenance
+    case inspection
+    case other
+
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
+/// Sheet for creating a new job - works offline (saves to pending) or online (API). Backend requires client_name, client_type, job_type, location.
 struct CreateJobSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var statusManager = ServerStatusManager.shared
 
     @State private var clientName = ""
-    @State private var jobType = ""
     @State private var location = ""
+    @State private var title = ""
+    @State private var clientType: CreateJobClientType = .residential
+    @State private var jobType: CreateJobJobType = .repair
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     private var isOffline: Bool { !statusManager.isOnline }
     private var canSave: Bool {
         !clientName.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !jobType.trimmingCharacters(in: .whitespaces).isEmpty &&
         !location.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -42,12 +73,22 @@ struct CreateJobSheet: View {
                         TextField("Client name", text: $clientName)
                             .textContentType(.organizationName)
                             .autocapitalization(.words)
-                        TextField("Job type", text: $jobType)
-                            .textContentType(.jobTitle)
-                            .autocapitalization(.words)
                         TextField("Location", text: $location)
                             .textContentType(.fullStreetAddress)
                             .autocapitalization(.words)
+                        TextField("Title (optional)", text: $title)
+                            .textContentType(.jobTitle)
+                            .autocapitalization(.words)
+                        Picker("Client type", selection: $clientType) {
+                            ForEach(CreateJobClientType.allCases) { t in
+                                Text(t.label).tag(t)
+                            }
+                        }
+                        Picker("Job type", selection: $jobType) {
+                            ForEach(CreateJobJobType.allCases) { t in
+                                Text(t.label).tag(t)
+                            }
+                        }
                     } header: {
                         Text("Job Details")
                     }
@@ -91,22 +132,28 @@ struct CreateJobSheet: View {
         defer { isSaving = false }
 
         let name = clientName.trimmingCharacters(in: .whitespaces)
-        let type = jobType.trimmingCharacters(in: .whitespaces)
         let loc = location.trimmingCharacters(in: .whitespaces)
+        let titleTrimmed = title.trimmingCharacters(in: .whitespaces)
+        let titleOpt = titleTrimmed.isEmpty ? nil : titleTrimmed
 
         do {
-            let job = try await jobsStore.createJob(clientName: name, jobType: type, location: loc)
+            let job = try await jobsStore.createJob(
+                clientName: name,
+                clientType: clientType.rawValue,
+                jobType: jobType.rawValue,
+                location: loc,
+                title: titleOpt
+            )
             Haptics.success()
             if !isOffline {
                 ToastCenter.shared.show("Job created", systemImage: "checkmark.circle.fill", style: .success)
             }
-            // "Saved offline" toast is shown by JobsStore.createJob for the offline path
             dismiss()
             Analytics.shared.trackJobCreated(jobId: job.id, wasOffline: isOffline)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = (error as? APIError)?.message ?? error.localizedDescription
             ToastCenter.shared.show(
-                error.localizedDescription,
+                errorMessage ?? "Couldn't create job.",
                 systemImage: "exclamationmark.triangle",
                 style: .error
             )

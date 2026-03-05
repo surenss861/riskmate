@@ -459,6 +459,7 @@ struct JobDetailView: View {
         return Job(
             id: base.id,
             clientName: clientName,
+            clientType: base.clientType,
             jobType: jobType,
             location: location,
             status: status,

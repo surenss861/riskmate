@@ -266,8 +266,14 @@ struct ContentView: View {
                     .allowsHitTesting(selectedTab == .ledger)
 
                     tabScreen(.workRecords, bottomPadding: bottomPad) {
-                        JobsListView(initialFilter: workRecordsFilter)
-                            .rmNavigationBar(title: "Work Records")
+                        Group {
+                            if workRecordsFilter != nil {
+                                JobsListView(initialFilter: workRecordsFilter)
+                                    .rmNavigationBar(title: "Work Records")
+                            } else {
+                                WorkRecordsHubView()
+                            }
+                        }
                     }
                     .offset(x: CGFloat(tabIndex(.workRecords) - tabIndex(selectedTab)) * width + tabDragOffset)
                     .scaleEffect(selectedTab == .workRecords ? 1.0 : 0.985)
@@ -598,7 +604,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Riskmate")
+        .navigationTitle("RiskMate")
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(RMTheme.Colors.background, for: .navigationBar)
         .onAppear {

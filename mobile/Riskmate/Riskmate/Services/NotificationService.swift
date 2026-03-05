@@ -74,9 +74,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         guard tokenString.count == 64, tokenString.allSatisfy({ $0.isHexDigit }) else { return }
         #if targetEnvironment(simulator)
         return
-        #endif
+        #else
         try await APIClient.shared.registerPushToken(token: tokenString, platform: "apns")
         UserDefaults.standard.set(tokenString, forKey: Self.lastRegisteredPushTokenKey)
+        #endif
     }
 
     /// Register device token only if user is authenticated (e.g. after token arrives at launch).

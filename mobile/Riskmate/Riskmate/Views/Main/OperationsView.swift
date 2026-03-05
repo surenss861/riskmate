@@ -262,30 +262,17 @@ struct OperationsView: View {
         }
     }
 
-    /// Pinned search: 44pt total height, 12pt inner padding. Executive gets fixed-height spacer so no layout jump on role change.
+    /// Pinned search: matches Work Records (RMSearchField 46pt, inputFill, no glow). Executive gets fixed-height spacer.
     private var operationsSearchControl: some View {
         Group {
             if entitlements.entitlements?.role.lowercased() == "executive" {
-                Color.clear.frame(height: 44)
+                Color.clear.frame(height: 46)
             } else {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14))
-                        .foregroundColor(RMTheme.Colors.textTertiary)
-                    TextField("Search jobs", text: $searchQuery)
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 46)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RMTheme.Colors.inputFill)
-                .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
-                .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(RMTheme.Colors.inputStroke, lineWidth: 1))
+                RMSearchField(placeholder: "Search jobs…", text: $searchQuery)
             }
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
-        .padding(.top, RMTheme.Spacing.sm)
+        .padding(.top, 8)
         .padding(.bottom, 0)
     }
 
