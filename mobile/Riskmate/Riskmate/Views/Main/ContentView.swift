@@ -218,11 +218,12 @@ struct ContentView: View {
     private static let tabSpring = Animation.interactiveSpring(response: 0.40, dampingFraction: 0.88, blendDuration: 0.2)
 
     private var iPhoneNavigation: some View {
-        GeometryReader { geo in
+        let bottomPad: CGFloat = !entitlements.isAuditor() && selectedTab == .workRecords ? 126 : 74
+        return GeometryReader { geo in
             let width = geo.size.width
             ZStack {
                 ZStack {
-                    tabScreen(.operations) {
+                    tabScreen(.operations, bottomPadding: bottomPad) {
                         OperationsView(onKPINavigate: { filter in
                             quickAction.requestSwitchToWorkRecords(filter: filter)
                         })
@@ -233,7 +234,7 @@ struct ContentView: View {
                     .opacity(selectedTab == .operations ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .operations)
 
-                    tabScreen(.ledger) {
+                    tabScreen(.ledger, bottomPadding: bottomPad) {
                         AuditFeedView()
                             .rmNavigationBar(title: "Ledger")
                     }
@@ -242,7 +243,7 @@ struct ContentView: View {
                     .opacity(selectedTab == .ledger ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .ledger)
 
-                    tabScreen(.workRecords) {
+                    tabScreen(.workRecords, bottomPadding: bottomPad) {
                         JobsListView(initialFilter: workRecordsFilter)
                             .rmNavigationBar(title: "Work Records")
                     }
@@ -251,7 +252,7 @@ struct ContentView: View {
                     .opacity(selectedTab == .workRecords ? 1.0 : 0.92)
                     .allowsHitTesting(selectedTab == .workRecords)
 
-                    tabScreen(.settings) {
+                    tabScreen(.settings, bottomPadding: bottomPad) {
                         AccountView()
                     }
                     .offset(x: CGFloat(tabIndex(.settings) - tabIndex(selectedTab)) * width + tabDragOffset)
@@ -298,30 +299,18 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            RMTabBar(selection: $selectedTab, namespace: tabBarNamespace)
-                .zIndex(999)
+            VStack(spacing: 0) {
+                if !entitlements.isAuditor() && selectedTab == .workRecords {
+                    AddEvidenceDockedBar(onTap: { quickAction.presentEvidence(jobId: nil) })
+                }
+                RMTabBar(selection: $selectedTab, namespace: tabBarNamespace)
+                    .zIndex(999)
+            }
         }
         .onReceive(quickAction.$requestedTab.compactMap { $0 }) { _ in
             guard let (tab, filter) = quickAction.consumeTabRequest() else { return }
             workRecordsFilter = filter
             withAnimation(Self.tabSpring) { selectedTab = tab }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if !entitlements.isAuditor() && selectedTab == .workRecords {
-                Button {
-                    quickAction.presentEvidence(jobId: nil)
-                } label: {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 56, height: 56)
-                        .background(RMTheme.Colors.accent)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 6)
-                }
-                .padding(.trailing, 18)
-                .padding(.bottom, RMTabBar.barHeight + 18)
-            }
         }
         .onChange(of: quickAction.showNotificationCenter) { _, show in
             if show {
@@ -336,10 +325,10 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func tabScreen<Content: View>(_ tab: MainTab, @ViewBuilder content: () -> Content) -> some View {
+    private func tabScreen<Content: View>(_ tab: MainTab, bottomPadding: CGFloat, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
             content()
-                .padding(.bottom, 74) // tab bar 56pt + breathing room
+                .padding(.bottom, bottomPadding)
         }
     }
     
@@ -425,6 +414,37 @@ struct ContentView: View {
 
 /// Pre-permission modal shown when we would request notification authorization.
 /// Outlines benefits; only calls requestAuthorization after user taps "Enable".
+/// Docked "Add Evidence" bar above tab bar (Work Records) — native, no overlap.
+private struct AddEvidenceDockedBar: View {
+    var onTap: () -> Void
+
+    private static let barHeight: CGFloat = 52
+
+    var body: some View {
+        Button(action: {
+            Haptics.tap()
+            onTap()
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("Add Evidence")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.barHeight)
+            .background(RMTheme.Colors.accent)
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+        }
+    }
+}
+
 struct NotificationPermissionEducationView: View {
     let onEnable: () -> Void
     let onNotNow: () -> Void

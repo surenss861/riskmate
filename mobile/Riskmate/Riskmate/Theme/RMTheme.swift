@@ -6,9 +6,13 @@ struct RMTheme {
     // MARK: - Colors
     
     struct Colors {
-        // Backgrounds
+        // Backgrounds & surface stack (base → lifted → primary)
         static let background = Color(hex: "#0A0A0A")
         static let surface = Color(hex: "#121212")
+        /// Surface 1: subtle lifted panel (sections)
+        static let surface1 = Color(hex: "#141414")
+        /// Surface 2: heavier panel (primary cards e.g. Needs attention)
+        static let surface2 = Color(hex: "#181818")
         static let cardBackground = Color(hex: "#0B0B0C").opacity(0.72)
         
         // Accent
@@ -93,14 +97,28 @@ struct RMTheme {
         static let lg: CGFloat = 24
         static let xl: CGFloat = 26 // Glass cards
         
-        // Standardized card radius
-        static let card: CGFloat = 24
+        // Standardized card radius (cards)
+        static let card: CGFloat = 22
+        /// Pills / chips
+        static let pill: CGFloat = 17
+    }
+    
+    // MARK: - Surfaces (stroke opacity for consistency)
+    struct Surfaces {
+        static let strokeOpacity: Double = 0.07
     }
     
     // MARK: - Shadows
     
     struct Shadow {
+        /// Standard card shadow (one recipe everywhere)
         static let card = ShadowStyle(
+            color: .black.opacity(0.35),
+            radius: 16,
+            x: 0,
+            y: 10
+        )
+        static let cardLight = ShadowStyle(
             color: .black.opacity(0.3),
             radius: 12,
             x: 0,

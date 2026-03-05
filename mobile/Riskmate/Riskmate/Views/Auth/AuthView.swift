@@ -7,6 +7,7 @@ struct AuthView: View {
     @StateObject private var sessionManager = SessionManager.shared
 
     @State private var screen: Screen = .landing
+    @State private var proofCardFloat: CGFloat = 0
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -75,10 +76,11 @@ struct AuthView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.top, 0)
+                .padding(.bottom, -8)
 
-            // Proof Pack Sample + pill as one unit (artifact header + metadata)
+            // Proof Pack Sample + pill as one unit (denser: attached to claim)
             proofPackSampleCard
-                .padding(.top, 2)
+                .padding(.top, -4)
 
             Text("Ledger Contract v1.0 • Frozen")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -157,13 +159,36 @@ struct AuthView: View {
                 Text("Verified")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(RMTheme.Colors.accent)
+                proofCardMetadataLine
                 proofCardReceiptLine
             }
             .padding(12)
             .frame(maxWidth: 320)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RMTheme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+            .themeShadow(RMTheme.Shadow.card)
+            .offset(y: proofCardFloat)
+            .onAppear {
+                if !RMMotion.reduceMotion {
+                    withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                        proofCardFloat = 3
+                    }
+                }
+            }
+        }
+    }
+
+    /// PDF/size metadata — "real product" artifact.
+    private var proofCardMetadataLine: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("PDF • 2 pages • 184 KB")
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.5))
+            Text("Generated from: Job #123 • 123 Main St")
+                .font(.system(size: 9, weight: .regular))
+                .foregroundColor(Color.white.opacity(0.4))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 
@@ -193,6 +218,10 @@ struct AuthView: View {
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
         VStack(spacing: 14) {
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+                .padding(.horizontal, 24)
             credibilityRow
             Button {
                 clearFormState()

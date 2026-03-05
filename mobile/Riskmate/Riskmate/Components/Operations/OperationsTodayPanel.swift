@@ -15,36 +15,56 @@ struct OperationsTodayPanel: View {
         return .calm
     }
     
+    private var hasAttention: Bool { blockerCount > 0 || highRiskCount > 0 }
+
     var body: some View {
-        Button {
-            Haptics.impact(.light)
-            if blockerCount > 0 {
-                onTapBlockers()
-            } else if highRiskCount > 0 {
-                onTapHighRisk()
-            } else {
-                onTapHighRisk()
-            }
-        } label: {
-            HStack(spacing: RMTheme.Spacing.md) {
-                iconView
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(state.headline)
-                        .font(RMTheme.Typography.bodySmallBold)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                    Text(state.subheadline(blockerCount: blockerCount, highRiskCount: highRiskCount, overdueCount: overdueTasksCount, lastUpdated: lastUpdated))
-                        .font(RMTheme.Typography.caption)
-                        .foregroundColor(RMTheme.Colors.textSecondary)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                Haptics.impact(.light)
+                if blockerCount > 0 { onTapBlockers() }
+                else if highRiskCount > 0 { onTapHighRisk() }
+                else { onTapHighRisk() }
+            } label: {
+                HStack(spacing: RMTheme.Spacing.md) {
+                    iconView
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(state.headline)
+                            .font(RMTheme.Typography.bodySmallBold)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        Text(state.subheadline(blockerCount: blockerCount, highRiskCount: highRiskCount, overdueCount: overdueTasksCount, lastUpdated: lastUpdated))
+                            .font(RMTheme.Typography.caption)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
+                    }
+                    Spacer()
+                    countsView
                 }
-                Spacer()
-                countsView
             }
-            .padding(RMTheme.Spacing.md)
-            .background(backgroundTint)
-            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
-            .animation(RMMotion.easeOut, value: state)
+            .buttonStyle(.plain)
+            if hasAttention {
+                Button {
+                    Haptics.tap()
+                    if blockerCount > 0 { onTapBlockers() } else { onTapHighRisk() }
+                } label: {
+                    Text("Review blockers")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.accent)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, RMTheme.Spacing.sm)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(RMTheme.Spacing.md)
+        .background(
+            ZStack {
+                backgroundTint
+                Rectangle()
+                    .fill(RMTheme.Colors.surface2.opacity(0.6))
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+        .themeShadow(RMTheme.Shadow.card)
+        .animation(RMMotion.easeOut, value: state)
     }
     
     private var iconView: some View {

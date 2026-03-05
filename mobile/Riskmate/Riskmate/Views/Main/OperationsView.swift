@@ -143,33 +143,15 @@ struct OperationsView: View {
         .listSectionSpacing(6)
 
         Section {
-            QuickActionsStrip(
+            QuickActionsStripHorizontal(
                 onAddEvidence: { Haptics.tap(); quickAction.presentEvidence(jobId: nil) },
                 onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) },
                 onExport: { Haptics.tap(); quickAction.requestSwitchToLedger() }
             )
-            .listRowInsets(EdgeInsets(top: 6, leading: RMTheme.Spacing.pagePadding, bottom: 6, trailing: RMTheme.Spacing.pagePadding))
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
             .listRowBackground(Color.clear)
         } header: {
             sectionHeader("Quick actions")
-        }
-        .listSectionSpacing(6)
-
-        Section {
-            OpenIssuesPlaceholder(onCreateJob: { Haptics.tap(); quickAction.requestSwitchToWorkRecords(filter: nil) })
-                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
-                .listRowBackground(Color.clear)
-        } header: {
-            sectionHeader("This week")
-        }
-        .listSectionSpacing(6)
-
-        Section {
-            RecentActivityRow(hasActivity: false)
-                .listRowInsets(EdgeInsets(top: RMTheme.Spacing.sm, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.sm, trailing: RMTheme.Spacing.pagePadding))
-                .listRowBackground(Color.clear)
-        } header: {
-            sectionHeader("Recent activity")
         }
         .listSectionSpacing(6)
 
@@ -202,12 +184,13 @@ struct OperationsView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(RMTheme.Colors.textPrimary)
                     OperationsHeaderView(
-                    activeCount: activeJobs.count,
-                    highRiskCount: highRiskJobs.count,
-                    missingEvidenceCount: missingEvidenceJobs.count,
-                    lastSync: jobsStore.lastSyncDate,
-                    onKPITap: handleKPITap
-                )
+                        activeCount: activeJobs.count,
+                        highRiskCount: highRiskJobs.count,
+                        missingEvidenceCount: missingEvidenceJobs.count,
+                        lastSync: jobsStore.lastSyncDate,
+                        onKPITap: handleKPITap
+                    )
+                    recentActivityOneLine(hasActivity: false)
                 }
             } footer: {
                 if activeJobs.count < filteredJobs.count {
@@ -223,10 +206,25 @@ struct OperationsView: View {
                     jobsEmpty: jobsStore.jobs.isEmpty
                 )
             } header: {
-                Text("Jobs")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(RMTheme.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Jobs")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                    recentActivityOneLine(hasActivity: false)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func recentActivityOneLine(hasActivity: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 12))
+                .foregroundColor(RMTheme.Colors.textTertiary)
+            Text(hasActivity ? "Recent activity" : "No recent activity yet")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(RMTheme.Colors.textTertiary)
         }
     }
 
@@ -334,16 +332,19 @@ struct OperationsView: View {
 
 // MARK: - Operations helpers (split out to avoid type-checker timeout)
 
-private struct QuickActionsStrip: View {
+private struct QuickActionsStripHorizontal: View {
     var onAddEvidence: () -> Void
     var onCreateJob: () -> Void
     var onExport: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            QuickActionChip(title: "Add Evidence", icon: "camera.fill", action: onAddEvidence)
-            QuickActionChip(title: "Create Job", icon: "doc.badge.plus", action: onCreateJob)
-            QuickActionChip(title: "Export", icon: "square.and.arrow.up", action: onExport)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                QuickActionChip(title: "Add Evidence", icon: "camera.fill", action: onAddEvidence)
+                QuickActionChip(title: "Create Job", icon: "doc.badge.plus", action: onCreateJob)
+                QuickActionChip(title: "Export", icon: "square.and.arrow.up", action: onExport)
+            }
+            .padding(.horizontal, RMTheme.Spacing.pagePadding)
         }
     }
 }
@@ -366,7 +367,7 @@ private struct QuickActionChip: View {
             .padding(.vertical, 8)
             .frame(height: 32)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 1))
+            .overlay(Capsule().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
