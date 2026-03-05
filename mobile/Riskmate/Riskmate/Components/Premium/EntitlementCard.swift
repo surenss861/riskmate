@@ -19,12 +19,15 @@ struct EntitlementCard: View {
                 RMCard(useSolidSurface: true) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(planDisplayName(data.plan_code))
-                                .font(RMTheme.Typography.title3)
+                            Text("Plan")
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(RMTheme.Colors.textPrimary)
                             Spacer()
+                            Text(planDisplayName(data.plan_code))
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.75))
                             if let end = data.flags.current_period_end, let date = parseISO(end) {
-                                Text("Renews \(formatDate(date))")
+                                Text("· Renews \(formatDate(date))")
                                     .font(RMTheme.Typography.caption)
                                     .foregroundColor(RMTheme.Colors.textTertiary)
                             }

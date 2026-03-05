@@ -1,77 +1,53 @@
 import SwiftUI
 
-/// Pinned Export control: one CTA + metadata. Optional "Last exported…" and divider below.
-/// chromeT (0...1) drives "attach to scroll": fill 0.92→0.955, shadow 0.26→0.16 (at-rest less floaty), shadow y 6→3.
+/// Pinned Proof Pack row: context + small Export capsule (calm, not banner). Optional divider below.
 struct LedgerExportControl: View {
     var lastExportedAt: Date?
     var dividerOpacity: CGFloat = 0
     var chromeT: CGFloat = 0
     let onExportTapped: () -> Void
 
-    private var fillOpacity: CGFloat { 0.92 + (0.955 - 0.92) * chromeT }
-    private var shadowOpacity: CGFloat { 0.26 + (0.16 - 0.26) * chromeT }
-    private var shadowY: CGFloat { 6 + (3 - 6) * chromeT }
-
-    private var lastExportedText: String? {
-        guard let date = lastExportedAt else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return "Last exported \(formatter.localizedString(for: date, relativeTo: Date()))"
-    }
-
-    private let radius = RMTheme.Radius.card
-
-    private let revealThreshold: CGFloat = 0.28
-
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: {
-                Haptics.tap()
-                onExportTapped()
-            }) {
+            RMCard(useSolidSurface: true) {
                 HStack(spacing: 10) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(RMTheme.Colors.accent)
-                    Text("Export Proof Pack")
-                        .font(RMTheme.Typography.sectionTitle)
-                        .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
-                    Spacer(minLength: 0)
-                    // Reserve space so layout is stable; reveal via opacity only (no shift).
-                    HStack(spacing: 6) {
-                        Text("Generate")
-                            .font(RMTheme.Typography.bodySmallBold)
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.22))
-                    }
-                    .opacity(chromeT > revealThreshold ? 1 : 0)
-                    .allowsHitTesting(chromeT > revealThreshold)
-                    .transaction { $0.animation = .easeOut(duration: 0.2) }
-                }
-                .frame(height: 44)
-                .padding(.horizontal, RMTheme.Spacing.cardPadding)
-            }
-            .buttonStyle(.plain)
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
-            )
-            .overlay(
-                VStack(spacing: 0) {
-                    Rectangle()
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white.opacity(0.06))
-                        .frame(height: 1)
-                    Spacer(minLength: 0)
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: "tray.and.arrow.up.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Color.white.opacity(0.20))
+                        )
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Proof Pack")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.92))
+                        Text("Includes hashes · Export-ready PDF/JSON")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.68))
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        Haptics.tap()
+                        onExportTapped()
+                    }) {
+                        Text("Export")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.white.opacity(0.06)))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .rmPressable(scale: 0.98, pressOpacity: 0.92, haptic: true)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            )
-            .shadow(color: .black.opacity(shadowOpacity), radius: 16, x: 0, y: shadowY)
+            }
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm + 2)
             .padding(.bottom, 8)

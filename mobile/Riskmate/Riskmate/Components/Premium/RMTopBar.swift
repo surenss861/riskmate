@@ -37,9 +37,14 @@ struct RMTopBar: View {
                     quickAction.openNotificationCenter()
                 } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Image(systemName: "bell.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
+                            )
                         if notificationBadge > 0 {
                             Text(notificationBadge > 99 ? "99+" : "\(notificationBadge)")
                                 .font(.system(size: 9, weight: .bold))
@@ -50,24 +55,29 @@ struct RMTopBar: View {
                                 .offset(x: 6, y: -6)
                         }
                     }
-                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .rmPressable(scale: 0.98, pressOpacity: 0.90, haptic: true)
+                .zIndex(1000)
 
                 Button {
                     Haptics.tap()
                     quickAction.requestSwitchToSettings()
                 } label: {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: "person.circle.fill")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
+                        )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .rmPressable(scale: 0.98, pressOpacity: 0.90, haptic: true)
+                .zIndex(1000)
             }
         }
         .padding(.horizontal, 12)

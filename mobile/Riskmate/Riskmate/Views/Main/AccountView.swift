@@ -138,20 +138,40 @@ struct AccountView: View {
                 )
             } else {
                 RMCard(useSolidSurface: true) {
-                    VStack(spacing: 6) {
-                        Image(systemName: "flame")
-                            .font(.system(size: 32))
-                            .foregroundColor(RMTheme.Colors.textTertiary)
-                        Text("Start a streak")
-                            .font(RMTheme.Typography.bodySmallBold)
-                            .foregroundColor(RMTheme.Colors.textSecondary)
-                        Text("Log evidence, complete tasks, or add comments to build your streak.")
-                            .font(RMTheme.Typography.caption)
-                            .foregroundColor(RMTheme.Colors.textTertiary)
-                            .multilineTextAlignment(.center)
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Color.white.opacity(0.18))
+                            )
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Start a streak")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            Text("Post 3 logs this week to build your audit trail.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.70))
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                        Button {
+                            Haptics.tap()
+                            ToastCenter.shared.show("Coming soon", systemImage: "clock", style: .info)
+                        } label: {
+                            Text("Start")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary.opacity(0.88))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Color.white.opacity(0.06)))
+                                .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 92)
+                    .frame(minHeight: 92, alignment: .center)
                 }
             }
         }

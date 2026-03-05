@@ -23,10 +23,26 @@ struct JobsListView: View {
     @Namespace private var jobListNamespace
     @Namespace private var filterChipNamespace
     @State private var selectedQuickChip: JobsQuickFilter?
+    @State private var workRecordsSort: WorkRecordsSort = .updated
+    @State private var showNeedsActionOnly = false
     @State private var scrollY: CGFloat = 0
     @State private var scrollBaselineY: CGFloat?
 
     private let scrollSpace = "workRecordsScroll"
+
+    enum WorkRecordsSort: String, CaseIterable {
+        case updated
+        case risk
+        case evidence
+    }
+
+    private func sortLabel(_ sort: WorkRecordsSort) -> String {
+        switch sort {
+        case .updated: return "Updated"
+        case .risk: return "Risk"
+        case .evidence: return "Evidence"
+        }
+    }
 
     private var dividerOpacity: CGFloat {
         let raw = (scrollBaselineY ?? 0) - scrollY
@@ -104,9 +120,30 @@ struct JobsListView: View {
         return filtered
     }
 
+    /// Sorted for display (Updated / Risk / Evidence).
+    private var sortedFilteredJobs: [Job] {
+        let list = filteredJobs
+        switch workRecordsSort {
+        case .updated:
+            return list.sorted { job1, job2 in
+                let d1 = job1.updatedAt ?? job1.createdAt
+                let d2 = job2.updatedAt ?? job2.createdAt
+                return d1 > d2
+            }
+        case .risk:
+            return list.sorted { ($0.riskScore ?? 0) > ($1.riskScore ?? 0) }
+        case .evidence:
+            return list.sorted { j1, j2 in
+                let miss1 = (j1.evidenceRequired ?? 0) - (j1.evidenceCount ?? 0)
+                let miss2 = (j2.evidenceRequired ?? 0) - (j2.evidenceCount ?? 0)
+                return miss1 > miss2
+            }
+        }
+    }
+
     /// Jobs that need action: missing signatures (active), missing evidence, or high risk. For "Needs action" section.
     private var needsActionJobs: [Job] {
-        filteredJobs.filter { job in
+        sortedFilteredJobs.filter { job in
             if job.status.lowercased() == "active" { return true }
             if let req = job.evidenceRequired, req > 0, (job.evidenceCount ?? 0) < req { return true }
             let level = (job.riskLevel ?? "").lowercased()
@@ -119,7 +156,7 @@ struct JobsListView: View {
     /// Jobs not in Needs action; shown in "Recent jobs" section.
     private var recentJobs: [Job] {
         let needIds = Set(needsActionJobs.map(\.id))
-        return filteredJobs.filter { !needIds.contains($0.id) }
+        return sortedFilteredJobs.filter { !needIds.contains($0.id) }
     }
     
     private func applyQuickFilter(_ chip: JobsQuickFilter, to list: [Job]) -> [Job] {
@@ -248,6 +285,7 @@ struct JobsListView: View {
                                     }
                                 }
                             }
+                            if !showNeedsActionOnly {
                             Section {
                                 ForEach(Array(recentJobs.enumerated()), id: \.element.id) { index, job in
                                     jobRowLink(index: index, job: job, isLastInSection: job.id == recentJobs.last?.id, reasons: [])
@@ -267,6 +305,7 @@ struct JobsListView: View {
                                             .clipShape(Capsule())
                                     }
                                 }
+                            }
                             }
                             // Load more indicator
                             if jobsStore.isLoadingMore {
@@ -362,6 +401,33 @@ struct JobsListView: View {
                         .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
                         .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(isSearchFocused ? RMTheme.Colors.inputStrokeFocused : RMTheme.Colors.inputStroke, lineWidth: 1))
                         RMFilterChips(selection: $selectedQuickChip, namespace: filterChipNamespace)
+                        // Quick triage: sort + Needs action only
+                        HStack(spacing: 8) {
+                            ForEach([WorkRecordsSort.updated, .risk, .evidence], id: \.self) { sort in
+                                Button {
+                                    Haptics.tap()
+                                    workRecordsSort = sort
+                                } label: {
+                                    Text(sortLabel(sort))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(workRecordsSort == sort ? RMTheme.Colors.textPrimary : RMTheme.Colors.textTertiary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Capsule().fill(workRecordsSort == sort ? RMTheme.Colors.surface1.opacity(0.9) : Color.white.opacity(0.06)))
+                                        .overlay(Capsule().stroke(workRecordsSort == sort ? Color.white.opacity(0.1) : Color.clear, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Spacer()
+                            Toggle(isOn: $showNeedsActionOnly) {
+                                Text("Needs action")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(RMTheme.Colors.textSecondary)
+                            }
+                            .labelsHidden()
+                            .tint(RMTheme.Colors.accent)
+                        }
+                        .padding(.top, 2)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 FilterPill(
@@ -514,17 +580,17 @@ struct JobsListView: View {
     /// One-line proof pipeline for job row: Evidence X/Y · Signatures 0/1 · Export status.
     private func proofStatusLine(for job: Job) -> String {
         let ev = job.evidenceRequired ?? 0
-        let evidencePart = ev > 0 ? "Evidence: \(job.evidenceCount ?? 0)/\(ev)" : "Evidence: —"
-        let signaturesPart = "Signatures: 0/1"
+        let evidencePart = ev > 0 ? "Evidence \(job.evidenceCount ?? 0)/\(ev)" : "Evidence —"
+        let signaturesPart = "Sign 0/1"
         let exportPart: String
         if let last = BackgroundExportManager.shared.getLastExport(jobId: job.id, type: .proofPack) {
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
-            exportPart = "Export: \(formatter.localizedString(for: last.generatedAt, relativeTo: Date()))"
+            exportPart = "Export \(formatter.localizedString(for: last.generatedAt, relativeTo: Date()))"
         } else {
-            exportPart = "Export: Not generated"
+            exportPart = "Export —"
         }
-        return "\(evidencePart) · \(signaturesPart) · \(exportPart)"
+        return "\(evidencePart) • \(signaturesPart) • \(exportPart)"
     }
 
     /// Reason labels for Needs action section only. Use "Open job" until we have real signature signal (e.g. signatureRequired && signatureCount == 0).
@@ -643,7 +709,7 @@ struct JobsListView: View {
             }
         }
         .onAppear {
-            if job.id == filteredJobs.last?.id, jobsStore.hasMore, !jobsStore.isLoadingMore {
+            if job.id == sortedFilteredJobs.last?.id, jobsStore.hasMore, !jobsStore.isLoadingMore {
                 Task {
                     try? await jobsStore.loadMore()
                 }

@@ -78,7 +78,7 @@ struct AuthView: View {
                 .padding(.top, 0)
                 .padding(.bottom, -8)
 
-            proofPackSampleCard
+            proofArtifactReceipt()
                 .padding(.top, -4)
         }
         .frame(maxWidth: 520)
@@ -113,157 +113,82 @@ struct AuthView: View {
         }
     }
 
-    /// Proof card as "artifact preview": PDF badge top-left, fake preview thumbnail, hash + timestamp under.
-    private var proofPackSampleCard: some View {
-        ZStack {
-            // Faint doc icon behind (kept for depth)
-            Image(systemName: "doc.richtext.fill")
-                .font(.system(size: 120))
-                .foregroundStyle(Color.white.opacity(0.045))
-                .offset(y: 8)
-                .mask(
-                    LinearGradient(
-                        gradient: Gradient(stops: [
-                            .init(color: .white, location: 0.0),
-                            .init(color: .white.opacity(0.4), location: 0.5),
-                            .init(color: .clear, location: 1.0)
-                        ]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    Text("PDF")
-                        .font(RMTheme.Typography.metadataSmall)
-                        .foregroundColor(Color.white.opacity(0.7))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
-                    Spacer()
-                    proofThumbnailBadge
-                }
-                .padding(.bottom, 8)
-                // PDF page snapshot: light page surface, inner border, doc header, left-aligned blocks, signature bottom-right
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(
-                        VStack(alignment: .leading, spacing: 0) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(height: 1)
-                                .frame(maxWidth: .infinity)
-                            HStack(alignment: .center) {
-                                Text("Report ID: RM-2F3A…9C")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                    .foregroundColor(Color.white.opacity(0.4))
-                                Spacer()
-                                Text("page 1/2")
-                                    .font(.system(size: 8, weight: .medium))
-                                    .foregroundColor(Color.white.opacity(0.4))
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.top, 4)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Proof Pack Summary")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(Color.white.opacity(0.5))
-                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            Spacer(minLength: 0)
-                            HStack {
-                                Spacer()
-                                HStack(spacing: 4) {
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.12))
-                                        .frame(width: 24, height: 1)
-                                    Text("Signed")
-                                        .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(Color.white.opacity(0.4))
-                                }
-                            }
+    /// Receipt-style proof artifact (no fake document); premium + believable.
+    private func proofArtifactReceipt() -> some View {
+        RMCard(useSolidSurface: true) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Proof Pack")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                        Spacer()
+                        Text("VERIFIED")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color.white.opacity(0.85))
                             .padding(.horizontal, 8)
-                            .padding(.bottom, 6)
-                        }
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                    )
-                    .frame(height: 72)
-                    .padding(.bottom, 8)
-                Text("SHA-256")
-                    .font(RMTheme.Typography.metadataSmall)
-                    .foregroundColor(Color.white.opacity(0.55))
-                Text("2F3A…9C")
-                    .font(RMTheme.Typography.metadata)
-                    .foregroundColor(Color.white.opacity(0.62))
-                Text("Verified")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.9))
-                Text("Signed by: Riskmate Ledger · 10:42 AM")
-                    .font(.system(size: 9, weight: .regular))
-                    .foregroundColor(Color.white.opacity(0.45))
-                proofCardMetadataLine
-                Text("Generated: 10:42 AM · Mar 5")
-                    .font(RMTheme.Typography.metadataSmall)
-                    .foregroundColor(Color.white.opacity(0.5))
-                proofCardReceiptLine
-            }
-            .padding(12)
-            .frame(maxWidth: min(320, UIScreen.main.bounds.width - 64))
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RMTheme.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
-            .themeShadow(RMTheme.Shadow.card)
-            .offset(y: proofCardFloat)
-            .onAppear {
-                if !RMMotion.reduceMotion {
-                    withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                        proofCardFloat = 3
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.white.opacity(0.06)))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        receiptLine(label: "Report ID", value: "RM-2F3A…9C")
+                        receiptLine(label: "SHA-256", value: "2F3A…9C", isMono: true, canCopy: true)
+                        receiptLine(label: "Generated", value: "Mar 5 · 10:42 AM")
+                        receiptLine(label: "Source", value: "Job #123 · 123 Main St")
                     }
                 }
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.05))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Color.white.opacity(0.18))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    )
+            }
+        }
+        .frame(maxWidth: min(320, UIScreen.main.bounds.width - 64))
+        .offset(y: proofCardFloat)
+        .onAppear {
+            if !RMMotion.reduceMotion {
+                withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                    proofCardFloat = 3
+                }
             }
         }
     }
 
-    /// PDF/size metadata — "real product" artifact.
-    private var proofCardMetadataLine: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("PDF • 2 pages • 184 KB")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.5))
-            Text("Generated from: Job #123 • 123 Main St")
-                .font(.system(size: 9, weight: .regular))
-                .foregroundColor(Color.white.opacity(0.4))
+    private func receiptLine(label: String, value: String, isMono: Bool = false, canCopy: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.72))
+                .frame(width: 78, alignment: .leading)
+            Text(value)
+                .font(isMono ? .system(size: 12, weight: .medium, design: .monospaced) : .system(size: 12, weight: .medium))
+                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.86))
                 .lineLimit(1)
-                .truncationMode(.tail)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+            if canCopy {
+                Button {
+                    UIPasteboard.general.string = value
+                    Haptics.tap()
+                    ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.30))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+            }
         }
-    }
-
-    /// Mini receipt line inside proof card — one more piece of metadata.
-    private var proofCardReceiptLine: some View {
-        HStack(spacing: 6) {
-            Rectangle()
-                .fill(Color.white.opacity(0.2))
-                .frame(height: 1)
-            Text("Verified · 2F3A…9C")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.5))
-        }
-        .padding(.top, 2)
-    }
-
-    /// Tiny PDF badge with check — breaks text-only hero, reinforces "exportable proof."
-    private var proofThumbnailBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "doc.fill")
-                .font(.system(size: 12))
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 10))
-        }
-        .foregroundColor(RMTheme.Colors.accent.opacity(0.9))
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
