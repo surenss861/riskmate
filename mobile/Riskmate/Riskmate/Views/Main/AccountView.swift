@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
+    @Environment(\.openURL) private var openURL
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var entitlementsManager = EntitlementsManager.shared
     @StateObject private var exportManager = BackgroundExportManager.shared
@@ -68,7 +69,7 @@ struct AccountView: View {
                         entitlements: entitlementsManager.entitlements,
                         isLoading: entitlementsManager.isLoading,
                         onManagePlan: {
-                            UIApplication.shared.open(WebAppURL.billingURL)
+                            openURL(WebAppURL.billingURL)
                         }
                     )
                     .padding(.horizontal, RMTheme.Spacing.pagePadding)

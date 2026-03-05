@@ -155,6 +155,19 @@ struct OperationsView: View {
         }
         .listSectionSpacing(6)
 
+        Section {
+            HStack(spacing: 6) {
+                Text("Last updated · \(relativeTime(jobsStore.lastSyncDate ?? Date()))")
+                Text("·")
+                Text(blockerCount == 0 ? "0 open issues" : "\(blockerCount) need attention")
+            }
+            .font(.system(size: 12))
+            .foregroundColor(RMTheme.Colors.textTertiary)
+            .listRowInsets(EdgeInsets(top: 4, leading: RMTheme.Spacing.pagePadding, bottom: 4, trailing: RMTheme.Spacing.pagePadding))
+            .listRowBackground(Color.clear)
+        }
+        .listSectionSpacing(6)
+
         if jobsStore.isLoading && activeJobs.isEmpty {
             Section {
                 OperationsLoadingSkeleton()
@@ -234,7 +247,6 @@ struct OperationsView: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(6)
-        .searchable(text: $searchQuery, prompt: "Search jobs")
         .anchoringRefresh(isRefreshing: $isRefreshing) {
             _ = try? await jobsStore.fetch(forceRefresh: true)
         }
@@ -296,6 +308,7 @@ struct OperationsView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 RMTopBar(title: "Operations", notificationBadge: 0)
             }
+            .searchable(text: $searchQuery, prompt: "Search jobs", placement: .navigationBarDrawer(displayMode: .always))
             .task {
                 // Refresh entitlements on view load
                 await entitlements.refresh()

@@ -50,7 +50,8 @@ struct EntitlementCard: View {
                             Haptics.impact(.light)
                             onManagePlan()
                         } label: {
-                            Text("Manage plan")
+                            Label("Manage plan", systemImage: "arrow.up.right")
+                                .labelStyle(.titleAndIcon)
                                 .font(RMTheme.Typography.bodySmallBold)
                                 .foregroundColor(RMTheme.Colors.accent)
                         }
