@@ -63,16 +63,16 @@ struct AuthView: View {
                 .padding(.bottom, 2)
 
             Text("Audit-ready proof packs\nfrom everyday field work")
-                .font(.system(size: 36, weight: .semibold, design: .serif))
-                .tracking(-0.6)
-                .lineSpacing(2)
+                .font(.system(size: 30, weight: .medium, design: .serif))
+                .tracking(-0.5)
+                .lineSpacing(1)
                 .multilineTextAlignment(.center)
                 .foregroundColor(Color.white.opacity(0.95))
                 .frame(maxWidth: 380)
 
             Text("Creates audit-ready proof packs from everyday field work.")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(Color.white.opacity(0.72))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(Color.white.opacity(0.65))
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.top, 0)
@@ -82,14 +82,14 @@ struct AuthView: View {
                 .padding(.top, -4)
 
             Text("Ledger Contract v1.0 • Frozen")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.55))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.42))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.04))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+                        .fill(Color.white.opacity(0.03))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 0.5))
                 )
                 .padding(.top, 2)
         }
@@ -156,28 +156,25 @@ struct AuthView: View {
                     proofThumbnailBadge
                 }
                 .padding(.bottom, 8)
-                // Fake preview thumbnail: faint lines + page label so it reads as document
+                // Fake PDF snapshot: section headers as faint lines (Job Summary, Evidence, Signatures)
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.white.opacity(0.06))
                     .overlay(
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Spacer()
                                 Text("page 1/2")
                                     .font(RMTheme.Typography.metadataSmall)
                                     .foregroundColor(Color.white.opacity(0.45))
                             }
+                            sectionLine("Job Summary")
+                            sectionLine("Evidence")
+                            sectionLine("Signatures")
                             Spacer()
-                            Rectangle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(height: 1)
-                            Rectangle()
-                                .fill(Color.white.opacity(0.06))
-                                .frame(height: 1)
                         }
                         .padding(8)
                     )
-                    .frame(height: 56)
+                    .frame(height: 64)
                     .padding(.bottom, 8)
                 Text("SHA-256")
                     .font(RMTheme.Typography.metadataSmall)
@@ -187,7 +184,10 @@ struct AuthView: View {
                     .foregroundColor(Color.white.opacity(0.62))
                 Text("Verified")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(RMTheme.Colors.accent)
+                    .foregroundColor(Color.white.opacity(0.9))
+                Text("Signed by: Riskmate Ledger · 10:42 AM")
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(Color.white.opacity(0.45))
                 proofCardMetadataLine
                 Text("Generated: 10:42 AM · Mar 5")
                     .font(RMTheme.Typography.metadataSmall)
@@ -207,6 +207,18 @@ struct AuthView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Faint section line for proof card PDF snapshot (Job Summary, Evidence, Signatures).
+    private func sectionLine(_ title: String) -> some View {
+        HStack(spacing: 6) {
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+            Text(title)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(Color.white.opacity(0.4))
         }
     }
 

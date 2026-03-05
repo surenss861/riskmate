@@ -221,7 +221,6 @@ struct AuditFeedView: View {
         .refreshable { await loadEvents() }
     }
 
-    @ViewBuilder
     private func ledgerRow(for event: AuditEvent) -> some View {
         let isBlocked = event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked"))
         let status: LedgerTimelineRow.LedgerEventStatus = isBlocked ? .error : .verified
@@ -230,7 +229,7 @@ struct AuditFeedView: View {
         let timeText = formatter.localizedString(for: event.timestamp, relativeTo: Date())
         let hashPreview = String(event.id.prefix(12)) + "…"
 
-        return LedgerTimelineRow(
+        LedgerTimelineRow(
             title: isBlocked ? "Action Blocked" : event.summary,
             subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
             hashPreview: hashPreview,
@@ -514,7 +513,9 @@ struct LedgerExportSheet: View {
                 }
                 Section {
                     Toggle("Include signatures", isOn: $includeSignatures)
+                        .tint(RMTheme.Colors.accent)
                     Toggle("Include photos", isOn: $includePhotos)
+                        .tint(RMTheme.Colors.accent)
                 }
                 if isGenerating {
                     Section {

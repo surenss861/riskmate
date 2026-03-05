@@ -16,7 +16,7 @@ struct EntitlementCard: View {
                 }
                 .rmShimmer()
             } else if let data = entitlements {
-                RMGlassCard {
+                RMCard(useSolidSurface: true) {
                     VStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
                         HStack {
                             Text(planDisplayName(data.plan_code))
@@ -46,20 +46,25 @@ struct EntitlementCard: View {
                                 }
                             }
                         }
-                        Button {
-                            Haptics.impact(.light)
-                            onManagePlan()
-                        } label: {
-                            Label("Manage plan", systemImage: "arrow.up.right")
-                                .labelStyle(.titleAndIcon)
-                                .font(RMTheme.Typography.bodySmallBold)
-                                .foregroundColor(RMTheme.Colors.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Button {
+                                Haptics.impact(.light)
+                                onManagePlan()
+                            } label: {
+                                Label("Manage plan", systemImage: "arrow.up.right")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(RMTheme.Typography.bodySmallBold)
+                                    .foregroundColor(RMTheme.Colors.accent)
+                            }
+                            .rmPressable(scale: 0.98, haptic: true, lightImpact: true)
+                            Text("Opens riskmate.dev")
+                                .font(RMTheme.Typography.caption2)
+                                .foregroundColor(RMTheme.Colors.textTertiary)
                         }
-                        .rmPressable(scale: 0.98, haptic: true, lightImpact: true)
                     }
                 }
             } else {
-                RMGlassCard {
+                RMCard(useSolidSurface: true) {
                     VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
                         Text("Plan")
                             .font(RMTheme.Typography.title3)
