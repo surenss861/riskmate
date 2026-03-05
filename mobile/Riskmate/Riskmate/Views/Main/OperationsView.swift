@@ -262,22 +262,27 @@ struct OperationsView: View {
         }
     }
 
+    /// Pinned search: 44pt total height, 12pt inner padding. Executive gets fixed-height spacer so no layout jump on role change.
     private var operationsSearchControl: some View {
-        HStack(spacing: RMTheme.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(RMTheme.Colors.textTertiary)
-            TextField("Search jobs...", text: $searchQuery)
-                .font(RMTheme.Typography.body)
-                .foregroundColor(RMTheme.Colors.textPrimary)
+        Group {
+            if entitlements.entitlements?.role.lowercased() == "executive" {
+                Color.clear.frame(height: 44)
+            } else {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14))
+                        .foregroundColor(RMTheme.Colors.textTertiary)
+                    TextField("Search jobs", text: $searchQuery)
+                        .font(RMTheme.Typography.body)
+                        .foregroundColor(RMTheme.Colors.textPrimary)
+                }
+                .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RMTheme.Colors.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(RMTheme.Colors.inputStroke, lineWidth: 1))
+            }
         }
-        .padding(.horizontal, RMTheme.Spacing.md)
-        .frame(height: 44)
-        .background(RMTheme.Colors.inputFill)
-        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
-        .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(RMTheme.Colors.inputStroke, lineWidth: 1))
-        .padding(RMTheme.Spacing.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RMTheme.Colors.surface2)
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
         .padding(.top, RMTheme.Spacing.sm)
         .padding(.bottom, 0)
@@ -351,11 +356,7 @@ struct OperationsView: View {
                 RMTopBar(title: "Operations", notificationBadge: 0)
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                Group {
-                    if entitlements.entitlements?.role.lowercased() != "executive" {
-                        operationsSearchControl
-                    }
-                }
+                operationsSearchControl
             }
             .task {
                 // Refresh entitlements on view load
@@ -542,24 +543,25 @@ private struct OperationsJobRow: View {
                     .frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.clientName.isEmpty ? "Untitled Job" : job.clientName)
-                        .font(RMTheme.Typography.bodyBold)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(RMTheme.Colors.textPrimary)
                         .lineLimit(1)
                     Text("\(job.jobType) · \(job.location)")
                         .font(RMTheme.Typography.secondaryLabelLarge)
-                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
+                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(jobTimestampText)
-                    .font(RMTheme.Typography.metadata)
-                    .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
+                    .font(RMTheme.Typography.metadataSmall)
+                    .foregroundColor(RMTheme.Colors.textTertiary)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(RMTheme.Colors.textTertiary)
             }
             .padding(.vertical, RMTheme.Spacing.inner)
             .frame(minHeight: 64)
+            .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
         }
         .listRowBackground(RMTheme.Colors.surface2.opacity(0.92))
         .listRowInsets(EdgeInsets(top: RMTheme.Spacing.xs, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.xs, trailing: RMTheme.Spacing.pagePadding))

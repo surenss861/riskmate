@@ -156,13 +156,26 @@ struct AuthView: View {
                     proofThumbnailBadge
                 }
                 .padding(.bottom, 8)
-                // Fake preview thumbnail (blurred mini page)
+                // Fake preview thumbnail: faint lines + page label so it reads as document
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.white.opacity(0.06))
                     .overlay(
-                        Image(systemName: "doc.richtext.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(Color.white.opacity(0.12))
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Spacer()
+                                Text("page 1/2")
+                                    .font(RMTheme.Typography.metadataSmall)
+                                    .foregroundColor(Color.white.opacity(0.45))
+                            }
+                            Spacer()
+                            Rectangle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 1)
+                            Rectangle()
+                                .fill(Color.white.opacity(0.06))
+                                .frame(height: 1)
+                        }
+                        .padding(8)
                     )
                     .frame(height: 56)
                     .padding(.bottom, 8)

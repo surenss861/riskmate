@@ -8,11 +8,13 @@ struct OperationsNeedsAttentionCard: View {
 
     private var hasBlockers: Bool { blockerCount > 0 }
     private var bodyText: String {
-        var parts: [String] = []
-        if blockerCount > 0 { parts.append("\(blockerCount) blocker\(blockerCount == 1 ? "" : "s")") }
-        if highRiskCount > 0 { parts.append("\(highRiskCount) high-risk") }
-        if parts.isEmpty { return "Items need your review." }
-        return parts.joined(separator: " and ") + " need review."
+        if blockerCount > 0 {
+            return "\(blockerCount) blocker\(blockerCount == 1 ? "" : "s") need review."
+        }
+        if highRiskCount > 0 {
+            return "\(highRiskCount) high-risk item\(highRiskCount == 1 ? "" : "s") need review."
+        }
+        return "Items need your review."
     }
 
     var body: some View {
