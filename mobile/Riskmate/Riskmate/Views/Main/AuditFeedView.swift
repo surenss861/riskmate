@@ -13,38 +13,47 @@ struct AuditFeedView: View {
     @State private var showingVerificationDetails = false
     @State private var showingVerificationExplainer = false
     @State private var showFirstVisitAnimation = false
+    @State private var showingExportSheet = false
+    @State private var lastExportedAt: Date?
+    @State private var scrollY: CGFloat = 0
+    @State private var scrollBaselineY: CGFloat?
     @AppStorage("riskmate.ledger.firstVisit") private var hasSeenFirstVisit = false
 
+    private let ledgerScrollSpace = "ledgerScroll"
     private var rbac: RBAC { RBAC(role: entitlements.entitlements?.role) }
-    
+
+    private var dividerOpacity: CGFloat {
+        let amount = max(0, (scrollBaselineY ?? 0) - scrollY)
+        if amount < 12 { return 0 }
+        if amount > 28 { return 0.075 }
+        return 0.075 * (amount - 12) / 16
+    }
+
+    /// Events sorted by timestamp desc, grouped by calendar day
+    private var groupedByDay: [(day: Date, label: String, events: [AuditEvent])] {
+        let cal = Calendar.current
+        let sorted = events.sorted { $0.timestamp > $1.timestamp }
+        let grouped = Dictionary(grouping: sorted) { cal.startOfDay(for: $0.timestamp) }
+        return grouped.keys.sorted(by: >).map { day in
+            let dayEvents = grouped[day] ?? []
+            let label: String
+            if cal.isDateInToday(day) { label = "Today" }
+            else if cal.isDateInYesterday(day) { label = "Yesterday" }
+            else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d"
+                label = formatter.string(from: day)
+            }
+            return (day: day, label: label, events: dayEvents)
+        }
+    }
+
     var body: some View {
         RMBackground()
             .overlay {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
-                    
-                    // Trust Strip (always visible, unforgeable status)
-                    LedgerTrustStrip(
-                        isVerified: true, // TODO: Wire to actual verification status
-                        lastAnchored: Date(), // TODO: Wire to actual anchor timestamp
-                        onTap: {
-                            showingVerificationExplainer = true
-                        }
-                    )
-                    .overlay(alignment: .center) {
-                        // First-visit "holy sh*t" moment: Proof hash → anchor → lock animation
-                        if showFirstVisitAnimation && !UIAccessibility.isReduceMotionEnabled {
-                            FirstVisitAnimationView()
-                                .transition(.opacity.combined(with: .scale))
-                                .zIndex(1000) // Ensure it appears above other content
-                        }
-                    }
-                    
-                    // Saved Views as Horizontal Cards
-                    SavedViewsCarousel()
-                        .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                        .padding(.top, RMTheme.Spacing.sm)
-                    
+
                     if isLoading {
                         // Premium skeleton loading
                         ScrollView {
@@ -79,102 +88,7 @@ struct AuditFeedView: View {
                             action: nil
                         )
                     } else {
-                        List {
-                            Section("Proof Records") {
-                                ForEach(events) { event in
-                                // Use enforcement row for blocked events
-                                if event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked")) {
-                                    EnforcementRow(event: event)
-                                        .listRowBackground(Color.clear)
-                                        .listRowSeparator(.hidden)
-                                        .listRowInsets(EdgeInsets(
-                                            top: RMTheme.Spacing.xs,
-                                            leading: RMTheme.Spacing.md,
-                                            bottom: RMTheme.Spacing.xs,
-                                            trailing: RMTheme.Spacing.md
-                                        ))
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button {
-                                                copyEventId(event.id)
-                                            } label: {
-                                                Label("Copy ID", systemImage: "doc.on.doc")
-                                            }
-                                            .tint(RMTheme.Colors.accent)
-                                        }
-                                        .contextMenu {
-                                            Button {
-                                                copyEventId(event.id)
-                                            } label: {
-                                                Label("Copy Event ID", systemImage: "doc.on.doc")
-                                            }
-                                            Divider()
-                                            Button {
-                                                selectedEvent = event
-                                                showingDetail = true
-                                            } label: {
-                                                Label("View Details", systemImage: "eye")
-                                            }
-                                        }
-                                        .onTapGesture {
-                                            let generator = UIImpactFeedbackGenerator(style: .light)
-                                            generator.impactOccurred()
-                                            selectedEvent = event
-                                            showingDetail = true
-                                        }
-                                } else {
-                                    // System-native Ledger Receipt Card (Proof Receipt)
-                                    LedgerReceiptCard(
-                                        title: event.summary,
-                                        subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
-                                        timeAgo: event.timestamp.toRelative(since: nil, dateTimeStyle: .named, unitsStyle: .short),
-                                        hashPreview: String(event.id.prefix(12)) + "...",
-                                        fullHash: event.id,
-                                        proofID: String(event.id.prefix(8)).uppercased()
-                                    )
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets(
-                                        top: RMTheme.Spacing.xs,
-                                        leading: RMTheme.Spacing.md,
-                                        bottom: RMTheme.Spacing.xs,
-                                        trailing: RMTheme.Spacing.md
-                                    ))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button {
-                                            copyEventId(event.id)
-                                        } label: {
-                                            Label("Copy ID", systemImage: "doc.on.doc")
-                                        }
-                                        .tint(Color(.systemBlue))
-                                    }
-                                    .contextMenu {
-                                        Button {
-                                            copyEventId(event.id)
-                                        } label: {
-                                            Label("Copy Event ID", systemImage: "doc.on.doc")
-                                        }
-                                        Divider()
-                                        Button {
-                                            selectedEvent = event
-                                            showingDetail = true
-                                        } label: {
-                                            Label("View Details", systemImage: "eye")
-                                        }
-                                    }
-                                    .onTapGesture {
-                                        let generator = UIImpactFeedbackGenerator(style: .light)
-                                        generator.impactOccurred()
-                                        selectedEvent = event
-                                        showingDetail = true
-                                    }
-                                }
-                            }
-                        }
-                        .listStyle(.insetGrouped)
-                        .scrollContentBackground(.hidden)
-                        .refreshable {
-                            await loadEvents()
-                        }
+                        ledgerTimelineList
                     }
                 }
             }
@@ -193,7 +107,14 @@ struct AuditFeedView: View {
                     if rbac.canExportLedger {
                         Button {
                             Haptics.tap()
+                            showingExportSheet = true
+                        } label: {
+                            Label("Export Proof Pack", systemImage: "square.and.arrow.up")
+                        }
+                        Button {
+                            Haptics.tap()
                             exportURL = try? AuditExporter.exportJSON(events: events)
+                            if exportURL != nil { lastExportedAt = Date() }
                         } label: {
                             Label("Export JSON", systemImage: "curlybraces")
                         }
@@ -201,6 +122,7 @@ struct AuditFeedView: View {
                         Button {
                             Haptics.tap()
                             exportURL = try? AuditExporter.exportCSV(events: events)
+                            if exportURL != nil { lastExportedAt = Date() }
                         } label: {
                             Label("Export CSV", systemImage: "tablecells")
                         }
@@ -212,6 +134,17 @@ struct AuditFeedView: View {
                         .foregroundColor(RMTheme.Colors.textSecondary)
                 }
             }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LedgerExportControl(
+                lastExportedAt: lastExportedAt,
+                dividerOpacity: dividerOpacity,
+                onExportTapped: { showingExportSheet = true }
+            )
+        }
+        .onPreferenceChange(LedgerScrollYKey.self) { value in
+            if scrollBaselineY == nil { scrollBaselineY = value }
+            scrollY = value
         }
         .onAppear {
             // Show first-visit animation once
@@ -249,8 +182,83 @@ struct AuditFeedView: View {
         .sheet(isPresented: $showingVerificationExplainer) {
             VerificationExplainerSheet()
         }
+        .sheet(isPresented: $showingExportSheet) {
+            LedgerExportSheet(
+                eventCount: events.count,
+                onExport: {
+                    showingExportSheet = false
+                    exportURL = try? AuditExporter.exportJSON(events: events)
+                    if exportURL != nil { lastExportedAt = Date() }
+                },
+                onDismiss: { showingExportSheet = false }
+            )
+        }
     }
-    
+
+    private var ledgerTimelineList: some View {
+        List {
+            Section {
+                Color.clear
+                    .frame(height: 1)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .trackScrollY(in: ledgerScrollSpace)
+            }
+            ForEach(groupedByDay, id: \.day) { group in
+                Section {
+                    ForEach(group.events) { event in
+                        ledgerRow(for: event)
+                    }
+                } header: {
+                    LedgerDaySectionHeader(title: group.label, eventCount: group.events.count)
+                }
+                .listSectionSpacing(RMTheme.Spacing.sectionSpacing)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .coordinateSpace(name: ledgerScrollSpace)
+        .refreshable { await loadEvents() }
+    }
+
+    @ViewBuilder
+    private func ledgerRow(for event: AuditEvent) -> some View {
+        let isBlocked = event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked"))
+        let status: LedgerTimelineRow.LedgerEventStatus = isBlocked ? .error : .verified
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        let timeText = formatter.localizedString(for: event.timestamp, relativeTo: Date())
+        let hashPreview = String(event.id.prefix(12)) + "…"
+
+        LedgerTimelineRow(
+            title: isBlocked ? "Action Blocked" : event.summary,
+            subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
+            hashPreview: hashPreview,
+            fullHash: event.id,
+            timeText: timeText,
+            status: status,
+            isVerified: !isBlocked,
+            onTap: { selectedEvent = event; showingDetail = true }
+        )
+        .listRowInsets(EdgeInsets(top: RMTheme.Spacing.xs, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.xs, trailing: RMTheme.Spacing.pagePadding))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .contextMenu {
+            Button {
+                copyEventId(event.id)
+            } label: {
+                Label("Copy Event ID", systemImage: "doc.on.doc")
+            }
+            Button {
+                selectedEvent = event
+                showingDetail = true
+            } label: {
+                Label("View Details", systemImage: "eye")
+            }
+        }
+    }
+
     private func loadEvents() async {
         isLoading = true
         errorMessage = nil
@@ -480,6 +488,86 @@ struct RMAuditDetailSheet: View {
     }
 }
 
+// MARK: - Ledger scroll Y (divider fade)
+private struct LedgerScrollYKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct LedgerTrackScrollY: ViewModifier {
+    let space: String
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: LedgerScrollYKey.self, value: proxy.frame(in: .named(space)).minY)
+                }
+            )
+    }
+}
+
+private extension View {
+    func trackScrollY(in space: String) -> some View {
+        modifier(LedgerTrackScrollY(space: space))
+    }
+}
+
+// MARK: - Export sheet (placeholder: format, scope, toggles, Generate)
+struct LedgerExportSheet: View {
+    let eventCount: Int
+    let onExport: () -> Void
+    let onDismiss: () -> Void
+    @State private var includeSignatures = true
+    @State private var includePhotos = true
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Label("PDF", systemImage: "doc.fill")
+                        .font(RMTheme.Typography.bodyBold)
+                } header: {
+                    Text("Format")
+                }
+                Section {
+                    Text("All events")
+                        .font(RMTheme.Typography.body)
+                } header: {
+                    Text("Scope")
+                }
+                Section {
+                    Toggle("Include signatures", isOn: $includeSignatures)
+                    Toggle("Include photos", isOn: $includePhotos)
+                }
+            }
+            .navigationTitle("Export Proof Pack")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        Haptics.tap()
+                        onDismiss()
+                        dismiss()
+                    }
+                    .foregroundColor(RMTheme.Colors.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Generate") {
+                        Haptics.tap()
+                        onExport()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(RMTheme.Colors.accent)
+                }
+            }
+        }
+    }
+}
 
 #Preview {
     AuditFeedView()

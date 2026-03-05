@@ -1,0 +1,56 @@
+import SwiftUI
+
+/// Pinned Export control: one CTA + metadata. Optional "Last exported…" and divider below.
+struct LedgerExportControl: View {
+    var lastExportedAt: Date?
+    var dividerOpacity: CGFloat = 0
+    let onExportTapped: () -> Void
+
+    private var lastExportedText: String? {
+        guard let date = lastExportedAt else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Last exported \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: {
+                Haptics.tap()
+                onExportTapped()
+            }) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(RMTheme.Colors.accent)
+                        Text("Export Proof Pack")
+                            .font(RMTheme.Typography.sectionTitle)
+                            .foregroundColor(RMTheme.Colors.textPrimary)
+                    }
+                    Text("Includes SHA-256 hashes · PDF ready")
+                        .font(RMTheme.Typography.secondaryLabelLarge)
+                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
+                    if let text = lastExportedText {
+                        Text(text)
+                            .font(RMTheme.Typography.metadataSmall)
+                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.62))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(RMTheme.Spacing.cardPadding)
+            }
+            .buttonStyle(.plain)
+            .background(RMTheme.Colors.surface2)
+            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+            .padding(.top, RMTheme.Spacing.sm)
+
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(dividerOpacity)
+                .frame(height: 1)
+                .transaction { $0.animation = .easeOut(duration: 0.15) }
+        }
+        .background(RMTheme.Colors.background)
+    }
+}
