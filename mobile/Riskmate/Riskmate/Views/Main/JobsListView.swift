@@ -27,12 +27,15 @@ struct JobsListView: View {
     private let scrollSpace = "workRecordsScroll"
 
     private var dividerOpacity: CGFloat {
-        let amount = max(0, (scrollBaselineY ?? 0) - scrollY)
-        if amount < 8 { return 0 }
-        if amount > 28 { return 0.06 }
-        let t = (amount - 8) / (28 - 8)
-        return 0.06 * t
+        let raw = (scrollBaselineY ?? 0) - scrollY
+        let amount = max(0, raw)
+        if amount < 12 { return 0 }
+        if amount > 28 { return maxDividerOpacity }
+        let t = (amount - 12) / (28 - 12)
+        return maxDividerOpacity * t
     }
+
+    private let maxDividerOpacity: CGFloat = 0.075
 
     init(initialFilter: String? = nil) {
         self.initialFilter = initialFilter
@@ -195,7 +198,7 @@ struct JobsListView: View {
                         List {
                             Section {
                                 Color.clear
-                                    .frame(height: 0)
+                                    .frame(height: 1)
                                     .listRowInsets(EdgeInsets())
                                     .listRowBackground(Color.clear)
                                     .listRowSeparator(.hidden)
@@ -422,10 +425,10 @@ struct JobsListView: View {
                         .padding(.top, 6)
                         .padding(.bottom, 8)
                     Rectangle()
-                        .fill(Color.white)
+                        .fill(.ultraThinMaterial)
                         .opacity(dividerOpacity)
                         .frame(height: 1)
-                        .animation(.easeOut(duration: 0.15), value: dividerOpacity)
+                        .transaction { $0.animation = .easeOut(duration: 0.15) }
                 }
                 .background(RMTheme.Colors.background)
             }
