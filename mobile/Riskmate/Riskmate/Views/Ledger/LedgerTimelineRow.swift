@@ -105,6 +105,7 @@ struct LedgerTimelineRow: View {
                                 .opacity(isVerified ? 0.15 : 0.28)
                         }
                     }
+                    .padding(.top, 3)
                 }
                 .padding(.leading, RMTheme.Spacing.sm)
             }

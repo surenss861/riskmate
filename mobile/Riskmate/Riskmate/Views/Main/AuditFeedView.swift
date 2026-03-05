@@ -325,7 +325,7 @@ struct AuditFeedView: View {
     }
 }
 
-// MARK: - Pinned day header (solid surface + top/bottom edge; darker when pinned for "lock in" feel)
+// MARK: - Pinned day header (solid surface + top/bottom edge; shadow when pinned to avoid card bleed; animation matches chrome)
 private struct LedgerPinnedDayHeader: View {
     let title: String
     let count: Int
@@ -349,6 +349,7 @@ private struct LedgerPinnedDayHeader: View {
         .background(
             Rectangle()
                 .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
+                .overlay(Color.black.opacity(0.04 * min(1, pinnedT)))
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.white.opacity(0.05))
@@ -360,7 +361,9 @@ private struct LedgerPinnedDayHeader: View {
                         .frame(height: 1)
                 }
         )
+        .shadow(color: .black.opacity(pinnedT > 0.01 ? 0.08 : 0), radius: 8, x: 0, y: 2)
         .zIndex(10)
+        .animation(.easeOut(duration: 0.15), value: pinnedT)
     }
 }
 
