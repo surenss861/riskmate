@@ -111,6 +111,16 @@ class AuthService {
                     userInfo: [NSLocalizedDescriptionKey: "Token doesn't appear to be a JWT (should start with 'eyJ')"]
                 )
             }
+
+            // Never return an expired token; callers should treat as no session.
+            if JWTExpiry.isExpired(token) {
+                print("[AuthService] ⚠️ Access token is expired; not returning")
+                throw NSError(
+                    domain: "AuthService",
+                    code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "Session token is expired"]
+                )
+            }
             
             // Logging (safe): only log in DEBUG builds
             #if DEBUG
