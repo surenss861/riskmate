@@ -41,14 +41,14 @@ struct LedgerExportControl: View {
                     HStack(spacing: 6) {
                         Text("Generate")
                             .font(RMTheme.Typography.bodySmallBold)
-                            .foregroundColor(RMTheme.Colors.accent)
+                            .foregroundColor(RMTheme.Colors.textSecondary)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(RMTheme.Colors.textTertiary)
+                            .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.22))
                     }
                     .opacity(chromeT > revealThreshold ? 1 : 0)
                     .allowsHitTesting(chromeT > revealThreshold)
-                    .animation(.easeOut(duration: 0.2), value: chromeT)
+                    .transaction { $0.animation = .easeOut(duration: 0.2) }
                 }
                 .frame(height: 48)
                 .padding(.horizontal, RMTheme.Spacing.cardPadding)

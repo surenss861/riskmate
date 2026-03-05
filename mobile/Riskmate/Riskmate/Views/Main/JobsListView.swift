@@ -18,6 +18,8 @@ struct JobsListView: View {
     @State private var showExportProofSheet = false
     @State private var exportProofJobId: String? = nil
     @State private var showCreateJobSheet = false
+    @State private var showCloseJobConfirm = false
+    @State private var jobToClose: Job? = nil
     @Namespace private var jobListNamespace
     @Namespace private var filterChipNamespace
     @State private var selectedQuickChip: JobsQuickFilter?
@@ -473,8 +475,28 @@ struct JobsListView: View {
             .sheet(isPresented: $showCreateJobSheet) {
                 CreateJobSheet()
             }
+            .confirmationDialog("Mark as complete?", isPresented: $showCloseJobConfirm, titleVisibility: .visible) {
+                Button("Mark complete") {
+                    Haptics.tap()
+                    ToastCenter.shared.show("Coming soon", systemImage: "clock", style: .info)
+                    jobToClose = nil
+                    showCloseJobConfirm = false
+                }
+                Button("Cancel", role: .cancel) {
+                    jobToClose = nil
+                    showCloseJobConfirm = false
+                }
+            } message: {
+                Text("Close this job and mark it complete. Full support coming soon.")
+            }
     }
-    
+
+    private func presentCloseJobConfirm(for job: Job) {
+        guard job.status.lowercased() != "completed", job.status.lowercased() != "cancelled" else { return }
+        jobToClose = job
+        showCloseJobConfirm = true
+    }
+
     private func presentExportSheet(for job: Job) {
         exportProofJobId = job.id
         showExportProofSheet = true
@@ -549,6 +571,15 @@ struct JobsListView: View {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
             .tint(RMTheme.Colors.categoryAccess)
+            if job.status.lowercased() != "completed", job.status.lowercased() != "cancelled" {
+                Button {
+                    Haptics.tap()
+                    presentCloseJobConfirm(for: job)
+                } label: {
+                    Label("Close job", systemImage: "checkmark.circle")
+                }
+                .tint(RMTheme.Colors.success)
+            }
             Button {
                 Haptics.success()
                 copyJobId(job.id)
@@ -570,6 +601,13 @@ struct JobsListView: View {
                 presentExportSheet(for: job)
             } label: {
                 Label("Export PDF", systemImage: "square.and.arrow.up")
+            }
+            if job.status.lowercased() != "completed", job.status.lowercased() != "cancelled" {
+                Button {
+                    presentCloseJobConfirm(for: job)
+                } label: {
+                    Label("Close job", systemImage: "checkmark.circle")
+                }
             }
             Button {
                 Haptics.success()

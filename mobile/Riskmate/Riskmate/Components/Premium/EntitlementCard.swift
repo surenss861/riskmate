@@ -32,7 +32,7 @@ struct EntitlementCard: View {
                         limitsSection(data)
                         if !data.features.isEmpty {
                             Text("Included")
-                                .font(RMTheme.Typography.captionBold)
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
                                 ForEach(data.features, id: \.self) { feature in
@@ -48,6 +48,7 @@ struct EntitlementCard: View {
                                         .clipShape(Capsule())
                                 }
                             }
+                            .padding(.top, 8)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Button {

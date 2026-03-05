@@ -153,7 +153,10 @@ struct AuthView: View {
                                 .fill(Color.white.opacity(0.08))
                                 .frame(height: 1)
                                 .frame(maxWidth: .infinity)
-                            HStack {
+                            HStack(alignment: .center) {
+                                Text("Report ID: RM-2F3A…9C")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(Color.white.opacity(0.4))
                                 Spacer()
                                 Text("page 1/2")
                                     .font(.system(size: 8, weight: .medium))
