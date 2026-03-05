@@ -27,11 +27,25 @@ enum CreateJobJobType: String, CaseIterable, Identifiable {
     case other
 
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    var label: String {
+        switch self {
+        case .repair: return "Repair"
+        case .install: return "Install"
+        case .maintenance: return "Maintenance"
+        case .inspection: return "Inspection"
+        case .other: return "Other"
+        }
+    }
 }
 
 /// Sheet for creating a new job - works offline (saves to pending) or online (API). Backend requires client_name, client_type, job_type, location.
 struct CreateJobSheet: View {
+    private enum Field: Hashable {
+        case clientName
+        case location
+        case title
+    }
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var jobsStore = JobsStore.shared
     @StateObject private var statusManager = ServerStatusManager.shared
@@ -44,10 +58,18 @@ struct CreateJobSheet: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    @FocusState private var focusedField: Field?
+
     private var isOffline: Bool { !statusManager.isOnline }
+    private var trimmedClientName: String { clientName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedLocation: String { location.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedTitle: String {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? "" : t
+    }
+
     private var canSave: Bool {
-        !clientName.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !location.trimmingCharacters(in: .whitespaces).isEmpty
+        !trimmedClientName.isEmpty && !trimmedLocation.isEmpty && !isSaving
     }
 
     var body: some View {
@@ -71,23 +93,45 @@ struct CreateJobSheet: View {
                 Form {
                     Section {
                         TextField("Client name", text: $clientName)
+                            .focused($focusedField, equals: .clientName)
                             .textContentType(.organizationName)
-                            .autocapitalization(.words)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled(true)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .location }
+
                         TextField("Location", text: $location)
+                            .focused($focusedField, equals: .location)
                             .textContentType(.fullStreetAddress)
-                            .autocapitalization(.words)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled(true)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .title }
+
                         TextField("Title (optional)", text: $title)
+                            .focused($focusedField, equals: .title)
                             .textContentType(.jobTitle)
-                            .autocapitalization(.words)
-                        Picker("Client type", selection: $clientType) {
-                            ForEach(CreateJobClientType.allCases) { t in
-                                Text(t.label).tag(t)
+                            .textInputAutocapitalization(.sentences)
+                            .autocorrectionDisabled(false)
+                            .submitLabel(.done)
+                            .onSubmit { submit() }
+
+                        LabeledContent("Client type") {
+                            Picker("Client type", selection: $clientType) {
+                                ForEach(CreateJobClientType.allCases) { type in
+                                    Text(type.label).tag(type)
+                                }
                             }
+                            .pickerStyle(.menu)
                         }
-                        Picker("Job type", selection: $jobType) {
-                            ForEach(CreateJobJobType.allCases) { t in
-                                Text(t.label).tag(t)
+
+                        LabeledContent("Job type") {
+                            Picker("Job type", selection: $jobType) {
+                                ForEach(CreateJobJobType.allCases) { type in
+                                    Text(type.label).tag(type)
+                                }
                             }
+                            .pickerStyle(.menu)
                         }
                     } header: {
                         Text("Job Details")
@@ -112,17 +156,28 @@ struct CreateJobSheet: View {
                         dismiss()
                     }
                     .foregroundColor(RMTheme.Colors.textSecondary)
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isOffline ? "Save Offline" : "Save") {
-                        Task { await saveJob() }
+                        submit()
                     }
                     .fontWeight(.semibold)
                     .foregroundColor(canSave ? RMTheme.Colors.accent : RMTheme.Colors.textTertiary)
-                    .disabled(!canSave || isSaving)
+                    .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    focusedField = .clientName
                 }
             }
         }
+    }
+
+    private func submit() {
+        guard canSave else { return }
+        Task { await saveJob() }
     }
 
     private func saveJob() async {
@@ -131,18 +186,13 @@ struct CreateJobSheet: View {
         errorMessage = nil
         defer { isSaving = false }
 
-        let name = clientName.trimmingCharacters(in: .whitespaces)
-        let loc = location.trimmingCharacters(in: .whitespaces)
-        let titleTrimmed = title.trimmingCharacters(in: .whitespaces)
-        let titleOpt = titleTrimmed.isEmpty ? nil : titleTrimmed
-
         do {
             let job = try await jobsStore.createJob(
-                clientName: name,
+                clientName: trimmedClientName,
                 clientType: clientType.rawValue,
                 jobType: jobType.rawValue,
-                location: loc,
-                title: titleOpt
+                location: trimmedLocation,
+                title: trimmedTitle.isEmpty ? nil : trimmedTitle
             )
             Haptics.success()
             if !isOffline {
