@@ -74,12 +74,13 @@ struct RMTopBar: View {
         .padding(.vertical, 8)
         .frame(height: Self.barHeight, alignment: .bottom)
         .background(.ultraThinMaterial)
-        .overlay(Color.black.opacity(0.22))
+        .overlay(Color.black.opacity(0.22).allowsHitTesting(false))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.06))
                 .frame(height: 1)
         }
+        .zIndex(100)
     }
 }
 

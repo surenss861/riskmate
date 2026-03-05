@@ -267,42 +267,46 @@ struct AuthView: View {
     }
 
     private func landingCTAs(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             Rectangle()
                 .fill(Color.white.opacity(0.06))
                 .frame(height: 1)
                 .padding(.horizontal, 24)
             credibilityRow
-            Button {
-                clearFormState()
-                withAnimation(RMTheme.Animation.spring) { screen = .signup }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focusedField = .email }
-            } label: {
-                Text("Start Free")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(RMTheme.Colors.accent.opacity(0.95), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        LinearGradient(
-                            gradient: Gradient(colors: [.white.opacity(0.10), .clear]),
-                            startPoint: .top,
-                            endPoint: .bottom
+            // Start Free + disclaimer as one grouped stack (tighter spacing)
+            VStack(spacing: 8) {
+                Button {
+                    clearFormState()
+                    withAnimation(RMTheme.Animation.spring) { screen = .signup }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { focusedField = .email }
+                } label: {
+                    Text("Start Free")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RMTheme.Colors.accent.opacity(0.95), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            LinearGradient(
+                                gradient: Gradient(colors: [.white.opacity(0.10), .clear]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .blendMode(.softLight)
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .blendMode(.softLight)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(.white.opacity(0.10), lineWidth: 1)
-                    )
-                    .shadow(color: RMTheme.Colors.accent.opacity(0.18), radius: 14, x: 0, y: 10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(.white.opacity(0.10), lineWidth: 1)
+                        )
+                        .shadow(color: RMTheme.Colors.accent.opacity(0.18), radius: 14, x: 0, y: 10)
+                }
+                Text("No credit card required")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.white.opacity(0.55))
             }
-            Text("No credit card required")
-                .font(.system(size: 12))
-                .foregroundColor(Color.white.opacity(0.55))
-
+            .padding(.top, 14)
+            // Sign In as quieter text button with more separation
             Button {
                 clearFormState()
                 withAnimation(RMTheme.Animation.spring) { screen = .login }
@@ -314,6 +318,7 @@ struct AuthView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
+            .padding(.top, 20)
         }
         .padding(.horizontal, 22)
         .padding(.bottom, safeBottom + 18)

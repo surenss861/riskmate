@@ -151,7 +151,7 @@ struct AccountView: View {
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: 44)
+                    .frame(minHeight: 92)
                 }
             }
         }

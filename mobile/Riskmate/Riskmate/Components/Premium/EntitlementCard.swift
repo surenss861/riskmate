@@ -70,6 +70,7 @@ struct EntitlementCard: View {
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
                     }
+                    .frame(minHeight: 92)
                 }
             } else {
                 RMCard(useSolidSurface: true) {

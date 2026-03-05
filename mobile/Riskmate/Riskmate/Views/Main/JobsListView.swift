@@ -234,9 +234,18 @@ struct JobsListView: View {
                                         jobRowLink(index: index, job: job, isLastInSection: job.id == needsActionJobs.last?.id, reasons: needsActionReasons(for: job))
                                     }
                                 } header: {
-                                    Text("Needs action")
-                                        .font(RMTheme.Typography.sectionTitle)
-                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                        Text("Needs action")
+                                            .font(RMTheme.Typography.sectionTitle)
+                                            .foregroundColor(RMTheme.Colors.textPrimary)
+                                        Text("• \(needsActionJobs.count)")
+                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .foregroundColor(RMTheme.Colors.textTertiary)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(RMTheme.Colors.surface1.opacity(0.9))
+                                            .clipShape(Capsule())
+                                    }
                                 }
                             }
                             Section {

@@ -354,7 +354,7 @@ private struct LedgerPinnedDayHeader: View {
                 .overlay(Color.black.opacity(0.04 * min(1, pinnedT)))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.05))
+                        .fill(Color.white.opacity(0.06))
                         .frame(height: 1)
                 }
                 .overlay(alignment: .bottom) {
