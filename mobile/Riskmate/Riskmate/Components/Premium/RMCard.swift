@@ -20,6 +20,10 @@ struct RMCard<Content: View>: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
+                            .fill(Color.black.opacity(0.04))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
                             .stroke(RMSystemTheme.Colors.separator, lineWidth: 0.5)
                     )
             )

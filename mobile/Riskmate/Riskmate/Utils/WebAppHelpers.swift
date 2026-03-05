@@ -15,7 +15,7 @@ enum WebAppURL {
         baseURL.appendingPathComponent("jobs").appendingPathComponent(jobId)
     }
 
-    /// Billing / manage plan (opens in browser).
+    /// Billing / manage plan (opens in browser). Single source of truth — if path changes (e.g. /billing), update only here.
     static var billingURL: URL {
         baseURL.appendingPathComponent("settings").appendingPathComponent("billing")
     }

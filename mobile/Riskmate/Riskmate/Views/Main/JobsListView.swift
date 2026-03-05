@@ -98,49 +98,39 @@ struct JobsListView: View {
             .overlay {
                 VStack(spacing: 0) {
                     RMOfflineBanner()
-                    // Sticky Filter Bar
-                    RMStickyFilterBar {
-                        VStack(spacing: RMTheme.Spacing.sm) {
-                            // Search Bar
+                    // One “control surface” card (Wallet/Health-style)
+                    VStack(spacing: 0) {
+                        VStack(spacing: 8) {
                             HStack(spacing: RMTheme.Spacing.sm) {
                                 Image(systemName: "magnifyingglass")
                                     .foregroundColor(RMTheme.Colors.textTertiary)
                                     .accessibilityHidden(true)
-                                
                                 TextField("Search jobs...", text: $searchText)
                                     .focused($isSearchFocused)
                                     .foregroundColor(RMTheme.Colors.textPrimary)
                                     .font(RMTheme.Typography.body)
                                     .accessibilityLabel("Search jobs")
                             }
-                            .padding(RMTheme.Spacing.md)
+                            .padding(.horizontal, RMTheme.Spacing.md)
+                            .frame(height: 44)
                             .background(RMTheme.Colors.inputFill)
-                            .cornerRadius(RMTheme.Radius.sm)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
-                                    .stroke(isSearchFocused ? RMTheme.Colors.inputStrokeFocused : RMTheme.Colors.inputStroke, lineWidth: 1)
-                            }
-                            
-                            // Quick filter chips (High Risk, Blockers, Needs Signature, Recent)
+                            .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.sm))
+                            .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.sm).stroke(isSearchFocused ? RMTheme.Colors.inputStrokeFocused : RMTheme.Colors.inputStroke, lineWidth: 1))
                             RMFilterChips(selection: $selectedQuickChip, namespace: filterChipNamespace)
-                            
-                            // Filter Pills
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: RMTheme.Spacing.sm) {
+                                HStack(spacing: 8) {
                                     FilterPill(
                                         title: "Status",
                                         value: $selectedStatus,
                                         options: ["all": "All", "active": "Active", "in_progress": "In Progress", "completed": "Completed", "cancelled": "Cancelled"],
                                         onSelect: { selectedStatus = $0 }
                                     )
-                                    
                                     FilterPill(
                                         title: "Risk",
                                         value: $selectedRiskLevel,
                                         options: ["all": "All", "low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"],
                                         onSelect: { selectedRiskLevel = $0 }
                                     )
-                                    
                                     if hasActiveFilters {
                                         Button {
                                             selectedStatus = "all"
@@ -165,7 +155,16 @@ struct JobsListView: View {
                                 }
                             }
                         }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RMTheme.Colors.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.card))
+                        .overlay(RoundedRectangle(cornerRadius: RMTheme.Radius.card).stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+                        .themeShadow(RMTheme.Shadow.card)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, RMTheme.Spacing.sm)
+                    .padding(.top, RMTheme.Spacing.xs)
                     
                     // Jobs List
                     if isLoading {
@@ -303,24 +302,26 @@ struct JobsListView: View {
                                 }
                             }
                             } header: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: RMTheme.Spacing.sm) {
-                                        Text("Proof Records")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundColor(RMTheme.Colors.textPrimary)
-                                        if !jobsStore.pendingJobIds.isEmpty {
-                                            Text("\(jobsStore.pendingJobIds.count) pending")
-                                                .font(RMTheme.Typography.caption)
-                                                .foregroundColor(RMTheme.Colors.warning)
-                                                .padding(.horizontal, RMTheme.Spacing.sm)
-                                                .padding(.vertical, 2)
-                                                .background(RMTheme.Colors.warning.opacity(0.2))
-                                                .clipShape(Capsule())
-                                        }
-                                    }
+                                HStack(spacing: 8) {
+                                    Text("Proof Records")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
                                     Text("Not yet anchored")
-                                        .font(RMTheme.Typography.caption)
+                                        .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(RMTheme.Colors.textTertiary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(RMTheme.Colors.surface1.opacity(0.8))
+                                        .clipShape(Capsule())
+                                    if !jobsStore.pendingJobIds.isEmpty {
+                                        Text("\(jobsStore.pendingJobIds.count) pending")
+                                            .font(RMTheme.Typography.caption)
+                                            .foregroundColor(RMTheme.Colors.warning)
+                                            .padding(.horizontal, RMTheme.Spacing.sm)
+                                            .padding(.vertical, 2)
+                                            .background(RMTheme.Colors.warning.opacity(0.2))
+                                            .clipShape(Capsule())
+                                    }
                                 }
                             }
                             // Load more indicator
@@ -362,9 +363,14 @@ struct JobsListView: View {
                             Haptics.tap()
                             showCreateJobSheet = true
                         } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(RMTheme.Colors.accent)
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(RMTheme.Colors.surface2)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1))
+                                .themeShadow(RMTheme.Shadow.cardLight)
                         }
                         .accessibilityLabel("Create new job")
                     }
@@ -601,20 +607,9 @@ struct FilterPill: View {
             }
             .padding(.horizontal, RMTheme.Spacing.md)
             .padding(.vertical, RMTheme.Spacing.sm)
-            .background(RMTheme.Colors.inputFill)
+            .background(RMTheme.Colors.surface1.opacity(0.65))
             .clipShape(Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(
-                        value == "all" ? RMTheme.Colors.border : RMTheme.Colors.accent.opacity(0.6),
-                        lineWidth: value == "all" ? 1 : 1.5
-                    )
-            }
-            .shadow(
-                color: value != "all" ? RMTheme.Colors.accent.opacity(0.3) : Color.clear,
-                radius: value != "all" ? 6 : 0
-            )
-            .scaleEffect(value != "all" ? 1.02 : 1.0)
+            .overlay(Capsule().stroke(value == "all" ? Color.white.opacity(0.07) : RMTheme.Colors.accent.opacity(0.35), lineWidth: 1))
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: value)
         }
     }

@@ -33,10 +33,11 @@ struct RMFilterChips: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: RMTheme.Spacing.sm) {
+            HStack(spacing: 8) {
                 ForEach(JobsQuickFilter.allCases, id: \.self) { chip in
                     let isSelected = selection == chip
                     Button {
+                        Haptics.tap()
                         withAnimation(RMMotion.spring) {
                             selection = isSelected ? nil : chip
                         }
@@ -44,20 +45,24 @@ struct RMFilterChips: View {
                         HStack(spacing: 6) {
                             Image(systemName: chip.icon)
                                 .font(.system(size: 12, weight: .semibold))
+                                .opacity(isSelected ? 0.95 : 0.80)
                             Text(chip.title)
                                 .font(RMTheme.Typography.captionBold)
+                                .opacity(isSelected ? 1.0 : 0.80)
                         }
-                        .foregroundColor(isSelected ? .black : RMTheme.Colors.textSecondary)
+                        .foregroundColor(isSelected ? RMTheme.Colors.textPrimary : RMTheme.Colors.textSecondary)
                         .padding(.horizontal, RMTheme.Spacing.md)
                         .padding(.vertical, RMTheme.Spacing.sm)
                         .background {
                             Group {
                                 if isSelected {
                                     Capsule()
-                                        .fill(RMTheme.Colors.accent)
+                                        .fill(RMTheme.Colors.accent.opacity(0.18))
+                                        .overlay(Capsule().stroke(RMTheme.Colors.accent.opacity(0.35), lineWidth: 1))
                                 } else {
                                     Capsule()
-                                        .fill(RMTheme.Colors.inputFill)
+                                        .fill(RMTheme.Colors.surface1.opacity(0.65))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
                                 }
                             }
                             .modifier(OptionalMatchedGeometry(id: "quickChip", isActive: isSelected, namespace: namespace))

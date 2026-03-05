@@ -308,6 +308,7 @@ struct OperationsView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 RMTopBar(title: "Operations", notificationBadge: 0)
             }
+            // Keep .searchable on root (not on inner List) so the drawer isn’t hidden under chrome; .toolbar(.hidden) + root placement avoids search disappearing on some iOS versions.
             .searchable(text: $searchQuery, prompt: "Search jobs", placement: .navigationBarDrawer(displayMode: .always))
             .task {
                 // Refresh entitlements on view load

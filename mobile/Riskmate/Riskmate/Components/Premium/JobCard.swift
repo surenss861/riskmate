@@ -74,7 +74,7 @@ struct JobCard: View {
                     
                     Text("\(job.jobType)  •  \(job.location)")
                         .font(RMSystemTheme.Typography.subheadline)
-                        .foregroundStyle(RMSystemTheme.Colors.textSecondary)
+                        .foregroundStyle(Color.white.opacity(0.62))
                         .lineLimit(1)
                     
                     StatusChip(text: job.status.uppercased())
