@@ -9,9 +9,18 @@ class ServerStatusManager: ObservableObject {
     @Published var isOnline: Bool = true
     @Published var lastCheck: Date?
     @Published var backendDown: Bool = false
-    /// Set when any API returns 5xx; cleared when health check passes. Use for "Some features temporarily unavailable" banner.
+    /// Set when any API returns 5xx; cleared when health check passes.
     @Published var recentlyDegraded: Bool = false
-    
+    /// Time of last 5xx; used for 10-minute cooldown so one fluke 502 doesn't keep banner on forever.
+    @Published private(set) var last5xxAt: Date?
+
+    /// Show "Backend degraded" banner only if we had a 5xx recently and it's within the cooldown window (or health hasn't cleared it yet).
+    var showDegradedBanner: Bool {
+        guard recentlyDegraded else { return false }
+        guard let at = last5xxAt else { return true }
+        return Date().timeIntervalSince(at) < 600 // 10 min
+    }
+
     private let healthCheckURL: String
     private var checkTimer: Timer?
     
@@ -43,6 +52,7 @@ class ServerStatusManager: ObservableObject {
                 
                 if isHealthy {
                     recentlyDegraded = false
+                    last5xxAt = nil
                     // Try to decode health response
                     if let healthData = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                         lastCheck = Date()
@@ -63,9 +73,10 @@ class ServerStatusManager: ObservableObject {
         return nil
     }
     
-    /// Call when an API returns 5xx so the app can show a "Backend degraded" banner.
+    /// Call when an API returns 5xx so the app can show a "Backend degraded" banner (with 10-min cooldown).
     func record5xx() {
         recentlyDegraded = true
+        last5xxAt = Date()
     }
 
     /// Check health and throw if backend is unavailable (for startup gate)

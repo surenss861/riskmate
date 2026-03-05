@@ -85,7 +85,7 @@ struct ContentView: View {
                         }
                     }
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        if serverStatus.recentlyDegraded {
+                        if serverStatus.showDegradedBanner {
                             Text("Some features are temporarily unavailable.")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(RMTheme.Colors.textSecondary)

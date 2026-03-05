@@ -445,6 +445,7 @@ class APIClient {
     ) async throws -> (events: [ActivityEvent], hasMore: Bool, nextCursor: String?) {
         var queryItems: [String] = []
         queryItems.append("job_id=\(jobId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? jobId)")
+        // Backend currently requires both start_date and end_date for time_range=custom. If backend adds partial bounds (e.g. "since" or "until" only), use: (startDate != nil && !(startDate?.isEmpty ?? true)) || (endDate != nil && !(endDate?.isEmpty ?? true))
         let useCustomRange = startDate != nil && !(startDate?.isEmpty ?? true) && endDate != nil && !(endDate?.isEmpty ?? true)
         queryItems.append("time_range=\(useCustomRange ? "custom" : timeRange)")
         queryItems.append("limit=\(min(max(1, limit), 100))")

@@ -6,6 +6,7 @@ import UserNotifications
 /// Set as UNUserNotificationCenter.current().delegate from AppDelegate.
 final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
+    private static let lastRegisteredPushTokenKey = "lastRegisteredPushToken"
 
     /// Last device token received from the system; set by AppDelegate, used to register after login.
     private(set) var lastDeviceToken: Data?
@@ -67,6 +68,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     /// Register the APNs device token with the backend. Call from AppDelegate after receiving token.
     /// Backend expects 64-char hex for APNs; do not register in Simulator (no deliverable token).
+    /// On success, stores token so we can re-register if it changes on next launch.
     func registerDeviceToken(_ token: Data) async throws {
         let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined().lowercased()
         guard tokenString.count == 64, tokenString.allSatisfy({ $0.isHexDigit }) else { return }
@@ -74,13 +76,19 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         return
         #endif
         try await APIClient.shared.registerPushToken(token: tokenString, platform: "apns")
+        UserDefaults.standard.set(tokenString, forKey: Self.lastRegisteredPushTokenKey)
     }
 
     /// Register device token only if user is authenticated (e.g. after token arrives at launch).
-    /// Token is always stored first so it can be registered later via registerStoredTokenIfNeeded() after session restore.
+    /// If token changed since last successful register, re-registers so backend stays in sync (APNs can change token).
     func registerDeviceTokenIfAuthenticated(_ token: Data) async {
         setDeviceToken(token)
         guard SessionManager.shared.isAuthenticated else { return }
+        let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined().lowercased()
+        let lastRegistered = UserDefaults.standard.string(forKey: Self.lastRegisteredPushTokenKey)
+        if lastRegistered == tokenString {
+            return
+        }
         do {
             try await registerDeviceToken(token)
         } catch {
@@ -109,6 +117,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     /// Clear the stored device token (call after successful unregister on logout to prevent reuse).
     func clearStoredToken() {
         lastDeviceToken = nil
+        UserDefaults.standard.removeObject(forKey: Self.lastRegisteredPushTokenKey)
     }
 
     // MARK: - Notification tap (deep link)

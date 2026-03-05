@@ -105,6 +105,9 @@ struct JobActivityView: View {
                     )
                     showFilterSheet = false
                     Haptics.tap()
+                    events = []
+                    nextCursor = nil
+                    hasMore = true
                     Task { await loadInitial() }
                 },
                 onClear: {
@@ -115,6 +118,9 @@ struct JobActivityView: View {
                     appliedFilters = ActivityFilters()
                     showFilterSheet = false
                     Haptics.tap()
+                    events = []
+                    nextCursor = nil
+                    hasMore = true
                     Task { await loadInitial() }
                 }
             )
@@ -327,7 +333,7 @@ struct JobActivityView: View {
                 endDate: appliedFilters.endDate.flatMap { isoDate($0) }
             )
             events = fetched
-            hasMore = more
+            hasMore = more && (cursor != nil)
             nextCursor = cursor
             await loadActorsIfNeeded()
         } catch {
@@ -366,8 +372,10 @@ struct JobActivityView: View {
                 startDate: appliedFilters.startDate.flatMap { isoDate($0) },
                 endDate: appliedFilters.endDate.flatMap { isoDate($0) }
             )
-            events.append(contentsOf: fetched)
-            hasMore = more
+            let existingIds = Set(events.map(\.id))
+            let newEvents = fetched.filter { !existingIds.contains($0.id) }
+            events.append(contentsOf: newEvents)
+            hasMore = more && (newCursor != nil)
             nextCursor = newCursor
             loadMoreError = nil
             await loadActorsIfNeeded()
@@ -612,8 +620,12 @@ struct ActivityCardView: View {
 /// Subscribes to audit_log INSERTs for a job and publishes new events for the view to prepend.
 /// Uses POST /api/jobs/{id}/activity/subscribe for channelId/organizationId, then Supabase postgres_changes with filter.
 /// Authenticates the Supabase client with the current user JWT so RLS on audit_logs allows the feed.
+/// On 404/501 from subscribe endpoint, disables realtime for 24h to avoid log spam and battery drain (Activity still uses audit events list).
 @MainActor
 final class JobActivityRealtimeService: ObservableObject {
+    private static let activityRealtimeDisabledUntilKey = "activityRealtimeDisabledUntil"
+    private static let activityRealtimeDisableInterval: TimeInterval = 24 * 60 * 60
+
     @Published var newEvent: ActivityEvent?
 
     /// When non-nil, realtime subscription was skipped (e.g. missing/expired token); view can show message or rely on polling.
@@ -627,14 +639,22 @@ final class JobActivityRealtimeService: ObservableObject {
     private(set) var actorCache: [String: (name: String, role: String?)] = [:]
 
     /// Subscribe to job-specific audit_log inserts, then wait until cancelled. Call unsubscribe() on cancel.
-    /// Uses the current user session JWT so RLS on audit_logs allows postgres_changes. On missing/expired token, falls back to polling (no subscription).
+    /// Uses the current user session JWT so RLS on audit_logs allows postgres_changes. On 404/501, fails silently and disables realtime for 24h.
     func subscribeAndWait(jobId: String) async {
         subscriptionUnavailableReason = nil
+
+        let disabledUntil = UserDefaults.standard.object(forKey: Self.activityRealtimeDisabledUntilKey) as? Date
+        if let until = disabledUntil, Date() < until {
+            return
+        }
 
         let subscribeResult: (channelId: String, organizationId: String)
         do {
             subscribeResult = try await APIClient.shared.subscribeToJobActivity(jobId: jobId)
         } catch {
+            if let apiError = error as? APIError, case .httpError(let code, _) = apiError, code == 404 || code == 501 {
+                UserDefaults.standard.set(Date().addingTimeInterval(Self.activityRealtimeDisableInterval), forKey: Self.activityRealtimeDisabledUntilKey)
+            }
             return
         }
         let channelId = subscribeResult.channelId
