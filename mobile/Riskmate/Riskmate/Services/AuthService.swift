@@ -27,13 +27,22 @@ class AuthService {
         return parts.count == 3 && token.count > 50
     }
     
-    /// Get current session (if logged in)
+    /// Get current session (if logged in). Returns nil for expired sessions so callers never do "logged-in work" with a stale token.
     func getCurrentSession() async throws -> Session? {
         do {
             let session = try await supabase.auth.session
+
+            // Hard gate: if token is expired, treat as no session.
+            // This prevents SessionManager from doing "logged-in work" for stale local sessions.
+            let accessToken = session.accessToken
+            if JWTExpiry.isExpired(accessToken) {
+                print("[AuthService] ⚠️ Session exists but access token is expired; treating as nil session")
+                return nil
+            }
+
             return session
         } catch {
-            // No session exists
+            // No session exists (or SDK can't load it)
             return nil
         }
     }

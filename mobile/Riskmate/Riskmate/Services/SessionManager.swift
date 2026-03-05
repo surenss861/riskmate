@@ -33,31 +33,35 @@ class SessionManager: ObservableObject {
         }
         
         do {
-            if try await authService.getCurrentSession() != nil {
-                // Refresh entitlements after successful session check
-                await EntitlementsManager.shared.refresh(force: true)
-                // Check JWT expiration (SDK-independent)
-                if let token = try? await authService.getAccessToken(),
-                   JWTExpiry.isExpired(token) {
-                    print("[SessionManager] ⚠️ Session found but JWT is expired, clearing...")
-                    await logout()
-                    isAuthenticated = false
-                } else {
-                    print("[SessionManager] ✅ Found valid session")
-                    isAuthenticated = true
-                    await loadUserData()
-                    
-                    // Subscribe to realtime events after session restore
-                    if let orgId = currentOrganization?.id {
-                        await RealtimeEventService.shared.subscribe(organizationId: orgId)
-                    }
-                    // Re-register stored device token after session restore
-                    await NotificationService.shared.registerStoredTokenIfNeeded()
-                }
-            } else {
+            // Fetch a usable session (AuthService now returns nil for expired)
+            let session = try await authService.getCurrentSession()
+
+            guard session != nil else {
                 print("[SessionManager] No existing session found")
                 isAuthenticated = false
+                return
             }
+
+            // Belt-and-suspenders: validate token directly (in case SDK changes)
+            if let token = try? await authService.getAccessToken(),
+               JWTExpiry.isExpired(token) {
+                print("[SessionManager] ⚠️ Session found but JWT is expired, clearing...")
+                await logout()
+                isAuthenticated = false
+                return
+            }
+
+            // Only after validity is proven:
+            print("[SessionManager] ✅ Found valid session")
+            isAuthenticated = true
+
+            await EntitlementsManager.shared.refresh(force: true)
+            await loadUserData()
+
+            if let orgId = currentOrganization?.id {
+                await RealtimeEventService.shared.subscribe(organizationId: orgId)
+            }
+            await NotificationService.shared.registerStoredTokenIfNeeded()
         } catch {
             print("[SessionManager] ❌ Error checking session: \(error)")
             isAuthenticated = false
