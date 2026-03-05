@@ -92,7 +92,6 @@ struct AuditFeedView: View {
                     }
                 }
             }
-        }
         .rmNavigationBar(title: "Ledger")
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -142,7 +141,7 @@ struct AuditFeedView: View {
                 onExportTapped: { showingExportSheet = true }
             )
         }
-        .onPreferenceChange(LedgerScrollYKey.self) { value in
+        .onPreferenceChange(ScrollYKey.self) { value in
             if scrollBaselineY == nil { scrollBaselineY = value }
             scrollY = value
         }
@@ -231,7 +230,7 @@ struct AuditFeedView: View {
         let timeText = formatter.localizedString(for: event.timestamp, relativeTo: Date())
         let hashPreview = String(event.id.prefix(12)) + "…"
 
-        LedgerTimelineRow(
+        return LedgerTimelineRow(
             title: isBlocked ? "Action Blocked" : event.summary,
             subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
             hashPreview: hashPreview,
@@ -241,7 +240,7 @@ struct AuditFeedView: View {
             isVerified: !isBlocked,
             onTap: { selectedEvent = event; showingDetail = true }
         )
-        .listRowInsets(EdgeInsets(top: RMTheme.Spacing.xs, leading: RMTheme.Spacing.pagePadding, bottom: RMTheme.Spacing.xs, trailing: RMTheme.Spacing.pagePadding))
+        .listRowInsets(EdgeInsets(top: 6, leading: RMTheme.Spacing.pagePadding, bottom: 6, trailing: RMTheme.Spacing.pagePadding))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .contextMenu {
@@ -488,40 +487,14 @@ struct RMAuditDetailSheet: View {
     }
 }
 
-// MARK: - Ledger scroll Y (divider fade)
-private struct LedgerScrollYKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct LedgerTrackScrollY: ViewModifier {
-    let space: String
-    func body(content: Content) -> some View {
-        content
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: LedgerScrollYKey.self, value: proxy.frame(in: .named(space)).minY)
-                }
-            )
-    }
-}
-
-private extension View {
-    func trackScrollY(in space: String) -> some View {
-        modifier(LedgerTrackScrollY(space: space))
-    }
-}
-
-// MARK: - Export sheet (placeholder: format, scope, toggles, Generate)
+// MARK: - Export sheet (format, scope, toggles, Generate + loading + success toast)
 struct LedgerExportSheet: View {
     let eventCount: Int
     let onExport: () -> Void
     let onDismiss: () -> Void
     @State private var includeSignatures = true
     @State private var includePhotos = true
+    @State private var isGenerating = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -543,6 +516,28 @@ struct LedgerExportSheet: View {
                     Toggle("Include signatures", isOn: $includeSignatures)
                     Toggle("Include photos", isOn: $includePhotos)
                 }
+                if isGenerating {
+                    Section {
+                        HStack(spacing: RMTheme.Spacing.sm) {
+                            ProgressView()
+                            Text("Generating Proof Pack…")
+                                .font(RMTheme.Typography.secondaryLabelLarge)
+                                .foregroundColor(RMTheme.Colors.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                Section {
+                    Button {
+                        Haptics.tap()
+                        onDismiss()
+                        dismiss()
+                    } label: {
+                        Label("View export history", systemImage: "clock.arrow.circlepath")
+                            .font(RMTheme.Typography.body)
+                            .foregroundColor(RMTheme.Colors.accent)
+                    }
+                }
             }
             .navigationTitle("Export Proof Pack")
             .navigationBarTitleDisplayMode(.inline)
@@ -554,15 +549,22 @@ struct LedgerExportSheet: View {
                         dismiss()
                     }
                     .foregroundColor(RMTheme.Colors.textSecondary)
+                    .disabled(isGenerating)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Generate") {
                         Haptics.tap()
+                        isGenerating = true
                         onExport()
-                        dismiss()
+                        ToastCenter.shared.show("Proof Pack exported", systemImage: "checkmark.circle", style: .success)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            isGenerating = false
+                            dismiss()
+                        }
                     }
                     .fontWeight(.semibold)
                     .foregroundColor(RMTheme.Colors.accent)
+                    .disabled(isGenerating)
                 }
             }
         }

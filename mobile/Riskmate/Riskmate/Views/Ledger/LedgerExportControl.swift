@@ -13,6 +13,8 @@ struct LedgerExportControl: View {
         return "Last exported \(formatter.localizedString(for: date, relativeTo: Date()))"
     }
 
+    private let radius = RMTheme.Radius.card
+
     var body: some View {
         VStack(spacing: 0) {
             Button(action: {
@@ -41,7 +43,24 @@ struct LedgerExportControl: View {
                 .padding(RMTheme.Spacing.cardPadding)
             }
             .buttonStyle(.plain)
-            .background(RMTheme.Colors.surface2)
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(RMTheme.Colors.surface2.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+            )
+            .overlay(
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 1)
+                    Spacer(minLength: 0)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            )
+            .themeShadow(RMTheme.Shadow.card)
             .padding(.horizontal, RMTheme.Spacing.pagePadding)
             .padding(.top, RMTheme.Spacing.sm)
 

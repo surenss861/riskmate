@@ -32,64 +32,69 @@ struct LedgerTimelineRow: View {
         }) {
             RMCard(useSolidSurface: true) {
                 HStack(alignment: .top, spacing: 0) {
-                    // Left timeline rail + dot
-                    VStack(spacing: 0) {
-                        Circle()
-                            .fill(status.dotColor)
-                            .frame(width: 8, height: 8)
+                    // Timeline rail (1pt) + dot (8pt); rail starts 6pt above dot, runs through dot center
+                    ZStack(alignment: .top) {
                         Rectangle()
                             .fill(Color.white.opacity(0.06))
                             .frame(width: 1)
                             .frame(maxHeight: .infinity)
+                            .padding(.top, 6)
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: 6)
+                            Circle()
+                                .fill(status.dotColor)
+                                .frame(width: 8, height: 8)
+                        }
                     }
-                    .frame(width: 12)
+                    .frame(width: 16)
 
                     VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top, spacing: RMTheme.Spacing.sm) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text(title)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(RMTheme.Colors.textPrimary)
-                                    .lineLimit(2)
-                                if isVerified {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(RMTheme.Colors.accent)
+                        HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text(title)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                        .lineLimit(2)
+                                    if isVerified {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(RMTheme.Colors.accent)
+                                    }
                                 }
+                                Text(subtitle)
+                                    .font(RMTheme.Typography.secondaryLabelLarge)
+                                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
+                                    .lineLimit(1)
                             }
-                            Text(subtitle)
-                                .font(RMTheme.Typography.secondaryLabelLarge)
-                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.63))
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Text(timeText)
-                            .font(RMTheme.Typography.metadataSmall)
-                            .foregroundColor(RMTheme.Colors.textTertiary)
-                    }
-
-                    // Hash pill: SHA-256 · 2F3A…9C + copy
-                    Button {
-                        UIPasteboard.general.string = fullHash
-                        Haptics.impact(.light)
-                        ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("SHA-256 · \(hashPreview)")
-                                .font(RMTheme.Typography.metadata)
-                                .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 10, weight: .medium))
+                            Text(timeText)
+                                .font(RMTheme.Typography.metadataSmall)
                                 .foregroundColor(RMTheme.Colors.textTertiary)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
+
+                        // Hash pill: SHA-256 · 2F3A…9C + copy (tap = copy; long-press also copies)
+                        Button {
+                            copyHash()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("SHA-256 · \(hashPreview)")
+                                    .font(RMTheme.Typography.metadata)
+                                    .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.70))
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(RMTheme.Colors.textTertiary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(RMTheme.Colors.surface1.opacity(0.65), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .onLongPressGesture(minimumDuration: 0.5) {
+                            copyHash()
+                        }
                     }
-                    .buttonStyle(.plain)
-                }
                     .padding(.leading, RMTheme.Spacing.sm)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,6 +102,12 @@ struct LedgerTimelineRow: View {
             .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
         }
         .buttonStyle(.plain)
+    }
+
+    private func copyHash() {
+        UIPasteboard.general.string = fullHash
+        Haptics.impact(.light)
+        ToastCenter.shared.show("Copied", systemImage: "doc.on.doc", style: .success)
     }
 }
 

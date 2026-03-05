@@ -54,7 +54,7 @@ struct JobsListView: View {
     }
     
     private var resultsCountHighRisk: Int {
-        filteredJobs.filter { (job.riskScore ?? 0) >= 80 }.count
+        filteredJobs.filter { ($0.riskScore ?? 0) >= 80 }.count
     }
     
     private var resultsCountNeedsSignature: Int {
@@ -796,33 +796,5 @@ struct DetailRow: View {
                 .font(RMTheme.Typography.body)
                 .foregroundColor(RMTheme.Colors.textSecondary)
         }
-    }
-}
-
-// MARK: - Scroll Y preference (divider fade-in)
-
-private struct ScrollYKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct TrackScrollY: ViewModifier {
-    let space: String
-    func body(content: Content) -> some View {
-        content
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: ScrollYKey.self, value: proxy.frame(in: .named(space)).minY)
-                }
-            )
-    }
-}
-
-private extension View {
-    func trackScrollY(in space: String) -> some View {
-        modifier(TrackScrollY(space: space))
     }
 }

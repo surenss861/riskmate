@@ -594,8 +594,8 @@ private struct OperationsJobRow: View {
     private var jobTimestampText: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        guard let dateStr = job.updatedAt ?? job.createdAt,
-              let date = ISO8601DateFormatter().date(from: dateStr) ?? ISO8601DateFormatter().date(from: dateStr + "Z") else {
+        let dateStr = job.updatedAt ?? job.createdAt
+        guard let date = ISO8601DateFormatter().date(from: dateStr) ?? ISO8601DateFormatter().date(from: dateStr + "Z") else {
             return "—"
         }
         return formatter.localizedString(for: date, relativeTo: Date())
