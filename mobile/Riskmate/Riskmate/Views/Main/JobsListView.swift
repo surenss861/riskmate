@@ -272,13 +272,13 @@ struct JobsListView: View {
                                 }
                             }
                             } header: {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: RMTheme.Spacing.sm) {
                                     Text("Proof Records")
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(RMTheme.Typography.sectionTitle)
                                         .foregroundColor(RMTheme.Colors.textPrimary)
                                     Text("Not yet anchored")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(RMTheme.Colors.textTertiary.opacity(0.78))
+                                        .font(RMTheme.Typography.metadata)
+                                        .foregroundColor(RMTheme.Colors.textSecondary.opacity(0.72))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
                                         .background(RMTheme.Colors.surface1.opacity(0.8))

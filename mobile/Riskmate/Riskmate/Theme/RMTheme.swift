@@ -49,7 +49,7 @@ struct RMTheme {
         static let categoryGovernance = Color(hex: "#10B981") // Green
     }
     
-    // MARK: - Spacing
+    // MARK: - Spacing (one rhythm: 16 outer, 14 card, 44 row, 12 section, 8/6 inner)
     
     struct Spacing {
         static let xs: CGFloat = 4
@@ -59,12 +59,15 @@ struct RMTheme {
         static let xl: CGFloat = 32
         static let xxl: CGFloat = 48
         
-        // Layout tokens
-        static let pagePadding: CGFloat = 20
-        static let sectionSpacing: CGFloat = 16
+        static let pagePadding: CGFloat = 16
+        static let cardPadding: CGFloat = 14
+        static let rowHeight: CGFloat = 44
+        static let sectionSpacing: CGFloat = 12
+        static let inner: CGFloat = 8
+        static let innerTight: CGFloat = 6
     }
     
-    // MARK: - Typography
+    // MARK: - Typography (section 18–20 semibold, secondary 12–13 @ 0.65–0.72, metadata 10–11 mono @ 0.55–0.62)
     
     struct Typography {
         // Titles
@@ -74,6 +77,8 @@ struct RMTheme {
         static let title3 = Font.system(size: 20, weight: .semibold, design: .default)
         static let headingLarge = Font.system(size: 28, weight: .bold, design: .default)
         static let headingSmall = Font.system(size: 18, weight: .semibold, design: .default)
+        /// Section titles: 18–20 semibold
+        static let sectionTitle = Font.system(size: 18, weight: .semibold, design: .default)
         
         // Body
         static let body = Font.system(size: 17, weight: .regular, design: .default)
@@ -81,11 +86,18 @@ struct RMTheme {
         static let bodySmall = Font.system(size: 15, weight: .regular, design: .default)
         static let bodySmallBold = Font.system(size: 15, weight: .semibold, design: .default)
         
+        // Secondary labels: 12–13 medium
+        static let secondaryLabel = Font.system(size: 12, weight: .medium, design: .default)
+        static let secondaryLabelLarge = Font.system(size: 13, weight: .medium, design: .default)
+        
         // Captions
         static let caption = Font.system(size: 13, weight: .regular, design: .default)
         static let captionBold = Font.system(size: 13, weight: .semibold, design: .default)
         static let caption2 = Font.caption2
         static let captionSmall = Font.system(size: 11, weight: .regular, design: .default)
+        /// Metadata (hashes, pills): 10–11 monospaced @ 0.55–0.62
+        static let metadata = Font.system(size: 10, weight: .medium, design: .monospaced)
+        static let metadataSmall = Font.system(size: 9, weight: .medium, design: .monospaced)
     }
     
     // MARK: - Corner Radius

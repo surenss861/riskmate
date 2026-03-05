@@ -40,7 +40,7 @@ struct JobCard: View {
     }
     
     var body: some View {
-        RMCard {
+        RMCard(useSolidSurface: true) {
             HStack(spacing: RMSystemTheme.Spacing.md) {
                 // Risk Pill + Compliance Badge (external compliance view) + Offline indicator
                 VStack(alignment: .leading, spacing: 8) {
@@ -73,8 +73,8 @@ struct JobCard: View {
                         .lineLimit(1)
                     
                     Text("\(job.jobType)  •  \(job.location)")
-                        .font(RMSystemTheme.Typography.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.62))
+                        .font(RMTheme.Typography.secondaryLabelLarge)
+                        .foregroundStyle(RMTheme.Colors.textSecondary.opacity(0.72))
                         .lineLimit(1)
                     
                     StatusChip(text: job.status.uppercased())
@@ -124,7 +124,7 @@ struct JobCard: View {
         .contentShape(Rectangle())
         .overlay {
             if isHighRisk {
-                RoundedRectangle(cornerRadius: RMSystemTheme.Radius.lg, style: .continuous)
+                RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
                     .stroke(riskColor.opacity(0.28), lineWidth: 1.2)
             }
         }

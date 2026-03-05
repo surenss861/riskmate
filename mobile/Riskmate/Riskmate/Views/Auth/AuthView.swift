@@ -70,7 +70,7 @@ struct AuthView: View {
                 .foregroundColor(Color.white.opacity(0.95))
                 .frame(maxWidth: 380)
 
-            Text("Turn site activity into compliance you can defend — fast.")
+            Text("Creates audit-ready proof packs from everyday field work.")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(Color.white.opacity(0.72))
                 .multilineTextAlignment(.center)
@@ -78,7 +78,6 @@ struct AuthView: View {
                 .padding(.top, 0)
                 .padding(.bottom, -8)
 
-            // Proof Pack Sample + pill as one unit (denser: attached to claim)
             proofPackSampleCard
                 .padding(.top, -4)
 
@@ -153,13 +152,19 @@ struct AuthView: View {
                     Spacer()
                     proofThumbnailBadge
                 }
-                Text("hash: 2F3A…9C")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                Text("SHA-256")
+                    .font(RMTheme.Typography.metadataSmall)
+                    .foregroundColor(Color.white.opacity(0.55))
+                Text("2F3A…9C")
+                    .font(RMTheme.Typography.metadata)
                     .foregroundColor(Color.white.opacity(0.62))
                 Text("Verified")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(RMTheme.Colors.accent)
                 proofCardMetadataLine
+                Text("Generated: 10:42 AM · Mar 5")
+                    .font(RMTheme.Typography.metadataSmall)
+                    .foregroundColor(Color.white.opacity(0.5))
                 proofCardReceiptLine
             }
             .padding(12)
