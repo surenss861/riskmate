@@ -23,6 +23,7 @@ struct RMSearchField: View {
             .autocorrectionDisabled(true)
             .foregroundColor(RMTheme.Colors.textPrimary)
             .font(RMTheme.Typography.body)
+            .submitLabel(.search)
 
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
@@ -34,6 +35,7 @@ struct RMSearchField: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
+                .animation(.none, value: text)
             }
         }
         .padding(.horizontal, 14)
@@ -56,5 +58,7 @@ struct RMSearchField: View {
             )
         )
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Search jobs")
     }
 }

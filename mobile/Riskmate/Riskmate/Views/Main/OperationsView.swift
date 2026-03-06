@@ -8,6 +8,8 @@ struct OperationsView: View {
     @EnvironmentObject private var quickAction: QuickActionRouter
     @State private var selectedView: OperationsViewType = .dashboard
     @State private var searchQuery: String = ""
+    @State private var debouncedQuery: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isRefreshing = false
     @State private var showCriticalBanner: Bool = false
     @State private var criticalJob: Job? = nil
@@ -26,13 +28,13 @@ struct OperationsView: View {
     }
     
     var filteredJobs: [Job] {
-        if searchQuery.isEmpty {
+        if debouncedQuery.isEmpty {
             return jobsStore.jobs
         }
         return jobsStore.jobs.filter { job in
-            job.clientName.localizedCaseInsensitiveContains(searchQuery) ||
-            job.location.localizedCaseInsensitiveContains(searchQuery) ||
-            job.jobType.localizedCaseInsensitiveContains(searchQuery)
+            job.clientName.localizedCaseInsensitiveContains(debouncedQuery) ||
+            job.location.localizedCaseInsensitiveContains(debouncedQuery) ||
+            job.jobType.localizedCaseInsensitiveContains(debouncedQuery)
         }
     }
     
@@ -354,6 +356,7 @@ struct OperationsView: View {
                 .background(
                     RMTheme.Colors.background
                         .opacity(0.96)
+                        .ignoresSafeArea(edges: .top)
                 )
             }
             .task {
@@ -373,6 +376,18 @@ struct OperationsView: View {
             }
             .onChange(of: jobsStore.jobs) { _, _ in
                 checkForCriticalRisk()
+            }
+            .onChange(of: searchQuery) { _, newValue in
+                if newValue.isEmpty {
+                    debouncedQuery = ""
+                    return
+                }
+                searchDebounceTask?.cancel()
+                searchDebounceTask = Task {
+                    try? await Task.sleep(nanoseconds: 250_000_000) // 0.25s
+                    guard !Task.isCancelled else { return }
+                    debouncedQuery = newValue
+                }
             }
             .onAppear {
                 if entitlements.entitlements?.role.lowercased() == "executive" && selectedView == .dashboard {
