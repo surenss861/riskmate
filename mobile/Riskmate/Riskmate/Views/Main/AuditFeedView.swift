@@ -43,11 +43,31 @@ struct AuditFeedView: View {
         return min(1, (amount - 18) / 24)
     }
 
-    /// Day group for sticky section headers (id = startOfDay for identity).
-    private struct LedgerDayGroup: Identifiable {
+    // MARK: - Layout constants (one rule: full-width headers, 16pt card inset, consistent gaps)
+    private static let cardInset: CGFloat = 16
+    private static let gapHeaderToFirstCard: CGFloat = 14
+    private static let gapBetweenCards: CGFloat = 12
+    private static let gapAfterSection: CGFloat = 16
+
+    /// Precomputed row model so we don't format strings in body every scroll frame.
+    private struct LedgerEventRowModel: Identifiable {
+        let id: String
+        let title: String
+        let subtitle: String
+        let timeText: String
+        let hashPreview: String
+        let fullHash: String
+        let status: LedgerTimelineRow.LedgerEventStatus
+        let isVerified: Bool
+        let event: AuditEvent
+    }
+
+    /// Section with precomputed display data; built when events change, not in body.
+    private struct LedgerDaySection: Identifiable {
         let id: Date
         let title: String
-        let events: [AuditEvent]
+        let count: Int
+        let rows: [LedgerEventRowModel]
     }
 
     private func dayLabel(for day: Date) -> String {
@@ -59,16 +79,36 @@ struct AuditFeedView: View {
         return formatter.string(from: day)
     }
 
-    /// Events sorted by timestamp desc, grouped by calendar day (for ScrollView + pinned headers).
-    private var grouped: [LedgerDayGroup] {
+    /// Precompute sections and row strings once when events change. Not recomputed every scroll.
+    private var groupedSections: [LedgerDaySection] {
         let cal = Calendar.current
         let sorted = events.sorted { $0.timestamp > $1.timestamp }
         let byDay = Dictionary(grouping: sorted) { cal.startOfDay(for: $0.timestamp) }
         return byDay.keys.sorted(by: >).map { day in
-            LedgerDayGroup(
+            let dayEvents = byDay[day] ?? []
+            let rows = dayEvents.map { event -> LedgerEventRowModel in
+                let isBlocked = event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked"))
+                let status: LedgerTimelineRow.LedgerEventStatus = isBlocked ? .error : .verified
+                let (title, subtitle) = ledgerDisplayTitleAndSubtitle(for: event, isBlocked: isBlocked)
+                let timeText = Self.ledgerTimeFormatter.localizedString(for: event.timestamp, relativeTo: Date())
+                let hashPreview = String(event.id.prefix(12)) + "…"
+                return LedgerEventRowModel(
+                    id: event.id,
+                    title: title,
+                    subtitle: subtitle,
+                    timeText: timeText,
+                    hashPreview: hashPreview,
+                    fullHash: event.id,
+                    status: status,
+                    isVerified: !isBlocked,
+                    event: event
+                )
+            }
+            return LedgerDaySection(
                 id: day,
                 title: dayLabel(for: day),
-                events: byDay[day] ?? []
+                count: dayEvents.count,
+                rows: rows
             )
         }
     }
@@ -250,30 +290,40 @@ struct AuditFeedView: View {
                     .frame(height: 1)
                     .trackScrollY(in: ledgerScrollSpace)
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(grouped) { group in
+                    ForEach(groupedSections) { section in
                         Section {
-                            VStack(spacing: 10) {
-                                ForEach(group.events) { event in
-                                    ledgerRow(for: event)
-                                        .contextMenu {
-                                            Button {
-                                                copyEventId(event.id)
-                                            } label: {
-                                                Label("Copy Event ID", systemImage: "doc.on.doc")
-                                            }
-                                            Button {
-                                                selectedEvent = event
-                                                showingDetail = true
-                                            } label: {
-                                                Label("View Details", systemImage: "eye")
-                                            }
+                            VStack(spacing: Self.gapBetweenCards) {
+                                ForEach(section.rows) { row in
+                                    LedgerTimelineRow(
+                                        title: row.title,
+                                        subtitle: row.subtitle,
+                                        hashPreview: row.hashPreview,
+                                        fullHash: row.fullHash,
+                                        timeText: row.timeText,
+                                        status: row.status,
+                                        isVerified: row.isVerified,
+                                        onTap: { selectedEvent = row.event; showingDetail = true }
+                                    )
+                                    .contextMenu {
+                                        Button {
+                                            copyEventId(row.event.id)
+                                        } label: {
+                                            Label("Copy Event ID", systemImage: "doc.on.doc")
                                         }
+                                        Button {
+                                            selectedEvent = row.event
+                                            showingDetail = true
+                                        } label: {
+                                            Label("View Details", systemImage: "eye")
+                                        }
+                                    }
                                 }
                             }
-                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
-                            .padding(.bottom, 14)
+                            .padding(.horizontal, Self.cardInset)
+                            .padding(.top, Self.gapHeaderToFirstCard)
+                            .padding(.bottom, Self.gapAfterSection)
                         } header: {
-                            LedgerPinnedDayHeader(title: group.title, count: group.events.count, pinnedT: chromeT)
+                            LedgerPinnedDayHeader(title: section.title, count: section.count, pinnedT: chromeT)
                         }
                     }
                 }
@@ -290,25 +340,6 @@ struct AuditFeedView: View {
         f.unitsStyle = .abbreviated
         return f
     }()
-
-    private func ledgerRow(for event: AuditEvent) -> some View {
-        let isBlocked = event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked"))
-        let status: LedgerTimelineRow.LedgerEventStatus = isBlocked ? .error : .verified
-        let timeText = Self.ledgerTimeFormatter.localizedString(for: event.timestamp, relativeTo: Date())
-        let hashPreview = String(event.id.prefix(12)) + "…"
-        let (title, subtitle) = ledgerDisplayTitleAndSubtitle(for: event, isBlocked: isBlocked)
-
-        return LedgerTimelineRow(
-            title: title,
-            subtitle: subtitle,
-            hashPreview: hashPreview,
-            fullHash: event.id,
-            timeText: timeText,
-            status: status,
-            isVerified: !isBlocked,
-            onTap: { selectedEvent = event; showingDetail = true }
-        )
-    }
 
     /// Derive readable title/subtitle when summary is redundant ("X for job") or actor is "Unknown".
     private func ledgerDisplayTitleAndSubtitle(for event: AuditEvent, isBlocked: Bool) -> (title: String, subtitle: String) {
@@ -386,9 +417,9 @@ private struct LedgerPinnedDayHeader: View {
                         .frame(height: 1)
                 }
         )
-        .shadow(color: .black.opacity(pinnedT > 0.01 ? 0.08 : 0), radius: 8, x: 0, y: 2)
+        .shadow(color: .black.opacity(pinnedT > 0.01 ? 0.04 : 0), radius: 2, x: 0, y: 1)
         .zIndex(10)
-        .transaction { $0.animation = .easeOut(duration: 0.15) }
+        .animation(nil, value: pinnedT)
     }
 }
 

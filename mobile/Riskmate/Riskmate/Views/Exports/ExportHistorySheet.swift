@@ -136,8 +136,7 @@ struct ExportHistorySheet: View {
 
     // MARK: - Actions
 
-    /// Opens the export's download_url (backend must return the URL for the requested format: PDF vs proof-pack ZIP).
-    /// If user selected PDF but gets JSON, the backend is returning the wrong artifact in download_url.
+    /// Opens the export's download_url. Each row has exactly one download_url (from that row’s storage_path); backend must return the artifact matching export_type (pdf → PDF, proof_pack → ZIP). If you see JSON when you expected PDF/ZIP, test with a brand‑new export created after the backend fix and confirm the opened row’s export_type and download_url.
     private func handleExportTap(_ export: Export) {
         switch export.state.lowercased() {
         case "failed":

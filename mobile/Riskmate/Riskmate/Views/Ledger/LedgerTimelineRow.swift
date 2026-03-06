@@ -27,8 +27,28 @@ struct LedgerTimelineRow: View {
     }
 
     var body: some View {
-        RMCard(useSolidSurface: true) {
-            HStack(alignment: .top, spacing: 0) {
+        ledgerRowContent
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
+                    .fill(RMTheme.Colors.surface2.opacity(0.92))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
+                            .stroke(RMTheme.Colors.border.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1)
+                    )
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if let onTap = onTap {
+                    Haptics.tap()
+                    onTap()
+                }
+            }
+            .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
+    }
+
+    private var ledgerRowContent: some View {
+        HStack(alignment: .top, spacing: 0) {
                 // Timeline rail (1pt) + dot (8pt); rail starts 6pt above dot, runs through dot center
                 ZStack(alignment: .top) {
                     Rectangle()
@@ -110,15 +130,6 @@ struct LedgerTimelineRow: View {
                 .padding(.leading, RMTheme.Spacing.sm)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if let onTap = onTap {
-                Haptics.tap()
-                onTap()
-            }
-        }
-        .rmPressable(scale: 0.99, haptic: false, pressOpacity: 0.94)
     }
 
     private func copyHash(fullHashToast: Bool) {
