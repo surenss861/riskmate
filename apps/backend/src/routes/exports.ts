@@ -35,7 +35,9 @@ exportsRouter.post(
     try {
       const { organization_id, id: userId } = authReq.user
       const { id: jobId } = req.params
-      const { export_type = 'ledger', filters = {} } = req.body
+      // This route is for single-job Risk Snapshot PDF; always use export_type 'pdf' (not ledger)
+      const export_type = 'pdf'
+      const filters = req.body?.filters ?? {}
 
       // Validate job belongs to organization
       const { data: job, error: jobError } = await supabase

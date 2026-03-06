@@ -249,7 +249,7 @@ struct AuditFeedView: View {
                 Color.clear
                     .frame(height: 1)
                     .trackScrollY(in: ledgerScrollSpace)
-                LazyVStack(spacing: 14, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(grouped) { group in
                         Section {
                             VStack(spacing: 10) {
@@ -270,12 +270,13 @@ struct AuditFeedView: View {
                                         }
                                 }
                             }
+                            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+                            .padding(.bottom, 14)
                         } header: {
                             LedgerPinnedDayHeader(title: group.title, count: group.events.count, pinnedT: chromeT)
                         }
                     }
                 }
-                .padding(.horizontal, RMTheme.Spacing.pagePadding)
                 .padding(.top, 12)
                 .padding(.bottom, 120)
             }
@@ -284,17 +285,22 @@ struct AuditFeedView: View {
         .refreshable { await loadEvents() }
     }
 
+    private static let ledgerTimeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     private func ledgerRow(for event: AuditEvent) -> some View {
         let isBlocked = event.category == "GOVERNANCE" && (event.metadata["blocked"] == "true" || event.summary.lowercased().contains("blocked"))
         let status: LedgerTimelineRow.LedgerEventStatus = isBlocked ? .error : .verified
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        let timeText = formatter.localizedString(for: event.timestamp, relativeTo: Date())
+        let timeText = Self.ledgerTimeFormatter.localizedString(for: event.timestamp, relativeTo: Date())
         let hashPreview = String(event.id.prefix(12)) + "…"
+        let (title, subtitle) = ledgerDisplayTitleAndSubtitle(for: event, isBlocked: isBlocked)
 
         return LedgerTimelineRow(
-            title: isBlocked ? "Action Blocked" : event.summary,
-            subtitle: "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)",
+            title: title,
+            subtitle: subtitle,
             hashPreview: hashPreview,
             fullHash: event.id,
             timeText: timeText,
@@ -302,6 +308,25 @@ struct AuditFeedView: View {
             isVerified: !isBlocked,
             onTap: { selectedEvent = event; showingDetail = true }
         )
+    }
+
+    /// Derive readable title/subtitle when summary is redundant ("X for job") or actor is "Unknown".
+    private func ledgerDisplayTitleAndSubtitle(for event: AuditEvent, isBlocked: Bool) -> (title: String, subtitle: String) {
+        if isBlocked { return ("Action Blocked", "\(event.category) • \(event.actor.isEmpty ? "System" : event.actor)") }
+        let nameFromMeta = event.metadata["client_name"] ?? event.metadata["job_name"] ?? event.metadata["name"] ?? event.metadata["title"]
+        let summary = event.summary
+        // Redundant pattern "Report Generated for report" / "Job Created for job" → use "Event: name" when metadata has a name
+        let redundantForSuffix = summary.lowercased().hasSuffix(" for job") || summary.lowercased().hasSuffix(" for report")
+        if redundantForSuffix, let name = nameFromMeta, !name.isEmpty {
+            let prefix = summary.replacingOccurrences(of: " for job", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " for report", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespaces)
+            let betterTitle = prefix.isEmpty ? summary : "\(prefix): \(name)"
+            let actorDisplay = (event.actor.isEmpty || event.actor.lowercased() == "unknown") && nameFromMeta != nil ? "System" : (event.actor.isEmpty ? "System" : event.actor)
+            return (betterTitle, "\(event.category) • \(actorDisplay)")
+        }
+        let actorDisplay = event.actor.isEmpty ? "System" : (event.actor.lowercased() == "unknown" && nameFromMeta != nil ? "System" : event.actor)
+        return (summary, "\(event.category) • \(actorDisplay)")
     }
 
     private func loadEvents() async {
@@ -326,7 +351,7 @@ struct AuditFeedView: View {
     }
 }
 
-// MARK: - Pinned day header (solid surface + top/bottom edge; shadow when pinned to avoid card bleed; animation matches chrome)
+// MARK: - Pinned day header (full row width, surface2, top divider; same horizontal rhythm as event list)
 private struct LedgerPinnedDayHeader: View {
     let title: String
     let count: Int
@@ -336,22 +361,20 @@ private struct LedgerPinnedDayHeader: View {
     private var bottomDividerOpacity: CGFloat { pinnedT > 0.01 ? 0.075 : 0.06 }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 0) {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(RMTheme.Typography.h3)
                 .foregroundColor(RMTheme.Colors.textPrimary)
-            Spacer()
+            Spacer(minLength: 0)
             Text("\(count) event\(count == 1 ? "" : "s")")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(RMTheme.Colors.textTertiary)
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textSecondary)
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
         .background(
             Rectangle()
                 .fill(RMTheme.Colors.surface2.opacity(fillOpacity))
-                .overlay(Color.black.opacity(0.03 * min(1, pinnedT)))
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color.white.opacity(0.06))
@@ -603,25 +626,35 @@ struct LedgerExportSheet: View {
                     Text("Scope")
                 }
                 Section {
-                    VStack(spacing: 0) {
-                        Toggle("Include signatures", isOn: $includeSignatures)
-                            .tint(RMTheme.Colors.accent)
-                        Divider()
-                            .background(RMTheme.Colors.border.opacity(0.5))
-                        Toggle("Include photos", isOn: $includePhotos)
-                            .tint(RMTheme.Colors.accent)
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Include signatures")
+                                .font(RMTheme.Typography.body)
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            Spacer()
+                            Toggle("", isOn: $includeSignatures)
+                                .tint(RMTheme.Colors.accent)
+                        }
+                        .frame(minHeight: 56)
+                        .padding(.horizontal, 16)
+                        .background(RMTheme.Colors.surface2.opacity(0.92))
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
+
+                        HStack {
+                            Text("Include photos")
+                                .font(RMTheme.Typography.body)
+                                .foregroundColor(RMTheme.Colors.textPrimary)
+                            Spacer()
+                            Toggle("", isOn: $includePhotos)
+                                .tint(RMTheme.Colors.accent)
+                        }
+                        .frame(minHeight: 56)
+                        .padding(.horizontal, 16)
+                        .background(RMTheme.Colors.surface2.opacity(0.92))
+                        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md, style: .continuous))
                     }
-                    .padding(.horizontal, RMTheme.Spacing.cardPadding)
-                    .padding(.vertical, RMTheme.Spacing.sm)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    .listRowBackground(
-                        RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
-                            .fill(RMTheme.Colors.surface2.opacity(0.92))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: RMTheme.Radius.card, style: .continuous)
-                                    .stroke(RMTheme.Colors.border.opacity(RMTheme.Surfaces.strokeOpacity), lineWidth: 1)
-                            )
-                    )
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
                 }
                 if isGenerating {
                     Section {

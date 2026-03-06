@@ -17,10 +17,10 @@ struct JobDetailTabBar: View {
                         tabButton(tab, proxy: proxy)
                     }
                 }
-                .padding(.horizontal, RMTheme.Spacing.sm)
-                .padding(.vertical, RMTheme.Spacing.xs)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             }
-            .background(blurBackground)
+            .background(tabStripBackground)
             .onChange(of: selection) { _, newValue in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     proxy.scrollTo(newValue, anchor: .center)
@@ -30,9 +30,15 @@ struct JobDetailTabBar: View {
         .background(RMTheme.Colors.background)
     }
 
-    private var blurBackground: some View {
-        VisualEffectBlur(style: .systemThinMaterial)
-            .opacity(0.92)
+    private var tabStripBackground: some View {
+        RoundedRectangle(cornerRadius: 0)
+            .fill(RMTheme.Colors.surface2.opacity(0.95))
+            .overlay(
+                Rectangle()
+                    .fill(RMTheme.Colors.border.opacity(0.4))
+                    .frame(height: 1),
+                alignment: .bottom
+            )
     }
 
     private func tabButton(_ tab: JobDetailTab, proxy: ScrollViewProxy) -> some View {
@@ -58,8 +64,8 @@ struct JobDetailTabBar: View {
                         .background(Capsule().fill(isSelected ? Color.white.opacity(0.4) : RMTheme.Colors.accent.opacity(0.25)))
                 }
             }
-            .padding(.horizontal, RMTheme.Spacing.md)
-            .padding(.vertical, RMTheme.Spacing.sm)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .background(
                 Group {
                     if isSelected {

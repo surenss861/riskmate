@@ -39,35 +39,28 @@ struct JobCommentsView: View {
     @StateObject private var realtimeService = JobCommentsRealtimeService()
 
     var body: some View {
-        Group {
-            if isLoading && comments.isEmpty {
-                VStack(spacing: RMTheme.Spacing.sm) {
-                    RMSkeletonList(count: 4)
-                }
-                .padding(RMTheme.Spacing.pagePadding)
-            } else if let loadError = loadError, comments.isEmpty {
-                RMEmptyState(
-                    icon: "bubble.left.and.bubble.right",
-                    title: "Couldn't load comments",
-                    message: loadError,
-                    action: RMEmptyStateAction(
-                        title: "Retry",
-                        action: { Task { await loadComments() } }
-                    )
-                )
-                .padding(RMTheme.Spacing.pagePadding)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
-                        if comments.isEmpty {
-                            RMEmptyState(
-                                icon: "bubble.left.and.bubble.right",
-                                title: "No comments yet",
-                                message: "Be the first to add a comment.",
-                                action: nil
-                            )
-                            .padding(.vertical, RMTheme.Spacing.lg)
-                        } else {
+        VStack(spacing: 0) {
+            commentsTopBar
+            Rectangle()
+                .fill(RMTheme.Colors.border.opacity(0.6))
+                .frame(height: 1)
+                .frame(maxWidth: .infinity)
+
+            Group {
+                if isLoading && comments.isEmpty {
+                    VStack(spacing: RMTheme.Spacing.sm) {
+                        RMSkeletonList(count: 4)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(RMTheme.Spacing.pagePadding)
+                } else if let loadError = loadError, comments.isEmpty {
+                    errorContent(loadError)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: RMTheme.Spacing.md) {
+                            if comments.isEmpty {
+                                emptyStateContent
+                            } else {
                             ForEach(comments) { comment in
                                 commentRow(comment)
                                     .contextMenu {
@@ -115,18 +108,20 @@ struct JobCommentsView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, RMTheme.Spacing.md)
                             }
+                            }
                         }
+                        .padding(RMTheme.Spacing.pagePadding)
                     }
-                    .padding(RMTheme.Spacing.pagePadding)
-                }
-                .refreshable {
-                    await loadComments()
-                    await loadMembers()
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    addCommentRow()
+                    .refreshable {
+                        await loadComments()
+                        await loadMembers()
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        commentsComposerDock
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
             await loadComments()
@@ -178,88 +173,136 @@ struct JobCommentsView: View {
         }
     }
 
-    private func addCommentRow() -> some View {
+    // MARK: - Comments layout (header, empty, error, composer dock)
+
+    private var commentsTopBar: some View {
+        HStack(alignment: .center, spacing: RMTheme.Spacing.sm) {
+            Text("Comments")
+                .font(RMTheme.Typography.h3)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+            Spacer(minLength: 0)
+            Text("Use @ to mention")
+                .font(RMTheme.Typography.caption)
+                .foregroundColor(RMTheme.Colors.textTertiary)
+        }
+        .padding(.horizontal, RMTheme.Spacing.pagePadding)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background(RMTheme.Colors.background)
+    }
+
+    private func errorContent(_ message: String) -> some View {
+        VStack(spacing: RMTheme.Spacing.lg) {
+            RMEmptyState(
+                icon: "bubble.left.and.bubble.right",
+                title: "Couldn't load comments",
+                message: message,
+                action: RMEmptyStateAction(title: "Retry", action: { Task { await loadComments() } })
+            )
+            .padding(.vertical, RMTheme.Spacing.xl)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(RMTheme.Spacing.pagePadding)
+    }
+
+    private var emptyStateContent: some View {
+        VStack(spacing: RMTheme.Spacing.md) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 44))
+                .foregroundColor(RMTheme.Colors.textTertiary)
+            Text("No comments yet")
+                .font(RMTheme.Typography.title3)
+                .foregroundColor(RMTheme.Colors.textPrimary)
+            Text("Be the first to add a comment.")
+                .font(RMTheme.Typography.bodySmall)
+                .foregroundColor(RMTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, RMTheme.Spacing.xl)
+    }
+
+    private var commentsComposerDock: some View {
         let newContentBinding = Binding(
             get: { newContent },
             set: { val in
                 newContent = val
-                // Cursor-at-end heuristic for @ mention query (mirrors web extractMentionQuery)
                 mentionQuery = Self.extractMentionQuery(text: val, cursorPos: val.count)
             }
         )
-        return VStack(alignment: .leading, spacing: RMTheme.Spacing.sm) {
-            Text("Add a comment")
-                .font(RMTheme.Typography.bodySmallBold)
-                .foregroundColor(RMTheme.Colors.textSecondary)
-
-            ZStack(alignment: .topLeading) {
-                HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
-                    TextField("Write a comment… Use @ to mention a teammate.", text: newContentBinding, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(RMTheme.Typography.body)
-                        .foregroundColor(RMTheme.Colors.textPrimary)
-                        .padding(RMTheme.Spacing.sm)
-                        .background(RMTheme.Colors.inputFill)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
-                                .stroke(RMTheme.Colors.border, lineWidth: 1)
-                        )
-                        .lineLimit(3...6)
-
-                    Button {
-                        Task { await postComment() }
-                    } label: {
-                        if isPosting {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                                .frame(width: 44, height: 44)
-                        } else {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
-                        }
-                    }
-                    .disabled(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
-                }
-                if mentionQuery != nil {
-                    let candidates = mentionCandidates(query: mentionQuery ?? "", forReplyParentId: nil)
-                    if !candidates.isEmpty {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(candidates, id: \.id) { member in
-                                Button {
-                                    insertMention(member: member, intoNewComment: true, replyParentId: nil)
-                                } label: {
-                                    HStack(spacing: RMTheme.Spacing.sm) {
-                                        Text(member.fullName ?? member.email)
-                                            .font(RMTheme.Typography.bodySmall)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(RMTheme.Colors.textPrimary)
-                                        if member.fullName != nil {
-                                            Text(member.email)
-                                                .font(RMTheme.Typography.caption2)
-                                                .foregroundColor(RMTheme.Colors.textTertiary)
-                                        }
+        return VStack(spacing: 0) {
+            if mentionQuery != nil {
+                let candidates = mentionCandidates(query: mentionQuery ?? "", forReplyParentId: nil)
+                if !candidates.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(candidates, id: \.id) { member in
+                            Button {
+                                insertMention(member: member, intoNewComment: true, replyParentId: nil)
+                            } label: {
+                                HStack(spacing: RMTheme.Spacing.sm) {
+                                    Text(member.fullName ?? member.email)
+                                        .font(RMTheme.Typography.bodySmall)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(RMTheme.Colors.textPrimary)
+                                    if member.fullName != nil {
+                                        Text(member.email)
+                                            .font(RMTheme.Typography.caption2)
+                                            .foregroundColor(RMTheme.Colors.textTertiary)
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, RMTheme.Spacing.sm)
-                                    .padding(.vertical, 8)
                                 }
-                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, RMTheme.Spacing.sm)
+                                .padding(.vertical, 10)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .background(RMTheme.Colors.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
-                                .stroke(RMTheme.Colors.border, lineWidth: 1)
-                        )
-                        .padding(.top, 4)
                     }
+                    .background(RMTheme.Colors.surface)
+                    .overlay(
+                        Rectangle()
+                            .fill(RMTheme.Colors.border.opacity(0.6))
+                            .frame(height: 1),
+                        alignment: .bottom
+                    )
                 }
             }
+            HStack(alignment: .bottom, spacing: RMTheme.Spacing.sm) {
+                TextField("Add a comment…", text: newContentBinding, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(RMTheme.Typography.body)
+                    .foregroundColor(RMTheme.Colors.textPrimary)
+                    .padding(RMTheme.Spacing.sm)
+                    .background(RMTheme.Colors.inputFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RMTheme.Radius.sm)
+                            .stroke(RMTheme.Colors.border, lineWidth: 1)
+                    )
+                    .lineLimit(3...6)
+
+                Button {
+                    Task { await postComment() }
+                } label: {
+                    if isPosting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: RMTheme.Colors.accent))
+                            .frame(width: 44, height: 44)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RMTheme.Colors.textTertiary : RMTheme.Colors.accent)
+                    }
+                }
+                .disabled(newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
+            }
+            .padding(.horizontal, RMTheme.Spacing.pagePadding)
+            .padding(.vertical, RMTheme.Spacing.md)
         }
-        .padding(RMTheme.Spacing.md)
-        .background(RMTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: RMTheme.Radius.md))
+        .background(RMTheme.Colors.surface2)
+        .overlay(
+            Rectangle()
+                .fill(RMTheme.Colors.border.opacity(0.6))
+                .frame(height: 1),
+            alignment: .top
+        )
     }
 
     /// Resolve permission aligned with backend: author, org owner, or org admin may resolve/unresolve.

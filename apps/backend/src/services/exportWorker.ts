@@ -17,6 +17,8 @@ import archiver from 'archiver'
 import crypto from 'crypto'
 import { generateLedgerExportPDF } from '../utils/pdf/ledgerExport'
 import { generateControlsPDF, generateAttestationsPDF, generateEvidenceIndexPDF } from '../utils/pdf/proofPack'
+import { generateRiskSnapshotPDF } from '../utils/pdf'
+import { buildJobReport } from '../utils/jobReport'
 import { buildCsvString, buildPdfBuffer, type JobRowForExport } from '../utils/bulkJobsExport'
 
 const WORKER_INTERVAL_MS = 5000 // Check every 5 seconds
@@ -213,6 +215,13 @@ async function processExport(exportJob: any) {
     if (export_type === 'proof_pack') {
       // Generate proof pack (ZIP with multiple PDFs)
       const result = await generateProofPack(organization_id, work_record_id, filters || {})
+      storagePath = result.storagePath
+      manifestPath = result.manifestPath
+      manifestHash = result.manifestHash
+      manifest = result.manifest
+    } else if (export_type === 'pdf') {
+      // Single-job Risk Snapshot PDF (POST /jobs/:id/export/pdf)
+      const result = await generateRiskSnapshotExport(organization_id, work_record_id)
       storagePath = result.storagePath
       manifestPath = result.manifestPath
       manifestHash = result.manifestHash
@@ -728,6 +737,107 @@ async function generateLedgerExport(
       upsert: false,
     })
 
+  if (manifestError) throw manifestError
+
+  return {
+    storagePath,
+    manifestPath,
+    manifestHash,
+    manifest,
+  }
+}
+
+/**
+ * Generate single-job Risk Snapshot PDF (export_type 'pdf')
+ * Used when client calls POST /api/jobs/:id/export/pdf.
+ */
+async function generateRiskSnapshotExport(
+  organizationId: string,
+  jobId: string
+): Promise<{
+  storagePath: string
+  manifestPath: string
+  manifestHash: string
+  manifest: any
+}> {
+  const reportData = await buildJobReport(organizationId, jobId)
+  if (!reportData?.job) throw new Error('Job not found')
+
+  const photoDocuments = (reportData.documents ?? []).filter(
+    (doc: any) => doc.type === 'photo' && doc.file_path
+  )
+  const photos = (
+    await Promise.all(
+      photoDocuments.map(async (document: any) => {
+        try {
+          const bucket =
+            document.source_bucket === 'evidence'
+              ? 'evidence'
+              : document.file_path?.startsWith?.('evidence/')
+                ? 'evidence'
+                : 'documents'
+          const { data: fileData } = await supabase.storage.from(bucket).download(document.file_path)
+          if (!fileData) return null
+          const arrayBuffer = await fileData.arrayBuffer()
+          return {
+            name: document.name,
+            description: document.description,
+            created_at: document.created_at,
+            buffer: Buffer.from(arrayBuffer),
+            category: document.category ?? undefined,
+          }
+        } catch (error) {
+          logStructured('warn', 'Failed to include photo in risk snapshot PDF', {
+            job_id: jobId,
+            doc_id: document?.id,
+            error: (error as Error)?.message,
+          })
+          return null
+        }
+      })
+    )
+  ).filter((item): item is NonNullable<typeof item> => item !== null)
+
+  const pdfBuffer = await generateRiskSnapshotPDF(
+    reportData.job,
+    reportData.risk_score,
+    reportData.mitigations || [],
+    reportData.organization ?? {
+      id: organizationId,
+      name: reportData.job?.client_name ?? 'Organization',
+    },
+    photos,
+    reportData.audit || [],
+    undefined
+  )
+
+  const pdfHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+  const storagePath = `${organizationId}/risk-snapshots/${jobId}-${Date.now()}.pdf`
+  const { error: uploadError } = await supabase.storage
+    .from('exports')
+    .upload(storagePath, pdfBuffer, {
+      contentType: 'application/pdf',
+      upsert: false,
+    })
+  if (uploadError) throw uploadError
+
+  const manifest = {
+    version: '1.0',
+    generated_at: new Date().toISOString(),
+    organization_id: organizationId,
+    work_record_id: jobId,
+    files: [{ name: 'risk-snapshot.pdf', type: 'pdf', hash: pdfHash }],
+  }
+  const manifestJson = JSON.stringify(manifest, null, 2)
+  const manifestBuffer = Buffer.from(manifestJson, 'utf-8')
+  const manifestHash = crypto.createHash('sha256').update(manifestBuffer).digest('hex')
+  const manifestPath = `${organizationId}/risk-snapshots/${jobId}-${Date.now()}-manifest.json`
+  const { error: manifestError } = await supabase.storage
+    .from('exports')
+    .upload(manifestPath, manifestBuffer, {
+      contentType: 'application/json',
+      upsert: false,
+    })
   if (manifestError) throw manifestError
 
   return {
