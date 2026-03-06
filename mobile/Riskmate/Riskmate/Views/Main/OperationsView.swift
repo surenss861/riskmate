@@ -386,8 +386,14 @@ struct OperationsView: View {
                 searchDebounceTask = Task {
                     try? await Task.sleep(nanoseconds: 250_000_000) // 0.25s
                     guard !Task.isCancelled else { return }
-                    debouncedQuery = newValue
+                    await MainActor.run {
+                        guard debouncedQuery != newValue else { return }
+                        debouncedQuery = newValue
+                    }
                 }
+            }
+            .onDisappear {
+                searchDebounceTask?.cancel()
             }
             .onAppear {
                 if entitlements.entitlements?.role.lowercased() == "executive" && selectedView == .dashboard {
