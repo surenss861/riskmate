@@ -147,10 +147,10 @@ struct WorkRecordsHubView: View {
                                 WorkRecordsExportRow(
                                     export: task,
                                     isRetrying: isRetryingExport,
-                                    canRetry: (task.state == .failed) && !hasInFlightExport(jobId: task.jobId, type: task.type),
+                                    canRetry: task.state.isFailed && !hasInFlightExport(jobId: task.jobId, type: task.type),
                                     isInFlight: hasInFlightExport(jobId: task.jobId, type: task.type),
                                     onRetry: {
-                                        guard task.state == .failed, !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
+                                        guard task.state.isFailed, !hasInFlightExport(jobId: task.jobId, type: task.type) else { return }
                                         Task {
                                             isRetryingExport = true
                                             defer { isRetryingExport = false }
@@ -215,9 +215,9 @@ struct WorkRecordsHubView: View {
                 )
             } else {
                 VStack(spacing: RMTheme.Spacing.xs) {
-                    ForEach(recentProofPacks) { task in
+                    ForEach(Array(recentProofPacks), id: \.id) { task in
                         if case .ready = task.state {
-                            NavigationLink(value: WorkRecordsJobRoute(jobId: task.jobId, initialTab: .exports)) {
+                            NavigationLink(value: WorkRecordsJobRoute(jobId: task.jobId, initialTab: .overview)) {
                                 WorkRecordsExportRow(export: task, isRetrying: false, isInFlight: false, onRetry: nil)
                             }
                             .buttonStyle(.plain)

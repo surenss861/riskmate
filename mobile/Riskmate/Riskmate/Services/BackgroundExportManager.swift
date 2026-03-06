@@ -339,6 +339,12 @@ enum ExportState: Codable, Equatable {
             return false
         }
     }
+
+    /// Use this instead of `== .failed` to avoid ambiguity with other `.failed` types (e.g. gesture phase).
+    var isFailed: Bool {
+        if case .failed = self { return true }
+        return false
+    }
     
     enum StateType: String, Codable {
         case queued

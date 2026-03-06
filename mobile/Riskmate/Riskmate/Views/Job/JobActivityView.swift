@@ -411,6 +411,8 @@ struct JobActivityView: View {
     private func userFacingErrorMessage(_ error: Error) -> String {
         if let apiError = error as? APIError {
             switch apiError {
+            case .authExpired:
+                return "Session expired."
             case .networkError(_, let msg, _): return msg
             case .httpError(let code, let msg): return msg.isEmpty ? "Request failed (\(code))" : msg
             case .decodingError: return "Invalid response"
