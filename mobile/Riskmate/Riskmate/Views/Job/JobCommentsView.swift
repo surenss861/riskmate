@@ -173,6 +173,7 @@ struct JobCommentsView: View {
             members = team.members
             currentUserRole = team.currentUserRole
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             // Non-fatal: comments work without mention picker
         }
     }
@@ -743,6 +744,7 @@ struct JobCommentsView: View {
             hasMoreComments = hasMore
             commentsOffset = data.count
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             loadError = error.localizedDescription
         }
     }
@@ -762,6 +764,7 @@ struct JobCommentsView: View {
             hasMoreComments = hasMore
             commentsOffset += data.count
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             loadError = error.localizedDescription
         }
     }
@@ -774,6 +777,7 @@ struct JobCommentsView: View {
             let list = try await APIClient.shared.getReplies(commentId: commentId)
             repliesByParent[commentId] = list
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             repliesErrorForId[commentId] = error.localizedDescription
             repliesByParent.removeValue(forKey: commentId)
         }
@@ -791,6 +795,7 @@ struct JobCommentsView: View {
             }
             await loadComments()
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             // Non-fatal: comment state unchanged; user can retry
         }
     }
@@ -811,6 +816,7 @@ struct JobCommentsView: View {
                 await loadReplies(commentId: expandedReplyForId!)
             }
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             editOrDeleteError = error.localizedDescription
         }
     }
@@ -832,6 +838,7 @@ struct JobCommentsView: View {
                 await loadReplies(commentId: expandedId)
             }
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             editOrDeleteError = error.localizedDescription
         }
     }
@@ -851,6 +858,7 @@ struct JobCommentsView: View {
             newlyPostedIds.insert(created.id)
             await loadComments()
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             loadError = error.localizedDescription
         }
     }
@@ -871,6 +879,7 @@ struct JobCommentsView: View {
             await loadReplies(commentId: commentId)
             await loadComments()
         } catch {
+            if (error as? APIError)?.isAuthExpired == true { return }
             repliesErrorForId[commentId] = error.localizedDescription
         }
     }

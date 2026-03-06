@@ -49,7 +49,7 @@ struct AuthView: View {
     private var heroBlock: some View {
         VStack(alignment: .center, spacing: 10) {
             // Micro-pill above headline
-            Text("RISK MATE")
+            Text("RISKMATE")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(2)
                 .foregroundColor(Color.white.opacity(0.85))
