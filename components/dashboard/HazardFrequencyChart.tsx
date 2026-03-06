@@ -127,7 +127,7 @@ export function HazardFrequencyChart({
       </div>
       <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
       <div className="min-w-0 w-full h-64">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={256}>
           <BarChart
             data={data}
             layout="vertical"

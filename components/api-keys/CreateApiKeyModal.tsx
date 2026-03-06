@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, GlassCard } from '@/components/shared'
 import { API_KEY_SCOPES } from '@/lib/api/apiKeyScopes'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export interface ApiKeyRow {
   id: string
@@ -75,10 +76,20 @@ export function CreateApiKeyModal({ open, onClose, onCreated }: CreateApiKeyModa
     setError(null)
     setSubmitting(true)
     try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setError('Session expired. Please refresh and try again.')
+        setSubmitting(false)
+        return
+      }
       const res = await fetch('/api/api-keys', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           name: name.trim(),
           scopes: Array.from(scopes),

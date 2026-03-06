@@ -176,7 +176,7 @@ export function AnalyticsTrendCharts({
           <div className="min-w-0 w-full h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
         ) : (
           <div className="min-w-0 w-full h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={224}>
               <LineChart data={jobsChartData} {...chartCommon}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
                 <XAxis
@@ -239,7 +239,7 @@ export function AnalyticsTrendCharts({
           <div className="min-w-0 w-full h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
         ) : (
           <div className="min-w-0 w-full h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={224}>
               <AreaChart data={riskChartData} {...chartCommon}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -283,7 +283,7 @@ export function AnalyticsTrendCharts({
           <h3 className="text-lg font-semibold text-white mb-2">Jobs by status</h3>
           <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
           <div className="min-w-0 w-full h-48">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={192}>
               <BarChart data={statusChartData} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
                 <XAxis
