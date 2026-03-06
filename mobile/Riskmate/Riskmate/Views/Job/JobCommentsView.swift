@@ -178,7 +178,7 @@ struct JobCommentsView: View {
     private var commentsTopBar: some View {
         HStack(alignment: .center, spacing: RMTheme.Spacing.sm) {
             Text("Comments")
-                .font(RMTheme.Typography.h3)
+                .font(RMTheme.Typography.sectionTitle)
                 .foregroundColor(RMTheme.Colors.textPrimary)
             Spacer(minLength: 0)
             Text("Use @ to mention")

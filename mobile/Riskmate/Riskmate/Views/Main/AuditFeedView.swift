@@ -363,7 +363,7 @@ private struct LedgerPinnedDayHeader: View {
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             Text(title)
-                .font(RMTheme.Typography.h3)
+                .font(RMTheme.Typography.sectionTitle)
                 .foregroundColor(RMTheme.Colors.textPrimary)
             Spacer(minLength: 0)
             Text("\(count) event\(count == 1 ? "" : "s")")
