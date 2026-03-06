@@ -42,8 +42,19 @@ If the UI says PDF and the user gets JSON, the backend is returning the wrong ar
 
 **Fix applied (backend):** POST /api/jobs/:id/export/pdf now sets export_type to `pdf`; worker has a `pdf` branch that generates the single-job Risk Snapshot PDF. Requested format now matches delivered artifact.
 
-**To trace the exact mismatch:** share either
-- the export backend route/handler, or  
-- the export response model + history/download logic  
+**iOS label consistency:** History row label now reflects stored type: `pdf` → “Risk Snapshot Report”, `ledger` → “Ledger Export”, `proof_pack` → “Proof Pack”. No UI branch assumes ledger for the PDF route.
 
-so the mismatch can be pinned (e.g. which field is used for “download URL” and whether it’s format-specific).
+---
+
+## Export path audit (request → type → worker → artifact → label → handler)
+
+| Request (iOS / client) | Backend route | Stored export_type | Worker branch | Main artifact | History row label (iOS) | Open / download |
+|------------------------|---------------|--------------------|---------------|---------------|--------------------------|-----------------|
+| Risk Snapshot (PDF) | POST /api/jobs/:id/export/pdf | `pdf` | generateRiskSnapshotExport | risk-snapshot PDF | “Risk Snapshot Report” | download_url → PDF |
+| Proof Pack (ZIP) | POST /api/jobs/:id/export/proof-pack | `proof_pack` | generateProofPack | proof-pack ZIP | “Proof Pack” | download_url → ZIP |
+| Ledger (org/audit flow) | (e.g. POST /api/audit/export or other) | `ledger` | generateLedgerExport | ledger PDF + manifest | “Ledger Export” | download_url → PDF |
+| Executive brief | (if used) | `executive_brief` | generateExecutiveBrief | brief PDF | (add if shown in job history) | download_url |
+| Bulk jobs | (if used) | `bulk_jobs` | generateBulkJobsExport | CSV/PDF/ZIP per filters | (add if shown) | download_url |
+
+- **Backend:** GET /api/jobs/:id/exports returns each row with its own `export_type` and `download_url` from that row’s `storage_path` only (no cross-row URL).
+- **iOS:** ExportHistorySheet uses `export.downloadUrl` for “Open” and derives label from `export.exportType`; retry uses createExport(jobId, type) which maps .pdf → POST export/pdf, .proofPack → POST export/proof-pack.

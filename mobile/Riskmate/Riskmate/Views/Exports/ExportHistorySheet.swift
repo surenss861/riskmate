@@ -208,7 +208,8 @@ private struct ExportHistoryRow: View {
     private var displayName: String {
         switch export.exportType {
         case "proof_pack": return "Proof Pack"
-        case "pdf", "ledger": return "Risk Snapshot Report"
+        case "pdf": return "Risk Snapshot Report"
+        case "ledger": return "Ledger Export"
         default: return "Export"
         }
     }
