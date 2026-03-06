@@ -266,7 +266,8 @@ struct OperationsView: View {
         }
     }
 
-    /// Pinned search: matches Work Records (RMSearchField 46pt, inputFill, no glow). Executive gets fixed-height spacer.
+    /// Pinned search: matches Work Records, with improved spacing under the top bar.
+    /// Executive keeps a fixed-height spacer so layout rhythm stays aligned.
     private var operationsSearchControl: some View {
         Group {
             if entitlements.entitlements?.role.lowercased() == "executive" {
@@ -276,8 +277,6 @@ struct OperationsView: View {
             }
         }
         .padding(.horizontal, RMTheme.Spacing.pagePadding)
-        .padding(.top, 8)
-        .padding(.bottom, 0)
     }
 
     private var fieldOperationsContent: some View {
@@ -345,10 +344,17 @@ struct OperationsView: View {
             // System nav bar hidden so RMTopBar is the only top chrome (avoids double bar).
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
-                RMTopBar(title: "Operations", notificationBadge: 0)
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                operationsSearchControl
+                VStack(spacing: 0) {
+                    RMTopBar(title: "Operations", notificationBadge: 0)
+
+                    operationsSearchControl
+                        .padding(.top, 12)
+                        .padding(.bottom, 10)
+                }
+                .background(
+                    RMTheme.Colors.background
+                        .opacity(0.96)
+                )
             }
             .task {
                 // Refresh entitlements on view load
