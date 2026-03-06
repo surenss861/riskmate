@@ -1400,14 +1400,29 @@ class APIClient {
         return response.data
     }
 
-    /// Create a new export (PDF or Proof Pack). Used for retry from export history.
-    func createExport(jobId: String, type: ExportType) async throws {
+    /// Create a new export (PDF or Proof Pack). Returns the server export id for polling. Used for generate flow and retry from export history.
+    func createExport(jobId: String, type: ExportType) async throws -> String {
         let path: String
         switch type {
         case .pdf: path = "/api/jobs/\(jobId)/export/pdf"
         case .proofPack: path = "/api/jobs/\(jobId)/export/proof-pack"
         }
-        let _: CreateExportResponse = try await request(endpoint: path, method: "POST")
+        let response: CreateExportResponse = try await request(endpoint: path, method: "POST")
+        return response.data.id
+    }
+
+    /// Fetch a single export by id (for polling until ready). GET /api/exports/:id
+    func getExport(exportId: String) async throws -> Export {
+        let response: ExportSingleResponse = try await request(endpoint: "/api/exports/\(exportId)")
+        return response.data
+    }
+
+    /// Download export file from signed URL (PDF or ZIP). Uses auth header.
+    func downloadExportFile(url: String, type: ExportType) async throws -> URL {
+        if type == .pdf {
+            return try await downloadPDF(url: url)
+        }
+        return try await downloadZIP(url: url)
     }
 
     // MARK: - Report Runs / Signatures API
@@ -1662,6 +1677,10 @@ struct Export: Codable, Identifiable, Equatable {
 
 struct ExportsListResponse: Codable {
     let data: [Export]
+}
+
+struct ExportSingleResponse: Codable {
+    let data: Export
 }
 
 struct CreateExportResponse: Codable {

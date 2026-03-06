@@ -64,66 +64,80 @@ class BackgroundExportManager: NSObject, ObservableObject {
         await startExport(export)
     }
     
+    private static let pollIntervalSeconds: Double = 2.5
+    private static let exportTimeoutSeconds: Double = 300 // 5 minutes
+
     private func startExport(_ export: ExportTask) async {
         updateExportState(export.id, state: .preparing)
-        
+
         do {
-            // Generate export (this may take time on server)
-            let fileURL: URL
-            switch export.type {
-            case .pdf:
-                fileURL = try await APIClient.shared.generateRiskSnapshot(jobId: export.jobId)
-            case .proofPack:
-                fileURL = try await APIClient.shared.generateProofPack(jobId: export.jobId)
+            // 1. Create export job on server (async contract: POST returns id, not file)
+            let serverExportId = try await APIClient.shared.createExport(jobId: export.jobId, type: export.type)
+
+            // 2. Poll until ready or failed
+            let exportRecord = try await pollExportUntilReady(exportId: serverExportId)
+            guard exportRecord.state.lowercased() == "ready",
+                  let downloadURLString = exportRecord.downloadUrl, !downloadURLString.isEmpty else {
+                let reason = exportRecord.failureReason ?? "Export did not complete"
+                throw NSError(domain: "BackgroundExportManager", code: -1, userInfo: [NSLocalizedDescriptionKey: reason])
             }
-            
-            // Move to permanent location
+
+            // 3. Download file from signed URL
+            let fileURL = try await APIClient.shared.downloadExportFile(url: downloadURLString, type: export.type)
+
+            // 4. Move to permanent location
             let permanentURL = try saveExportFile(
                 sourceURL: fileURL,
                 jobId: export.jobId,
                 type: export.type,
                 exportId: export.id
             )
-            
-            // Update last export for this job
+
             saveLastExport(jobId: export.jobId, type: export.type, url: permanentURL)
-            
-            // Update state (on main actor for thread safety)
             updateExportState(export.id, state: .ready, fileURL: permanentURL)
-            
-            // Track success
+
             Analytics.shared.trackExportSucceeded(jobId: export.jobId, type: export.type.rawValue)
-            
-            // Log event for iOS ↔ web parity
             Task {
                 try? await APIClient.shared.logEvent(
                     eventType: "export.generated",
                     entityType: "export",
-                    entityId: export.id,
+                    entityId: serverExportId,
                     metadata: [
                         "job_id": export.jobId,
                         "type": export.type.rawValue,
-                        "export_id": export.id
+                        "export_id": serverExportId
                     ]
                 )
             }
-            
-            // Refresh entitlements after export (in case limits changed)
             await EntitlementsManager.shared.refresh()
-            
-            // Auto-share if initiated from foreground
+
             if export.initiatedFromForeground {
                 await triggerShare(export: export, fileURL: permanentURL)
             } else {
-                // Show notification for background completion
                 await showExportReadyNotification(export: export, fileURL: permanentURL)
             }
-            
+
         } catch {
             let errorMessage = error.localizedDescription
             updateExportState(export.id, state: .failed(errorMessage))
             Analytics.shared.trackExportFailed(jobId: export.jobId, type: export.type.rawValue, error: errorMessage)
             CrashReporting.shared.captureError(error)
+        }
+    }
+
+    /// Poll GET /api/exports/:id until state is ready or failed, or timeout.
+    private func pollExportUntilReady(exportId: String) async throws -> Export {
+        let deadline = Date().addingTimeInterval(Self.exportTimeoutSeconds)
+        while true {
+            let record = try await APIClient.shared.getExport(exportId: exportId)
+            let state = record.state.lowercased()
+            if state == "ready" || state == "failed" {
+                return record
+            }
+            if Date() >= deadline {
+                throw NSError(domain: "BackgroundExportManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "Export timed out. Check export history in a few minutes."])
+            }
+            try await Task.sleep(nanoseconds: UInt64(Self.pollIntervalSeconds * 1_000_000_000))
         }
     }
     
