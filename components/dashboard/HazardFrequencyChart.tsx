@@ -120,14 +120,14 @@ export function HazardFrequencyChart({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h3 className="text-lg font-semibold text-white">Top hazard types</h3>
         {periodSelector}
       </div>
       <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-64 min-h-[16rem] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={256}>
           <BarChart
             data={data}
             layout="vertical"

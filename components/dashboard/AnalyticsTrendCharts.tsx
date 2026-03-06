@@ -167,16 +167,16 @@ export function AnalyticsTrendCharts({
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 min-w-0">
       {/* Jobs over time: created + completed */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 min-w-0">
         <h3 className="text-lg font-semibold text-white mb-2">Jobs over time</h3>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         {jobsChartData.length === 0 ? (
-          <div className="h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
+          <div className="h-56 min-h-[14rem] flex items-center justify-center text-white/50 text-sm">No data</div>
         ) : (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-56 min-h-[14rem] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={224}>
               <LineChart data={jobsChartData} {...chartCommon}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
                 <XAxis
@@ -232,14 +232,14 @@ export function AnalyticsTrendCharts({
       </div>
 
       {/* Risk score trend (area) */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 min-w-0">
         <h3 className="text-lg font-semibold text-white mb-2">Risk score trend</h3>
         <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
         {riskChartData.length === 0 ? (
-          <div className="h-56 flex items-center justify-center text-white/50 text-sm">No data</div>
+          <div className="h-56 min-h-[14rem] flex items-center justify-center text-white/50 text-sm">No data</div>
         ) : (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-56 min-h-[14rem] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={224}>
               <AreaChart data={riskChartData} {...chartCommon}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -279,11 +279,11 @@ export function AnalyticsTrendCharts({
 
       {/* Jobs by status per week (stacked bars with period on each bar) */}
       {statusChartData.length > 0 && statusKeys.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 lg:col-span-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 lg:col-span-2 min-w-0">
           <h3 className="text-lg font-semibold text-white mb-2">Jobs by status</h3>
           <p className="text-sm text-white/50 mb-4">{periodLabel}</p>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-48 min-h-[12rem] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={192}>
               <BarChart data={statusChartData} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartCommon.stroke} />
                 <XAxis

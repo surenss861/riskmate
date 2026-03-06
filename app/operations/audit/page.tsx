@@ -334,7 +334,7 @@ export default function AuditViewPage() {
 
   const loadJobs = async () => {
     try {
-      const response = await jobsApi.list({ limit: 1000 })
+      const response = await jobsApi.list({ limit: 100 })
       setJobs(response.data || [])
     } catch (err) {
       console.error('Failed to load jobs:', err)

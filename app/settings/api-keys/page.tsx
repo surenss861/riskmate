@@ -6,6 +6,7 @@ import { DashboardNavbar } from '@/components/dashboard/DashboardNavbar'
 import { AppBackground, AppShell, PageSection, GlassCard, Button, PageHeader } from '@/components/shared'
 import { ConfirmModal } from '@/components/dashboard/ConfirmModal'
 import { CreateApiKeyModal, type ApiKeyRow } from '@/components/api-keys/CreateApiKeyModal'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyRow[]>([])
@@ -47,7 +48,15 @@ export default function ApiKeysPage() {
   }, [])
 
   useEffect(() => {
-    loadKeys()
+    let cancelled = false
+    const run = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled || !session) return
+      await loadKeys()
+    }
+    run()
+    return () => { cancelled = true }
   }, [loadKeys])
 
   const handleCreated = () => {
