@@ -1,6 +1,22 @@
 import Foundation
 import Combine
 
+/// Serializes logout so only one logout runs at a time (async-safe for Swift 6).
+private actor LogoutGate {
+    private var inProgress = false
+
+    /// Returns true if this call should proceed with logout; false if another logout is in progress.
+    func tryBegin() -> Bool {
+        if inProgress { return false }
+        inProgress = true
+        return true
+    }
+
+    func end() {
+        inProgress = false
+    }
+}
+
 /// Manages app session state (auth, user, organization)
 @MainActor
 class SessionManager: ObservableObject {
@@ -15,8 +31,7 @@ class SessionManager: ObservableObject {
     
     private let authService: AuthService
     private let apiClient: APIClient
-    private var isLoggingOut = false
-    private let logoutLock = NSLock()
+    private let logoutGate = LogoutGate()
 
     private init() {
         self.authService = AuthService.shared
@@ -135,19 +150,7 @@ class SessionManager: ObservableObject {
     /// Logout. Does not require a valid token — best effort: clears local session (Supabase signOut), unregisters push, clears state.
     /// De-duped: concurrent callers (e.g. multiple requests hitting expired token) only run logout once.
     func logout() async {
-        logoutLock.lock()
-        if isLoggingOut {
-            logoutLock.unlock()
-            return
-        }
-        isLoggingOut = true
-        logoutLock.unlock()
-
-        defer {
-            logoutLock.lock()
-            isLoggingOut = false
-            logoutLock.unlock()
-        }
+        guard await logoutGate.tryBegin() else { return }
 
         isLoading = true
         defer { isLoading = false }
@@ -167,6 +170,7 @@ class SessionManager: ObservableObject {
         isAuthenticated = false
         currentUser = nil
         currentOrganization = nil
+        await logoutGate.end()
     }
     
     /// Load user and organization data
