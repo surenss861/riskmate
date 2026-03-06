@@ -377,6 +377,7 @@ export function DashboardOverview({
             }
           />
 
+          <div className="min-w-0">
           <AnalyticsTrendCharts
             trendsJobs={enhancedAnalytics.trendsJobs}
             trendsCompletion={enhancedAnalytics.trendsCompletion}
@@ -393,6 +394,7 @@ export function DashboardOverview({
             onPeriodClick={enhancedAnalytics.onPeriodClick}
             onStatusClick={enhancedAnalytics.onStatusClick}
           />
+          </div>
 
           {enhancedAnalytics.riskHeatmap != null && (
             <RiskHeatmap
@@ -402,7 +404,8 @@ export function DashboardOverview({
             />
           )}
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2 min-w-0">
+            <div className="min-w-0">
             <HazardFrequencyChart
               items={enhancedAnalytics.hazardItems}
               periodLabel={enhancedAnalytics.periodLabel}
@@ -415,6 +418,8 @@ export function DashboardOverview({
               isLoading={enhancedAnalytics.isLoading}
               onCategoryClick={enhancedAnalytics.onHazardCategoryClick}
             />
+            </div>
+            <div className="min-w-0">
             <TeamPerformanceTable
               members={enhancedAnalytics.teamMembers}
               periodLabel={enhancedAnalytics.periodLabel}
@@ -426,6 +431,7 @@ export function DashboardOverview({
               }}
               isLoading={enhancedAnalytics.isLoading}
             />
+            </div>
           </div>
         </section>
       )}

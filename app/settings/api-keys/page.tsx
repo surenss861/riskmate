@@ -21,11 +21,19 @@ export default function ApiKeysPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
   const loadKeys = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+
     setRefreshing(true)
     setFetchError(null)
     try {
-      const res = await fetch('/api/api-keys', { credentials: 'include' })
+      const res = await fetch('/api/api-keys', {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
       const json = await res.json().catch(() => ({}))
+      if (res.status === 401) return
       if (res.status === 403) {
         setCanManage(false)
         setKeys([])
@@ -52,7 +60,10 @@ export default function ApiKeysPage() {
     const run = async () => {
       const supabase = createSupabaseBrowserClient()
       const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled || !session) return
+      if (cancelled || !session?.access_token) {
+        if (!cancelled) setLoading(false)
+        return
+      }
       await loadKeys()
     }
     run()
@@ -72,12 +83,16 @@ export default function ApiKeysPage() {
   const handleRevokeConfirm = async () => {
     const id = revokeConfirmId
     if (!id) return
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
     setRevokingId(id)
     setActionError(null)
     try {
       const res = await fetch(`/api/api-keys/${id}`, {
         method: 'DELETE',
         credentials: 'include',
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))

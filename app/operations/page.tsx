@@ -754,7 +754,7 @@ function DashboardPageInner() {
                     <KpiGrid items={kpiItems} />
                   </div>
                   <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-                    <GlassCard className="p-8">
+                    <GlassCard className="p-8 min-w-0">
                       {(() => {
                         const trendsJobs = dashboardData?.trendsJobs?.data ?? []
                         const trendsCompletion = dashboardData?.trendsCompletion?.data ?? []
